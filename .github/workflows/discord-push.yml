@@ -1,0 +1,55 @@
+name: Discord Push 알림
+
+on:
+  push:
+    branches: ["**"]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Discord 푸시 알림 전송
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          BRANCH="${{ github.ref_name }}"
+          PUSHER="${{ github.actor }}"
+          COMMIT_MSG="${{ github.event.head_commit.message }}"
+          COMMIT_URL="${{ github.event.head_commit.url }}"
+          REPO="${{ github.repository }}"
+          SHORT_SHA="${{ github.sha }}"
+          SHORT_SHA="${SHORT_SHA:0:7}"
+
+          # 변경 파일 목록
+          CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | head -10 | sed 's/^/• /' | tr '\n' '\n' || echo "• (파일 목록 없음)")
+
+          curl -s -X POST "$DISCORD_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n \
+              --arg branch "$BRANCH" \
+              --arg pusher "$PUSHER" \
+              --arg msg "$COMMIT_MSG" \
+              --arg url "$COMMIT_URL" \
+              --arg repo "$REPO" \
+              --arg sha "$SHORT_SHA" \
+              --arg changed "$CHANGED" \
+              '{
+                embeds: [{
+                  title: ("🚀 Push: " + $repo),
+                  color: 3447003,
+                  fields: [
+                    { name: "📌 브랜치", value: $branch, inline: true },
+                    { name: "👤 푸셔", value: $pusher, inline: true },
+                    { name: "🔖 커밋", value: ("[`" + $sha + "`](" + $url + ")"), inline: true },
+                    { name: "💬 메시지", value: $msg },
+                    { name: "📝 변경 파일", value: $changed }
+                  ],
+                  timestamp: now | todate
+                }]
+              }'
+            )"

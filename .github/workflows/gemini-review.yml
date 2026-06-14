@@ -18,12 +18,11 @@ jobs:
           fetch-depth: 0
 
       - name: Get PR diff
-        id: diff
         run: |
           git diff origin/${{ github.base_ref }}...HEAD > pr_diff.txt
-          echo "diff_size=$(wc -c < pr_diff.txt)" >> $GITHUB_OUTPUT
 
       - name: Gemini Code Review
+        id: gemini
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -32,7 +31,7 @@ jobs:
         run: |
           DIFF=$(cat pr_diff.txt)
 
-          # diff가 너무 크면 앞부분만 사용 (Gemini 토큰 제한)
+          # diff가 너무 크면 앞부분만 사용
           if [ ${#DIFF} -gt 30000 ]; then
             DIFF="${DIFF:0:30000}
           ... (diff too large, truncated)"
@@ -57,14 +56,56 @@ jobs:
           # 응답에서 텍스트 추출
           REVIEW=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // "리뷰를 생성할 수 없습니다."')
 
-          # PR 코멘트로 작성
-          COMMENT="## 🤖 Gemini 코드 리뷰
+          # PR 코멘트 작성
+          gh pr comment "$PR_NUMBER" \
+            --repo "$REPO" \
+            --body "## 🤖 Gemini 코드 리뷰
 
           $REVIEW
 
           ---
           *Powered by Google Gemini*"
 
-          gh pr comment "$PR_NUMBER" \
-            --repo "$REPO" \
-            --body "$COMMENT"
+          # 다음 스텝에서 사용하기 위해 저장 (2000자 제한)
+          SHORT_REVIEW="${REVIEW:0:2000}"
+          echo "review<<EOF" >> $GITHUB_OUTPUT
+          echo "$SHORT_REVIEW" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Discord 리뷰 결과 전송
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_URL="${{ github.event.pull_request.html_url }}"
+          PR_AUTHOR="${{ github.event.pull_request.user.login }}"
+          REPO="${{ github.repository }}"
+          REVIEW="${{ steps.gemini.outputs.review }}"
+
+          # 리뷰가 너무 길면 자르기
+          if [ ${#REVIEW} -gt 1000 ]; then
+            REVIEW="${REVIEW:0:1000}..."
+          fi
+
+          curl -s -X POST "$DISCORD_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n \
+              --arg title "$PR_TITLE" \
+              --arg url "$PR_URL" \
+              --arg author "$PR_AUTHOR" \
+              --arg repo "$REPO" \
+              --arg review "$REVIEW" \
+              '{
+                embeds: [{
+                  title: ("🔍 Gemini 코드 리뷰 완료: " + $repo),
+                  url: $url,
+                  color: 10181046,
+                  fields: [
+                    { name: "📋 PR", value: ("[" + $title + "](" + $url + ")") },
+                    { name: "👤 작성자", value: $author, inline: true },
+                    { name: "🤖 리뷰 요약", value: $review }
+                  ],
+                  timestamp: now | todate
+                }]
+              }'
+            )"
