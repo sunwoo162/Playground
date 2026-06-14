@@ -1,0 +1,48 @@
+export function formatDuration(minutes: number): string {
+  if (minutes <= 0) return '0분';
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return `${m}분`;
+  if (m === 0) return `${h}시간`;
+  return `${h}시간 ${m}분`;
+}
+
+export function formatTimer(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+export function getTodayStr(): string {
+  return new Date().toISOString().split('T')[0];
+}
+
+export function getWeekDates(): string[] {
+  const today = new Date();
+  const dates: string[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    dates.push(d.toISOString().split('T')[0]);
+  }
+  return dates;
+}
+
+export function getMonthDates(year: number, month: number): (string | null)[] {
+  const firstDay = new Date(year, month, 1).getDay(); // 0=일
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells: (string | null)[] = [];
+  for (let i = 0; i < firstDay; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) {
+    cells.push(`${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+  }
+  return cells;
+}
+
+export const SUBJECT_COLORS = [
+  '#70a1ff', '#ff6b81', '#2ed573', '#ffa502',
+  '#a29bfe', '#fd79a8', '#00cec9', '#e17055',
+  '#6c5ce7', '#fdcb6e', '#55efc4', '#d63031',
+];
