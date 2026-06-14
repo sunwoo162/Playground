@@ -165,10 +165,14 @@ app.use(express.static(path.join(__dirname, '..', 'dist')));
 
 // Life Tracker 앱 (서브 경로에서 서빙)
 app.use('/apps/life-tracker', express.static(path.join(__dirname, '..', 'apps', 'life-tracker', 'dist')));
-
-// SPA 라우팅: 알 수 없는 경로는 index.html로
 app.get('/apps/life-tracker/*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'apps', 'life-tracker', 'dist', 'index.html'));
+});
+
+// Dev Notes 앱
+app.use('/apps/dev-notes', express.static(path.join(__dirname, '..', 'apps', 'dev-notes', 'dist')));
+app.get('/apps/dev-notes/*', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'apps', 'dev-notes', 'dist', 'index.html'));
 });
 
 app.get('*', (req, res) => {

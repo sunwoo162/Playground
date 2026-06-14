@@ -13,6 +13,7 @@ interface MyPageProps {
 
 const APPS = [
   { id: 'life-tracker', title: 'Life Tracker', emoji: '📊', url: '/apps/life-tracker/' },
+  { id: 'dev-notes', title: '개발자 노트', emoji: '📒', url: '/apps/dev-notes/' },
 ];
 
 export function MyPage({ user, onLogout, onBack }: MyPageProps) {
