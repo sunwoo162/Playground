@@ -235,3 +235,205 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* 프로필/유저네임 클릭 버튼 */
+.avatar-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  border-radius: 50%;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.avatar-btn:hover {
+  opacity: 0.85;
+  transform: scale(1.05);
+}
+
+.username-btn {
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.2s;
+}
+
+.username-btn:hover {
+  color: var(--accent-blue);
+}
+
+/* 뒤로가기 버튼 */
+.btn-back {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  padding: 8px 16px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-back:hover {
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+
+/* 마이페이지 */
+.mypage-main {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  padding-bottom: 40px;
+}
+
+.profile-section {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 28px;
+  border: 1px solid var(--border);
+}
+
+.profile-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.profile-name {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.profile-github-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.9rem;
+  transition: color 0.2s;
+}
+
+.profile-github-link:hover {
+  color: var(--accent-blue);
+}
+
+.github-icon-sm {
+  width: 16px;
+  height: 16px;
+}
+
+.mypage-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.section-heading {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+/* 마이페이지 앱 목록 */
+.mypage-apps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mypage-app-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 16px 20px;
+  text-decoration: none;
+  color: var(--text);
+  transition: all 0.2s;
+}
+
+.mypage-app-card:hover {
+  border-color: var(--accent-blue);
+  background: var(--surface-2);
+}
+
+.mypage-app-emoji {
+  font-size: 1.4rem;
+}
+
+.mypage-app-title {
+  flex: 1;
+  font-weight: 500;
+}
+
+.mypage-app-arrow {
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  transition: transform 0.2s;
+}
+
+.mypage-app-card:hover .mypage-app-arrow {
+  transform: translateX(4px);
+  color: var(--accent-blue);
+}
+
+/* 계정 정보 */
+.account-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.account-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.account-row:last-child {
+  border-bottom: none;
+}
+
+.account-label {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.account-value {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.btn-logout-full {
+  width: 100%;
+  padding: 12px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-top: 4px;
+}
+
+.btn-logout-full:hover {
+  border-color: #ff4757;
+  color: #ff4757;
+}

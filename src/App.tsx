@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { MyPage } from './pages/MyPage'
 
 interface User {
   id: number;
@@ -39,6 +40,7 @@ const APPS = [
 function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState<'home' | 'mypage'>('home');
 
   useEffect(() => {
     fetch('/auth/me')
@@ -57,6 +59,7 @@ function App() {
   const handleLogout = async () => {
     await fetch('/auth/logout', { method: 'POST' });
     setUser(null);
+    setPage('home');
   };
 
   if (loading) {
@@ -64,6 +67,16 @@ function App() {
       <div className="app loading-screen">
         <div className="spinner" />
       </div>
+    );
+  }
+
+  if (page === 'mypage' && user) {
+    return (
+      <MyPage
+        user={user}
+        onLogout={handleLogout}
+        onBack={() => setPage('home')}
+      />
     );
   }
 
@@ -77,8 +90,20 @@ function App() {
         <div className="header-right">
           {user ? (
             <div className="user-info">
-              <img src={user.avatar_url} alt={user.name} className="avatar" />
-              <span className="username">{user.name || user.login}</span>
+              <button
+                className="avatar-btn"
+                onClick={() => setPage('mypage')}
+                aria-label="마이페이지"
+                title="마이페이지"
+              >
+                <img src={user.avatar_url} alt={user.name} className="avatar" />
+              </button>
+              <button
+                className="username-btn"
+                onClick={() => setPage('mypage')}
+              >
+                {user.name || user.login}
+              </button>
               <button className="btn-logout" onClick={handleLogout}>로그아웃</button>
             </div>
           ) : (
