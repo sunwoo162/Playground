@@ -24,6 +24,13 @@ export function createProject(title: string, description: string): Project {
     description,
     createdAt: now,
     updatedAt: now,
+    overview: {
+      background: '',
+      techStack: '',
+      targetUsers: '',
+      schedule: '',
+      links: [],
+    },
     spec: [],
     api: [],
     users: [],

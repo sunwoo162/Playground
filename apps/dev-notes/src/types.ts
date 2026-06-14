@@ -4,9 +4,24 @@ export interface Project {
   description: string;
   createdAt: string;
   updatedAt: string;
+  overview: ProjectOverview;
   spec: FeatureSpec[];
   api: ApiSpec[];
   users: UserAnalysis[];
+}
+
+export interface ProjectOverview {
+  background: string;       // 프로젝트 배경/목적
+  techStack: string;        // 기술 스택
+  targetUsers: string;      // 타겟 사용자
+  schedule: string;         // 일정
+  links: ProjectLink[];     // 관련 링크
+}
+
+export interface ProjectLink {
+  id: string;
+  label: string;
+  url: string;
 }
 
 export interface FeatureSpec {
@@ -33,4 +48,4 @@ export interface UserAnalysis {
   painPoint: string;
 }
 
-export type TabType = 'spec' | 'api' | 'users';
+export type TabType = 'overview' | 'spec' | 'api' | 'users';

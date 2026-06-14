@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Project, TabType } from '../types';
 import { updateProject } from '../storage';
+import { ProjectOverview } from './tabs/ProjectOverview';
 import { FeatureSpec } from './tabs/FeatureSpec';
 import { ApiSpec } from './tabs/ApiSpec';
 import { UserAnalysis } from './tabs/UserAnalysis';
@@ -12,28 +13,35 @@ interface Props {
 }
 
 const TABS: { key: TabType; label: string; icon: string }[] = [
+  { key: 'overview', label: '프로젝트 개요', icon: '🗂️' },
   { key: 'spec', label: '기능 명세서', icon: '📋' },
   { key: 'api', label: 'API 명세서', icon: '🔌' },
   { key: 'users', label: '사용자 분석', icon: '👥' },
 ];
 
 export function ProjectDetail({ project, onBack, onUpdate }: Props) {
-  const [activeTab, setActiveTab] = useState<TabType>('spec');
+  const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleInput, setTitleInput] = useState(project.title);
 
-  const handleTabChange = <K extends keyof Project>(key: K, value: Project[K]) => {
-    const updated = { ...project, [key]: value };
+  const save = (updated: Project) => {
     updateProject(updated);
     onUpdate(updated);
   };
 
+  const handleTabChange = <K extends keyof Project>(key: K, value: Project[K]) => {
+    save({ ...project, [key]: value });
+  };
+
   const handleTitleSave = () => {
     if (!titleInput.trim()) return;
-    const updated = { ...project, title: titleInput.trim() };
-    updateProject(updated);
-    onUpdate(updated);
+    save({ ...project, title: titleInput.trim() });
     setEditingTitle(false);
+  };
+
+  // 기존 프로젝트에 overview가 없을 경우 기본값
+  const overview = project.overview ?? {
+    background: '', techStack: '', targetUsers: '', schedule: '', links: [],
   };
 
   return (
@@ -47,7 +55,10 @@ export function ProjectDetail({ project, onBack, onUpdate }: Props) {
                 className="title-input"
                 value={titleInput}
                 onChange={(e) => setTitleInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleTitleSave(); if (e.key === 'Escape') setEditingTitle(false); }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleTitleSave();
+                  if (e.key === 'Escape') setEditingTitle(false);
+                }}
                 autoFocus
               />
               <button className="btn-primary btn-sm" onClick={handleTitleSave}>저장</button>
@@ -58,7 +69,6 @@ export function ProjectDetail({ project, onBack, onUpdate }: Props) {
               {project.title} <span className="edit-hint">✏️</span>
             </h1>
           )}
-          {project.description && <p className="detail-desc">{project.description}</p>}
         </div>
       </header>
 
@@ -71,16 +81,29 @@ export function ProjectDetail({ project, onBack, onUpdate }: Props) {
           >
             <span>{tab.icon}</span>
             <span>{tab.label}</span>
-            <span className="tab-count">
-              {tab.key === 'spec' ? project.spec.length
-                : tab.key === 'api' ? project.api.length
-                : project.users.length}
-            </span>
+            {tab.key !== 'overview' && (
+              <span className="tab-count">
+                {tab.key === 'spec' ? project.spec.length
+                  : tab.key === 'api' ? project.api.length
+                  : project.users.length}
+              </span>
+            )}
           </button>
         ))}
       </nav>
 
       <div className="tab-panel">
+        {activeTab === 'overview' && (
+          <ProjectOverview
+            data={overview}
+            title={project.title}
+            description={project.description}
+            createdAt={project.createdAt}
+            updatedAt={project.updatedAt}
+            onChange={(v) => handleTabChange('overview', v)}
+            onDescriptionChange={(desc) => save({ ...project, description: desc })}
+          />
+        )}
         {activeTab === 'spec' && (
           <FeatureSpec items={project.spec} onChange={(v) => handleTabChange('spec', v)} />
         )}

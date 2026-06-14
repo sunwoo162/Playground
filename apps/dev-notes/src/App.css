@@ -405,7 +405,120 @@
   border: 1px dashed var(--border);
 }
 
-/* ========== Modal ========== */
+/* ========== Project Overview ========== */
+.overview-meta-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.overview-meta-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.overview-meta-row:last-child { border-bottom: none; }
+.overview-meta-label { font-size: 0.8rem; color: var(--text-muted); }
+.overview-meta-value { font-size: 0.85rem; font-weight: 500; }
+
+.overview-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.overview-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.overview-section-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.overview-text {
+  font-size: 0.9rem;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+.overview-empty {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+.overview-edit-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.overview-textarea {
+  background: var(--surface-2);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  color: var(--text);
+  font-size: 0.9rem;
+  font-family: inherit;
+  resize: vertical;
+  line-height: 1.6;
+}
+.overview-textarea:focus { outline: none; }
+
+.overview-input {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  color: var(--text);
+  font-size: 0.88rem;
+  font-family: inherit;
+  width: 100%;
+}
+.overview-input:focus { outline: none; border-color: var(--accent); }
+
+/* Links */
+.link-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.link-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.link-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+}
+
+.link-anchor {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 0.88rem;
+  flex: 1;
+}
+.link-anchor:hover { text-decoration: underline; }
 .modal-overlay {
   position: fixed;
   inset: 0;
