@@ -8,7 +8,17 @@ interface User {
   avatar_url: string;
 }
 
-const APPS = [
+interface AppItem {
+  id: string;
+  title: string;
+  description: string;
+  emoji: string;
+  url: string;
+  color: string;
+  disabled?: boolean;
+}
+
+const APPS: AppItem[] = [
   {
     id: 'life-tracker',
     title: 'Life Tracker',
@@ -18,29 +28,44 @@ const APPS = [
     color: '#70a1ff',
   },
   {
-    id: 'coming-soon-1',
-    title: '준비 중...',
-    description: '새로운 앱이 곧 추가됩니다',
-    emoji: '🔮',
-    url: '#',
-    color: '#a855f7',
-    disabled: true,
+    id: 'dev-notes',
+    title: '개발자 노트',
+    description: '프로젝트별 기능명세서, API 명세서, 사용자 분석을 한 곳에',
+    emoji: '📒',
+    url: '/apps/dev-notes/',
+    color: '#2ed573',
   },
-  {
-    id: 'coming-soon-2',
-    title: '준비 중...',
-    description: '새로운 앱이 곧 추가됩니다',
-    emoji: '🚀',
-    url: '#',
-    color: '#f97316',
-    disabled: true,
-  },
+  { id: 'cs1',  title: '습관 트래커',     description: '매일 반복할 습관을 설정하고 달성률을 추적',           emoji: '🔁', url: '#', color: '#ffa502', disabled: true },
+  { id: 'cs2',  title: '독서 기록',        description: '읽은 책, 읽는 중, 읽고 싶은 책을 관리',             emoji: '📚', url: '#', color: '#ff6b81', disabled: true },
+  { id: 'cs3',  title: '가계부',           description: '수입과 지출을 기록하고 월별 통계 확인',              emoji: '💰', url: '#', color: '#ffd32a', disabled: true },
+  { id: 'cs4',  title: '운동 로그',        description: '운동 종류, 시간, 횟수를 기록하고 성장 추적',          emoji: '🏋️', url: '#', color: '#ff4757', disabled: true },
+  { id: 'cs5',  title: '일기장',           description: '날마다 하루를 기록하는 개인 일기',                   emoji: '✍️', url: '#', color: '#eccc68', disabled: true },
+  { id: 'cs6',  title: '목표 관리',        description: '단기·장기 목표를 설정하고 달성 여부를 체크',          emoji: '🎯', url: '#', color: '#a29bfe', disabled: true },
+  { id: 'cs7',  title: '링크 저장소',      description: '나중에 볼 링크, 읽을거리를 깔끔하게 저장',            emoji: '🔗', url: '#', color: '#00cec9', disabled: true },
+  { id: 'cs8',  title: '레시피 노트',      description: '자주 해먹는 요리 레시피를 기록',                     emoji: '🍳', url: '#', color: '#e17055', disabled: true },
+  { id: 'cs9',  title: '회고 일지',        description: '주간·월간 회고를 작성하고 성장 패턴 파악',            emoji: '🔍', url: '#', color: '#74b9ff', disabled: true },
+  { id: 'cs10', title: '스터디 플래너',    description: '공부 계획을 세우고 완료 시간을 기록',                 emoji: '📅', url: '#', color: '#55efc4', disabled: true },
+  { id: 'cs11', title: '감정 일기',        description: '오늘의 감정을 기록하고 감정 변화 흐름을 시각화',      emoji: '🌈', url: '#', color: '#fd79a8', disabled: true },
+  { id: 'cs12', title: '여행 기록',        description: '다녀온 여행지와 기억을 사진과 함께 기록',             emoji: '✈️', url: '#', color: '#6c5ce7', disabled: true },
 ];
+
+const FAVORITES_KEY = 'playground-favorites';
+
+function getFavorites(): string[] {
+  const raw = localStorage.getItem(FAVORITES_KEY);
+  return raw ? JSON.parse(raw) : [];
+}
+
+function saveFavorites(ids: string[]) {
+  localStorage.setItem(FAVORITES_KEY, JSON.stringify(ids));
+}
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState<'home' | 'mypage'>('home');
+  const [favorites, setFavorites] = useState<string[]>(getFavorites);
+  const [showFavOnly, setShowFavOnly] = useState(false);
 
   useEffect(() => {
     fetch('/auth/me')
@@ -52,15 +77,27 @@ function App() {
       .catch(() => setLoading(false));
   }, []);
 
-  const handleLogin = () => {
-    window.location.href = '/auth/github';
-  };
+  const handleLogin = () => { window.location.href = '/auth/github'; };
 
   const handleLogout = async () => {
     await fetch('/auth/logout', { method: 'POST' });
     setUser(null);
     setPage('home');
   };
+
+  const toggleFavorite = (id: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const next = favorites.includes(id)
+      ? favorites.filter((f) => f !== id)
+      : [...favorites, id];
+    setFavorites(next);
+    saveFavorites(next);
+  };
+
+  const displayedApps = showFavOnly
+    ? APPS.filter((a) => favorites.includes(a.id))
+    : APPS;
 
   if (loading) {
     return (
@@ -90,18 +127,10 @@ function App() {
         <div className="header-right">
           {user ? (
             <div className="user-info">
-              <button
-                className="avatar-btn"
-                onClick={() => setPage('mypage')}
-                aria-label="마이페이지"
-                title="마이페이지"
-              >
+              <button className="avatar-btn" onClick={() => setPage('mypage')} aria-label="마이페이지">
                 <img src={user.avatar_url} alt={user.name} className="avatar" />
               </button>
-              <button
-                className="username-btn"
-                onClick={() => setPage('mypage')}
-              >
+              <button className="username-btn" onClick={() => setPage('mypage')}>
                 {user.name || user.login}
               </button>
               <button className="btn-logout" onClick={handleLogout}>로그아웃</button>
@@ -124,8 +153,31 @@ function App() {
           </div>
         )}
 
+        {/* 필터 바 */}
+        <div className="filter-bar">
+          <button
+            className={`filter-btn ${!showFavOnly ? 'active' : ''}`}
+            onClick={() => setShowFavOnly(false)}
+          >
+            전체 <span className="filter-count">{APPS.length}</span>
+          </button>
+          <button
+            className={`filter-btn ${showFavOnly ? 'active' : ''}`}
+            onClick={() => setShowFavOnly(true)}
+          >
+            ⭐ 즐겨찾기 <span className="filter-count">{favorites.length}</span>
+          </button>
+        </div>
+
+        {showFavOnly && displayedApps.length === 0 && (
+          <div className="fav-empty">
+            <p>즐겨찾기한 앱이 없어요.</p>
+            <p>앱 카드의 ⭐ 버튼을 눌러 추가해보세요.</p>
+          </div>
+        )}
+
         <section className="apps-grid">
-          {APPS.map((app) => (
+          {displayedApps.map((app) => (
             <a
               key={app.id}
               href={user && !app.disabled ? app.url : undefined}
@@ -135,10 +187,20 @@ function App() {
                 if (!user || app.disabled) e.preventDefault();
               }}
             >
+              {/* 즐겨찾기 버튼 */}
+              <button
+                className={`fav-btn ${favorites.includes(app.id) ? 'favorited' : ''}`}
+                onClick={(e) => toggleFavorite(app.id, e)}
+                aria-label="즐겨찾기"
+                title={favorites.includes(app.id) ? '즐겨찾기 해제' : '즐겨찾기 추가'}
+              >
+                {favorites.includes(app.id) ? '⭐' : '☆'}
+              </button>
+
               <div className="app-emoji">{app.emoji}</div>
               <h2 className="app-title">{app.title}</h2>
               <p className="app-desc">{app.description}</p>
-              {!user && <span className="lock-badge">🔒 로그인 필요</span>}
+              {!user && !app.disabled && <span className="lock-badge">🔒 로그인 필요</span>}
               {app.disabled && <span className="lock-badge">🔜 준비 중</span>}
             </a>
           ))}
