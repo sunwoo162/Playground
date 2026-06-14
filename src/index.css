@@ -159,7 +159,6 @@ body {
   color: var(--text);
   transition: all 0.2s;
   position: relative;
-  overflow: hidden;
 }
 
 .app-card::before {
@@ -272,25 +271,37 @@ body {
 /* Favorite Button */
 .fav-btn {
   position: absolute;
-  top: 12px;
-  right: 12px;
-  background: none;
-  border: none;
-  font-size: 1.1rem;
+  top: 10px;
+  right: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 1rem;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.2s, transform 0.15s;
-  line-height: 1;
-  padding: 2px;
-  z-index: 1;
+  z-index: 2;
 }
 
-.app-card:hover .fav-btn,
-.fav-btn.favorited {
+.app-card:hover .fav-btn {
   opacity: 1;
 }
 
-.fav-btn:hover { transform: scale(1.2); }
+.fav-btn.favorited {
+  opacity: 1;
+  background: rgba(255, 214, 0, 0.15);
+  border-color: rgba(255, 214, 0, 0.4);
+}
+
+.fav-btn:hover {
+  transform: scale(1.15);
+  border-color: var(--accent-blue);
+}
 
 @media (max-width: 600px) {
   .header {
