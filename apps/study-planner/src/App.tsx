@@ -41,7 +41,8 @@ function App() {
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>(subjects[0]?.id ?? '');
   const [memo, setMemo] = useState('');
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const lastNotifyHour = useRef<number>(0); // 마지막으로 알림 보낸 시간(시)
+  const lastNotifyHour = useRef<number>(0);
+  const elapsedRef = useRef<number>(0); // elapsed 최신값 ref로 추적
 
   // 알림 권한 요청 (최초 1회)
   useEffect(() => {
@@ -54,6 +55,7 @@ function App() {
       intervalRef.current = setInterval(() => {
         setElapsed(e => {
           const next = e + 1;
+          elapsedRef.current = next; // ref도 동기 업데이트
           // 1시간(3600초) 단위마다 알림
           const hours = Math.floor(next / 3600);
           if (hours > 0 && hours > lastNotifyHour.current) {
@@ -97,8 +99,19 @@ function App() {
   };
 
   const handleStop = () => {
+    // interval 즉시 정지
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
     setRunning(false);
-    if (elapsed < 60) { setElapsed(0); return; }
+
+    const currentElapsed = elapsedRef.current;
+    if (currentElapsed < 60) {
+      setElapsed(0);
+      elapsedRef.current = 0;
+      return;
+    }
 
     const session: StudySession = {
       id: crypto.randomUUID(),
@@ -106,18 +119,24 @@ function App() {
       date: getTodayStr(),
       startTime: startTime!.toISOString(),
       endTime: new Date().toISOString(),
-      durationMinutes: Math.floor(elapsed / 60),
+      durationMinutes: Math.floor(currentElapsed / 60),
       memo: memo.trim() || undefined,
     };
     addSession(session);
     setElapsed(0);
+    elapsedRef.current = 0;
     setMemo('');
     handleRefresh();
   };
 
   const handleReset = () => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
     setRunning(false);
     setElapsed(0);
+    elapsedRef.current = 0;
   };
 
   const todayTotal = getTotalMinutesByDate(getTodayStr(), sessions);
