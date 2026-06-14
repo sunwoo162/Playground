@@ -127,8 +127,8 @@ export function Timer({
           />
         )}
 
-        {elapsed > 0 && elapsed < 60 && !running && (
-          <p className="timer-min-notice">1분 이상 공부해야 기록됩니다</p>
+        {elapsed === 0 && !running && subjects.length > 0 && (
+          <p className="timer-min-notice">과목을 선택하고 시작을 눌러주세요</p>
         )}
       </div>
 

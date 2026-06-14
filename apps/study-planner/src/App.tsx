@@ -107,7 +107,7 @@ function App() {
     setRunning(false);
 
     const currentElapsed = elapsedRef.current;
-    if (currentElapsed < 60) {
+    if (currentElapsed < 1) {
       setElapsed(0);
       elapsedRef.current = 0;
       return;
