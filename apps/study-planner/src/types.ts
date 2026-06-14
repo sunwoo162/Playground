@@ -11,7 +11,8 @@ export interface StudySession {
   date: string;        // YYYY-MM-DD
   startTime: string;   // ISO string
   endTime: string;     // ISO string
-  durationMinutes: number;
+  durationSeconds: number; // 초 단위로 저장
+  durationMinutes: number; // 하위 호환용
   memo?: string;
 }
 

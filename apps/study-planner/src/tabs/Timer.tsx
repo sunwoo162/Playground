@@ -4,7 +4,7 @@ import { getStreak, getWeekStudyDays } from '../storage';
 
 interface Props {
   subjects: Subject[];
-  todayTotal: number;
+  todayTotalSeconds: number;
   dailyGoalMinutes: number;
   running: boolean;
   elapsed: number;
@@ -19,14 +19,15 @@ interface Props {
 }
 
 export function Timer({
-  subjects, todayTotal, dailyGoalMinutes,
+  subjects, todayTotalSeconds, dailyGoalMinutes,
   running, elapsed, selectedSubjectId, memo, sessions,
   onSelectSubject, onStart, onStop, onReset, onMemoChange,
 }: Props) {
   const todaySessions = sessions.filter(s => s.date === getTodayStr());
   const streak = getStreak(sessions);
   const weekDays = getWeekStudyDays(sessions);
-  const progressPct = Math.min((todayTotal / dailyGoalMinutes) * 100, 100);
+  const dailyGoalSeconds = dailyGoalMinutes * 60;
+  const progressPct = Math.min((todayTotalSeconds / dailyGoalSeconds) * 100, 100);
   const achieved = progressPct >= 100;
   const selectedSubject = subjects.find(s => s.id === selectedSubjectId);
 
@@ -56,7 +57,7 @@ export function Timer({
         <div className="daily-progress-header">
           <span>오늘의 목표</span>
           <span className="daily-progress-time">
-            <strong>{formatDuration(todayTotal)}</strong> / {formatDuration(dailyGoalMinutes)}
+            <strong>{formatDuration(todayTotalSeconds)}</strong> / {formatDuration(dailyGoalSeconds)}
           </span>
         </div>
         <div className="progress-bar-track">
@@ -137,11 +138,11 @@ export function Timer({
           <h3 className="section-title">오늘의 과목별 현황</h3>
           <div className="subject-stats-list">
             {subjects.map(s => {
-              const mins = todaySessions
+              const secs = todaySessions
                 .filter(ss => ss.subjectId === s.id)
-                .reduce((sum, ss) => sum + ss.durationMinutes, 0);
-              const goal = s.dailyGoalMinutes;
-              const pct = goal > 0 ? Math.min((mins / goal) * 100, 100) : 0;
+                .reduce((sum, ss) => sum + (ss.durationSeconds ?? ss.durationMinutes * 60), 0);
+              const goalSecs = s.dailyGoalMinutes * 60;
+              const pct = goalSecs > 0 ? Math.min((secs / goalSecs) * 100, 100) : 0;
               return (
                 <div key={s.id} className="subject-stat-row">
                   <div className="subject-stat-info">
@@ -153,7 +154,7 @@ export function Timer({
                       <div className="mini-progress-fill" style={{ width: `${pct}%`, backgroundColor: s.color }} />
                     </div>
                     <span className="subject-stat-time">
-                      {formatDuration(mins)}{goal > 0 ? ` / ${formatDuration(goal)}` : ''}
+                      {formatDuration(secs)}{goalSecs > 0 ? ` / ${formatDuration(goalSecs)}` : ''}
                     </span>
                   </div>
                 </div>

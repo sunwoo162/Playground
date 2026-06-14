@@ -8,30 +8,31 @@ interface Props {
   onSessionDeleted: () => void;
 }
 
+const getDurationSecs = (s: StudySession) => s.durationSeconds ?? s.durationMinutes * 60;
+
 export function Stats({ subjects, sessions, onSessionDeleted }: Props) {
   const weekDates = getWeekDates();
   const dayLabels = ['일', '월', '화', '수', '목', '금', '토'];
-
   const getSubject = (id: string) => subjects.find(s => s.id === id);
 
-  // 주간 일별 공부 시간
+  // 주간 일별 공부 시간 (초)
   const weekData = weekDates.map(date => {
-    const total = sessions.filter(s => s.date === date).reduce((sum, s) => sum + s.durationMinutes, 0);
+    const total = sessions.filter(s => s.date === date).reduce((sum, s) => sum + getDurationSecs(s), 0);
     return { date, total };
   });
   const maxWeek = Math.max(...weekData.map(d => d.total), 1);
 
-  // 전체 과목별 누적
+  // 전체 과목별 누적 (초)
   const subjectTotals = subjects.map(s => ({
     subject: s,
-    total: sessions.filter(ss => ss.subjectId === s.id).reduce((sum, ss) => sum + ss.durationMinutes, 0),
+    total: sessions.filter(ss => ss.subjectId === s.id).reduce((sum, ss) => sum + getDurationSecs(ss), 0),
   })).sort((a, b) => b.total - a.total);
 
   const streak = getStreak(sessions);
   const weekDays = getWeekStudyDays(sessions);
-  const totalAll = sessions.reduce((sum, s) => sum + s.durationMinutes, 0);
+  const totalAllSeconds = sessions.reduce((sum, s) => sum + getDurationSecs(s), 0);
+  const avgWeekSeconds = Math.floor(weekData.reduce((s, d) => s + d.total, 0) / 7);
 
-  // 최근 기록
   const recentSessions = [...sessions].slice(0, 20);
 
   const handleDelete = (id: string) => {
@@ -41,25 +42,25 @@ export function Stats({ subjects, sessions, onSessionDeleted }: Props) {
 
   return (
     <div className="stats-page">
-      {/* 전체 통계 카드 */}
+      {/* 통계 카드 */}
       <div className="stat-cards-row">
         <div className="stat-card-item">
           <span className="stat-card-label">총 공부 시간</span>
-          <span className="stat-card-value">{formatDuration(totalAll)}</span>
+          <span className="stat-card-value">{formatDuration(totalAllSeconds)}</span>
         </div>
         <div className="stat-card-item">
           <span className="stat-card-label">🔥 연속</span>
           <span className="stat-card-value" style={{ color: streak > 0 ? '#ffa502' : undefined }}>{streak}일</span>
         </div>
         <div className="stat-card-item">
-          <span className="stat-card-label">이번주 출석</span>
-          <span className="stat-card-value">{weekDays}일</span>
+          <span className="stat-card-label">일 평균 (7일)</span>
+          <span className="stat-card-value">{formatDuration(avgWeekSeconds)}</span>
         </div>
       </div>
 
       {/* 주간 바 차트 */}
       <div className="section-card">
-        <h3 className="section-title">📊 주간 현황</h3>
+        <h3 className="section-title">📊 주간 현황 (이번주 {weekDays}일 출석)</h3>
         <div className="week-chart">
           {weekData.map((d, _i) => {
             const date = new Date(d.date);
@@ -99,7 +100,7 @@ export function Stats({ subjects, sessions, onSessionDeleted }: Props) {
                 <div className="bar-track-sm">
                   <div
                     className="bar-fill-sm"
-                    style={{ width: `${totalAll > 0 ? (total / totalAll) * 100 : 0}%`, backgroundColor: subject.color }}
+                    style={{ width: `${totalAllSeconds > 0 ? (total / totalAllSeconds) * 100 : 0}%`, backgroundColor: subject.color }}
                   />
                 </div>
                 <span className="subject-total-time">{formatDuration(total)}</span>
@@ -126,14 +127,14 @@ export function Stats({ subjects, sessions, onSessionDeleted }: Props) {
                     <div className="session-subject">{subject?.name ?? '삭제된 과목'}</div>
                     <div className="session-time-info">
                       {session.date} &nbsp;
-                      {start.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })} ~
-                      {end.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                      {start.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })} ~
+                      {end.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                     </div>
                     {session.memo && <div className="session-memo">{session.memo}</div>}
                   </div>
                 </div>
                 <div className="session-right">
-                  <span className="session-duration">{formatDuration(session.durationMinutes)}</span>
+                  <span className="session-duration">{formatDuration(getDurationSecs(session))}</span>
                   <button className="btn-del" onClick={() => handleDelete(session.id)}>✕</button>
                 </div>
               </div>

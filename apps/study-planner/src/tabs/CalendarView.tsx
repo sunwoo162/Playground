@@ -18,11 +18,13 @@ export function CalendarView({ subjects, sessions, dailyGoalMinutes }: Props) {
   const dayLabels = ['일', '월', '화', '수', '목', '금', '토'];
 
   const getDayTotal = (date: string) =>
-    sessions.filter(s => s.date === date).reduce((sum, s) => sum + s.durationMinutes, 0);
+    sessions.filter(s => s.date === date).reduce((sum, s) => sum + (s.durationSeconds ?? s.durationMinutes * 60), 0);
 
-  const getColor = (mins: number): string => {
-    if (mins === 0) return 'transparent';
-    const ratio = Math.min(mins / dailyGoalMinutes, 1);
+  const dailyGoalSeconds = dailyGoalMinutes * 60;
+
+  const getColor = (secs: number): string => {
+    if (secs === 0) return 'transparent';
+    const ratio = Math.min(secs / dailyGoalSeconds, 1);
     if (ratio >= 1) return '#2ed573';
     if (ratio >= 0.7) return '#70a1ff';
     if (ratio >= 0.4) return '#a29bfe';
@@ -76,7 +78,7 @@ export function CalendarView({ subjects, sessions, dailyGoalMinutes }: Props) {
                   <div className="cal-dot" style={{ backgroundColor: getColor(mins) }} />
                 )}
                 {mins > 0 && (
-                  <span className="cal-mins">{Math.floor(mins / 60) > 0 ? `${Math.floor(mins/60)}h` : `${mins}m`}</span>
+                  <span className="cal-mins">{Math.floor(mins / 3600) > 0 ? `${Math.floor(mins/3600)}h` : `${Math.floor(mins/60)}m`}</span>
                 )}
               </div>
             );

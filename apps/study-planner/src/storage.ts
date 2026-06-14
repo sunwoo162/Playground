@@ -41,16 +41,26 @@ export function saveDailyGoal(goal: DailyGoal) {
   localStorage.setItem(KEYS.goal, JSON.stringify(goal));
 }
 
-// 날짜별 총 공부 시간 (분)
-export function getTotalMinutesByDate(date: string, sessions?: StudySession[]): number {
+// 날짜별 총 공부 시간 (초)
+export function getTotalSecondsByDate(date: string, sessions?: StudySession[]): number {
   const all = sessions ?? getSessions();
-  return all.filter(s => s.date === date).reduce((sum, s) => sum + s.durationMinutes, 0);
+  return all.filter(s => s.date === date).reduce((sum, s) => sum + (s.durationSeconds ?? s.durationMinutes * 60), 0);
 }
 
-// 과목별 총 공부 시간
-export function getMinutesBySubject(subjectId: string, sessions?: StudySession[]): number {
+// 날짜별 총 공부 시간 (분) - 하위 호환
+export function getTotalMinutesByDate(date: string, sessions?: StudySession[]): number {
+  return Math.floor(getTotalSecondsByDate(date, sessions) / 60);
+}
+
+// 과목별 총 공부 시간 (초)
+export function getTotalSecondsBySubject(subjectId: string, sessions?: StudySession[]): number {
   const all = sessions ?? getSessions();
-  return all.filter(s => s.subjectId === subjectId).reduce((sum, s) => sum + s.durationMinutes, 0);
+  return all.filter(s => s.subjectId === subjectId).reduce((sum, s) => sum + (s.durationSeconds ?? s.durationMinutes * 60), 0);
+}
+
+// 과목별 총 공부 시간 (분) - 하위 호환
+export function getMinutesBySubject(subjectId: string, sessions?: StudySession[]): number {
+  return Math.floor(getTotalSecondsBySubject(subjectId, sessions) / 60);
 }
 
 // 연속 공부 일수 (streak) - 오늘 포함

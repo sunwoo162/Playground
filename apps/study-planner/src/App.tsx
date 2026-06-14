@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import type { TabType } from './types';
-import { getSubjects, getSessions, getTotalMinutesByDate, getDailyGoal, addSession } from './storage';
+import { getSubjects, getSessions, getTotalSecondsByDate, getDailyGoal, addSession } from './storage';
 import { getTodayStr, formatTimer } from './utils';
 import type { StudySession } from './types';
 import { Timer } from './tabs/Timer';
@@ -119,6 +119,7 @@ function App() {
       date: getTodayStr(),
       startTime: startTime!.toISOString(),
       endTime: new Date().toISOString(),
+      durationSeconds: currentElapsed,
       durationMinutes: Math.floor(currentElapsed / 60),
       memo: memo.trim() || undefined,
     };
@@ -139,7 +140,7 @@ function App() {
     elapsedRef.current = 0;
   };
 
-  const todayTotal = getTotalMinutesByDate(getTodayStr(), sessions);
+  const todayTotalSeconds = getTotalSecondsByDate(getTodayStr(), sessions);
   const dailyGoal = getDailyGoal();
   const selectedSubject = subjects.find(s => s.id === selectedSubjectId);
 
@@ -185,7 +186,7 @@ function App() {
         {activeTab === 'timer' && (
           <Timer
             subjects={subjects}
-            todayTotal={todayTotal}
+            todayTotalSeconds={todayTotalSeconds}
             dailyGoalMinutes={dailyGoal.totalMinutes}
             running={running}
             elapsed={elapsed}
