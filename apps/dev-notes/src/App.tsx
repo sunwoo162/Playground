@@ -1,18 +1,34 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { Project } from './types';
-import { getProjects } from './storage';
+import { getProjectsAsync } from './storage';
 import { ProjectList } from './pages/ProjectList';
 import { ProjectDetail } from './pages/ProjectDetail';
 import './App.css';
 
 function App() {
-  const [projects, setProjects] = useState<Project[]>(getProjects);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [selected, setSelected] = useState<Project | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getProjectsAsync().then((data) => {
+      setProjects(data);
+      setLoading(false);
+    });
+  }, []);
 
   const handleUpdate = (updated: Project) => {
     setProjects((prev) => prev.map((p) => p.id === updated.id ? updated : p));
     setSelected(updated);
   };
+
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: '#888' }}>
+        불러오는 중...
+      </div>
+    );
+  }
 
   if (selected) {
     return (
