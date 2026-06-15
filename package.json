@@ -12,11 +12,13 @@
     "start": "node server/index.js"
   },
   "dependencies": {
+    "dotenv": "^16.4.5",
     "express": "^4.21.0",
     "express-session": "^1.18.0",
-    "dotenv": "^16.4.5"
+    "jsonwebtoken": "^9.0.3"
   },
   "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.4.0",

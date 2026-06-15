@@ -25,8 +25,9 @@ require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
 const path = require('path');
-const http = require('http');
-const https = require('https');
+const jwt = require('jsonwebtoken');
+
+const JWT_SECRET = process.env.JWT_SECRET || 'playground-jwt-secret-2024';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -151,10 +152,29 @@ app.get('/auth/github/callback', async (req, res) => {
     // 3단계: 세션에 사용자 정보 저장
     req.session.user = {
       id: userData.id,
-      login: userData.login,        // GitHub 아이디
-      name: userData.name,          // 표시 이름
-      avatar_url: userData.avatar_url, // 프로필 사진
+      login: userData.login,
+      name: userData.name,
+      avatar_url: userData.avatar_url,
     };
+
+    // 4단계: JWT 발급 (Spring Boot API 인증용)
+    const token = jwt.sign(
+      {
+        id: String(userData.id),
+        login: userData.login,
+        name: userData.name || userData.login,
+        avatar_url: userData.avatar_url,
+      },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    // JWT를 HttpOnly 쿠키로 저장 (XSS 방지)
+    res.cookie('playground_token', token, {
+      httpOnly: false, // 프론트에서 읽을 수 있게
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7일
+      sameSite: 'lax',
+    });
 
     // 로그인 성공 → 메인 페이지로 이동
     res.redirect('/');
@@ -185,6 +205,7 @@ app.get('/auth/me', (req, res) => {
  */
 app.post('/auth/logout', (req, res) => {
   req.session.destroy(() => {
+    res.clearCookie('playground_token');
     res.json({ success: true });
   });
 });

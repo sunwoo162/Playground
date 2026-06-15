@@ -31,3 +31,5 @@ server:
 app:
   cors:
     allowed-origins: http://ssh.gsmsv.site:30234
+  jwt:
+    secret: ${JWT_SECRET:playground-jwt-secret-2024}
