@@ -68,7 +68,7 @@ function App() {
   const [showFavOnly, setShowFavOnly] = useState(false);
 
   useEffect(() => {
-    fetch('/api/auth/me', { credentials: 'include' })
+    fetch('/auth/me', { credentials: 'include' })
       .then((res) => res.json())
       .then((data) => {
         setUser(data.user);
@@ -77,10 +77,10 @@ function App() {
       .catch(() => setLoading(false));
   }, []);
 
-  const handleLogin = () => { window.location.href = '/oauth2/authorization/github'; };
+  const handleLogin = () => { window.location.href = '/auth/github'; };
 
   const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+    await fetch('/auth/logout', { method: 'POST', credentials: 'include' });
     setUser(null);
     setPage('home');
   };
