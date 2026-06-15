@@ -18,11 +18,16 @@ public class AuthController {
         if (user == null) {
             return ResponseEntity.ok(Map.of("user", null));
         }
+        Object idAttr = user.getAttribute("id");
+        String id = idAttr != null ? String.valueOf(idAttr) : "";
+        Object nameAttr = user.getAttribute("name");
+        String name = nameAttr != null ? String.valueOf(nameAttr) : String.valueOf(user.getAttribute("login"));
+
         return ResponseEntity.ok(Map.of("user", Map.of(
-                "id", String.valueOf(user.getAttribute("id")),
-                "login", user.getAttribute("login"),
-                "name", user.getAttribute("name") != null ? user.getAttribute("name") : user.getAttribute("login"),
-                "avatar_url", user.getAttribute("avatar_url")
+                "id", id,
+                "login", String.valueOf(user.getAttribute("login")),
+                "name", name,
+                "avatar_url", String.valueOf(user.getAttribute("avatar_url"))
         )));
     }
 }

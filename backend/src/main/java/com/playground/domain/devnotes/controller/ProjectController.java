@@ -19,7 +19,8 @@ public class ProjectController {
     private final ProjectService projectService;
 
     private String getUserId(OAuth2User user) {
-        return String.valueOf(user.getAttribute("id"));
+        Object id = user.getAttribute("id");
+        return id != null ? String.valueOf(id) : "";
     }
 
     @GetMapping
