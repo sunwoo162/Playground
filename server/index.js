@@ -25,9 +25,12 @@ require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
 const path = require('path');
+const http = require('http');
+const https = require('https');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8080';
 
 // 세션 설정 (로그인 상태 유지)
 app.use(session({
@@ -41,6 +44,36 @@ app.use(session({
 }));
 
 app.use(express.json());
+
+function proxyToBackend(req, res) {
+  const targetUrl = new URL(req.originalUrl, BACKEND_URL);
+  const client = targetUrl.protocol === 'https:' ? https : http;
+
+  const proxyReq = client.request(
+    targetUrl,
+    {
+      method: req.method,
+      headers: {
+        ...req.headers,
+        host: targetUrl.host,
+        origin: BACKEND_URL,
+      },
+    },
+    (proxyRes) => {
+      res.writeHead(proxyRes.statusCode || 500, proxyRes.headers);
+      proxyRes.pipe(res);
+    }
+  );
+
+  proxyReq.on('error', (error) => {
+    console.error('Backend proxy error:', error);
+    res.status(502).json({ error: 'backend_unavailable' });
+  });
+
+  req.pipe(proxyReq);
+}
+
+app.use(['/api', '/oauth2', '/login/oauth2'], proxyToBackend);
 
 // ============================================
 // GitHub OAuth 라우트
