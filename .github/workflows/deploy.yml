@@ -1,0 +1,40 @@
+name: Deploy to Server
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          script: |
+            # 프론트엔드 업데이트
+            cd ~/playground
+            git pull origin main
+
+            # 앱 빌드
+            npm run build:all
+
+            # Spring Boot 빌드
+            cd ~/playground/backend
+            chmod +x gradlew
+            ./gradlew bootJar -x test
+
+            # 서버 재시작
+            pm2 restart playground
+
+            # Spring Boot 재시작
+            pm2 restart backend || pm2 start build/libs/playground-backend-*.jar \
+              --name backend \
+              --interpreter java \
+              -- -jar \
+              --spring.config.location=file:$HOME/playground/backend/src/main/resources/application.yml
