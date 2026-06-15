@@ -1,6 +1,7 @@
-import type { Subject, StudySession } from '../types';
-import { formatTimer, formatDuration, getTodayStr } from '../utils';
-import { getStreak, getWeekStudyDays } from '../storage';
+import type { Subject } from '../../../entities/subject';
+import type { StudySession } from '../../../entities/session';
+import { getStreak, getWeekStudyDays } from '../../../entities/session';
+import { formatTimer, formatDuration, getTodayStr, getSessionSeconds } from '../../../shared/lib';
 
 interface Props {
   subjects: Subject[];
@@ -33,7 +34,6 @@ export function Timer({
 
   return (
     <div className="timer-page">
-      {/* 상단 배지 */}
       <div className="badge-row">
         <div className="info-badge">
           <span className="badge-icon">🔥</span>
@@ -52,7 +52,6 @@ export function Timer({
         </div>
       </div>
 
-      {/* 오늘 진행률 */}
       <div className="daily-progress-card">
         <div className="daily-progress-header">
           <span>오늘의 목표</span>
@@ -68,9 +67,7 @@ export function Timer({
         </div>
       </div>
 
-      {/* 타이머 카드 */}
       <div className="timer-card" style={{ borderColor: running ? (selectedSubject?.color ?? '#70a1ff') : 'var(--border)' }}>
-        {/* 과목 선택 */}
         <div className="timer-subject-selector">
           {subjects.length === 0 ? (
             <p className="timer-no-subject">먼저 과목 탭에서 과목을 추가해주세요</p>
@@ -93,12 +90,10 @@ export function Timer({
           )}
         </div>
 
-        {/* 시간 표시 */}
         <div className="timer-display" style={{ color: running ? (selectedSubject?.color ?? '#e8e8e8') : '#e8e8e8' }}>
           {formatTimer(elapsed)}
         </div>
 
-        {/* 컨트롤 버튼 */}
         <div className="timer-controls">
           {!running ? (
             <button
@@ -132,7 +127,6 @@ export function Timer({
         )}
       </div>
 
-      {/* 오늘 과목별 현황 */}
       {subjects.length > 0 && (
         <div className="today-subjects">
           <h3 className="section-title">오늘의 과목별 현황</h3>
@@ -140,7 +134,7 @@ export function Timer({
             {subjects.map(s => {
               const secs = todaySessions
                 .filter(ss => ss.subjectId === s.id)
-                .reduce((sum, ss) => sum + (ss.durationSeconds ?? ss.durationMinutes * 60), 0);
+                .reduce((sum, ss) => sum + getSessionSeconds(ss), 0);
               const goalSecs = s.dailyGoalMinutes * 60;
               const pct = goalSecs > 0 ? Math.min((secs / goalSecs) * 100, 100) : 0;
               return (

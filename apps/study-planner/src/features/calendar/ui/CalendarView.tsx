@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import type { Subject, StudySession } from '../types';
-import { formatDuration, getMonthDates } from '../utils';
+import type { Subject } from '../../../entities/subject';
+import type { StudySession } from '../../../entities/session';
+import { formatDuration, getMonthDates, getSessionSeconds } from '../../../shared/lib';
 
 interface Props {
   subjects: Subject[];
@@ -16,11 +17,10 @@ export function CalendarView({ subjects, sessions, dailyGoalMinutes }: Props) {
 
   const cells = getMonthDates(year, month);
   const dayLabels = ['일', '월', '화', '수', '목', '금', '토'];
+  const dailyGoalSeconds = dailyGoalMinutes * 60;
 
   const getDayTotal = (date: string) =>
-    sessions.filter(s => s.date === date).reduce((sum, s) => sum + (s.durationSeconds ?? s.durationMinutes * 60), 0);
-
-  const dailyGoalSeconds = dailyGoalMinutes * 60;
+    sessions.filter(s => s.date === date).reduce((sum, s) => sum + getSessionSeconds(s), 0);
 
   const getColor = (secs: number): string => {
     if (secs === 0) return 'transparent';
@@ -31,18 +31,10 @@ export function CalendarView({ subjects, sessions, dailyGoalMinutes }: Props) {
     return '#3a3a5c';
   };
 
-  const prevMonth = () => {
-    if (month === 0) { setYear(y => y - 1); setMonth(11); }
-    else setMonth(m => m - 1);
-  };
-  const nextMonth = () => {
-    if (month === 11) { setYear(y => y + 1); setMonth(0); }
-    else setMonth(m => m + 1);
-  };
+  const prevMonth = () => month === 0 ? (setYear(y => y - 1), setMonth(11)) : setMonth(m => m - 1);
+  const nextMonth = () => month === 11 ? (setYear(y => y + 1), setMonth(0)) : setMonth(m => m + 1);
 
-  const selectedSessions = selectedDate
-    ? sessions.filter(s => s.date === selectedDate)
-    : [];
+  const selectedSessions = selectedDate ? sessions.filter(s => s.date === selectedDate) : [];
 
   return (
     <div className="calendar-page">
@@ -62,7 +54,7 @@ export function CalendarView({ subjects, sessions, dailyGoalMinutes }: Props) {
         <div className="calendar-grid">
           {cells.map((date, i) => {
             if (!date) return <div key={`empty-${i}`} className="cal-cell empty" />;
-            const mins = getDayTotal(date);
+            const secs = getDayTotal(date);
             const isToday = date === today.toISOString().split('T')[0];
             const isSelected = date === selectedDate;
             const dayNum = parseInt(date.split('-')[2]);
@@ -74,18 +66,17 @@ export function CalendarView({ subjects, sessions, dailyGoalMinutes }: Props) {
                 onClick={() => setSelectedDate(isSelected ? null : date)}
               >
                 <span className={`cal-day-num ${dayOfWeek === 0 ? 'sun' : ''}`}>{dayNum}</span>
-                {mins > 0 && (
-                  <div className="cal-dot" style={{ backgroundColor: getColor(mins) }} />
-                )}
-                {mins > 0 && (
-                  <span className="cal-mins">{Math.floor(mins / 3600) > 0 ? `${Math.floor(mins/3600)}h` : `${Math.floor(mins/60)}m`}</span>
+                {secs > 0 && <div className="cal-dot" style={{ backgroundColor: getColor(secs) }} />}
+                {secs > 0 && (
+                  <span className="cal-mins">
+                    {secs >= 3600 ? `${Math.floor(secs / 3600)}h` : `${Math.floor(secs / 60)}m`}
+                  </span>
                 )}
               </div>
             );
           })}
         </div>
 
-        {/* 범례 */}
         <div className="cal-legend">
           <span style={{ color: '#3a3a5c' }}>■</span> 입문
           <span style={{ color: '#a29bfe' }}>■</span> 40%↑
@@ -94,7 +85,6 @@ export function CalendarView({ subjects, sessions, dailyGoalMinutes }: Props) {
         </div>
       </div>
 
-      {/* 선택된 날짜 상세 */}
       {selectedDate && (
         <div className="section-card">
           <h3 className="section-title">{selectedDate} 기록</h3>
@@ -123,7 +113,7 @@ export function CalendarView({ subjects, sessions, dailyGoalMinutes }: Props) {
                           {session.memo && <div className="session-memo">{session.memo}</div>}
                         </div>
                       </div>
-                      <span className="session-duration">{formatDuration(session.durationMinutes)}</span>
+                      <span className="session-duration">{formatDuration(getSessionSeconds(session))}</span>
                     </div>
                   );
                 })}

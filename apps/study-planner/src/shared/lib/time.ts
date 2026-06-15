@@ -20,8 +20,8 @@ export function formatTimer(seconds: number): string {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   const s = seconds % 60;
-  if (h > 0) return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-  return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  if (h > 0) return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
 export function getTodayStr(): string {
@@ -50,8 +50,6 @@ export function getMonthDates(year: number, month: number): (string | null)[] {
   return cells;
 }
 
-export const SUBJECT_COLORS = [
-  '#70a1ff', '#ff6b81', '#2ed573', '#ffa502',
-  '#a29bfe', '#fd79a8', '#00cec9', '#e17055',
-  '#6c5ce7', '#fdcb6e', '#55efc4', '#d63031',
-];
+export function getSessionSeconds(session: { durationSeconds?: number; durationMinutes: number }): number {
+  return session.durationSeconds ?? session.durationMinutes * 60;
+}
