@@ -5,6 +5,6 @@ export interface StudySession {
   startTime: string;
   endTime: string;
   durationSeconds: number;
-  durationMinutes: number; // 하위 호환
+  durationMinutes: number;
   memo?: string;
 }
