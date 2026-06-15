@@ -76,7 +76,7 @@ function proxyToBackend(req, res) {
   req.pipe(proxyReq);
 }
 
-app.use(['/api', '/oauth2', '/login/oauth2'], proxyToBackend);
+app.use(['/api'], proxyToBackend);
 
 // ============================================
 // GitHub OAuth 라우트
