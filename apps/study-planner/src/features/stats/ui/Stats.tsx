@@ -1,6 +1,6 @@
 import type { Subject } from '../../../entities/subject';
 import type { StudySession } from '../../../entities/session';
-import { deleteSession, getStreak, getWeekStudyDays } from '../../../entities/session';
+import { deleteSessionAsync, getStreak, getWeekStudyDays } from '../../../entities/session';
 import { formatDuration, getWeekDates, getSessionSeconds } from '../../../shared/lib';
 
 interface Props {
@@ -32,7 +32,7 @@ export function Stats({ subjects, sessions, onSessionDeleted }: Props) {
   const recentSessions = [...sessions].slice(0, 20);
 
   const handleDelete = (id: string) => {
-    deleteSession(id);
+    deleteSessionAsync(id);
     onSessionDeleted();
   };
 

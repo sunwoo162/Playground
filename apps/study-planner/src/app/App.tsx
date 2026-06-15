@@ -1,9 +1,8 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import type { TabType } from '../shared/model/types';
 import type { StudySession } from '../entities/session';
-import { getSubjects } from '../entities/subject';
-import { getDailyGoal } from '../entities/subject';
-import { getSessions, addSession, getTotalSecondsByDate } from '../entities/session';
+import { getSubjectsAsync, getDailyGoalAsync } from '../entities/subject';
+import { getSessionsAsync, addSessionAsync } from '../entities/session';
 import { getTodayStr, requestNotificationPermission, sendNotification } from '../shared/lib';
 import { Timer } from '../features/timer';
 import { Stats } from '../features/stats';
@@ -15,20 +14,40 @@ import './App.css';
 
 function App() {
   const [activeTab, setActiveTab] = useState<TabType>('timer');
-  const [subjects, setSubjects] = useState(getSubjects);
-  const [sessions, setSessions] = useState(getSessions);
+  const [subjects, setSubjects] = useState<import('../entities/subject').Subject[]>([]);
+  const [sessions, setSessions] = useState<StudySession[]>([]);
+  const [dailyGoalMinutes, setDailyGoalMinutes] = useState(480);
+  const [loading, setLoading] = useState(true);
 
   const [running, setRunning] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [startTime, setStartTime] = useState<Date | null>(null);
-  const [selectedSubjectId, setSelectedSubjectId] = useState<string>(subjects[0]?.id ?? '');
+  const [selectedSubjectId, setSelectedSubjectId] = useState<string>('');
   const [memo, setMemo] = useState('');
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastNotifyHour = useRef<number>(0);
   const elapsedRef = useRef<number>(0);
 
-  useEffect(() => { requestNotificationPermission(); }, []);
+  // 초기 데이터 로드
+  useEffect(() => {
+    requestNotificationPermission();
+    Promise.all([getSubjectsAsync(), getSessionsAsync(), getDailyGoalAsync()])
+      .then(([subs, sess, goal]) => {
+        setSubjects(subs);
+        setSessions(sess);
+        setDailyGoalMinutes(goal.totalMinutes);
+        if (subs.length > 0) setSelectedSubjectId(subs[0].id);
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
+  useEffect(() => {
+    if (subjects.length > 0 && !selectedSubjectId) {
+      setSelectedSubjectId(subjects[0].id);
+    }
+  }, [subjects]);
+
+  // 타이머 인터벌
   useEffect(() => {
     if (running) {
       intervalRef.current = setInterval(() => {
@@ -41,7 +60,7 @@ function App() {
             const subject = subjects.find(s => s.id === selectedSubjectId);
             sendNotification(
               `⏱️ ${hours}시간 달성!`,
-              `${subject?.name ?? '공부'} ${hours}시간을 채웠어요. 잠깐 쉬어가도 좋아요! 🎉`
+              `${subject?.name ?? '공부'} ${hours}시간을 채웠어요! 🎉`
             );
           }
           return next;
@@ -53,11 +72,9 @@ function App() {
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [running, selectedSubjectId, subjects]);
 
-  useEffect(() => {
-    if (subjects.length > 0 && !selectedSubjectId) setSelectedSubjectId(subjects[0].id);
-  }, [subjects]);
-
-  const handleRefresh = useCallback(() => setSessions(getSessions()), []);
+  const handleRefresh = useCallback(() => {
+    getSessionsAsync().then(setSessions);
+  }, []);
 
   const handleStart = () => {
     if (!selectedSubjectId) return;
@@ -72,21 +89,23 @@ function App() {
     const currentElapsed = elapsedRef.current;
     if (currentElapsed < 1) { setElapsed(0); elapsedRef.current = 0; return; }
 
+    const now = new Date();
     const session: StudySession = {
       id: crypto.randomUUID(),
       subjectId: selectedSubjectId,
       date: getTodayStr(),
       startTime: startTime!.toISOString(),
-      endTime: new Date().toISOString(),
+      endTime: now.toISOString(),
       durationSeconds: currentElapsed,
       durationMinutes: Math.floor(currentElapsed / 60),
       memo: memo.trim() || undefined,
     };
-    addSession(session);
+    addSessionAsync(session).then(saved => {
+      setSessions(prev => [saved, ...prev]);
+    });
     setElapsed(0);
     elapsedRef.current = 0;
     setMemo('');
-    handleRefresh();
   };
 
   const handleReset = () => {
@@ -96,9 +115,19 @@ function App() {
     elapsedRef.current = 0;
   };
 
-  const todayTotalSeconds = getTotalSecondsByDate(getTodayStr(), sessions);
-  const dailyGoal = getDailyGoal();
+  const todayTotalSeconds = sessions
+    .filter(s => s.date === getTodayStr())
+    .reduce((sum, s) => sum + (s.durationSeconds ?? s.durationMinutes * 60), 0);
+
   const selectedSubject = subjects.find(s => s.id === selectedSubjectId);
+
+  if (loading) {
+    return (
+      <div className="app" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
+        <div style={{ color: '#888' }}>불러오는 중...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="app">
@@ -120,7 +149,7 @@ function App() {
           <Timer
             subjects={subjects}
             todayTotalSeconds={todayTotalSeconds}
-            dailyGoalMinutes={dailyGoal.totalMinutes}
+            dailyGoalMinutes={dailyGoalMinutes}
             running={running}
             elapsed={elapsed}
             selectedSubjectId={selectedSubjectId}
@@ -137,10 +166,14 @@ function App() {
           <Stats subjects={subjects} sessions={sessions} onSessionDeleted={handleRefresh} />
         )}
         {activeTab === 'calendar' && (
-          <CalendarView subjects={subjects} sessions={sessions} dailyGoalMinutes={dailyGoal.totalMinutes} />
+          <CalendarView subjects={subjects} sessions={sessions} dailyGoalMinutes={dailyGoalMinutes} />
         )}
         {activeTab === 'subjects' && (
-          <Subjects subjects={subjects} onSubjectsChange={setSubjects} />
+          <Subjects
+            subjects={subjects}
+            onSubjectsChange={setSubjects}
+            onGoalChange={setDailyGoalMinutes}
+          />
         )}
       </main>
     </div>
