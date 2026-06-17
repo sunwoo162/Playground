@@ -9,6 +9,7 @@
  */
 import type { Project } from './types';
 import * as api from './api/projectApi';
+import { generateId } from './utils/uuid';
 
 const KEY = 'dev-notes-projects';
 
@@ -87,7 +88,7 @@ function createProjectLocal(title: string, description: string): Project {
   const projects = localGetProjects();
   const now = new Date().toISOString();
   const project: Project = {
-    id: crypto.randomUUID(),
+    id: generateId(),
     title,
     description,
     createdAt: now,

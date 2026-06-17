@@ -1,4 +1,4 @@
-const BASE = 'http://ssh.gsmsv.site:8080/api/dev-notes/projects';
+const BASE = '/api/dev-notes/projects';
 
 // 인증 필요 fetch 래퍼
 async function authFetch(url: string, options: RequestInit = {}) {

@@ -3,7 +3,7 @@ import type { TabType } from '../shared/model/types';
 import type { StudySession } from '../entities/session';
 import { getSubjectsAsync, getDailyGoalAsync } from '../entities/subject';
 import { getSessionsAsync, addSessionAsync } from '../entities/session';
-import { getTodayStr, requestNotificationPermission, sendNotification } from '../shared/lib';
+import { getTodayStr, requestNotificationPermission, sendNotification, generateId } from '../shared/lib';
 import { Timer } from '../features/timer';
 import { Stats } from '../features/stats';
 import { CalendarView } from '../features/calendar';
@@ -91,7 +91,7 @@ function App() {
 
     const now = new Date();
     const session: StudySession = {
-      id: crypto.randomUUID(),
+      id: generateId(),
       subjectId: selectedSubjectId,
       date: getTodayStr(),
       startTime: startTime!.toISOString(),
