@@ -26,6 +26,7 @@ const APPS: AppItem[] = [
     emoji: '📊',
     url: '/apps/life-tracker/',
     color: '#70a1ff',
+    disabled: true,
   },
   {
     id: 'dev-notes',
@@ -44,7 +45,7 @@ const APPS: AppItem[] = [
   { id: 'cs7',  title: '링크 저장소',      description: '나중에 볼 링크, 읽을거리를 깔끔하게 저장',            emoji: '🔗', url: '#', color: '#00cec9', disabled: true },
   { id: 'cs8',  title: '레시피 노트',      description: '자주 해먹는 요리 레시피를 기록',                     emoji: '🍳', url: '#', color: '#e17055', disabled: true },
   { id: 'cs9',  title: '회고 일지',        description: '주간·월간 회고를 작성하고 성장 패턴 파악',            emoji: '🔍', url: '#', color: '#74b9ff', disabled: true },
-  { id: 'cs10', title: '스터디 플래너',   description: '과목별 타이머 + 공부 시간 추적 + 달력 히트맵',        emoji: '📅', url: '/apps/study-planner/', color: '#55efc4' },
+  { id: 'cs10', title: '스터디 플래너',   description: '과목별 타이머 + 공부 시간 추적 + 달력 히트맵',        emoji: '📅', url: '/apps/study-planner/', color: '#55efc4', disabled: true },
   { id: 'cs11', title: '감정 일기',        description: '오늘의 감정을 기록하고 감정 변화 흐름을 시각화',      emoji: '🌈', url: '#', color: '#fd79a8', disabled: true },
   { id: 'cs12', title: '여행 기록',        description: '다녀온 여행지와 기억을 사진과 함께 기록',             emoji: '✈️', url: '#', color: '#6c5ce7', disabled: true },
 ];
