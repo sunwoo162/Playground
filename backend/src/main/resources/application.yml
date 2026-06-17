@@ -28,6 +28,10 @@ spring:
 server:
   port: 8080
 
+logging:
+  level:
+    com.playground: DEBUG
+
 app:
   cors:
     allowed-origins: http://ssh.gsmsv.site:30234
