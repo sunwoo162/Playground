@@ -1,4 +1,4 @@
-const BASE = 'http://ssh.gsmsv.site:8080/api/study';
+const BASE = '/api/study';
 
 async function req<T>(url: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(url, {

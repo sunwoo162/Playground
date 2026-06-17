@@ -52,6 +52,11 @@ function proxyToBackend(req, res) {
   const targetUrl = new URL(req.originalUrl, BACKEND_URL);
   const client = targetUrl.protocol === 'https:' ? https : http;
 
+  // 쿠키 전달 확인용 로그
+  const cookieHeader = req.headers['cookie'] || '';
+  const hasToken = cookieHeader.includes('playground_token');
+  console.log(`[Proxy] ${req.method} ${req.originalUrl} | token: ${hasToken}`);
+
   const proxyReq = client.request(
     targetUrl,
     {
