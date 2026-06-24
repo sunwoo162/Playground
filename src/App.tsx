@@ -18,6 +18,28 @@ interface AppItem {
   disabled?: boolean;
 }
 
+// 쿠키에서 JWT 파싱 → 만료까지 남은 시간 계산
+function getTokenExpiry(): Date | null {
+  const match = document.cookie.match(/(?:^|;\s*)playground_token=([^;]+)/);
+  if (!match) return null;
+  try {
+    const payload = JSON.parse(atob(match[1].split('.')[1]));
+    return payload.exp ? new Date(payload.exp * 1000) : null;
+  } catch {
+    return null;
+  }
+}
+
+function formatTimeLeft(expiry: Date): string {
+  const diff = expiry.getTime() - Date.now();
+  if (diff <= 0) return '만료됨';
+  const m = Math.floor(diff / 60000);
+  const s = Math.floor((diff % 60000) / 1000);
+  if (m >= 60) return `${Math.floor(m / 60)}시간 ${m % 60}분`;
+  if (m > 0) return `${m}분 ${s}초`;
+  return `${s}초`;
+}
+
 const APPS: AppItem[] = [
   {
     id: 'life-tracker',
@@ -67,6 +89,8 @@ function App() {
   const [page, setPage] = useState<'home' | 'mypage'>('home');
   const [favorites, setFavorites] = useState<string[]>(getFavorites);
   const [showFavOnly, setShowFavOnly] = useState(false);
+  const [tokenExpiry, setTokenExpiry] = useState<Date | null>(null);
+  const [timeLeft, setTimeLeft] = useState<string>('');
 
   useEffect(() => {
     fetch('/auth/me', { credentials: 'include' })
@@ -74,9 +98,19 @@ function App() {
       .then((data) => {
         setUser(data.user);
         setLoading(false);
+        if (data.user) setTokenExpiry(getTokenExpiry());
       })
       .catch(() => setLoading(false));
   }, []);
+
+  // 1초마다 남은 시간 갱신
+  useEffect(() => {
+    if (!tokenExpiry) return;
+    const update = () => setTimeLeft(formatTimeLeft(tokenExpiry));
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, [tokenExpiry]);
 
   const handleLogin = () => { window.location.href = '/auth/github'; };
 
@@ -128,6 +162,11 @@ function App() {
         <div className="header-right">
           {user ? (
             <div className="user-info">
+              {timeLeft && (
+                <span className={`token-expiry ${timeLeft === '만료됨' ? 'expired' : ''}`}>
+                  🔑 {timeLeft}
+                </span>
+              )}
               <button className="avatar-btn" onClick={() => setPage('mypage')} aria-label="마이페이지">
                 <img src={user.avatar_url} alt={user.name} className="avatar" />
               </button>

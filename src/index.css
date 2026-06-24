@@ -314,7 +314,21 @@ body {
   }
 }
 
-/* 프로필/유저네임 클릭 버튼 */
+/* 토큰 만료 시간 */
+.token-expiry {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+
+.token-expiry.expired {
+  color: #ff4757;
+  border-color: #ff4757;
+}
 .avatar-btn {
   background: none;
   border: none;
