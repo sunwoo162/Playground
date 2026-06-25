@@ -66,8 +66,6 @@ export function getAccessTokenExpiry(): Date | null {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
     const payload = JSON.parse(atob(parts[1]));
-    // 액세스 토큰 타입만 허용
-    if (payload.type !== 'access') return null;
     return payload.exp ? new Date(payload.exp * 1000) : null;
   } catch {
     return null;
