@@ -57,15 +57,27 @@ function proxyToBackend(req, res) {
   const hasToken = cookieHeader.includes('playground_token');
   console.log(`[Proxy] ${req.method} ${req.originalUrl} | token: ${hasToken}`);
 
+  // express.json()이 바디를 파싱했으므로 다시 직렬화
+  const bodyData = req.body && Object.keys(req.body).length > 0
+    ? JSON.stringify(req.body)
+    : null;
+
+  const headers = {
+    ...req.headers,
+    host: targetUrl.host,
+    origin: BACKEND_URL,
+  };
+
+  if (bodyData) {
+    headers['content-length'] = Buffer.byteLength(bodyData).toString();
+    headers['content-type'] = 'application/json';
+  }
+
   const proxyReq = client.request(
     targetUrl,
     {
       method: req.method,
-      headers: {
-        ...req.headers,
-        host: targetUrl.host,
-        origin: BACKEND_URL,
-      },
+      headers,
     },
     (proxyRes) => {
       res.writeHead(proxyRes.statusCode || 500, proxyRes.headers);
@@ -78,7 +90,12 @@ function proxyToBackend(req, res) {
     res.status(502).json({ error: 'backend_unavailable' });
   });
 
-  req.pipe(proxyReq);
+  if (bodyData) {
+    proxyReq.write(bodyData);
+    proxyReq.end();
+  } else {
+    req.pipe(proxyReq);
+  }
 }
 
 app.use(['/api'], proxyToBackend);
