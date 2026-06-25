@@ -35,7 +35,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         log.debug("JWT Filter - URI: {}, token present: {}", request.getRequestURI(), token != null);
 
         if (token != null) {
-            if (jwtUtil.isValid(token)) {
+            if (jwtUtil.isValid(token) && !"refresh".equals(jwtUtil.getTokenType(token))) {
                 Claims claims = jwtUtil.parseToken(token);
                 String userId = claims.get("id", String.class);
                 log.info("JWT valid - userId: {}", userId);
