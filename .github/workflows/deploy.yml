@@ -51,21 +51,22 @@ jobs:
           password: ${{ secrets.SSH_PASSWORD }}
           script: |
             cd ~/playground
-            git pull origin main
+
+            # 서버에서 수정된 파일(application.yml 등) 무시하고 pull
+            git fetch origin main
+            git reset --hard origin/main
+
+            # 의존성 설치 및 프론트 빌드
             npm install --legacy-peer-deps
             npm run build:all
 
-            # ecosystem.config.js로 통합 관리
-            if pm2 describe playground > /dev/null 2>&1; then
-              pm2 reload ecosystem.config.js --only playground
-            else
-              pm2 start ecosystem.config.js --only playground
-            fi
+            # playground (Node.js) 재시작 - ecosystem으로 환경변수 포함
+            pm2 delete playground 2>/dev/null || true
+            export $(grep -v '^#' /home/ubuntu/playground/.env | xargs)
+            pm2 start ecosystem.config.js --only playground
 
-            # Spring Boot 재시작
-            if pm2 describe backend > /dev/null 2>&1; then
-              pm2 reload ecosystem.config.js --only backend
-            else
-              pm2 start ecosystem.config.js --only backend
-            fi
+            # backend (Spring Boot) 재시작 - 새 JAR 반영
+            pm2 delete backend 2>/dev/null || true
+            pm2 start ecosystem.config.js --only backend
+
             pm2 save
