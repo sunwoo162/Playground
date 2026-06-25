@@ -165,20 +165,37 @@ app.get('/auth/github/callback', async (req, res) => {
     };
 
     // 4단계: JWT 발급 (Spring Boot API 인증용)
-    const token = jwt.sign(
-      {
-        id: String(userData.id),
-        login: userData.login,
-        name: userData.name || userData.login,
-        avatar_url: userData.avatar_url,
-      },
+    const userPayload = {
+      id: String(userData.id),
+      login: userData.login,
+      name: userData.name || userData.login,
+      avatar_url: userData.avatar_url,
+    };
+
+    // 액세스 토큰 (1시간)
+    const accessToken = jwt.sign(
+      { ...userPayload, type: 'access' },
+      JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+
+    // 리프레시 토큰 (7일)
+    const refreshToken = jwt.sign(
+      { id: userPayload.id, type: 'refresh' },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
 
-    // JWT를 HttpOnly 쿠키로 저장 (XSS 방지)
-    res.cookie('playground_token', token, {
+    // 액세스 토큰 쿠키 (1시간)
+    res.cookie('playground_token', accessToken, {
       httpOnly: false, // 프론트에서 읽을 수 있게
+      maxAge: 60 * 60 * 1000, // 1시간
+      sameSite: 'lax',
+    });
+
+    // 리프레시 토큰 쿠키 (7일, HttpOnly로 보안 강화)
+    res.cookie('playground_refresh', refreshToken, {
+      httpOnly: true,
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7일
       sameSite: 'lax',
     });
@@ -213,6 +230,7 @@ app.get('/auth/me', (req, res) => {
 app.post('/auth/logout', (req, res) => {
   req.session.destroy(() => {
     res.clearCookie('playground_token');
+    res.clearCookie('playground_refresh');
     res.json({ success: true });
   });
 });
