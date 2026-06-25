@@ -67,7 +67,7 @@ function KVEditor({
   );
 }
 
-function KVReadonly({ label, rows }: { label: string; rows: KVRow[] }) {
+function KVReadonly({ label, rows }: { label: string; rows: { key: string; value: string; description?: string }[] }) {
   if (!rows || rows.length === 0) return null;
   return (
     <div className="kv-readonly">
