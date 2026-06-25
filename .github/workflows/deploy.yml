@@ -54,15 +54,18 @@ jobs:
             git pull origin main
             npm install --legacy-peer-deps
             npm run build:all
-            pm2 restart playground
+
+            # ecosystem.config.js로 통합 관리
+            if pm2 describe playground > /dev/null 2>&1; then
+              pm2 reload ecosystem.config.js --only playground
+            else
+              pm2 start ecosystem.config.js --only playground
+            fi
 
             # Spring Boot 재시작
             if pm2 describe backend > /dev/null 2>&1; then
-              pm2 restart backend
+              pm2 reload ecosystem.config.js --only backend
             else
-              pm2 start /home/ubuntu/playground/backend/build/libs/playground-backend-0.0.1-SNAPSHOT.jar \
-                --name backend \
-                --interpreter java \
-                --interpreter-args "-jar"
+              pm2 start ecosystem.config.js --only backend
             fi
             pm2 save
