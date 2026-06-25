@@ -20,10 +20,12 @@ interface AppItem {
 
 // 쿠키에서 JWT 파싱 → 만료까지 남은 시간 계산
 function getTokenExpiry(): Date | null {
-  const match = document.cookie.match(/(?:^|;\s*)playground_token=([^;]+)/);
-  if (!match) return null;
+  const cookies = document.cookie.split(';');
+  const tokenCookie = cookies.find(c => c.trim().startsWith('playground_token='));
+  if (!tokenCookie) return null;
   try {
-    const payload = JSON.parse(atob(match[1].split('.')[1]));
+    const token = tokenCookie.trim().substring('playground_token='.length);
+    const payload = JSON.parse(atob(token.split('.')[1]));
     return payload.exp ? new Date(payload.exp * 1000) : null;
   } catch {
     return null;
