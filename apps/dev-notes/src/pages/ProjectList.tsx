@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Project } from '../types';
-import { createProject, deleteProject } from '../storage';
+import { createProjectAsync, deleteProjectAsync } from '../storage';
 import { ConfirmModal } from '../components/ConfirmModal';
 
 interface Props {
@@ -14,19 +14,25 @@ export function ProjectList({ projects, onProjectsChange, onSelect }: Props) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
-  const handleCreate = (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
-    const project = createProject(title.trim(), description.trim());
-    onProjectsChange([project, ...projects]);
-    setTitle('');
-    setDescription('');
-    setShowForm(false);
+    setSaving(true);
+    try {
+      const project = await createProjectAsync(title.trim(), description.trim());
+      onProjectsChange([project, ...projects]);
+      setTitle('');
+      setDescription('');
+      setShowForm(false);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleDelete = (id: string) => {
-    deleteProject(id);
+  const handleDelete = async (id: string) => {
+    await deleteProjectAsync(id);
     onProjectsChange(projects.filter((p) => p.id !== id));
     setDeleteTarget(null);
   };
@@ -74,7 +80,9 @@ export function ProjectList({ projects, onProjectsChange, onSelect }: Props) {
             />
           </div>
           <div className="form-actions">
-            <button type="submit" className="btn-primary">만들기</button>
+            <button type="submit" className="btn-primary" disabled={saving}>
+              {saving ? '저장 중...' : '만들기'}
+            </button>
             <button type="button" className="btn-ghost" onClick={() => setShowForm(false)}>취소</button>
           </div>
         </form>

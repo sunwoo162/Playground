@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Project, TabType } from '../types';
-import { updateProject } from '../storage';
+import { updateProjectAsync } from '../storage';
 import { ProjectOverview } from './tabs/ProjectOverview';
 import { FeatureSpec } from './tabs/FeatureSpec';
 import { ApiSpec } from './tabs/ApiSpec';
@@ -25,7 +25,7 @@ export function ProjectDetail({ project, onBack, onUpdate }: Props) {
   const [titleInput, setTitleInput] = useState(project.title);
 
   const save = (updated: Project) => {
-    updateProject(updated);
+    updateProjectAsync(updated);
     onUpdate(updated);
   };
 
