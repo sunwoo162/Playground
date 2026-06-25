@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { MyPage } from './pages/MyPage'
+import { getAccessTokenExpiry, formatTimeLeft } from './api/auth'
 
 interface User {
   id: number;
@@ -16,30 +17,6 @@ interface AppItem {
   url: string;
   color: string;
   disabled?: boolean;
-}
-
-// 쿠키에서 JWT 파싱 → 만료까지 남은 시간 계산
-function getTokenExpiry(): Date | null {
-  const cookies = document.cookie.split(';');
-  const tokenCookie = cookies.find(c => c.trim().startsWith('playground_token='));
-  if (!tokenCookie) return null;
-  try {
-    const token = tokenCookie.trim().substring('playground_token='.length);
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    return payload.exp ? new Date(payload.exp * 1000) : null;
-  } catch {
-    return null;
-  }
-}
-
-function formatTimeLeft(expiry: Date): string {
-  const diff = expiry.getTime() - Date.now();
-  if (diff <= 0) return '만료됨';
-  const m = Math.floor(diff / 60000);
-  const s = Math.floor((diff % 60000) / 1000);
-  if (m >= 60) return `${Math.floor(m / 60)}시간 ${m % 60}분`;
-  if (m > 0) return `${m}분 ${s}초`;
-  return `${s}초`;
 }
 
 const APPS: AppItem[] = [
@@ -100,15 +77,33 @@ function App() {
       .then((data) => {
         setUser(data.user);
         setLoading(false);
-        if (data.user) setTokenExpiry(getTokenExpiry());
+        if (data.user) setTokenExpiry(getAccessTokenExpiry());
       })
       .catch(() => setLoading(false));
   }, []);
 
-  // 1초마다 남은 시간 갱신
+  // 1초마다 남은 시간 갱신 + 만료 5분 전 자동 갱신
   useEffect(() => {
     if (!tokenExpiry) return;
-    const update = () => setTimeLeft(formatTimeLeft(tokenExpiry));
+    const update = () => {
+      const diff = tokenExpiry.getTime() - Date.now();
+      setTimeLeft(formatTimeLeft(tokenExpiry));
+      // 만료 5분 전 자동 갱신
+      if (diff > 0 && diff < 5 * 60 * 1000) {
+        fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' })
+          .then((res) => {
+            if (res.ok) setTokenExpiry(getAccessTokenExpiry());
+          });
+      }
+      // 만료됐으면 갱신 시도
+      if (diff <= 0) {
+        fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' })
+          .then((res) => {
+            if (res.ok) setTokenExpiry(getAccessTokenExpiry());
+            else { setUser(null); }
+          });
+      }
+    };
     update();
     const id = setInterval(update, 1000);
     return () => clearInterval(id);
