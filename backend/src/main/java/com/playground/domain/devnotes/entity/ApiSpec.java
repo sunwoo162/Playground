@@ -35,5 +35,11 @@ public class ApiSpec {
     @Column(columnDefinition = "TEXT")
     private String responseBody;
 
+    @Column(columnDefinition = "TEXT")
+    private String headers;
+
+    @Column(columnDefinition = "TEXT")
+    private String queryParams;
+
     public enum HttpMethod { GET, POST, PUT, PATCH, DELETE }
 }

@@ -60,6 +60,8 @@ export async function updateProjectAsync(project: Project): Promise<void> {
         method: a.method,
         endpoint: a.endpoint,
         description: a.description,
+        headers: a.headers ? JSON.stringify(a.headers) : undefined,
+        queryParams: a.queryParams ? JSON.stringify(a.queryParams) : undefined,
         requestBody: a.requestBody,
         responseBody: a.responseBody,
       })),
@@ -135,7 +137,11 @@ function mapApiProject(d: Record<string, unknown>): Project {
       ? (typeof d.overview === 'string' ? JSON.parse(d.overview) : d.overview)
       : { background: '', techStack: '', targetUsers: '', schedule: '', links: [] },
     spec: Array.isArray(d.spec) ? d.spec as Project['spec'] : [],
-    api: Array.isArray(d.api) ? d.api as Project['api'] : [],
+    api: Array.isArray(d.api) ? (d.api as Record<string, unknown>[]).map(a => ({
+      ...a,
+      headers: typeof a.headers === 'string' ? JSON.parse(a.headers) : (a.headers ?? []),
+      queryParams: typeof a.queryParams === 'string' ? JSON.parse(a.queryParams) : (a.queryParams ?? []),
+    })) as Project['api'] : [],
     users: Array.isArray(d.users) ? d.users as Project['users'] : [],
   };
 }

@@ -37,6 +37,8 @@ export interface ApiSpec {
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   endpoint: string;
   description: string;
+  headers?: { key: string; value: string; description?: string }[];
+  queryParams?: { key: string; value: string; description?: string }[];
   requestBody?: string;
   responseBody?: string;
 }

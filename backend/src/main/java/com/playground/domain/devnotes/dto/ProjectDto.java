@@ -51,6 +51,8 @@ public class ProjectDto {
         private String method;
         private String endpoint;
         private String description;
+        private String headers;
+        private String queryParams;
         private String requestBody;
         private String responseBody;
     }
