@@ -6,13 +6,19 @@ import com.playground.domain.friend.repository.FriendshipRepository;
 import com.playground.domain.user.entity.User;
 import com.playground.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -20,6 +26,10 @@ public class FriendService {
 
     private final FriendshipRepository friendshipRepository;
     private final UserRepository userRepository;
+    private final RestTemplate restTemplate = new RestTemplate();
+
+    @Value("${app.node-url:http://localhost:3000}")
+    private String nodeUrl;
 
     // 유저 검색 (놀이터 가입자 한정, 자기 자신 제외)
     public List<FriendDto.UserResponse> searchUsers(String query, String myId) {
@@ -80,6 +90,24 @@ public class FriendService {
             .receiverId(receiverId)
             .status(Friendship.Status.PENDING)
             .build());
+
+        // Web Push 알림 발송 (비동기, 실패해도 요청은 성공)
+        try {
+            User requester = userRepository.findById(requesterId).orElse(null);
+            String requesterName = requester != null ? (requester.getName() != null ? requester.getName() : requester.getLogin()) : requesterId;
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            Map<String, String> pushBody = Map.of(
+                "userId", receiverId,
+                "title", "새 친구 요청",
+                "body", requesterName + "님이 친구 요청을 보냈어요!",
+                "url", "/mypage"
+            );
+            restTemplate.postForEntity(nodeUrl + "/internal/push/send", new HttpEntity<>(pushBody, headers), String.class);
+        } catch (Exception e) {
+            log.warn("Push notification failed for friend request: {}", e.getMessage());
+        }
     }
 
     // 받은 친구 요청 목록

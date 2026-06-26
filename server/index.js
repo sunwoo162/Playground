@@ -28,8 +28,16 @@ const path = require('path');
 const http = require('http');
 const https = require('https');
 const jwt = require('jsonwebtoken');
+const webpush = require('web-push');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'playground-jwt-secret-2024';
+
+// Web Push VAPID 설정
+webpush.setVapidDetails(
+  process.env.VAPID_EMAIL || 'mailto:admin@playground.com',
+  process.env.VAPID_PUBLIC_KEY || '',
+  process.env.VAPID_PRIVATE_KEY || ''
+);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -101,13 +109,58 @@ function proxyToBackend(req, res) {
 app.use(['/api'], proxyToBackend);
 
 // ============================================
-// GitHub OAuth 라우트
+// Web Push
 // ============================================
 
+/** VAPID 공개키 반환 */
+app.get('/push/vapid-public-key', (req, res) => {
+  res.json({ publicKey: process.env.VAPID_PUBLIC_KEY });
+});
+
+/** 특정 유저에게 Web Push 발송 */
+async function sendPushNotification(userId, payload) {
+  try {
+    const subscriptions = await new Promise((resolve) => {
+      const targetUrl = new URL(`/internal/push/subscriptions/${userId}`, BACKEND_URL);
+      const client = targetUrl.protocol === 'https:' ? https : http;
+      const req = client.get(targetUrl, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try { resolve(JSON.parse(data)); } catch { resolve([]); }
+        });
+      });
+      req.on('error', () => resolve([]));
+    });
+
+    await Promise.allSettled(
+      subscriptions.map(sub =>
+        webpush.sendNotification(
+          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.authKey } },
+          JSON.stringify(payload)
+        )
+      )
+    );
+  } catch (err) {
+    console.error('Push notification error:', err);
+  }
+}
+
 /**
- * GET /auth/github
- * GitHub 로그인 시작 - GitHub 인증 페이지로 리다이렉트
+ * POST /internal/push/send
+ * Spring Boot에서 호출 → Node.js가 Web Push 발송
+ * { userId, title, body, url }
  */
+app.post('/internal/push/send', async (req, res) => {
+  const { userId, title, body, url } = req.body;
+  if (!userId) return res.status(400).json({ error: 'userId required' });
+  await sendPushNotification(userId, { title, body, url });
+  res.json({ success: true });
+});
+
+// ============================================
+// GitHub OAuth 라우트
+// ============================================
 app.get('/auth/github', (req, res) => {
   const clientId = process.env.GITHUB_CLIENT_ID;
   const callbackUrl = process.env.CALLBACK_URL;

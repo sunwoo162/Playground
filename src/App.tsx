@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { MyPage } from './pages/MyPage'
 import { getAccessTokenExpiry, formatTimeLeft } from './api/auth'
+import { registerPushSubscription } from './api/push'
 
 interface User {
   id: number;
@@ -77,7 +78,10 @@ function App() {
       .then((data) => {
         setUser(data.user);
         setLoading(false);
-        if (data.user) setTokenExpiry(getAccessTokenExpiry());
+        if (data.user) {
+          setTokenExpiry(getAccessTokenExpiry());
+          registerPushSubscription(); // 로그인 시 Push 구독 등록
+        }
       })
       .catch(() => setLoading(false));
   }, []);
