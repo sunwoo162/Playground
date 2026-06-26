@@ -693,3 +693,21 @@ body {
   border-color: var(--accent-blue);
   color: var(--accent-blue);
 }
+
+/* ========== Primary Button (마이페이지 공통) ========== */
+.btn-primary {
+  padding: 8px 16px;
+  background: var(--accent-blue);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  white-space: nowrap;
+}
+
+.btn-primary:hover { opacity: 0.85; }
+.btn-primary:disabled { opacity: 0.4; cursor: default; }
+.btn-primary.btn-sm { padding: 6px 14px; font-size: 0.8rem; }
