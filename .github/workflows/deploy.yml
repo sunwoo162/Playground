@@ -70,3 +70,4 @@ jobs:
             pm2 start ecosystem.config.js --only backend
 
             pm2 save
+            sudo systemctl reload nginx 2>/dev/null || true
