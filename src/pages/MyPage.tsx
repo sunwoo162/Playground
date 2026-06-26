@@ -28,6 +28,7 @@ interface MyPageProps {
   user: User;
   onLogout: () => void;
   onBack: () => void;
+  initialTab?: Tab;
 }
 
 type Tab = 'apps' | 'friends';
@@ -38,13 +39,14 @@ const APPS = [
   { id: 'study-planner', title: '스터디 플래너', emoji: '📅', url: '/apps/study-planner/' },
 ];
 
-export function MyPage({ user, onLogout, onBack }: MyPageProps) {
-  const [tab, setTab] = useState<Tab>('apps');
+export function MyPage({ user, onLogout, onBack, initialTab = 'apps' }: MyPageProps) {
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<FriendUser[]>([]);
   const [searching, setSearching] = useState(false);
   const [friends, setFriends] = useState<FriendUser[]>([]);
   const [requests, setRequests] = useState<FriendRequest[]>([]);
+  const [recentUsers, setRecentUsers] = useState<FriendUser[]>([]);
   const [loadingFriends, setLoadingFriends] = useState(false);
 
   useEffect(() => {
@@ -54,12 +56,14 @@ export function MyPage({ user, onLogout, onBack }: MyPageProps) {
   const loadFriendsData = async () => {
     setLoadingFriends(true);
     try {
-      const [friendsRes, requestsRes] = await Promise.all([
+      const [friendsRes, requestsRes, recentRes] = await Promise.all([
         fetch('/api/friends', { credentials: 'include' }),
         fetch('/api/friends/requests', { credentials: 'include' }),
+        fetch('/api/friends/recent', { credentials: 'include' }),
       ]);
       if (friendsRes.ok) setFriends(await friendsRes.json());
       if (requestsRes.ok) setRequests(await requestsRes.json());
+      if (recentRes.ok) setRecentUsers(await recentRes.json());
     } finally {
       setLoadingFriends(false);
     }
@@ -80,7 +84,10 @@ export function MyPage({ user, onLogout, onBack }: MyPageProps) {
   const sendRequest = async (githubId: string) => {
     const res = await fetch(`/api/friends/request/${githubId}`, { method: 'POST', credentials: 'include' });
     if (res.ok) {
-      setSearchResults(prev => prev.map(u => u.githubId === githubId ? { ...u, friendStatus: 'PENDING_SENT' } : u));
+      const updateStatus = (prev: FriendUser[]) =>
+        prev.map(u => u.githubId === githubId ? { ...u, friendStatus: 'PENDING_SENT' } : u);
+      setSearchResults(updateStatus);
+      setRecentUsers(updateStatus);
     }
   };
 
@@ -204,6 +211,30 @@ export function MyPage({ user, onLogout, onBack }: MyPageProps) {
                       </div>
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {/* 최근 가입자 */}
+            {!searchQuery && recentUsers.length > 0 && (
+              <div className="friend-search-section">
+                <h3 className="section-heading">🆕 최근 가입자</h3>
+                <div className="friend-list">
+                  {recentUsers.map(u => {
+                    const { label, cls, action } = statusLabel(u.friendStatus);
+                    return (
+                      <div key={u.githubId} className="friend-item">
+                        <img src={u.avatarUrl} alt={u.login} className="friend-avatar" />
+                        <div className="friend-info">
+                          <span className="friend-name">{u.name || u.login}</span>
+                          <span className="friend-login">@{u.login}</span>
+                        </div>
+                        <button className={cls} onClick={() => action && sendRequest(u.githubId)} disabled={!action}>
+                          {label}
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}

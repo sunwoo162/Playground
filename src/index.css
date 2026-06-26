@@ -673,3 +673,23 @@ body {
 .btn-ghost.btn-sm { padding: 5px 12px; font-size: 0.78rem; }
 .btn-ghost.danger:hover { color: #ff4757; border-color: #ff4757; }
 .btn-ghost:disabled { opacity: 0.5; cursor: default; }
+
+/* 친구 버튼 */
+.btn-friends {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  color: var(--text);
+  font-size: 1rem;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-friends:hover {
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}

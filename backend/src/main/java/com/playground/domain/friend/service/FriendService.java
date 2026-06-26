@@ -25,26 +25,42 @@ public class FriendService {
     public List<FriendDto.UserResponse> searchUsers(String query, String myId) {
         return userRepository.findByLoginContainingIgnoreCase(query).stream()
             .filter(u -> !u.getGithubId().equals(myId))
-            .map(u -> {
-                Optional<Friendship> rel = friendshipRepository.findBetween(myId, u.getGithubId());
-                String status = null;
-                if (rel.isPresent()) {
-                    Friendship f = rel.get();
-                    if (f.getStatus() == Friendship.Status.ACCEPTED) {
-                        status = "ACCEPTED";
-                    } else if (f.getStatus() == Friendship.Status.PENDING) {
-                        status = f.getRequesterId().equals(myId) ? "PENDING_SENT" : "PENDING_RECEIVED";
-                    }
-                }
-                return FriendDto.UserResponse.builder()
-                    .githubId(u.getGithubId())
-                    .login(u.getLogin())
-                    .name(u.getName())
-                    .avatarUrl(u.getAvatarUrl())
-                    .friendStatus(status)
-                    .build();
-            })
+            .map(u -> toUserResponse(u, myId))
             .collect(Collectors.toList());
+    }
+
+    // 최근 가입자 목록 (자기 자신 제외, 최근 20명)
+    public List<FriendDto.UserResponse> getRecentUsers(String myId) {
+        return userRepository.findAll().stream()
+            .filter(u -> !u.getGithubId().equals(myId))
+            .sorted((a, b) -> {
+                if (a.getLastLoginAt() == null) return 1;
+                if (b.getLastLoginAt() == null) return -1;
+                return b.getLastLoginAt().compareTo(a.getLastLoginAt());
+            })
+            .limit(20)
+            .map(u -> toUserResponse(u, myId))
+            .collect(Collectors.toList());
+    }
+
+    private FriendDto.UserResponse toUserResponse(User u, String myId) {
+        Optional<Friendship> rel = friendshipRepository.findBetween(myId, u.getGithubId());
+        String status = null;
+        if (rel.isPresent()) {
+            Friendship f = rel.get();
+            if (f.getStatus() == Friendship.Status.ACCEPTED) {
+                status = "ACCEPTED";
+            } else if (f.getStatus() == Friendship.Status.PENDING) {
+                status = f.getRequesterId().equals(myId) ? "PENDING_SENT" : "PENDING_RECEIVED";
+            }
+        }
+        return FriendDto.UserResponse.builder()
+            .githubId(u.getGithubId())
+            .login(u.getLogin())
+            .name(u.getName())
+            .avatarUrl(u.getAvatarUrl())
+            .friendStatus(status)
+            .build();
     }
 
     // 친구 요청 보내기
@@ -108,15 +124,7 @@ public class FriendService {
         return friendshipRepository.findFriends(userId).stream()
             .map(f -> {
                 String friendId = f.getRequesterId().equals(userId) ? f.getReceiverId() : f.getRequesterId();
-                return userRepository.findById(friendId).map(u ->
-                    FriendDto.UserResponse.builder()
-                        .githubId(u.getGithubId())
-                        .login(u.getLogin())
-                        .name(u.getName())
-                        .avatarUrl(u.getAvatarUrl())
-                        .friendStatus("ACCEPTED")
-                        .build()
-                ).orElse(null);
+                return userRepository.findById(friendId).map(u -> toUserResponse(u, userId)).orElse(null);
             })
             .filter(u -> u != null)
             .collect(Collectors.toList());

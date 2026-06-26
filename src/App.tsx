@@ -65,7 +65,7 @@ function saveFavorites(ids: string[]) {
 function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState<'home' | 'mypage'>('home');
+  const [page, setPage] = useState<'home' | 'mypage' | 'friends'>('home');
   const [favorites, setFavorites] = useState<string[]>(getFavorites);
   const [showFavOnly, setShowFavOnly] = useState(false);
   const [tokenExpiry, setTokenExpiry] = useState<Date | null>(null);
@@ -116,7 +116,6 @@ function App() {
     setUser(null);
     setPage('home');
   };
-
   const toggleFavorite = (id: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -145,6 +144,18 @@ function App() {
         user={user}
         onLogout={handleLogout}
         onBack={() => setPage('home')}
+        initialTab="apps"
+      />
+    );
+  }
+
+  if (page === 'friends' && user) {
+    return (
+      <MyPage
+        user={user}
+        onLogout={handleLogout}
+        onBack={() => setPage('home')}
+        initialTab="friends"
       />
     );
   }
@@ -164,6 +175,9 @@ function App() {
                   🔑 {timeLeft}
                 </span>
               )}
+              <button className="btn-friends" onClick={() => setPage('friends')} aria-label="친구">
+                👥
+              </button>
               <button className="avatar-btn" onClick={() => setPage('mypage')} aria-label="마이페이지">
                 <img src={user.avatar_url} alt={user.name} className="avatar" />
               </button>

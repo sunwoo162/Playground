@@ -26,6 +26,13 @@ public class FriendController {
         return ResponseEntity.ok(friendService.searchUsers(q, auth.getUserId()));
     }
 
+    // 최근 가입자 목록
+    @GetMapping("/recent")
+    public ResponseEntity<List<FriendDto.UserResponse>> getRecentUsers(
+            @AuthenticationPrincipal JwtAuthenticationToken auth) {
+        return ResponseEntity.ok(friendService.getRecentUsers(auth.getUserId()));
+    }
+
     // 친구 요청 보내기
     @PostMapping("/request/{receiverId}")
     public ResponseEntity<Map<String, Boolean>> sendRequest(
