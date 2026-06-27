@@ -71,3 +71,6 @@ jobs:
 
             pm2 save
             sudo systemctl reload nginx 2>/dev/null || true
+
+            # Notion 업데이트
+            node scripts/notion-sync.js update || true
