@@ -93,10 +93,12 @@ export function ProjectDetail({ project, onBack, onUpdate }: Props) {
     background: '', techStack: '', targetUsers: '', schedule: '', links: [],
   };
 
-  // 이미 공유된 친구 ID 목록
+  // 이미 공유된 유저 ID 목록 (소유자 포함)
   const sharedIds = sharedUsers.map(u => u.userId);
-  // 공유 가능한 친구 (아직 공유 안 된)
-  const sharableFriends = friends.filter(f => !sharedIds.includes(f.githubId));
+  // 공유 가능한 친구 (이미 팀원이 아닌 + 소유자가 아닌)
+  const sharableFriends = friends.filter(f => 
+    !sharedIds.includes(f.githubId) && f.githubId !== project.ownerId
+  );
 
   return (
     <div className="page">
@@ -155,7 +157,8 @@ export function ProjectDetail({ project, onBack, onUpdate }: Props) {
                   {u.avatarUrl && <img src={u.avatarUrl} alt={u.login} className="share-avatar" />}
                   <span className="share-user-name">{u.name || u.login}</span>
                   <span className="share-user-login">@{u.login}</span>
-                  {project.isOwner !== false && (
+                  {(u as any).role === 'OWNER' && <span className="role-badge owner">소유자</span>}
+                  {(u as any).role === 'EDITOR' && project.isOwner !== false && (
                     <button className="btn-text danger" onClick={() => handleUnshare(u.userId)}>제거</button>
                   )}
                 </div>

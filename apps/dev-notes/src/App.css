@@ -775,3 +775,15 @@
 .btn-ghost.btn-sm { padding: 5px 10px; font-size: 0.78rem; }
 .btn-text.danger { color: #ff4757; background: none; border: none; cursor: pointer; font-size: 0.8rem; }
 .btn-text.danger:hover { text-decoration: underline; }
+
+.role-badge {
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+.role-badge.owner {
+  background: rgba(112, 161, 255, 0.15);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}

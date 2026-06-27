@@ -163,20 +163,37 @@ public class ProjectService {
         projectShareRepository.deleteByProjectIdAndUserId(projectId, targetUserId);
     }
 
-    // ── 공유 목록 조회 ─────────────────────────────────────
+    // 공유 목록 조회 - 소유자 포함
     public List<Map<String, String>> getSharedUsers(Long projectId, String userId) {
-        getAccessibleProject(projectId, userId);
-        return projectShareRepository.findByProjectId(projectId).stream()
-            .map(ps -> {
-                User u = userRepository.findById(ps.getUserId()).orElse(null);
-                Map<String, String> m = new HashMap<>();
-                m.put("userId", ps.getUserId());
-                m.put("login", u != null ? u.getLogin() : ps.getUserId());
-                m.put("name", u != null ? u.getName() : null);
-                m.put("avatarUrl", u != null ? u.getAvatarUrl() : null);
-                return m;
-            })
-            .collect(Collectors.toList());
+        Project project = getAccessibleProject(projectId, userId);
+        
+        List<Map<String, String>> result = new ArrayList<>();
+        
+        // 소유자 추가
+        User owner = userRepository.findById(project.getUserId()).orElse(null);
+        if (owner != null) {
+            Map<String, String> ownerMap = new HashMap<>();
+            ownerMap.put("userId", owner.getGithubId());
+            ownerMap.put("login", owner.getLogin());
+            ownerMap.put("name", owner.getName());
+            ownerMap.put("avatarUrl", owner.getAvatarUrl());
+            ownerMap.put("role", "OWNER");
+            result.add(ownerMap);
+        }
+        
+        // 공유받은 팀원 추가
+        projectShareRepository.findByProjectId(projectId).forEach(ps -> {
+            User u = userRepository.findById(ps.getUserId()).orElse(null);
+            Map<String, String> m = new HashMap<>();
+            m.put("userId", ps.getUserId());
+            m.put("login", u != null ? u.getLogin() : ps.getUserId());
+            m.put("name", u != null ? u.getName() : null);
+            m.put("avatarUrl", u != null ? u.getAvatarUrl() : null);
+            m.put("role", "EDITOR");
+            result.add(m);
+        });
+        
+        return result;
     }
 
     // ── 접근 가능한 프로젝트 조회 (소유자 or 공유받은 사람) ──
