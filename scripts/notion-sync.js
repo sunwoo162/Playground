@@ -275,6 +275,85 @@ async function writeFullDoc() {
     bullet('알림 센터 (받은 알림 히스토리)'),
     bullet('마이페이지 - 활동 통계'),
     bullet('다크/라이트 테마 토글'),
+    divider(),
+
+    // 트러블슈팅
+    h2('🔧 트러블슈팅'),
+
+    toggle('JWT 시크릿 불일치 → API 401 에러', [
+      p('문제: Node.js에서 발급한 JWT를 Spring Boot가 검증 실패'),
+      p('원인: HMAC-SHA256은 최소 32바이트 키 필요. "playground-jwt-secret-2024" (26자)가 너무 짧음'),
+      p('해결: JWT_SECRET을 34자 이상으로 변경, Node.js/.env와 Spring Boot application.yml 동일하게 맞춤'),
+      code('JWT_SECRET=playground-jwt-secret-2024-secure-key  # 34자', 'plain text'),
+    ]),
+
+    toggle('getPrincipal() 순환 참조 → StackOverflow', [
+      p('문제: Spring Security AbstractAuthenticationToken.getName()이 무한 루프'),
+      p('원인: getPrincipal()을 this로 반환했을 때 getName()이 getPrincipal().toString() 호출 → 순환'),
+      p('해결: JwtAuthenticationToken에 getName() 명시적 오버라이드'),
+      code('@Override\npublic String getName() { return userId; }', 'java'),
+    ]),
+
+    toggle('프록시 POST/PUT 요청 바디 유실', [
+      p('문제: Node.js → Spring Boot 프록시 시 POST/PUT 요청의 body가 비어있음'),
+      p('원인: express.json()이 바디를 파싱한 후 req 스트림이 소비됨. req.pipe()로 전달 불가'),
+      p('해결: 파싱된 req.body를 JSON.stringify로 재직렬화 후 content-length 재계산하여 전달'),
+      code('const bodyData = req.body && Object.keys(req.body).length > 0\n  ? JSON.stringify(req.body) : null;\nif (bodyData) {\n  headers["content-length"] = Buffer.byteLength(bodyData).toString();\n  proxyReq.write(bodyData);\n  proxyReq.end();\n}', 'javascript'),
+    ]),
+
+    toggle('PM2 restart 시 환경변수 초기화', [
+      p('문제: pm2 restart 후 .env 환경변수가 사라져 서버 크래시'),
+      p('원인: PM2는 restart 시 초기 실행 시의 환경변수만 유지. .env를 자동으로 재로드하지 않음'),
+      p('해결: ecosystem.config.js 생성 + 배포 시 pm2 delete → export env → pm2 start 순서로 변경'),
+      code('pm2 delete playground\nexport $(grep -v "^#" .env | xargs)\npm2 start ecosystem.config.js --only playground', 'bash'),
+    ]),
+
+    toggle('ERR_TOO_MANY_REDIRECTS (nginx 리다이렉트 루프)', [
+      p('문제: https://playground.https.gsmsv.site 접속 시 무한 리다이렉트'),
+      p('원인: 학교 서버 인프라에서 HTTPS를 처리 후 HTTP로 nginx에 전달. nginx가 다시 HTTPS로 301 리다이렉트'),
+      p('해결: nginx에서 HTTP→HTTPS 리다이렉트 제거, X-Forwarded-Proto: https 헤더 강제 설정'),
+      code('server {\n  listen 80;\n  location / {\n    proxy_pass http://127.0.0.1:3000;\n    proxy_set_header X-Forwarded-Proto https;\n  }\n}', 'nginx'),
+    ]),
+
+    toggle('Web Push 알림 권한 차단 (HTTP에서 denied)', [
+      p('문제: Notification.permission이 "denied"로 알림 팝업이 뜨지 않음'),
+      p('원인: Chrome은 HTTP 사이트에서 알림 권한 요청을 자동 차단. HTTPS 필수'),
+      p('해결: Let\'s Encrypt SSL 인증서 발급 + nginx HTTPS 설정'),
+      code('sudo certbot --nginx -d playground.https.gsmsv.site', 'bash'),
+    ]),
+
+    toggle('Push Subscription 404 → 401 → 정상화', [
+      p('문제: Node.js에서 /internal/push/subscriptions/{userId} 호출 시 404'),
+      p('원인 1: PushController mapping이 /api/push였는데 /internal/push로 호출'),
+      p('원인 2: /api/** 패턴에 걸려 인증 필요 → 401'),
+      p('해결: 엔드포인트를 /api/push/subscriptions/{userId}로 통일, SecurityConfig에 permitAll 추가'),
+      code('.requestMatchers("/api/push/subscriptions/**").permitAll()', 'java'),
+    ]),
+
+    toggle('server/index.js git 추적 안 됨', [
+      p('문제: git status에서 server/index.js가 M(수정됨)으로 뜨는데 git add 해도 커밋 안 됨'),
+      p('원인: server/index.js가 main 브랜치에 한 번도 커밋된 적 없어서 git이 추적 불가'),
+      p('해결: git add -f server/index.js로 강제 추가 후 커밋'),
+    ]),
+
+    toggle('application.yml git reset으로 덮어씌워지는 문제', [
+      p('문제: 서버에서 application.yml 직접 수정 후 git pull 하면 충돌'),
+      p('원인: git pull이 로컬 변경사항을 보존하려다 충돌'),
+      p('해결: 배포 스크립트를 git pull → git fetch + git reset --hard origin/main으로 변경'),
+      p('근본 해결: application.yml의 설정값을 환경변수로 관리 (.env)'),
+    ]),
+
+    toggle('subscriptions.map is not a function', [
+      p('문제: sendPushNotification에서 TypeError: subscriptions.map is not a function'),
+      p('원인: /internal/push/subscriptions 응답이 배열이 아닌 다른 형태로 파싱됨 (404/401 응답)'),
+      p('해결: 엔드포인트 경로 수정 + permitAll 설정으로 올바른 배열 응답 수신'),
+    ]),
+
+    toggle('Notion Integration 연결 오류 (object_not_found)', [
+      p('문제: Notion API 호출 시 "Could not find block" 404 에러'),
+      p('원인: Integration이 해당 페이지에 연결되지 않음'),
+      p('해결: Notion 페이지 → ... → Connections → Integration 추가'),
+    ]),
   ];
 
   await appendBlocks(blocks);
