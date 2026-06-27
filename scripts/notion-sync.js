@@ -340,6 +340,7 @@ async function writeFullDoc() {
     bullet('원인: getSharedUsers()가 project_shares 테이블만 조회. 소유자는 shares에 없음'),
     bullet('해결: 소유자 정보를 별도로 조회해서 OWNER 역할로 목록 맨 앞에 추가'),
     divider(),
+  ];
 
   await appendBlocks(blocks);
   console.log('✅ Notion 문서 작성 완료!');
