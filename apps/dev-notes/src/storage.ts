@@ -143,6 +143,9 @@ function mapApiProject(d: Record<string, unknown>): Project {
       queryParams: typeof a.queryParams === 'string' ? JSON.parse(a.queryParams) : (a.queryParams ?? []),
     })) as Project['api'] : [],
     users: Array.isArray(d.users) ? d.users as Project['users'] : [],
+    ownerId: d.ownerId ? String(d.ownerId) : undefined,
+    isOwner: d.isOwner as boolean ?? true,
+    sharedWith: Array.isArray(d.sharedWith) ? d.sharedWith as string[] : [],
   };
 }
 

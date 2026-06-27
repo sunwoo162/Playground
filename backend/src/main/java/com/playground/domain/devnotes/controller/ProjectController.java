@@ -53,4 +53,31 @@ public class ProjectController {
         projectService.deleteProject(id, auth.getUserId());
         return ResponseEntity.ok(Map.of("success", true));
     }
+
+    // ── 공유 API ──────────────────────────────────────────
+
+    @PostMapping("/{id}/share/{targetUserId}")
+    public ResponseEntity<Map<String, Boolean>> shareProject(
+            @PathVariable Long id,
+            @PathVariable String targetUserId,
+            @AuthenticationPrincipal JwtAuthenticationToken auth) {
+        projectService.shareProject(id, auth.getUserId(), targetUserId);
+        return ResponseEntity.ok(Map.of("success", true));
+    }
+
+    @DeleteMapping("/{id}/share/{targetUserId}")
+    public ResponseEntity<Map<String, Boolean>> unshareProject(
+            @PathVariable Long id,
+            @PathVariable String targetUserId,
+            @AuthenticationPrincipal JwtAuthenticationToken auth) {
+        projectService.unshareProject(id, auth.getUserId(), targetUserId);
+        return ResponseEntity.ok(Map.of("success", true));
+    }
+
+    @GetMapping("/{id}/share")
+    public ResponseEntity<List<Map<String, String>>> getSharedUsers(
+            @PathVariable Long id,
+            @AuthenticationPrincipal JwtAuthenticationToken auth) {
+        return ResponseEntity.ok(projectService.getSharedUsers(id, auth.getUserId()));
+    }
 }

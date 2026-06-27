@@ -8,6 +8,9 @@ export interface Project {
   spec: FeatureSpec[];
   api: ApiSpec[];
   users: UserAnalysis[];
+  ownerId?: string;
+  isOwner?: boolean;
+  sharedWith?: string[];
 }
 
 export interface ProjectOverview {

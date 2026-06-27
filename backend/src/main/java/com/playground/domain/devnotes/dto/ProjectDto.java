@@ -34,6 +34,9 @@ public class ProjectDto {
         private List<FeatureSpecDto> spec;
         private List<ApiSpecDto> api;
         private List<UserAnalysisDto> users;
+        private String ownerId;        // 소유자 ID
+        private boolean isOwner;       // 현재 유저가 소유자인지
+        private List<String> sharedWith; // 공유된 유저 ID 목록
     }
 
     @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder

@@ -648,3 +648,130 @@
   font-size: 0.8rem;
   color: var(--accent);
 }
+
+/* ========== 공유 기능 ========== */
+.detail-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.detail-header-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-share {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-share:hover, .btn-share.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.share-count {
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.72rem;
+  border-radius: 10px;
+  padding: 1px 6px;
+}
+
+.share-badge {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 4px 10px;
+}
+
+.share-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.share-panel-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.share-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.share-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.share-user-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+}
+
+.share-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.share-user-name {
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+
+.share-user-login {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  flex: 1;
+}
+
+.share-empty {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  padding: 8px 0;
+}
+
+.btn-ghost {
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-ghost:hover { color: var(--text); border-color: var(--text-muted); }
+.btn-ghost.btn-sm { padding: 5px 10px; font-size: 0.78rem; }
+.btn-text.danger { color: #ff4757; background: none; border: none; cursor: pointer; font-size: 0.8rem; }
+.btn-text.danger:hover { text-decoration: underline; }
