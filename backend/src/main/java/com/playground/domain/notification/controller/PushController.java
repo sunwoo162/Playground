@@ -70,11 +70,10 @@ public class PushController {
     }
 
     /**
-     * GET /internal/push/subscriptions/{userId}
+     * GET /api/push/subscriptions/{userId}
      * Node.js 서버에서 내부적으로 호출 - 특정 유저의 구독 목록 반환
-     * 외부에서 접근 불가 (SecurityConfig에서 localhost만 허용)
      */
-    @GetMapping("/internal/push/subscriptions/{userId}")
+    @GetMapping("/subscriptions/{userId}")
     public ResponseEntity<?> getSubscriptions(@PathVariable String userId) {
         return ResponseEntity.ok(pushSubscriptionRepository.findByUserId(userId));
     }

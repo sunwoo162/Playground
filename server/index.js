@@ -121,7 +121,7 @@ app.get('/push/vapid-public-key', (req, res) => {
 async function sendPushNotification(userId, payload) {
   try {
     const subscriptions = await new Promise((resolve) => {
-      const targetUrl = new URL(`/internal/push/subscriptions/${userId}`, BACKEND_URL);
+      const targetUrl = new URL(`/api/push/subscriptions/${userId}`, BACKEND_URL);
       const client = targetUrl.protocol === 'https:' ? https : http;
       const req = client.get(targetUrl, (res) => {
         let data = '';
