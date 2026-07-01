@@ -787,3 +787,44 @@
   color: var(--accent);
   border: 1px solid var(--accent);
 }
+
+/* ========== App Shell (공통 헤더) ========== */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.app-shell-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.back-to-home {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: all 0.2s;
+}
+.back-to-home:hover { color: var(--text); border-color: var(--text-muted); }
+
+.app-shell-title-block { flex: 1; }
+.app-shell-title { font-size: 1.2rem; font-weight: 700; }
+.app-shell-subtitle { font-size: 0.8rem; color: var(--text-muted); margin-top: 2px; }
+
+.app-shell-body {
+  flex: 1;
+  padding: 24px 20px;
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+}

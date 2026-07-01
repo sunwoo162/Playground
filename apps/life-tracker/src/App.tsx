@@ -12,8 +12,11 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>Life Tracker</h1>
-        <p className="app-subtitle">성공이 아닌, 진짜 나를 기록하는 곳</p>
+        <a href="/" className="back-to-home">← 놀이터</a>
+        <div className="app-header-content">
+          <h1>Life Tracker</h1>
+          <p className="app-subtitle">성공이 아닌, 진짜 나를 기록하는 곳</p>
+        </div>
       </header>
 
       <TabNav activeTab={activeTab} onTabChange={setActiveTab} />

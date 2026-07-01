@@ -24,28 +24,58 @@ function App() {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: '#888' }}>
-        불러오는 중...
+      <div className="app-shell">
+        <header className="app-shell-header">
+          <a href="/" className="back-to-home">← 놀이터</a>
+          <div className="app-shell-title-block">
+            <h1 className="app-shell-title">📒 개발자 노트</h1>
+            <p className="app-shell-subtitle">프로젝트별 기능명세서, API 명세서, 사용자 분석</p>
+          </div>
+        </header>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, color: '#888' }}>
+          불러오는 중...
+        </div>
       </div>
     );
   }
 
   if (selected) {
     return (
-      <ProjectDetail
-        project={selected}
-        onBack={() => setSelected(null)}
-        onUpdate={handleUpdate}
-      />
+      <div className="app-shell">
+        <header className="app-shell-header">
+          <a href="/" className="back-to-home">← 놀이터</a>
+          <div className="app-shell-title-block">
+            <h1 className="app-shell-title">📒 개발자 노트</h1>
+          </div>
+        </header>
+        <div className="app-shell-body">
+          <ProjectDetail
+            project={selected}
+            onBack={() => setSelected(null)}
+            onUpdate={handleUpdate}
+          />
+        </div>
+      </div>
     );
   }
 
   return (
-    <ProjectList
-      projects={projects}
-      onProjectsChange={setProjects}
-      onSelect={setSelected}
-    />
+    <div className="app-shell">
+      <header className="app-shell-header">
+        <a href="/" className="back-to-home">← 놀이터</a>
+        <div className="app-shell-title-block">
+          <h1 className="app-shell-title">📒 개발자 노트</h1>
+          <p className="app-shell-subtitle">프로젝트별 기능명세서, API 명세서, 사용자 분석</p>
+        </div>
+      </header>
+      <div className="app-shell-body">
+        <ProjectList
+          projects={projects}
+          onProjectsChange={setProjects}
+          onSelect={setSelected}
+        />
+      </div>
+    </div>
   );
 }
 

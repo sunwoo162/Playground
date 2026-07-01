@@ -1,14 +1,35 @@
 /* Header */
 .app-header {
-  text-align: center;
-  padding: 24px 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.app-header-content {
+  flex: 1;
+  text-align: left;
 }
 
 .app-header h1 {
-  font-size: 1.8rem;
+  font-size: 1.2rem;
   font-weight: 700;
   letter-spacing: -0.5px;
 }
+
+.back-to-home {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: all 0.2s;
+}
+.back-to-home:hover { color: var(--text); border-color: var(--text-muted); }
 
 .app-subtitle {
   color: var(--text-muted);
