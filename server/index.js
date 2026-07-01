@@ -330,6 +330,12 @@ app.get('/apps/study-planner/*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'apps', 'study-planner', 'dist', 'index.html'));
 });
 
+// Cornell Notes 앱
+app.use('/apps/cornell-notes', express.static(path.join(__dirname, '..', 'apps', 'cornell-notes', 'dist')));
+app.get('/apps/cornell-notes/*', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'apps', 'cornell-notes', 'dist', 'index.html'));
+});
+
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'dist', 'index.html'));
 });
