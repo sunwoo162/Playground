@@ -131,11 +131,16 @@ function App() {
   };
 
   const handleStop = () => {
+    // 모달 1단계 표시 (아직 타이머는 멈추지 않음)
+    setModalStep(1);
+  };
+
+  const handleStopConfirm = () => {
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
     setRunning(false);
     saveTimerState(false, null, '');
     const currentElapsed = elapsedRef.current;
-    if (currentElapsed < 1) { setElapsed(0); elapsedRef.current = 0; return; }
+    if (currentElapsed < 1) { setElapsed(0); elapsedRef.current = 0; setModalStep(0); return; }
 
     const now = new Date();
     const session: StudySession = {
@@ -154,8 +159,7 @@ function App() {
     setElapsed(0);
     elapsedRef.current = 0;
     setMemo('');
-    // 모달 1단계 표시
-    setModalStep(1);
+    setModalStep(2);
   };
 
   const handleReset = () => {
@@ -230,7 +234,7 @@ function App() {
       {modalStep > 0 && (
         <StopModal
           step={modalStep as 1 | 2}
-          onConfirmStep1={() => setModalStep(2)}
+          onConfirmStep1={handleStopConfirm}
           onConfirmStep2={() => setModalStep(0)}
           onCancel={() => setModalStep(0)}
         />
