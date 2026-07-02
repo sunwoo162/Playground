@@ -1,7 +1,7 @@
 /* ===== Header ===== */
 .app { display: flex; flex-direction: column; min-height: 100vh; }
 .app-header { padding: 12px 20px; background: var(--surface); border-bottom: 1px solid var(--border); }
-.app-main { flex: 1; padding: 16px 20px 80px; max-width: 720px; width: 100%; margin: 0 auto; }
+.app-main { flex: 1; padding: 16px 20px 80px; width: 100%; }
 .back-link { color: var(--text-muted); text-decoration: none; font-size: 0.85rem; }
 .back-link:hover { color: var(--text); }
 .header-title-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 8px; }
