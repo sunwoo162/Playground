@@ -3,6 +3,27 @@ import { MyPage } from './pages/MyPage'
 import { getAccessTokenExpiry, formatTimeLeft } from './api/auth'
 import { registerPushSubscription } from './api/push'
 
+// 스터디 플래너 타이머 상태 읽기
+function getStudyTimerElapsed(): number | null {
+  try {
+    const raw = localStorage.getItem('study-planner-timer');
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (!data.running || !data.startTime) return null;
+    return Math.floor((Date.now() - new Date(data.startTime).getTime()) / 1000);
+  } catch {
+    return null;
+  }
+}
+
+function formatStudyTime(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
 interface User {
   id: number;
   login: string;
@@ -85,6 +106,7 @@ function App() {
   const [showFavOnly, setShowFavOnly] = useState(false);
   const [tokenExpiry, setTokenExpiry] = useState<Date | null>(null);
   const [timeLeft, setTimeLeft] = useState<string>('');
+  const [studyElapsed, setStudyElapsed] = useState<number | null>(null);
 
   useEffect(() => {
     fetch('/auth/me', { credentials: 'include' })
@@ -106,21 +128,16 @@ function App() {
     const update = () => {
       const diff = tokenExpiry.getTime() - Date.now();
       setTimeLeft(formatTimeLeft(tokenExpiry));
-      // 만료 5분 전 자동 갱신
       if (diff > 0 && diff < 5 * 60 * 1000) {
         fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' })
-          .then((res) => {
-            if (res.ok) setTokenExpiry(getAccessTokenExpiry());
-          });
+          .then((res) => { if (res.ok) setTokenExpiry(getAccessTokenExpiry()); });
       }
-      // 만료됐으면 갱신 시도
       if (diff <= 0) {
         fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' })
-          .then((res) => {
-            if (res.ok) setTokenExpiry(getAccessTokenExpiry());
-            else { setUser(null); }
-          });
+          .then((res) => { if (res.ok) setTokenExpiry(getAccessTokenExpiry()); else setUser(null); });
       }
+      // 스터디 타이머 상태도 갱신
+      setStudyElapsed(getStudyTimerElapsed());
     };
     update();
     const id = setInterval(update, 1000);
@@ -192,6 +209,11 @@ function App() {
                 <span className={`token-expiry ${timeLeft === '만료됨' ? 'expired' : ''}`}>
                   🔑 {timeLeft}
                 </span>
+              )}
+              {studyElapsed !== null && (
+                <a href="/apps/study-planner/" className="study-timer-badge">
+                  ⏱️ {formatStudyTime(studyElapsed)}
+                </a>
               )}
               <button className="btn-friends" onClick={() => setPage('friends')} aria-label="친구">
                 👥
