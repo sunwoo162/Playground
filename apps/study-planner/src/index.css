@@ -18,7 +18,7 @@ body {
   color: var(--text);
   min-height: 100vh;
 }
-#root { max-width: 640px; margin: 0 auto; padding: 16px 16px 80px; }
+#root { width: 100%; min-height: 100vh; }
 
 /* ========== Cornell Notes ========== */
 .notes-layout {
