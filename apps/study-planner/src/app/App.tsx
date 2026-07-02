@@ -11,6 +11,7 @@ import { CalendarView } from '../features/calendar';
 import { Subjects } from '../features/subjects';
 import { TabNav } from '../widgets/tab-nav';
 import { MiniTimer } from '../widgets/mini-timer';
+import { StopModal } from '../widgets/stop-modal/StopModal';
 import './App.css';
 
 const TIMER_KEY = 'study-planner-timer';
@@ -55,6 +56,7 @@ function App() {
   const [startTime, setStartTime] = useState<Date | null>(null);
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('');
   const [memo, setMemo] = useState('');
+  const [modalStep, setModalStep] = useState<0 | 1 | 2>(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastNotifyHour = useRef<number>(0);
   const elapsedRef = useRef<number>(0);
@@ -152,6 +154,8 @@ function App() {
     setElapsed(0);
     elapsedRef.current = 0;
     setMemo('');
+    // 모달 1단계 표시
+    setModalStep(1);
   };
 
   const handleReset = () => {
@@ -223,6 +227,14 @@ function App() {
           />
         )}
       </main>
+      {modalStep > 0 && (
+        <StopModal
+          step={modalStep as 1 | 2}
+          onConfirmStep1={() => setModalStep(2)}
+          onConfirmStep2={() => setModalStep(0)}
+          onCancel={() => setModalStep(0)}
+        />
+      )}
     </div>
   );
 }
