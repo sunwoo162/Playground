@@ -5,7 +5,7 @@ interface Props {
   onCancel: () => void;
 }
 
-export function StopModal({ step, onConfirmStep1, onConfirmStep2, onCancel }: Props) {
+export function StopModal({ step, onConfirmStep1, onCancel }: Props) {
   return (
     <div className="modal-overlay" onClick={onCancel}>
       <div className="modal-box" onClick={e => e.stopPropagation()}>
