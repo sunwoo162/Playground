@@ -13,6 +13,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -71,13 +73,22 @@ public class StudyService {
                 .userId(userId)
                 .subjectId(req.getSubjectId())
                 .date(LocalDate.parse(req.getDate()))
-                .startTime(req.getStartTime() != null ? LocalDateTime.parse(req.getStartTime()) : null)
-                .endTime(req.getEndTime() != null ? LocalDateTime.parse(req.getEndTime()) : null)
+                .startTime(req.getStartTime() != null ? parseDateTime(req.getStartTime()) : null)
+                .endTime(req.getEndTime() != null ? parseDateTime(req.getEndTime()) : null)
                 .durationSeconds(req.getDurationSeconds())
                 .durationMinutes(req.getDurationMinutes())
                 .memo(req.getMemo())
                 .build();
         return toSessionResponse(sessionRepository.save(session));
+    }
+
+    private LocalDateTime parseDateTime(String s) {
+        try {
+            // ISO 8601 with Z suffix (e.g. 2026-07-02T02:06:33.669Z)
+            return Instant.parse(s).atOffset(ZoneOffset.UTC).toLocalDateTime();
+        } catch (Exception e) {
+            return LocalDateTime.parse(s);
+        }
     }
 
     @Transactional
