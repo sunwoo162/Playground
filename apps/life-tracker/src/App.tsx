@@ -4,6 +4,7 @@ import { TabNav } from './components/TabNav';
 import { FailureLog } from './components/FailureLog';
 import { WastedTime } from './components/WastedTime';
 import { SmallWins } from './components/SmallWins';
+import { StudyTimerBadge } from './components/StudyTimerBadge';
 import './App.css';
 
 function App() {
@@ -17,6 +18,7 @@ function App() {
           <h1>Life Tracker</h1>
           <p className="app-subtitle">성공이 아닌, 진짜 나를 기록하는 곳</p>
         </div>
+        <StudyTimerBadge />
       </header>
 
       <TabNav activeTab={activeTab} onTabChange={setActiveTab} />

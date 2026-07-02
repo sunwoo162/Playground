@@ -3,6 +3,7 @@ import type { Project } from './types';
 import { getProjectsAsync } from './storage';
 import { ProjectList } from './pages/ProjectList';
 import { ProjectDetail } from './pages/ProjectDetail';
+import { StudyTimerBadge } from './components/StudyTimerBadge';
 import './App.css';
 
 function App() {
@@ -31,6 +32,7 @@ function App() {
             <h1 className="app-shell-title">📒 개발자 노트</h1>
             <p className="app-shell-subtitle">프로젝트별 기능명세서, API 명세서, 사용자 분석</p>
           </div>
+          <StudyTimerBadge />
         </header>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, color: '#888' }}>
           불러오는 중...
@@ -47,6 +49,7 @@ function App() {
           <div className="app-shell-title-block">
             <h1 className="app-shell-title">📒 개발자 노트</h1>
           </div>
+          <StudyTimerBadge />
         </header>
         <div className="app-shell-body">
           <ProjectDetail
@@ -67,6 +70,7 @@ function App() {
           <h1 className="app-shell-title">📒 개발자 노트</h1>
           <p className="app-shell-subtitle">프로젝트별 기능명세서, API 명세서, 사용자 분석</p>
         </div>
+        <StudyTimerBadge />
       </header>
       <div className="app-shell-body">
         <ProjectList

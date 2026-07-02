@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { CornellNote, Subject } from './types';
 import { getNotes, saveNote, deleteNote, getSubjects, saveSubjects, generateId, getTodayStr } from './storage';
+import { StudyTimerBadge } from './StudyTimerBadge';
 
 type View = 'list' | 'edit' | 'view' | 'subjects';
 
@@ -88,6 +89,7 @@ export default function App() {
           <button className={`nav-btn ${view !== 'subjects' ? 'active' : ''}`} onClick={() => setView('list')}>📋 노트</button>
           <button className={`nav-btn ${view === 'subjects' ? 'active' : ''}`} onClick={() => setView('subjects')}>📚 과목</button>
         </nav>
+        <StudyTimerBadge />
       </header>
 
       {view === 'subjects' ? (
