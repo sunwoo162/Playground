@@ -283,7 +283,7 @@ body {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  opacity: 0;
+  opacity: 0.5;
   transition: opacity 0.2s, transform 0.15s;
   z-index: 2;
 }
@@ -294,13 +294,14 @@ body {
 
 .fav-btn.favorited {
   opacity: 1;
-  background: rgba(255, 214, 0, 0.15);
-  border-color: rgba(255, 214, 0, 0.4);
+  background: rgba(255, 214, 0, 0.2);
+  border-color: rgba(255, 214, 0, 0.6);
 }
 
 .fav-btn:hover {
   transform: scale(1.15);
   border-color: var(--accent-blue);
+  opacity: 1;
 }
 
 @media (max-width: 600px) {
