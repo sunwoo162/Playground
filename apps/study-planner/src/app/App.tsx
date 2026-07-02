@@ -12,6 +12,35 @@ import { TabNav } from '../widgets/tab-nav';
 import { MiniTimer } from '../widgets/mini-timer';
 import './App.css';
 
+const TIMER_KEY = 'study-planner-timer';
+
+function saveTimerState(running: boolean, startTime: Date | null, subjectId: string) {
+  if (running && startTime) {
+    localStorage.setItem(TIMER_KEY, JSON.stringify({
+      running: true,
+      startTime: startTime.toISOString(),
+      subjectId,
+    }));
+  } else {
+    localStorage.removeItem(TIMER_KEY);
+  }
+}
+
+function loadTimerState() {
+  try {
+    const raw = localStorage.getItem(TIMER_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (!data.running || !data.startTime) return null;
+    return {
+      startTime: new Date(data.startTime),
+      subjectId: data.subjectId as string,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function App() {
   const [activeTab, setActiveTab] = useState<TabType>('timer');
   const [subjects, setSubjects] = useState<import('../entities/subject').Subject[]>([]);
@@ -36,7 +65,19 @@ function App() {
         setSubjects(subs);
         setSessions(sess);
         setDailyGoalMinutes(goal.totalMinutes);
-        if (subs.length > 0) setSelectedSubjectId(subs[0].id);
+
+        // 타이머 복원
+        const saved = loadTimerState();
+        if (saved) {
+          const elapsed = Math.floor((Date.now() - saved.startTime.getTime()) / 1000);
+          setStartTime(saved.startTime);
+          setElapsed(elapsed);
+          elapsedRef.current = elapsed;
+          setSelectedSubjectId(saved.subjectId || (subs.length > 0 ? subs[0].id : ''));
+          setRunning(true);
+        } else if (subs.length > 0) {
+          setSelectedSubjectId(subs[0].id);
+        }
       })
       .finally(() => setLoading(false));
   }, []);
@@ -78,14 +119,17 @@ function App() {
 
   const handleStart = () => {
     if (!selectedSubjectId) return;
-    setStartTime(new Date());
+    const now = new Date();
+    setStartTime(now);
     lastNotifyHour.current = 0;
     setRunning(true);
+    saveTimerState(true, now, selectedSubjectId);
   };
 
   const handleStop = () => {
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
     setRunning(false);
+    saveTimerState(false, null, '');
     const currentElapsed = elapsedRef.current;
     if (currentElapsed < 1) { setElapsed(0); elapsedRef.current = 0; return; }
 
@@ -113,6 +157,7 @@ function App() {
     setRunning(false);
     setElapsed(0);
     elapsedRef.current = 0;
+    saveTimerState(false, null, '');
   };
 
   const todayTotalSeconds = sessions
