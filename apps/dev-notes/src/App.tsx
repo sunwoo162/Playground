@@ -4,26 +4,29 @@ import { getProjectsAsync } from './storage';
 import { ProjectList } from './pages/ProjectList';
 import { ProjectDetail } from './pages/ProjectDetail';
 import { StudyTimerBadge } from './components/StudyTimerBadge';
+import { useAuth } from './hooks/useAuth';
 import './App.css';
 
 function App() {
+  const authed = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [selected, setSelected] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!authed) return;
     getProjectsAsync().then((data) => {
       setProjects(data);
       setLoading(false);
     });
-  }, []);
+  }, [authed]);
 
   const handleUpdate = (updated: Project) => {
     setProjects((prev) => prev.map((p) => p.id === updated.id ? updated : p));
     setSelected(updated);
   };
 
-  if (loading) {
+  if (authed === null || loading) {
     return (
       <div className="app-shell">
         <header className="app-shell-header">

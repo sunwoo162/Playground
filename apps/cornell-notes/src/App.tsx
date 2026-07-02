@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import type { CornellNote, Subject } from './types';
 import { getNotes, saveNote, deleteNote, getSubjects, saveSubjects, generateId, getTodayStr } from './storage';
 import { StudyTimerBadge } from './StudyTimerBadge';
+import { useAuth } from './useAuth';
 
 type View = 'list' | 'edit' | 'view' | 'subjects';
 
@@ -20,6 +21,7 @@ const EMPTY_NOTE = (subjectId: string): CornellNote => ({
 const COLORS = ['#70a1ff','#2ed573','#ffa502','#ff4757','#ff6b81','#a29bfe','#00cec9','#fd79a8','#fdcb6e','#55efc4'];
 
 export default function App() {
+  const authed = useAuth();
   const [notes, setNotes] = useState<CornellNote[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [view, setView] = useState<View>('list');
@@ -30,9 +32,12 @@ export default function App() {
   const [newSubjectColor, setNewSubjectColor] = useState(COLORS[0]);
 
   useEffect(() => {
+    if (!authed) return;
     setNotes(getNotes());
     setSubjects(getSubjects());
-  }, []);
+  }, [authed]);
+
+  if (!authed) return null;
 
   const subjectName = (id: string) => subjects.find(s => s.id === id)?.name ?? '?';
   const subjectColor = (id: string) => subjects.find(s => s.id === id)?.color ?? '#888';

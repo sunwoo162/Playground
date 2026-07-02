@@ -4,6 +4,7 @@ import type { StudySession } from '../entities/session';
 import { getSubjectsAsync, getDailyGoalAsync } from '../entities/subject';
 import { getSessionsAsync, addSessionAsync } from '../entities/session';
 import { getTodayStr, requestNotificationPermission, sendNotification, generateId } from '../shared/lib';
+import { useAuth } from '../shared/lib/useAuth';
 import { Timer } from '../features/timer';
 import { Stats } from '../features/stats';
 import { CalendarView } from '../features/calendar';
@@ -42,6 +43,7 @@ function loadTimerState() {
 }
 
 function App() {
+  const authed = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('timer');
   const [subjects, setSubjects] = useState<import('../entities/subject').Subject[]>([]);
   const [sessions, setSessions] = useState<StudySession[]>([]);
@@ -166,7 +168,7 @@ function App() {
 
   const selectedSubject = subjects.find(s => s.id === selectedSubjectId);
 
-  if (loading) {
+  if (!authed || loading) {
     return (
       <div className="app" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
         <div style={{ color: '#888' }}>불러오는 중...</div>

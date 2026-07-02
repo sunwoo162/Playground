@@ -5,10 +5,14 @@ import { FailureLog } from './components/FailureLog';
 import { WastedTime } from './components/WastedTime';
 import { SmallWins } from './components/SmallWins';
 import { StudyTimerBadge } from './components/StudyTimerBadge';
+import { useAuth } from './hooks/useAuth';
 import './App.css';
 
 function App() {
+  const authed = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('failures');
+
+  if (!authed) return null;
 
   return (
     <div className="app">
