@@ -1,7 +1,7 @@
 interface Props {
   step: 1 | 2;
   onConfirmStep1: () => void;
-  onConfirmStep2: () => void;
+  onConfirmStep2?: () => void;
   onCancel: () => void;
 }
 
