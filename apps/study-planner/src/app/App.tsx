@@ -8,7 +8,6 @@ import { Timer } from '../features/timer';
 import { Stats } from '../features/stats';
 import { CalendarView } from '../features/calendar';
 import { Subjects } from '../features/subjects';
-import { Notes } from '../features/notes';
 import { TabNav } from '../widgets/tab-nav';
 import { MiniTimer } from '../widgets/mini-timer';
 import './App.css';
@@ -175,9 +174,6 @@ function App() {
             onSubjectsChange={setSubjects}
             onGoalChange={setDailyGoalMinutes}
           />
-        )}
-        {activeTab === 'notes' && (
-          <Notes subjects={subjects} />
         )}
       </main>
     </div>
