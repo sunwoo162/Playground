@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { CodingLog, Platform, Status } from './types';
 import { getLogs, saveLog, deleteLog, generateId, getTodayStr, parseUrlParams } from './storage';
+import { useAuth } from './useAuth';
 
 type View = 'list' | 'edit' | 'view';
 
@@ -40,6 +41,7 @@ function emptyLog(): CodingLog {
 }
 
 export default function App() {
+  const authed = useAuth();
   const [logs, setLogs] = useState<CodingLog[]>([]);
   const [view, setView] = useState<View>('list');
   const [selected, setSelected] = useState<CodingLog | null>(null);
@@ -49,14 +51,16 @@ export default function App() {
   const [tagInput, setTagInput] = useState('');
 
   useEffect(() => {
+    if (!authed) return;
     setLogs(getLogs());
-    // URL 파라미터 있으면 바로 작성 화면
     const params = parseUrlParams();
     if (params.title) {
       setSelected(emptyLog());
       setView('edit');
     }
-  }, []);
+  }, [authed]);
+
+  if (!authed) return null;
 
   const filtered = logs
     .filter(l => filterPlatform === 'all' || l.platform === filterPlatform)
