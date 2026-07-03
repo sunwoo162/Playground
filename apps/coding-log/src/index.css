@@ -68,7 +68,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .common-tags { display: flex; flex-wrap: wrap; gap: 6px; }
 
 /* Editor */
-.editor { display: flex; flex-direction: column; gap: 16px; max-width: 900px; }
+.editor { display: flex; flex-direction: column; gap: 16px; width: 100%; }
 .editor-row { display: flex; gap: 12px; flex-wrap: wrap; }
 .form-group { display: flex; flex-direction: column; gap: 6px; }
 .form-group label { font-size: 0.78rem; color: var(--text-muted); font-weight: 600; }
@@ -87,7 +87,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .empty-sub { font-size: 0.82rem; max-width: 340px; line-height: 1.7; }
 
 /* Viewer */
-.viewer { max-width: 900px; display: flex; flex-direction: column; gap: 20px; }
+.viewer { width: 100%; display: flex; flex-direction: column; gap: 20px; }
 .viewer-header { display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
 .viewer-title-block { flex: 1; display: flex; flex-direction: column; gap: 8px; }
 .viewer-badges { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
