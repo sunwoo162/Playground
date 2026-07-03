@@ -336,6 +336,12 @@ app.get('/apps/cornell-notes/*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'apps', 'cornell-notes', 'dist', 'index.html'));
 });
 
+// Coding Log 앱
+app.use('/apps/coding-log', express.static(path.join(__dirname, '..', 'apps', 'coding-log', 'dist')));
+app.get('/apps/coding-log/*', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'apps', 'coding-log', 'dist', 'index.html'));
+});
+
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'dist', 'index.html'));
 });
