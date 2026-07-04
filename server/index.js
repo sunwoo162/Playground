@@ -109,6 +109,53 @@ function proxyToBackend(req, res) {
 app.use(['/api'], proxyToBackend);
 
 // ============================================
+// 나이스 급식 API 프록시
+// ============================================
+const NEIS_BASE = 'https://open.neis.go.kr/hub';
+
+/** GET /neis/school?q=학교명 - 학교 검색 */
+app.get('/neis/school', async (req, res) => {
+  const { q } = req.query;
+  if (!q) return res.status(400).json({ error: 'q required' });
+  try {
+    const url = `${NEIS_BASE}/schoolInfo?KEY=${process.env.NEIS_API_KEY}&Type=json&SCHUL_NM=${encodeURIComponent(q)}&pSize=10`;
+    const r = await fetch(url);
+    const data = await r.json();
+    const rows = data?.schoolInfo?.[1]?.row || [];
+    res.json(rows.map(s => ({
+      name: s.SCHUL_NM,
+      orgCode: s.ATPT_OFCDC_SC_CODE,
+      schoolCode: s.SD_SCHUL_CODE,
+      address: s.ORG_RDNMA,
+      type: s.SCHUL_KND_SC_NM,
+    })));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/** GET /neis/meal?orgCode=&schoolCode=&date=YYYYMMDD - 급식 조회 */
+app.get('/neis/meal', async (req, res) => {
+  const { orgCode, schoolCode, date } = req.query;
+  if (!orgCode || !schoolCode) return res.status(400).json({ error: 'orgCode, schoolCode required' });
+  const today = date || new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  try {
+    const url = `${NEIS_BASE}/mealServiceDietInfo?KEY=${process.env.NEIS_API_KEY}&Type=json&ATPT_OFCDC_SC_CODE=${orgCode}&SD_SCHUL_CODE=${schoolCode}&MLSV_YMD=${today}`;
+    const r = await fetch(url);
+    const data = await r.json();
+    const rows = data?.mealServiceDietInfo?.[1]?.row || [];
+    res.json(rows.map(m => ({
+      mealType: m.MMEAL_SC_NM,  // 조식/중식/석식
+      menu: m.DDISH_NM?.replace(/<br\/>/g, '\n').replace(/\d+\./g, '').trim(),
+      calories: m.CAL_INFO,
+      date: m.MLSV_YMD,
+    })));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================
 // Web Push
 // ============================================
 
@@ -344,6 +391,12 @@ app.get('/apps/cornell-notes/*', (req, res) => {
 app.use('/apps/coding-log', express.static(path.join(__dirname, '..', 'apps', 'coding-log', 'dist')));
 app.get('/apps/coding-log/*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'apps', 'coding-log', 'dist', 'index.html'));
+});
+
+// School Meal 앱
+app.use('/apps/school-meal', express.static(path.join(__dirname, '..', 'apps', 'school-meal', 'dist')));
+app.get('/apps/school-meal/*', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'apps', 'school-meal', 'dist', 'index.html'));
 });
 
 app.get('*', (req, res) => {
