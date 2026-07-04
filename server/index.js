@@ -113,12 +113,60 @@ app.use(['/api'], proxyToBackend);
 // ============================================
 const NEIS_BASE = 'https://open.neis.go.kr/hub';
 
-/** GET /neis/school?q=학교명 - 학교 검색 */
+// 전국 학교 목록 캐시 (서버 시작 시 로드)
+let schoolCache = [];
+let schoolCacheLoaded = false;
+
+async function loadSchoolCache() {
+  if (schoolCacheLoaded) return;
+  console.log('[NEIS] 전국 학교 목록 로딩 중...');
+  try {
+    let page = 1;
+    const all = [];
+    while (true) {
+      const url = `${NEIS_BASE}/schoolInfo?KEY=${process.env.NEIS_API_KEY}&Type=json&pSize=1000&pIndex=${page}`;
+      const r = await fetch(url);
+      const data = await r.json();
+      const rows = data?.schoolInfo?.[1]?.row || [];
+      if (rows.length === 0) break;
+      all.push(...rows.map(s => ({
+        name: s.SCHUL_NM,
+        orgCode: s.ATPT_OFCDC_SC_CODE,
+        schoolCode: s.SD_SCHUL_CODE,
+        address: s.ORG_RDNMA,
+        type: s.SCHUL_KND_SC_NM,
+        region: s.LCTN_SC_NM,
+      })));
+      if (rows.length < 1000) break;
+      page++;
+    }
+    schoolCache = all;
+    schoolCacheLoaded = true;
+    console.log(`[NEIS] 학교 목록 로딩 완료: ${all.length}개`);
+  } catch (e) {
+    console.error('[NEIS] 학교 목록 로딩 실패:', e.message);
+  }
+}
+
+// 서버 시작 후 백그라운드에서 로드
+setTimeout(loadSchoolCache, 3000);
+
+/** GET /neis/school?q=검색어 - 학교 부분 검색 */
 app.get('/neis/school', async (req, res) => {
   const { q } = req.query;
   if (!q) return res.status(400).json({ error: 'q required' });
+  
+  // 캐시에서 부분 검색
+  if (schoolCacheLoaded && schoolCache.length > 0) {
+    const results = schoolCache
+      .filter(s => s.name.includes(q) || s.address?.includes(q))
+      .slice(0, 20);
+    return res.json(results);
+  }
+
+  // 캐시 없으면 API 직접 호출
   try {
-    const url = `${NEIS_BASE}/schoolInfo?KEY=${process.env.NEIS_API_KEY}&Type=json&SCHUL_NM=${encodeURIComponent(q)}&pSize=10`;
+    const url = `${NEIS_BASE}/schoolInfo?KEY=${process.env.NEIS_API_KEY}&Type=json&SCHUL_NM=${encodeURIComponent(q)}&pSize=20`;
     const r = await fetch(url);
     const data = await r.json();
     const rows = data?.schoolInfo?.[1]?.row || [];
@@ -128,6 +176,7 @@ app.get('/neis/school', async (req, res) => {
       schoolCode: s.SD_SCHUL_CODE,
       address: s.ORG_RDNMA,
       type: s.SCHUL_KND_SC_NM,
+      region: s.LCTN_SC_NM,
     })));
   } catch (e) {
     res.status(500).json({ error: e.message });

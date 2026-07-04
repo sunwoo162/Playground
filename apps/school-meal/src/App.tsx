@@ -161,7 +161,7 @@ export default function App() {
           <form className="search-form" onSubmit={handleSearch}>
             <input
               className="search-input"
-              placeholder="학교 이름 검색..."
+              placeholder="학교명 (예: 광주소프트웨어마이스터고) 또는 지역명 (예: 광주광역시)"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               autoFocus
