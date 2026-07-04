@@ -26,10 +26,6 @@ interface SavedSchool {
 
 const STORAGE_KEY = 'school-meal-settings';
 
-function getToday(): string {
-  return new Date().toISOString().slice(0, 10).replace(/-/g, '');
-}
-
 function dateToApi(date: Date): string {
   return date.toISOString().slice(0, 10).replace(/-/g, '');
 }
