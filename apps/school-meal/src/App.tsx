@@ -20,8 +20,8 @@ interface SavedSchool {
   orgCode: string;
   schoolCode: string;
   alertEnabled: boolean;
-  alertTime: string; // "HH:MM" 형식 - 급식 몇 분 전 알림
-  mealType: string;  // 중식/석식 등
+  alertTime: string;
+  mealType: string;
 }
 
 const STORAGE_KEY = 'school-meal-settings';
@@ -30,8 +30,18 @@ function getToday(): string {
   return new Date().toISOString().slice(0, 10).replace(/-/g, '');
 }
 
-function getTodayDisplay(): string {
-  return new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
+function dateToApi(date: Date): string {
+  return date.toISOString().slice(0, 10).replace(/-/g, '');
+}
+
+function dateToDisplay(date: Date): string {
+  return date.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
+}
+
+function addDays(date: Date, n: number): Date {
+  const d = new Date(date);
+  d.setDate(d.getDate() + n);
+  return d;
 }
 
 export default function App() {
@@ -43,25 +53,33 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState<'main' | 'search' | 'settings'>('main');
   const [notifPermission, setNotifPermission] = useState(Notification.permission);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [selectedMealType, setSelectedMealType] = useState<string>('중식');
 
   useEffect(() => {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const s = JSON.parse(raw) as SavedSchool;
       setSaved(s);
-      fetchMeals(s.orgCode, s.schoolCode);
+      fetchMeals(s.orgCode, s.schoolCode, new Date());
     }
   }, []);
 
-  const fetchMeals = async (orgCode: string, schoolCode: string) => {
+  const fetchMeals = async (orgCode: string, schoolCode: string, date: Date) => {
     setLoading(true);
     try {
-      const res = await fetch(`/neis/meal?orgCode=${orgCode}&schoolCode=${schoolCode}&date=${getToday()}`);
+      const res = await fetch(`/neis/meal?orgCode=${orgCode}&schoolCode=${schoolCode}&date=${dateToApi(date)}`);
       const data = await res.json();
       setMeals(data);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleDateChange = (delta: number) => {
+    const newDate = addDays(selectedDate, delta);
+    setSelectedDate(newDate);
+    if (saved) fetchMeals(saved.orgCode, saved.schoolCode, newDate);
   };
 
   const handleSearch = async (e: React.FormEvent) => {
@@ -82,12 +100,12 @@ export default function App() {
       orgCode: school.orgCode,
       schoolCode: school.schoolCode,
       alertEnabled: false,
-      alertTime: '12:20', // 기본 급식 10분 전
+      alertTime: '12:20',
       mealType: '중식',
     };
     setSaved(settings);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-    fetchMeals(school.orgCode, school.schoolCode);
+    fetchMeals(school.orgCode, school.schoolCode, selectedDate);
     setView('main');
     setSearchResults([]);
     setSearchQuery('');
@@ -228,6 +246,27 @@ export default function App() {
 
       {view === 'main' && (
         <main className="app-main">
+          <div className="date-nav">
+              <button className="date-nav-btn" onClick={() => handleDateChange(-1)}>‹</button>
+              <span className="date-label">{dateToDisplay(selectedDate)}</span>
+              <button className="date-nav-btn" onClick={() => handleDateChange(1)}>›</button>
+            </div>
+
+          {/* 아침/점심/저녁 탭 */}
+          {meals.length > 0 && (
+              <div className="meal-type-tabs">
+                {['조식', '중식', '석식'].map(type => (
+                  <button
+                    key={type}
+                    className={`meal-type-tab ${selectedMealType === type ? 'active' : ''} ${!meals.find(m => m.mealType.includes(type)) ? 'disabled' : ''}`}
+                    onClick={() => setSelectedMealType(type)}
+                  >
+                    {type === '조식' ? '🌅 아침' : type === '중식' ? '☀️ 점심' : '🌙 저녁'}
+                  </button>
+                ))}
+              </div>
+            )}
+
           {!saved ? (
             <div className="empty-state">
               <p className="empty-icon">🏫</p>
@@ -239,27 +278,35 @@ export default function App() {
           ) : meals.length === 0 ? (
             <div className="empty-state">
               <p className="empty-icon">🤷</p>
-              <p>오늘은 급식 정보가 없어요.</p>
-              <p className="empty-sub">{getTodayDisplay()}</p>
+              <p>이 날은 급식 정보가 없어요.</p>
+              <p className="empty-sub">{dateToDisplay(selectedDate)}</p>
             </div>
           ) : (
             <div className="meal-list">
-              <p className="today-label">📅 {getTodayDisplay()}</p>
-              {meals.map((meal, i) => (
-                <div key={i} className="meal-card" style={{ borderTop: `3px solid ${mealTypeColors[meal.mealType] || '#888'}` }}>
-                  <div className="meal-header">
-                    <span className="meal-type" style={{ color: mealTypeColors[meal.mealType] || '#888' }}>
-                      {meal.mealType}
-                    </span>
-                    {meal.calories && <span className="meal-cal">{meal.calories}</span>}
+              {(() => {
+                const filtered = meals.filter(m => m.mealType.includes(selectedMealType));
+                if (filtered.length === 0) return (
+                  <div className="empty-state">
+                    <p className="empty-icon">🍽️</p>
+                    <p>{selectedMealType} 정보가 없어요.</p>
                   </div>
-                  <ul className="menu-list">
-                    {meal.menu.split('\n').filter(Boolean).map((item, j) => (
-                      <li key={j} className="menu-item">{item.trim()}</li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
+                );
+                return filtered.map((meal, i) => (
+                  <div key={i} className="meal-card" style={{ borderTop: `3px solid ${mealTypeColors[meal.mealType] || '#888'}` }}>
+                    <div className="meal-header">
+                      <span className="meal-type" style={{ color: mealTypeColors[meal.mealType] || '#888' }}>
+                        {meal.mealType}
+                      </span>
+                      {meal.calories && <span className="meal-cal">{meal.calories}</span>}
+                    </div>
+                    <ul className="menu-list">
+                      {meal.menu.split('\n').filter(Boolean).map((item, j) => (
+                        <li key={j} className="menu-item">{item.trim()}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ));
+              })()}
 
               {saved.alertEnabled ? (
                 <div className="alert-status on">
