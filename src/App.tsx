@@ -124,7 +124,14 @@ function App() {
         setLoading(false);
         if (data.user) {
           setTokenExpiry(getAccessTokenExpiry());
-          registerPushSubscription(); // 로그인 시 Push 구독 등록
+          registerPushSubscription();
+          // 로그인 후 returnTo가 있으면 이동
+          const params = new URLSearchParams(window.location.search);
+          const returnTo = params.get('returnTo');
+          if (returnTo) {
+            window.location.href = decodeURIComponent(returnTo);
+            return;
+          }
         }
       })
       .catch(() => setLoading(false));

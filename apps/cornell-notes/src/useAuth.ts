@@ -7,7 +7,10 @@ export function useAuth() {
       .then(r => r.json())
       .then(data => {
         if (data.user) setAuthed(true);
-        else window.location.href = '/';
+        else {
+          const returnTo = encodeURIComponent(window.location.href);
+          window.location.href = `/?returnTo=${returnTo}`;
+        }
       })
       .catch(() => { window.location.href = '/'; });
   }, []);

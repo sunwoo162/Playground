@@ -7,7 +7,11 @@ export function useAuth() {
       .then(r => r.json())
       .then(data => {
         if (data.user) setAuthed(true);
-        else window.location.href = '/';
+        else {
+          // 현재 URL을 returnTo로 저장 후 메인으로 이동
+          const returnTo = encodeURIComponent(window.location.href);
+          window.location.href = `/?returnTo=${returnTo}`;
+        }
       })
       .catch(() => { window.location.href = '/'; });
   }, []);
