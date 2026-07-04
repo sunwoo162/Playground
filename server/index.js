@@ -123,12 +123,16 @@ async function loadSchoolCache() {
   try {
     let page = 1;
     const all = [];
+    const apiKey = process.env.NEIS_API_KEY;
+    console.log('[NEIS] API Key 확인:', apiKey ? apiKey.slice(0, 8) + '...' : '없음');
     while (true) {
-      const url = `${NEIS_BASE}/schoolInfo?KEY=${process.env.NEIS_API_KEY}&Type=json&pSize=1000&pIndex=${page}`;
+      const url = `${NEIS_BASE}/schoolInfo?KEY=${apiKey}&Type=json&pSize=1000&pIndex=${page}`;
       const r = await fetch(url);
-      const data = await r.json();
+      const text = await r.text();
+      let data;
+      try { data = JSON.parse(text); } catch { console.error('[NEIS] JSON 파싱 실패:', text.slice(0, 200)); break; }
       const rows = data?.schoolInfo?.[1]?.row || [];
-      if (rows.length === 0) break;
+      if (rows.length === 0) { console.log('[NEIS] page', page, '결과 없음, 로딩 종료'); break; }
       all.push(...rows.map(s => ({
         name: s.SCHUL_NM,
         orgCode: s.ATPT_OFCDC_SC_CODE,
@@ -137,6 +141,7 @@ async function loadSchoolCache() {
         type: s.SCHUL_KND_SC_NM,
         region: s.LCTN_SC_NM,
       })));
+      console.log(`[NEIS] page ${page}: ${rows.length}개 로드 (누적 ${all.length}개)`);
       if (rows.length < 1000) break;
       page++;
     }
