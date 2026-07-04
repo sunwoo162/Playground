@@ -164,11 +164,13 @@ app.post('/internal/push/send', async (req, res) => {
 app.get('/auth/github', (req, res) => {
   const clientId = process.env.GITHUB_CLIENT_ID;
   const callbackUrl = process.env.CALLBACK_URL;
+
+  // returnTo 세션에 저장
+  if (req.query.returnTo) {
+    req.session.returnTo = req.query.returnTo;
+  }
   
-  // GitHub OAuth 인증 URL로 이동
-  // scope: read:user → 사용자 기본 정보(이름, 아바타 등) 읽기 권한
   const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(callbackUrl)}&scope=read:user`;
-  
   res.redirect(githubAuthUrl);
 });
 
@@ -270,8 +272,10 @@ app.get('/auth/github/callback', async (req, res) => {
       sameSite: 'lax',
     });
 
-    // 로그인 성공 → 메인 페이지로 이동
-    res.redirect('/');
+    // 로그인 성공 → returnTo가 있으면 거기로, 없으면 메인
+    const returnTo = req.session.returnTo || '/';
+    delete req.session.returnTo;
+    res.redirect(returnTo);
   } catch (error) {
     console.error('OAuth error:', error);
     console.error('GITHUB_CLIENT_ID:', process.env.GITHUB_CLIENT_ID);

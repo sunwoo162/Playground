@@ -125,13 +125,6 @@ function App() {
         if (data.user) {
           setTokenExpiry(getAccessTokenExpiry());
           registerPushSubscription();
-          // 로그인 후 returnTo가 있으면 이동
-          const params = new URLSearchParams(window.location.search);
-          const returnTo = params.get('returnTo');
-          if (returnTo) {
-            window.location.href = decodeURIComponent(returnTo);
-            return;
-          }
         }
       })
       .catch(() => setLoading(false));
@@ -159,7 +152,13 @@ function App() {
     return () => clearInterval(id);
   }, [tokenExpiry]);
 
-  const handleLogin = () => { window.location.href = '/auth/github'; };
+  const handleLogin = () => {
+    const params = new URLSearchParams(window.location.search);
+    const returnTo = params.get('returnTo');
+    window.location.href = returnTo
+      ? `/auth/github?returnTo=${encodeURIComponent(returnTo)}`
+      : '/auth/github';
+  };
 
   const handleLogout = async () => {
     await fetch('/auth/logout', { method: 'POST', credentials: 'include' });
