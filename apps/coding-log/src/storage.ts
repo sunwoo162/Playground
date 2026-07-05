@@ -74,6 +74,7 @@ function toLocal(a: ApiLog): CodingLog {
     problemNumber: a.problemNumber ?? '',
     level: a.level ?? '',
     status: a.status as 'solved' | 'failed' | 'retry',
+    language: (a as any).language ?? undefined,
     approach: a.approach ?? '',
     code: a.code ?? '',
     timeComplexity: a.timeComplexity ?? '',
@@ -92,6 +93,7 @@ function toApi(log: CodingLog) {
     problemNumber: log.problemNumber || null,
     level: log.level || null,
     status: log.status,
+    language: log.language || null,
     approach: log.approach || null,
     code: log.code || null,
     timeComplexity: log.timeComplexity || null,
@@ -99,6 +101,25 @@ function toApi(log: CodingLog) {
     date: log.date,
     isPublic: log.isPublic,
   };
+}
+
+// ── 좋아요 ──────────────────────────────────────────────
+export async function getLike(logId: string): Promise<{ liked: boolean; count: number }> {
+  return req(`/api/coding-log/${logId}/like`);
+}
+export async function toggleLike(logId: string): Promise<{ liked: boolean; count: number }> {
+  return req(`/api/coding-log/${logId}/like`, { method: 'POST' });
+}
+
+// ── 댓글 ────────────────────────────────────────────────
+export async function getComments(logId: string) {
+  return req<any[]>(`/api/coding-log/${logId}/comments`);
+}
+export async function addComment(logId: string, content: string) {
+  return req(`/api/coding-log/${logId}/comments`, { method: 'POST', body: JSON.stringify({ content }) });
+}
+export async function deleteComment(commentId: number) {
+  return req(`/api/coding-log/comments/${commentId}`, { method: 'DELETE' });
 }
 
 // ── 유틸 ──────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import type { CodingLog, Platform, Status } from './types';
-import { getMyLogs, getPublicLogs, createLog, updateLog, deleteLog, generateId, getTodayStr, parseUrlParams } from './storage';
+import type { CodingLog, Platform, Status, Language, Comment } from './types';
+import { getMyLogs, getPublicLogs, createLog, updateLog, deleteLog, generateId, getTodayStr, parseUrlParams, getLike, toggleLike, getComments, addComment, deleteComment } from './storage';
 import { useAuth } from './useAuth';
 
 type View = 'list' | 'edit' | 'view';
@@ -18,6 +18,18 @@ const STATUSES: { value: Status; label: string; color: string }[] = [
 const COMMON_TAGS = ['DP', '그리디', 'BFS', 'DFS', '이분탐색', '구현', '정렬', '스택/큐', '해시', '완전탐색', '투포인터', '문자열'];
 const PROG_LEVELS = ['Lv.0', 'Lv.1', 'Lv.2', 'Lv.3', 'Lv.4', 'Lv.5'];
 const BOJ_LEVELS = ['브론즈', '실버', '골드', '플래티넘', '다이아', '루비'];
+const LANGUAGES: { value: Language; label: string }[] = [
+  { value: 'python', label: 'Python' },
+  { value: 'javascript', label: 'JavaScript' },
+  { value: 'typescript', label: 'TypeScript' },
+  { value: 'java', label: 'Java' },
+  { value: 'cpp', label: 'C++' },
+  { value: 'c', label: 'C' },
+  { value: 'kotlin', label: 'Kotlin' },
+  { value: 'swift', label: 'Swift' },
+  { value: 'go', label: 'Go' },
+  { value: 'rust', label: 'Rust' },
+];
 
 function emptyLog(): CodingLog {
   const params = parseUrlParams();
@@ -52,6 +64,14 @@ export default function App() {
   const [tagInput, setTagInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [isNew, setIsNew] = useState(false);
+  // 좋아요/댓글
+  const [likeData, setLikeData] = useState<{ liked: boolean; count: number } | null>(null);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [commentInput, setCommentInput] = useState('');
+  // GitHub 커밋
+  const [repoInput, setRepoInput] = useState('sunwoo162/Coding-Test');
+  const [committing, setCommitting] = useState(false);
+  const [commitResult, setCommitResult] = useState<{ url?: string; error?: string } | null>(null);
 
   useEffect(() => {
     if (!authed) return;
@@ -92,6 +112,9 @@ export default function App() {
       setSelected(saved);
       setIsNew(false);
       setView('view');
+      // 좋아요/댓글 로드
+      getLike(saved.id).then(setLikeData);
+      getComments(saved.id).then(setComments);
     } finally {
       setSaving(false);
     }
@@ -107,7 +130,49 @@ export default function App() {
     setView('list');
   };
 
-  const addTag = (tag: string) => {
+  const handleCommit = async () => {
+    if (!selected || !selected.code) return;
+    setCommitting(true);
+    setCommitResult(null);
+    try {
+      const res = await fetch('/github/commit', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          repo: repoInput,
+          problemTitle: selected.problemTitle,
+          platform: selected.platform,
+          language: selected.language || 'python',
+          code: selected.code,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) setCommitResult({ url: data.url });
+      else setCommitResult({ error: data.error });
+    } finally {
+      setCommitting(false);
+    }
+  };
+
+  const handleToggleLike = async () => {
+    if (!selected) return;
+    const data = await toggleLike(selected.id);
+    setLikeData(data);
+  };
+
+  const handleAddComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selected || !commentInput.trim()) return;
+    const c = await addComment(selected.id, commentInput);
+    setComments(prev => [...prev, c as Comment]);
+    setCommentInput('');
+  };
+
+  const handleDeleteComment = async (id: number) => {
+    await deleteComment(id);
+    setComments(prev => prev.filter(c => c.id !== id));
+  };
     if (!selected || !tag.trim() || selected.tags.includes(tag)) return;
     setSelected({ ...selected, tags: [...selected.tags, tag] });
     setTagInput('');
@@ -162,7 +227,12 @@ export default function App() {
           ) : (
             <div className="log-grid">
               {filtered.map(log => (
-                <div key={log.id} className="log-card" onClick={() => { setSelected(log); setIsNew(false); setView('view'); }}>
+                <div key={log.id} className="log-card" onClick={() => {
+                  setSelected(log); setIsNew(false); setView('view');
+                  getLike(log.id).then(setLikeData);
+                  getComments(log.id).then(setComments);
+                  setCommitResult(null);
+                }}>
                   <div className="log-card-top">
                     <span className={`platform-badge ${log.platform}`}>{platformLabel(log.platform)}</span>
                     {log.level && <span className="level-badge">{log.level}</span>}
@@ -241,6 +311,13 @@ export default function App() {
                 >
                   {selected.isPublic ? '🌐 공개' : '🔒 비공개'}
                 </button>
+              </div>
+              <div className="form-group" style={{ flex: '0 0 140px' }}>
+                <label>언어</label>
+                <select value={selected.language || ''} onChange={e => setSelected({ ...selected, language: e.target.value as Language })}>
+                  <option value="">선택</option>
+                  {LANGUAGES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+                </select>
               </div>
             </div>
 
@@ -327,10 +404,56 @@ export default function App() {
             )}
             {selected.code && (
               <div className="section-gap">
-                <div className="section-label">💻 코드</div>
+                <div className="section-label">💻 코드 {selected.language && <span className="lang-badge">{LANGUAGES.find(l=>l.value===selected.language)?.label}</span>}</div>
                 <pre className="code-block">{selected.code}</pre>
               </div>
             )}
+
+            {/* GitHub 커밋 */}
+            {selected.code && (
+              <div className="section-gap commit-section">
+                <div className="section-label">🚀 GitHub 커밋</div>
+                <div className="commit-row">
+                  <input className="repo-input" placeholder="username/repo" value={repoInput} onChange={e => setRepoInput(e.target.value)} />
+                  <button className="btn-commit" onClick={handleCommit} disabled={committing || !selected.code}>
+                    {committing ? '커밋 중...' : '커밋하기'}
+                  </button>
+                </div>
+                {commitResult?.url && <p className="commit-success">✅ 커밋 완료! <a href={commitResult.url} target="_blank" rel="noopener">파일 보기 →</a></p>}
+                {commitResult?.error && <p className="commit-error">❌ {commitResult.error}</p>}
+              </div>
+            )}
+
+            {/* 좋아요 */}
+            <div className="like-row">
+              <button className={`like-btn ${likeData?.liked ? 'liked' : ''}`} onClick={handleToggleLike}>
+                {likeData?.liked ? '❤️' : '🤍'} {likeData?.count ?? 0}
+              </button>
+            </div>
+
+            {/* 댓글 */}
+            <div className="section-gap">
+              <div className="section-label">💬 댓글 {comments.length > 0 && `(${comments.length})`}</div>
+              <div className="comment-list">
+                {comments.map(c => (
+                  <div key={c.id} className="comment-item">
+                    <img src={c.userAvatarUrl} alt={c.userLogin} className="comment-avatar" />
+                    <div className="comment-body">
+                      <div className="comment-header">
+                        <span className="comment-author">@{c.userLogin}</span>
+                        <span className="comment-date">{new Date(c.createdAt).toLocaleDateString('ko-KR')}</span>
+                      </div>
+                      <p className="comment-content">{c.content}</p>
+                    </div>
+                    <button className="comment-delete" onClick={() => handleDeleteComment(c.id)}>✕</button>
+                  </div>
+                ))}
+              </div>
+              <form className="comment-form" onSubmit={handleAddComment}>
+                <input className="comment-input" placeholder="댓글을 입력하세요..." value={commentInput} onChange={e => setCommentInput(e.target.value)} />
+                <button type="submit" className="btn-primary btn-sm" disabled={!commentInput.trim()}>등록</button>
+              </form>
+            </div>
           </div>
         </main>
       )}

@@ -260,8 +260,73 @@ app.post('/internal/push/send', async (req, res) => {
 });
 
 // ============================================
-// GitHub OAuth 라우트
+// GitHub 커밋 API
 // ============================================
+
+/**
+ * POST /github/commit
+ * 코테 일지 풀이를 GitHub 레포에 커밋
+ * { repo, problemTitle, platform, language, code }
+ */
+app.post('/github/commit', async (req, res) => {
+  const githubToken = req.session?.githubToken;
+  if (!githubToken) return res.status(401).json({ error: 'GitHub 토큰 없음. 다시 로그인해주세요.' });
+
+  const { repo, problemTitle, platform, language, code } = req.body;
+  if (!repo || !problemTitle || !code) return res.status(400).json({ error: '필수 값 누락' });
+
+  const LANG_EXT = {
+    python: 'py', javascript: 'js', typescript: 'ts', java: 'java',
+    cpp: 'cpp', c: 'c', kotlin: 'kt', swift: 'swift', go: 'go', rust: 'rs',
+  };
+  const ext = LANG_EXT[language?.toLowerCase()] || 'txt';
+  const langName = language ? language.charAt(0).toUpperCase() + language.slice(1) : 'Code';
+
+  // 파일 경로: codingtest.py/프로그래머스/문제이름 (Python).py
+  const platformDir = platform === 'programmers' ? '프로그래머스' : '백준';
+  const safeTitle = problemTitle.replace(/[\\/:*?"<>|]/g, '_');
+  const filePath = `codingtest.py/${platformDir}/${safeTitle} (${langName}).${ext}`;
+
+  try {
+    const headers = {
+      'Authorization': `Bearer ${githubToken}`,
+      'Accept': 'application/vnd.github+json',
+      'User-Agent': 'playground-app',
+      'Content-Type': 'application/json',
+    };
+
+    // 기존 파일 SHA 조회 (업데이트 시 필요)
+    let sha;
+    const getRes = await fetch(`https://api.github.com/repos/${repo}/contents/${encodeURIComponent(filePath)}`, { headers });
+    if (getRes.ok) {
+      const getData = await getRes.json();
+      sha = getData.sha;
+    }
+
+    // 파일 생성/업데이트
+    const body = {
+      message: `[${platform === 'programmers' ? '프로그래머스' : '백준'}] ${problemTitle}`,
+      content: Buffer.from(code, 'utf-8').toString('base64'),
+      ...(sha && { sha }),
+    };
+
+    const putRes = await fetch(`https://api.github.com/repos/${repo}/contents/${encodeURIComponent(filePath)}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(body),
+    });
+
+    if (!putRes.ok) {
+      const err = await putRes.json();
+      return res.status(putRes.status).json({ error: err.message });
+    }
+
+    const result = await putRes.json();
+    res.json({ success: true, url: result.content?.html_url, sha: result.content?.sha });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 app.get('/auth/github', (req, res) => {
   const clientId = process.env.GITHUB_CLIENT_ID;
   const callbackUrl = process.env.CALLBACK_URL;
@@ -271,7 +336,7 @@ app.get('/auth/github', (req, res) => {
     req.session.returnTo = req.query.returnTo;
   }
   
-  const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(callbackUrl)}&scope=read:user`;
+  const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(callbackUrl)}&scope=read:user,repo`;
   res.redirect(githubAuthUrl);
 });
 
@@ -336,6 +401,7 @@ app.get('/auth/github/callback', async (req, res) => {
       name: userData.name,
       avatar_url: userData.avatar_url,
     };
+    req.session.githubToken = tokenData.access_token; // GitHub API 사용용
 
     // 4단계: JWT 발급 (Spring Boot API 인증용)
     const userPayload = {
