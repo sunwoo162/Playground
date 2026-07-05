@@ -19,16 +19,11 @@ const COMMON_TAGS = ['DP', '그리디', 'BFS', 'DFS', '이분탐색', '구현', 
 const PROG_LEVELS = ['Lv.0', 'Lv.1', 'Lv.2', 'Lv.3', 'Lv.4', 'Lv.5'];
 const BOJ_LEVELS = ['브론즈', '실버', '골드', '플래티넘', '다이아', '루비'];
 const LANGUAGES: { value: Language; label: string }[] = [
-  { value: 'python', label: 'Python' },
-  { value: 'javascript', label: 'JavaScript' },
-  { value: 'typescript', label: 'TypeScript' },
-  { value: 'java', label: 'Java' },
-  { value: 'cpp', label: 'C++' },
-  { value: 'c', label: 'C' },
-  { value: 'kotlin', label: 'Kotlin' },
-  { value: 'swift', label: 'Swift' },
-  { value: 'go', label: 'Go' },
-  { value: 'rust', label: 'Rust' },
+  { value: 'python', label: 'Python' }, { value: 'javascript', label: 'JavaScript' },
+  { value: 'typescript', label: 'TypeScript' }, { value: 'java', label: 'Java' },
+  { value: 'cpp', label: 'C++' }, { value: 'c', label: 'C' },
+  { value: 'kotlin', label: 'Kotlin' }, { value: 'swift', label: 'Swift' },
+  { value: 'go', label: 'Go' }, { value: 'rust', label: 'Rust' },
 ];
 
 function emptyLog(): CodingLog {
@@ -64,11 +59,9 @@ export default function App() {
   const [tagInput, setTagInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [isNew, setIsNew] = useState(false);
-  // 좋아요/댓글
   const [likeData, setLikeData] = useState<{ liked: boolean; count: number } | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentInput, setCommentInput] = useState('');
-  // GitHub 커밋
   const [repoInput, setRepoInput] = useState('sunwoo162/Coding-Test');
   const [committing, setCommitting] = useState(false);
   const [commitResult, setCommitResult] = useState<{ url?: string; error?: string } | null>(null);
@@ -78,11 +71,7 @@ export default function App() {
     getMyLogs().then(setLogs).catch(() => {});
     getPublicLogs().then(setPublicLogs).catch(() => {});
     const params = parseUrlParams();
-    if (params.title) {
-      setSelected(emptyLog());
-      setIsNew(true);
-      setView('edit');
-    }
+    if (params.title) { setSelected(emptyLog()); setIsNew(true); setView('edit'); }
   }, [authed]);
 
   if (!authed) return null;
@@ -95,26 +84,22 @@ export default function App() {
 
   const handleNew = () => { setSelected(emptyLog()); setIsNew(true); setView('edit'); };
 
+  const openViewer = (log: CodingLog) => {
+    setSelected(log); setIsNew(false); setView('view');
+    getLike(log.id).then(setLikeData).catch(() => {});
+    getComments(log.id).then((c) => setComments(c as Comment[])).catch(() => {});
+    setCommitResult(null);
+  };
+
   const handleSave = async () => {
     if (!selected || !selected.problemTitle.trim()) return;
     setSaving(true);
     try {
-      let saved: CodingLog;
-      if (isNew) {
-        saved = await createLog(selected);
-      } else {
-        saved = await updateLog(selected);
-      }
-      const myLogs = await getMyLogs();
-      const pubLogs = await getPublicLogs();
-      setLogs(myLogs);
-      setPublicLogs(pubLogs);
-      setSelected(saved);
+      const saved = isNew ? await createLog(selected) : await updateLog(selected);
+      setLogs(await getMyLogs());
+      setPublicLogs(await getPublicLogs());
+      openViewer(saved);
       setIsNew(false);
-      setView('view');
-      // 좋아요/댓글 로드
-      getLike(saved.id).then(setLikeData);
-      getComments(saved.id).then(setComments);
     } finally {
       setSaving(false);
     }
@@ -122,37 +107,33 @@ export default function App() {
 
   const handleDelete = async (id: string) => {
     await deleteLog(id);
-    const myLogs = await getMyLogs();
-    const pubLogs = await getPublicLogs();
-    setLogs(myLogs);
-    setPublicLogs(pubLogs);
-    setSelected(null);
-    setView('list');
+    setLogs(await getMyLogs());
+    setPublicLogs(await getPublicLogs());
+    setSelected(null); setView('list');
+  };
+
+  const addTag = (tag: string) => {
+    if (!selected || !tag.trim() || selected.tags.includes(tag)) return;
+    setSelected({ ...selected, tags: [...selected.tags, tag] });
+    setTagInput('');
+  };
+  const removeTag = (tag: string) => {
+    if (!selected) return;
+    setSelected({ ...selected, tags: selected.tags.filter(t => t !== tag) });
   };
 
   const handleCommit = async () => {
-    if (!selected || !selected.code) return;
-    setCommitting(true);
-    setCommitResult(null);
+    if (!selected?.code) return;
+    setCommitting(true); setCommitResult(null);
     try {
       const res = await fetch('/github/commit', {
-        method: 'POST',
-        credentials: 'include',
+        method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          repo: repoInput,
-          problemTitle: selected.problemTitle,
-          platform: selected.platform,
-          language: selected.language || 'python',
-          code: selected.code,
-        }),
+        body: JSON.stringify({ repo: repoInput, problemTitle: selected.problemTitle, platform: selected.platform, language: selected.language || 'python', code: selected.code }),
       });
       const data = await res.json();
-      if (data.success) setCommitResult({ url: data.url });
-      else setCommitResult({ error: data.error });
-    } finally {
-      setCommitting(false);
-    }
+      setCommitResult(data.success ? { url: data.url } : { error: data.error });
+    } finally { setCommitting(false); }
   };
 
   const handleToggleLike = async () => {
@@ -173,14 +154,6 @@ export default function App() {
     await deleteComment(id);
     setComments(prev => prev.filter(c => c.id !== id));
   };
-    if (!selected || !tag.trim() || selected.tags.includes(tag)) return;
-    setSelected({ ...selected, tags: [...selected.tags, tag] });
-    setTagInput('');
-  };
-  const removeTag = (tag: string) => {
-    if (!selected) return;
-    setSelected({ ...selected, tags: selected.tags.filter(t => t !== tag) });
-  };
 
   const statusOf = (s: Status) => STATUSES.find(x => x.value === s)!;
   const platformLabel = (p: Platform) => p === 'programmers' ? '프로그래머스' : '백준';
@@ -200,12 +173,10 @@ export default function App() {
 
       {view === 'list' && (
         <main className="app-main">
-          {/* 탭 */}
           <div className="tab-bar">
             <button className={`tab-btn ${tab === 'my' ? 'active' : ''}`} onClick={() => setTab('my')}>📋 내 풀이</button>
             <button className={`tab-btn ${tab === 'community' ? 'active' : ''}`} onClick={() => setTab('community')}>🌐 커뮤니티</button>
           </div>
-
           <div className="filter-bar">
             <input className="search-input" placeholder="🔍 문제 검색..." value={search} onChange={e => setSearch(e.target.value)} />
             <select className="select-sm" value={filterPlatform} onChange={e => setFilterPlatform(e.target.value as Platform | 'all')}>
@@ -217,7 +188,6 @@ export default function App() {
               {STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
             </select>
           </div>
-
           {filtered.length === 0 ? (
             <div className="empty-state">
               <p className="empty-icon">💻</p>
@@ -227,12 +197,7 @@ export default function App() {
           ) : (
             <div className="log-grid">
               {filtered.map(log => (
-                <div key={log.id} className="log-card" onClick={() => {
-                  setSelected(log); setIsNew(false); setView('view');
-                  getLike(log.id).then(setLikeData);
-                  getComments(log.id).then(setComments);
-                  setCommitResult(null);
-                }}>
+                <div key={log.id} className="log-card" onClick={() => openViewer(log)}>
                   <div className="log-card-top">
                     <span className={`platform-badge ${log.platform}`}>{platformLabel(log.platform)}</span>
                     {log.level && <span className="level-badge">{log.level}</span>}
@@ -247,9 +212,7 @@ export default function App() {
                     </div>
                   )}
                   {(log.tags || []).length > 0 && (
-                    <div className="tag-row">
-                      {(log.tags || []).slice(0, 4).map(t => <span key={t} className="tag">{t}</span>)}
-                    </div>
+                    <div className="tag-row">{(log.tags || []).slice(0, 4).map(t => <span key={t} className="tag">{t}</span>)}</div>
                   )}
                   <div className="log-visibility">{log.isPublic ? '🌐 공개' : '🔒 비공개'}</div>
                 </div>
@@ -278,7 +241,6 @@ export default function App() {
                 <input placeholder="번호" value={selected.problemNumber || ''} onChange={e => setSelected({ ...selected, problemNumber: e.target.value })} />
               </div>
             </div>
-
             <div className="editor-row">
               <div className="form-group" style={{ flex: '0 0 140px' }}>
                 <label>난이도</label>
@@ -294,6 +256,13 @@ export default function App() {
                 </select>
               </div>
               <div className="form-group" style={{ flex: '0 0 140px' }}>
+                <label>언어</label>
+                <select value={selected.language || ''} onChange={e => setSelected({ ...selected, language: e.target.value as Language })}>
+                  <option value="">선택</option>
+                  {LANGUAGES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+                </select>
+              </div>
+              <div className="form-group" style={{ flex: '0 0 140px' }}>
                 <label>시간 복잡도</label>
                 <input placeholder="O(n log n)" value={selected.timeComplexity || ''} onChange={e => setSelected({ ...selected, timeComplexity: e.target.value })} />
               </div>
@@ -301,62 +270,37 @@ export default function App() {
                 <label>날짜</label>
                 <input type="date" value={selected.date} onChange={e => setSelected({ ...selected, date: e.target.value })} />
               </div>
-              {/* 공개/비공개 토글 */}
               <div className="form-group" style={{ flex: '0 0 120px' }}>
                 <label>공개 설정</label>
-                <button
-                  type="button"
-                  className={`visibility-toggle ${selected.isPublic ? 'public' : 'private'}`}
-                  onClick={() => setSelected({ ...selected, isPublic: !selected.isPublic })}
-                >
+                <button type="button" className={`visibility-toggle ${selected.isPublic ? 'public' : 'private'}`} onClick={() => setSelected({ ...selected, isPublic: !selected.isPublic })}>
                   {selected.isPublic ? '🌐 공개' : '🔒 비공개'}
                 </button>
               </div>
-              <div className="form-group" style={{ flex: '0 0 140px' }}>
-                <label>언어</label>
-                <select value={selected.language || ''} onChange={e => setSelected({ ...selected, language: e.target.value as Language })}>
-                  <option value="">선택</option>
-                  {LANGUAGES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
-                </select>
-              </div>
             </div>
-
             <div className="form-group">
               <label>태그</label>
               <div className="tag-editor">
                 <div className="tag-row">
-                  {selected.tags.map(t => (
-                    <span key={t} className="tag removable">{t} <button onClick={() => removeTag(t)}>✕</button></span>
-                  ))}
+                  {selected.tags.map(t => <span key={t} className="tag removable">{t} <button onClick={() => removeTag(t)}>✕</button></span>)}
                 </div>
                 <div className="tag-input-row">
-                  <input className="tag-input" placeholder="태그 입력 후 Enter" value={tagInput}
-                    onChange={e => setTagInput(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && (addTag(tagInput), e.preventDefault())}
-                  />
+                  <input className="tag-input" placeholder="태그 입력 후 Enter" value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && (addTag(tagInput), e.preventDefault())} />
                   <div className="common-tags">
-                    {COMMON_TAGS.filter(t => !selected.tags.includes(t)).map(t => (
-                      <button key={t} className="tag-suggest" onClick={() => addTag(t)}>{t}</button>
-                    ))}
+                    {COMMON_TAGS.filter(t => !selected.tags.includes(t)).map(t => <button key={t} className="tag-suggest" onClick={() => addTag(t)}>{t}</button>)}
                   </div>
                 </div>
               </div>
             </div>
-
             <div className="form-group">
               <label>풀이 접근법</label>
-              <textarea rows={5} placeholder="어떻게 접근했는지, 어떤 알고리즘을 사용했는지 설명해보세요" value={selected.approach} onChange={e => setSelected({ ...selected, approach: e.target.value })} />
+              <textarea rows={5} placeholder="어떻게 접근했는지 설명해보세요" value={selected.approach} onChange={e => setSelected({ ...selected, approach: e.target.value })} />
             </div>
-
             <div className="form-group">
               <label>코드</label>
               <textarea className="code-area" rows={12} placeholder="풀이 코드를 붙여넣으세요" value={selected.code} onChange={e => setSelected({ ...selected, code: e.target.value })} spellCheck={false} />
             </div>
-
             <div className="editor-actions">
-              <button className="btn-primary" onClick={handleSave} disabled={saving || !selected.problemTitle.trim()}>
-                {saving ? '저장 중...' : '저장'}
-              </button>
+              <button className="btn-primary" onClick={handleSave} disabled={saving || !selected.problemTitle.trim()}>{saving ? '저장 중...' : '저장'}</button>
               <button className="btn-ghost" onClick={() => setView('list')}>취소</button>
             </div>
           </div>
@@ -372,6 +316,7 @@ export default function App() {
                   <span className={`platform-badge ${selected.platform}`}>{platformLabel(selected.platform)}</span>
                   {selected.level && <span className="level-badge">{selected.level}</span>}
                   {selected.problemNumber && <span className="level-badge">#{selected.problemNumber}</span>}
+                  {selected.language && <span className="level-badge">{LANGUAGES.find(l => l.value === selected.language)?.label}</span>}
                   <span className="log-status" style={{ color: statusOf(selected.status).color }}>{statusOf(selected.status).label}</span>
                   <span className={`visibility-badge ${selected.isPublic ? 'public' : 'private'}`}>{selected.isPublic ? '🌐 공개' : '🔒 비공개'}</span>
                 </div>
@@ -404,7 +349,7 @@ export default function App() {
             )}
             {selected.code && (
               <div className="section-gap">
-                <div className="section-label">💻 코드 {selected.language && <span className="lang-badge">{LANGUAGES.find(l=>l.value===selected.language)?.label}</span>}</div>
+                <div className="section-label">💻 코드</div>
                 <pre className="code-block">{selected.code}</pre>
               </div>
             )}
@@ -415,9 +360,7 @@ export default function App() {
                 <div className="section-label">🚀 GitHub 커밋</div>
                 <div className="commit-row">
                   <input className="repo-input" placeholder="username/repo" value={repoInput} onChange={e => setRepoInput(e.target.value)} />
-                  <button className="btn-commit" onClick={handleCommit} disabled={committing || !selected.code}>
-                    {committing ? '커밋 중...' : '커밋하기'}
-                  </button>
+                  <button className="btn-commit" onClick={handleCommit} disabled={committing}>{committing ? '커밋 중...' : '커밋하기'}</button>
                 </div>
                 {commitResult?.url && <p className="commit-success">✅ 커밋 완료! <a href={commitResult.url} target="_blank" rel="noopener">파일 보기 →</a></p>}
                 {commitResult?.error && <p className="commit-error">❌ {commitResult.error}</p>}

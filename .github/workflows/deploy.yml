@@ -22,11 +22,12 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.7'
+          cache-read-only: false
 
       - name: Build Spring Boot JAR
         run: |
           cd backend
-          gradle bootJar -x test
+          gradle bootJar -x test --no-daemon
         env:
           GITHUB_CLIENT_ID: ${{ secrets.GITHUB_CLIENT_ID }}
           GITHUB_CLIENT_SECRET: ${{ secrets.GITHUB_CLIENT_SECRET }}
