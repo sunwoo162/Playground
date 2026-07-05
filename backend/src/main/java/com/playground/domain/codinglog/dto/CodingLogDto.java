@@ -13,6 +13,7 @@ public class CodingLogDto {
         private String problemNumber;
         private String level;
         private String status;
+        private String language;
         private String approach;
         private String code;
         private String timeComplexity;
@@ -32,6 +33,7 @@ public class CodingLogDto {
         private String problemNumber;
         private String level;
         private String status;
+        private String language;
         private String approach;
         private String code;
         private String timeComplexity;

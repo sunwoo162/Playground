@@ -34,6 +34,8 @@ public class CodingLog {
     @Enumerated(EnumType.STRING)
     private Status status;
 
+    private String language;
+
     @Column(columnDefinition = "TEXT")
     private String approach;
 

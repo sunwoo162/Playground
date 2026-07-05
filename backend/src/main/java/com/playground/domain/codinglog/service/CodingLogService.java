@@ -43,6 +43,7 @@ public class CodingLogService {
                 .problemNumber(req.getProblemNumber())
                 .level(req.getLevel())
                 .status(CodingLog.Status.valueOf(req.getStatus()))
+                .language(req.getLanguage())
                 .approach(req.getApproach())
                 .code(req.getCode())
                 .timeComplexity(req.getTimeComplexity())
@@ -63,6 +64,7 @@ public class CodingLogService {
         log.setProblemNumber(req.getProblemNumber());
         log.setLevel(req.getLevel());
         log.setStatus(CodingLog.Status.valueOf(req.getStatus()));
+        log.setLanguage(req.getLanguage());
         log.setApproach(req.getApproach());
         log.setCode(req.getCode());
         log.setTimeComplexity(req.getTimeComplexity());
@@ -92,6 +94,7 @@ public class CodingLogService {
                 .problemNumber(l.getProblemNumber())
                 .level(l.getLevel())
                 .status(l.getStatus().name())
+                .language(l.getLanguage())
                 .approach(l.getApproach())
                 .code(l.getCode())
                 .timeComplexity(l.getTimeComplexity())
