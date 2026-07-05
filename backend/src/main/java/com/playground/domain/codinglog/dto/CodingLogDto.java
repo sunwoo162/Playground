@@ -19,6 +19,7 @@ public class CodingLogDto {
         private String timeComplexity;
         private String tags;
         private String date;
+        @com.fasterxml.jackson.annotation.JsonProperty("isPublic")
         private boolean isPublic;
     }
 
