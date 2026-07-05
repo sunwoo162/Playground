@@ -39,8 +39,9 @@ public class CodingLogDto {
         private String timeComplexity;
         private String tags;
         private String date;
+        @com.fasterxml.jackson.annotation.JsonProperty("isPublic")
         private boolean isPublic;
-        private LocalDateTime createdAt;
-        private LocalDateTime updatedAt;
+        private java.time.LocalDateTime createdAt;
+        private java.time.LocalDateTime updatedAt;
     }
 }

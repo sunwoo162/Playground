@@ -168,7 +168,8 @@ export default function App() {
           <p className="app-subtitle">프로그래머스 · 백준 풀이를 기록하세요</p>
         </div>
         {view === 'list' && <button className="btn-primary" onClick={handleNew}>+ 새 일지</button>}
-        {view !== 'list' && <button className="btn-ghost" onClick={() => setView('list')}>← 목록</button>}
+        {view === 'edit' && <button className="btn-ghost" onClick={() => setView('list')}>← 코테 일지</button>}
+        {view === 'view' && <button className="btn-ghost" onClick={() => setView('list')}>← 코테 일지</button>}
       </header>
 
       {view === 'list' && (
