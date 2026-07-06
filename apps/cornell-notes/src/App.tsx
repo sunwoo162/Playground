@@ -5,6 +5,9 @@ import { StudyTimerBadge } from './StudyTimerBadge';
 import { useAuth } from './useAuth';
 
 type View = 'list' | 'edit' | 'view' | 'subjects';
+type Theme = 'dark' | 'light';
+const THEME_KEY = 'playground-theme';
+const getTheme = (): Theme => localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark';
 
 const EMPTY_NOTE = (subjectId: string): CornellNote => ({
   id: generateId(),
@@ -30,6 +33,12 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [newSubjectName, setNewSubjectName] = useState('');
   const [newSubjectColor, setNewSubjectColor] = useState(COLORS[0]);
+  const [theme, setTheme] = useState<Theme>(getTheme);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem(THEME_KEY, theme);
+  }, [theme]);
 
   useEffect(() => {
     if (!authed) return;
@@ -95,6 +104,9 @@ export default function App() {
           <button className={`nav-btn ${view === 'subjects' ? 'active' : ''}`} onClick={() => setView('subjects')}>📚 과목</button>
         </nav>
         <StudyTimerBadge />
+        <button className="theme-toggle" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} aria-label="테마 전환">
+          {theme === 'dark' ? '☀️' : '🌙'}
+        </button>
       </header>
 
       {view === 'subjects' ? (

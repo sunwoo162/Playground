@@ -15,6 +15,9 @@ import { StopModal } from '../widgets/stop-modal/StopModal';
 import './App.css';
 
 const TIMER_KEY = 'study-planner-timer';
+type Theme = 'dark' | 'light';
+const THEME_KEY = 'playground-theme';
+const getTheme = (): Theme => localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark';
 
 function saveTimerState(running: boolean, startTime: Date | null, subjectId: string) {
   if (running && startTime) {
@@ -50,6 +53,7 @@ function App() {
   const [sessions, setSessions] = useState<StudySession[]>([]);
   const [dailyGoalMinutes, setDailyGoalMinutes] = useState(480);
   const [loading, setLoading] = useState(true);
+  const [theme, setTheme] = useState<Theme>(getTheme);
 
   const [running, setRunning] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -60,6 +64,11 @@ function App() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastNotifyHour = useRef<number>(0);
   const elapsedRef = useRef<number>(0);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem(THEME_KEY, theme);
+  }, [theme]);
 
   // 초기 데이터 로드
   useEffect(() => {
@@ -195,6 +204,9 @@ function App() {
           </div>
           <MiniTimer running={running} elapsed={elapsed} subject={selectedSubject} />
         </div>
+        <button className="theme-toggle" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} aria-label="테마 전환">
+          {theme === 'dark' ? '☀️' : '🌙'}
+        </button>
       </header>
 
       <TabNav activeTab={activeTab} running={running} onTabChange={setActiveTab} />

@@ -25,6 +25,9 @@ interface SavedSchool {
 }
 
 const STORAGE_KEY = 'school-meal-settings';
+type Theme = 'dark' | 'light';
+const THEME_KEY = 'playground-theme';
+const getTheme = (): Theme => localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark';
 
 function dateToApi(date: Date): string {
   return date.toISOString().slice(0, 10).replace(/-/g, '');
@@ -51,6 +54,12 @@ export default function App() {
   const [notifPermission, setNotifPermission] = useState(Notification.permission);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedMealType, setSelectedMealType] = useState<string>('중식');
+  const [theme, setTheme] = useState<Theme>(getTheme);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem(THEME_KEY, theme);
+  }, [theme]);
 
   useEffect(() => {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -166,6 +175,9 @@ export default function App() {
           )}
           <button className="btn-primary" onClick={() => setView(view === 'search' ? 'main' : 'search')}>
             {view === 'search' ? '취소' : '🔍 학교 변경'}
+          </button>
+          <button className="theme-toggle" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} aria-label="테마 전환">
+            {theme === 'dark' ? '☀️' : '🌙'}
           </button>
         </div>
       </header>

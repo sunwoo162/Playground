@@ -5,6 +5,9 @@ import { useAuth } from './useAuth';
 
 type View = 'list' | 'edit' | 'view';
 type Tab = 'my' | 'community';
+type Theme = 'dark' | 'light';
+const THEME_KEY = 'playground-theme';
+const getTheme = (): Theme => localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark';
 
 const PLATFORMS: { value: Platform; label: string }[] = [
   { value: 'programmers', label: '프로그래머스' },
@@ -66,6 +69,12 @@ export default function App() {
   const [committing, setCommitting] = useState(false);
   const [commitResult, setCommitResult] = useState<{ url?: string; error?: string } | null>(null);
   const [fetchingCode, setFetchingCode] = useState(false);
+  const [theme, setTheme] = useState<Theme>(getTheme);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem(THEME_KEY, theme);
+  }, [theme]);
 
   useEffect(() => {
     if (!authed) return;
@@ -188,6 +197,9 @@ export default function App() {
         </div>
         {view === 'list' && <button className="btn-primary" onClick={handleNew}>+ 새 일지</button>}
         {view === 'edit' && <button className="btn-ghost" onClick={() => setView('list')}>취소</button>}
+        <button className="theme-toggle" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} aria-label="테마 전환">
+          {theme === 'dark' ? '☀️' : '🌙'}
+        </button>
       </header>
 
       {view === 'list' && (
