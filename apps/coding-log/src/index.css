@@ -24,6 +24,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .back-link { color: var(--text-muted); text-decoration: none; font-size: 0.85rem; padding: 6px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); transition: all 0.2s; white-space: nowrap; }
 .back-link:hover { color: var(--text); border-color: var(--text-muted); }
 .header-info { flex: 1; }
+.header-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .app-title { font-size: 1.2rem; font-weight: 700; }
 .app-subtitle { font-size: 0.8rem; color: var(--text-muted); }
 
@@ -94,6 +95,129 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .empty-icon { font-size: 3rem; }
 .empty-sub { font-size: 0.82rem; max-width: 340px; line-height: 1.7; }
 
+/* Coding test settings */
+.coding-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 760px;
+}
+
+.settings-hero {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 22px;
+  box-shadow: var(--shadow);
+}
+
+.settings-kicker {
+  display: inline-flex;
+  width: fit-content;
+  margin-bottom: 10px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(112, 161, 255, 0.14);
+  border: 1px solid rgba(112, 161, 255, 0.28);
+  color: var(--accent);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.settings-title {
+  font-size: 1.35rem;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.settings-desc {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  line-height: 1.7;
+}
+
+.settings-link-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.settings-link-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 112px;
+  padding: 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  text-decoration: none;
+  box-shadow: var(--shadow);
+  transition: transform .2s, border-color .2s, background .2s;
+}
+
+.settings-link-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+}
+
+.settings-link-icon {
+  width: 42px;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-size: 1.25rem;
+}
+
+.settings-link-body {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-link-body strong {
+  font-size: 0.96rem;
+}
+
+.settings-link-body small {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.settings-link-arrow {
+  color: var(--text-muted);
+  font-size: 1rem;
+}
+
+.settings-note {
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+}
+
+.settings-note strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.86rem;
+}
+
+.settings-note p {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
 /* Viewer */
 .viewer { width: 100%; display: flex; flex-direction: column; gap: 20px; }
 .viewer-header { display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
@@ -108,8 +232,14 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .code-block { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 16px; font-family: 'Fira Code', 'Consolas', 'Monaco', monospace; font-size: 0.85rem; line-height: 1.6; overflow-x: auto; white-space: pre; }
 
 @media (max-width: 600px) {
+  .app-header { flex-wrap: wrap; }
+  .header-info { flex-basis: 100%; order: 3; }
+  .header-actions { order: 4; width: 100%; }
+  .header-actions .btn-ghost,
+  .header-actions .btn-primary { flex: 1; }
   .log-grid { grid-template-columns: 1fr; }
   .editor-row { flex-direction: column; }
+  .settings-link-grid { grid-template-columns: 1fr; }
 }
 
 /* Tab */

@@ -3,11 +3,13 @@ import type { CodingLog, Platform, Status, Language, Comment } from './types';
 import { getMyLogs, getPublicLogs, createLog, updateLog, deleteLog, generateId, getTodayStr, parseUrlParams, getLike, toggleLike, getComments, addComment, deleteComment, fetchCodeFromCommit } from './storage';
 import { useAuth } from './useAuth';
 
-type View = 'list' | 'edit' | 'view';
+type View = 'list' | 'edit' | 'view' | 'settings';
 type Tab = 'my' | 'community';
 type Theme = 'dark' | 'light';
 const THEME_KEY = 'playground-theme';
 const getTheme = (): Theme => localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark';
+const BAEKJOONHUB_INSTALL_URL = 'https://chromewebstore.google.com/detail/ccammcjdkpgjmcpijpahlehmapgmphmk';
+const CTBOT_REPO_URL = 'https://github.com/sunwoo162/ctbot.git';
 
 const PLATFORMS: { value: Platform; label: string }[] = [
   { value: 'programmers', label: '프로그래머스' },
@@ -195,7 +197,12 @@ export default function App() {
           <h1 className="app-title">💻 코테 일지</h1>
           <p className="app-subtitle">프로그래머스 · 백준 풀이를 기록하세요</p>
         </div>
-        {view === 'list' && <button className="btn-primary" onClick={handleNew}>+ 새 일지</button>}
+        {view === 'list' && (
+          <div className="header-actions">
+            <button className="btn-ghost" onClick={() => setView('settings')}>⚙️ 코딩테스트 설정</button>
+            <button className="btn-primary" onClick={handleNew}>+ 새 일지</button>
+          </div>
+        )}
         {view === 'edit' && <button className="btn-ghost" onClick={() => setView('list')}>취소</button>}
         <button className="theme-toggle" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} aria-label="테마 전환">
           {theme === 'dark' ? '☀️' : '🌙'}
@@ -250,6 +257,55 @@ export default function App() {
               ))}
             </div>
           )}
+        </main>
+      )}
+
+      {view === 'settings' && (
+        <main className="app-main">
+          <section className="coding-settings">
+            <div className="settings-hero">
+              <span className="settings-kicker">자동 기록 연결</span>
+              <h2 className="settings-title">코딩테스트 설정하기</h2>
+              <p className="settings-desc">
+                백준허브로 풀이를 GitHub에 자동 저장하고, ctbot 템플릿으로 Playground 코테 일지 import 링크를 생성하세요.
+              </p>
+            </div>
+
+            <div className="settings-link-grid">
+              <a
+                className="settings-link-card"
+                href={BAEKJOONHUB_INSTALL_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <span className="settings-link-icon">🧩</span>
+                <span className="settings-link-body">
+                  <strong>백준허브 설치</strong>
+                  <small>Chrome Web Store에서 백준허브 확장 프로그램을 설치합니다.</small>
+                </span>
+                <span className="settings-link-arrow">↗</span>
+              </a>
+
+              <a
+                className="settings-link-card"
+                href={CTBOT_REPO_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <span className="settings-link-icon">🔗</span>
+                <span className="settings-link-body">
+                  <strong>ctbot 템플릿 보기</strong>
+                  <small>백준허브 레포에 붙여 넣을 GitHub Actions 템플릿으로 이동합니다.</small>
+                </span>
+                <span className="settings-link-arrow">↗</span>
+              </a>
+            </div>
+
+            <div className="settings-note">
+              <strong>적용 순서</strong>
+              <p>백준허브 설치 → 풀이 저장 레포 연결 → ctbot 파일을 해당 레포에 복사 → Actions Summary 링크로 코테 일지 작성</p>
+            </div>
+          </section>
         </main>
       )}
 
