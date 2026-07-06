@@ -138,5 +138,52 @@ export function parseUrlParams() {
     level: p.get('level') || '',
     platform: (p.get('platform') || 'programmers') as 'programmers' | 'baekjoon',
     number: p.get('number') || '',
+    commitSha: p.get('commitSha') || '',
+    repo: p.get('repo') || '',
   };
+}
+
+/**
+ * GitHub commit API로 코드 파일 내용을 가져옴
+ * GET /repos/{repo}/commits/{commitSha} → files[].raw_url 로 내용 fetch
+ */
+export async function fetchCodeFromCommit(
+  repo: string,
+  commitSha: string,
+  problemTitle: string
+): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://api.github.com/repos/${repo}/commits/${commitSha}`,
+      { headers: { Accept: 'application/vnd.github+json' } }
+    );
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    const files: Array<{ filename: string; raw_url: string }> = data.files ?? [];
+
+    // README 제외하고 코드 파일만
+    const codeFiles = files.filter(f => !f.filename.endsWith('.md'));
+
+    // 문제 제목을 기반으로 파일 매칭
+    const normalize = (s: string) =>
+      s.toLowerCase().replace(/[\s_\-+\[\]().]+/g, '').replace(/[^a-z0-9가-힣]/g, '');
+
+    const titleNorm = normalize(problemTitle);
+    const matched = codeFiles.find(f => {
+      const baseName = f.filename.split('/').pop() || f.filename;
+      const nameWithoutExt = baseName.replace(/\.[^.]+$/, '');
+      return normalize(nameWithoutExt).includes(titleNorm) || titleNorm.includes(normalize(nameWithoutExt));
+    });
+    const target = matched ?? codeFiles[0];
+
+    if (!target) return null;
+
+    const codeRes = await fetch(target.raw_url);
+    if (!codeRes.ok) return null;
+
+    return await codeRes.text();
+  } catch {
+    return null;
+  }
 }
