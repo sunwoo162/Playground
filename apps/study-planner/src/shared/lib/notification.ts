@@ -9,9 +9,8 @@ export function sendNotification(title: string, body: string, autoCloseMs = 3000
     const n = new Notification(title, {
       body,
       icon: '/favicon.svg',
-      tag: 'study-timer',   // 동일 tag면 이전 알림 대체
-      renotify: true,
-    });
+      tag: 'study-timer',
+    } as NotificationOptions);
     if (autoCloseMs > 0) {
       setTimeout(() => n.close(), autoCloseMs);
     }
