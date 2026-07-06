@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { CodingLog, Platform, Status, Language, Comment } from './types';
-import { getMyLogs, getPublicLogs, createLog, updateLog, deleteLog, generateId, getTodayStr, parseUrlParams, getLike, toggleLike, getComments, addComment, deleteComment } from './storage';
+import { getMyLogs, getPublicLogs, createLog, updateLog, deleteLog, generateId, getTodayStr, parseUrlParams, getLike, toggleLike, getComments, addComment, deleteComment, fetchCodeFromCommit } from './storage';
 import { useAuth } from './useAuth';
 
 type View = 'list' | 'edit' | 'view';
@@ -62,16 +62,33 @@ export default function App() {
   const [likeData, setLikeData] = useState<{ liked: boolean; count: number } | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentInput, setCommentInput] = useState('');
-  const [repoInput, setRepoInput] = useState('sunwoo162/Coding-Test');
+  const [repoInput, setRepoInput] = useState(() => parseUrlParams().repo || 'sunwoo162/Coding-Test');
   const [committing, setCommitting] = useState(false);
   const [commitResult, setCommitResult] = useState<{ url?: string; error?: string } | null>(null);
+  const [fetchingCode, setFetchingCode] = useState(false);
 
   useEffect(() => {
     if (!authed) return;
     getMyLogs().then(setLogs).catch(() => {});
     getPublicLogs().then(setPublicLogs).catch(() => {});
     const params = parseUrlParams();
-    if (params.title) { setSelected(emptyLog()); setIsNew(true); setView('edit'); }
+    if (params.title) {
+      const initial = emptyLog();
+      setIsNew(true);
+      setView('edit');
+
+      if (params.commitSha && params.repo) {
+        setFetchingCode(true);
+        fetchCodeFromCommit(params.repo, params.commitSha, params.title)
+          .then(code => {
+            setSelected({ ...initial, code: code ?? '' });
+          })
+          .catch(() => { setSelected(initial); })
+          .finally(() => setFetchingCode(false));
+      } else {
+        setSelected(initial);
+      }
+    }
   }, [authed]);
 
   if (!authed) return null;
@@ -297,8 +314,8 @@ export default function App() {
               <textarea rows={5} placeholder="어떻게 접근했는지 설명해보세요" value={selected.approach} onChange={e => setSelected({ ...selected, approach: e.target.value })} />
             </div>
             <div className="form-group">
-              <label>코드</label>
-              <textarea className="code-area" rows={12} placeholder="풀이 코드를 붙여넣으세요" value={selected.code} onChange={e => setSelected({ ...selected, code: e.target.value })} spellCheck={false} />
+              <label>코드 {fetchingCode && <span style={{ fontWeight: 'normal', color: '#888', fontSize: '0.85em' }}>⏳ GitHub에서 코드 불러오는 중...</span>}</label>
+              <textarea className="code-area" rows={12} placeholder="풀이 코드를 붙여넣으세요" value={selected.code} onChange={e => setSelected({ ...selected, code: e.target.value })} spellCheck={false} disabled={fetchingCode} />
             </div>
             <div className="editor-actions">
               <button className="btn-primary" onClick={handleSave} disabled={saving || !selected.problemTitle.trim()}>{saving ? '저장 중...' : '저장'}</button>
