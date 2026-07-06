@@ -47,7 +47,7 @@ function emptyLog(): CodingLog {
 }
 
 export default function App() {
-  const { authed, user: currentUser } = useAuth();
+  const { authed } = useAuth();
   const [logs, setLogs] = useState<CodingLog[]>([]);
   const [publicLogs, setPublicLogs] = useState<CodingLog[]>([]);
   const [tab, setTab] = useState<Tab>('my');
@@ -92,8 +92,6 @@ export default function App() {
   }, [authed]);
 
   if (!authed) return null;
-
-  const isMyLog = selected?.userId === currentUser?.id;
 
   const displayLogs = tab === 'my' ? logs : publicLogs;
   const filtered = displayLogs
