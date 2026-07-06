@@ -69,7 +69,9 @@ export function CalendarView({ subjects, sessions, dailyGoalMinutes }: Props) {
                 {secs > 0 && <div className="cal-dot" style={{ backgroundColor: getColor(secs) }} />}
                 {secs > 0 && (
                   <span className="cal-mins">
-                    {secs >= 3600 ? `${Math.floor(secs / 3600)}h` : `${Math.floor(secs / 60)}m`}
+                    {secs >= 3600
+                      ? `${Math.floor(secs / 3600)}h${Math.floor((secs % 3600) / 60) > 0 ? `${Math.floor((secs % 3600) / 60)}m` : ''}`
+                      : `${Math.floor(secs / 60)}m`}
                   </span>
                 )}
               </div>

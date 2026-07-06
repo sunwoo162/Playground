@@ -135,15 +135,15 @@
 .cal-day-label { text-align: center; font-size: 0.75rem; color: var(--text-muted); padding: 4px 0; }
 .cal-day-label.sun { color: #ff6b81; }
 .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
-.cal-cell { aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border-radius: 8px; cursor: pointer; transition: background .2s; padding: 4px; }
+.cal-cell { aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border-radius: 8px; cursor: pointer; transition: background .2s; padding: 6px; min-height: 56px; }
 .cal-cell:hover:not(.empty) { background: var(--surface-2); }
 .cal-cell.today { border: 1px solid var(--accent); }
 .cal-cell.selected { background: var(--surface-2); }
 .cal-cell.empty { cursor: default; }
-.cal-day-num { font-size: 0.78rem; }
+.cal-day-num { font-size: 0.92rem; font-weight: 500; }
 .cal-day-num.sun { color: #ff6b81; }
-.cal-dot { width: 6px; height: 6px; border-radius: 50%; }
-.cal-mins { font-size: 0.58rem; color: var(--text-muted); }
+.cal-dot { width: 8px; height: 8px; border-radius: 50%; }
+.cal-mins { font-size: 0.72rem; color: var(--text-muted); font-weight: 500; }
 .cal-legend { display: flex; gap: 12px; margin-top: 12px; font-size: 0.75rem; color: var(--text-muted); justify-content: center; }
 
 /* ===== Subjects ===== */
