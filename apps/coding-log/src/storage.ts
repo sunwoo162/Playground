@@ -179,7 +179,12 @@ export async function fetchCodeFromCommit(
 
     if (!target) return null;
 
-    const codeRes = await fetch(target.raw_url);
+    // github.com/raw → raw.githubusercontent.com으로 변환 (CORS 우회)
+    const rawUrl = target.raw_url
+      .replace('https://github.com/', 'https://raw.githubusercontent.com/')
+      .replace('/raw/', '/');
+
+    const codeRes = await fetch(rawUrl);
     if (!codeRes.ok) return null;
 
     return await codeRes.text();
