@@ -179,14 +179,15 @@ export default function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <a href="/" className="back-link">← 놀이터</a>
+        <a href="/" className="back-link" onClick={view !== 'list' ? (e) => { e.preventDefault(); setView('list'); } : undefined}>
+          {view !== 'list' ? '← 코테 일지' : '← 놀이터'}
+        </a>
         <div className="header-info">
           <h1 className="app-title">💻 코테 일지</h1>
           <p className="app-subtitle">프로그래머스 · 백준 풀이를 기록하세요</p>
         </div>
         {view === 'list' && <button className="btn-primary" onClick={handleNew}>+ 새 일지</button>}
-        {view === 'edit' && <button className="btn-ghost" onClick={() => setView('list')}>← 코테 일지</button>}
-        {view === 'view' && <button className="btn-ghost" onClick={() => setView('list')}>← 코테 일지</button>}
+        {view === 'edit' && <button className="btn-ghost" onClick={() => setView('list')}>취소</button>}
       </header>
 
       {view === 'list' && (
