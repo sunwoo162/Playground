@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import type { CodingLog, Platform, Status, Language, Comment } from './types';
 import { getMyLogs, getPublicLogs, createLog, updateLog, deleteLog, generateId, getTodayStr, parseUrlParams, getLike, toggleLike, getComments, addComment, deleteComment, fetchCodeFromCommit } from './storage';
 import { useAuth } from './useAuth';
@@ -47,7 +47,7 @@ function emptyLog(): CodingLog {
 }
 
 export default function App() {
-  const authed = useAuth();
+  const { authed, user: currentUser } = useAuth();
   const [logs, setLogs] = useState<CodingLog[]>([]);
   const [publicLogs, setPublicLogs] = useState<CodingLog[]>([]);
   const [tab, setTab] = useState<Tab>('my');
@@ -92,6 +92,8 @@ export default function App() {
   }, [authed]);
 
   if (!authed) return null;
+
+  const isMyLog = selected?.userId === currentUser?.id;
 
   const displayLogs = tab === 'my' ? logs : publicLogs;
   const filtered = displayLogs
@@ -373,8 +375,8 @@ export default function App() {
               </div>
             )}
 
-            {/* GitHub 커밋 */}
-            {selected.code && (
+            {/* GitHub 커밋 - 내 풀이만 */}
+            {selected.code && isMyLog && (
               <div className="section-gap commit-section">
                 <div className="section-label">🚀 GitHub 커밋</div>
                 <div className="commit-row">
@@ -386,36 +388,38 @@ export default function App() {
               </div>
             )}
 
-            {/* 좋아요 */}
-            <div className="like-row">
-              <button className={`like-btn ${likeData?.liked ? 'liked' : ''}`} onClick={handleToggleLike}>
-                {likeData?.liked ? '❤️' : '🤍'} {likeData?.count ?? 0}
-              </button>
-            </div>
-
-            {/* 댓글 */}
-            <div className="section-gap">
-              <div className="section-label">💬 댓글 {comments.length > 0 && `(${comments.length})`}</div>
-              <div className="comment-list">
-                {comments.map(c => (
-                  <div key={c.id} className="comment-item">
-                    <img src={c.userAvatarUrl} alt={c.userLogin} className="comment-avatar" />
-                    <div className="comment-body">
-                      <div className="comment-header">
-                        <span className="comment-author">@{c.userLogin}</span>
-                        <span className="comment-date">{new Date(c.createdAt).toLocaleDateString('ko-KR')}</span>
+            {/* 좋아요/댓글 - 커뮤니티(타인 풀이)만 */}
+            {!isMyLog && (
+              <>
+                <div className="like-row">
+                  <button className={`like-btn ${likeData?.liked ? 'liked' : ''}`} onClick={handleToggleLike}>
+                    {likeData?.liked ? '❤️' : '🤍'} {likeData?.count ?? 0}
+                  </button>
+                </div>
+                <div className="section-gap">
+                  <div className="section-label">💬 댓글 {comments.length > 0 && `(${comments.length})`}</div>
+                  <div className="comment-list">
+                    {comments.map(c => (
+                      <div key={c.id} className="comment-item">
+                        <img src={c.userAvatarUrl} alt={c.userLogin} className="comment-avatar" />
+                        <div className="comment-body">
+                          <div className="comment-header">
+                            <span className="comment-author">@{c.userLogin}</span>
+                            <span className="comment-date">{new Date(c.createdAt).toLocaleDateString('ko-KR')}</span>
+                          </div>
+                          <p className="comment-content">{c.content}</p>
+                        </div>
+                        <button className="comment-delete" onClick={() => handleDeleteComment(c.id)}>✕</button>
                       </div>
-                      <p className="comment-content">{c.content}</p>
-                    </div>
-                    <button className="comment-delete" onClick={() => handleDeleteComment(c.id)}>✕</button>
+                    ))}
                   </div>
-                ))}
-              </div>
-              <form className="comment-form" onSubmit={handleAddComment}>
-                <input className="comment-input" placeholder="댓글을 입력하세요..." value={commentInput} onChange={e => setCommentInput(e.target.value)} />
-                <button type="submit" className="btn-primary btn-sm" disabled={!commentInput.trim()}>등록</button>
-              </form>
-            </div>
+                  <form className="comment-form" onSubmit={handleAddComment}>
+                    <input className="comment-input" placeholder="댓글을 입력하세요..." value={commentInput} onChange={e => setCommentInput(e.target.value)} />
+                    <button type="submit" className="btn-primary btn-sm" disabled={!commentInput.trim()}>등록</button>
+                  </form>
+                </div>
+              </>
+            )}
           </div>
         </main>
       )}
