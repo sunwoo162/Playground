@@ -375,8 +375,8 @@ export default function App() {
               </div>
             )}
 
-            {/* GitHub 커밋 - 내 풀이만 */}
-            {selected.code && isMyLog && (
+            {/* GitHub 커밋 - 내 풀이(내 탭)만 */}
+            {selected.code && tab === 'my' && (
               <div className="section-gap commit-section">
                 <div className="section-label">🚀 GitHub 커밋</div>
                 <div className="commit-row">
@@ -388,8 +388,8 @@ export default function App() {
               </div>
             )}
 
-            {/* 좋아요/댓글 - 커뮤니티(타인 풀이)만 */}
-            {!isMyLog && (
+            {/* 좋아요/댓글 - 커뮤니티 탭만 */}
+            {tab === 'community' && (
               <>
                 <div className="like-row">
                   <button className={`like-btn ${likeData?.liked ? 'liked' : ''}`} onClick={handleToggleLike}>
