@@ -8,7 +8,10 @@
     "dev:server": "node server/index.js",
     "dev:client": "vite",
     "build": "vite build",
-    "build:all": "npm run build && cd apps/life-tracker && npm run build && cd ../dev-notes && npm run build && cd ../study-planner && npm run build && cd ../cornell-notes && npm run build && cd ../coding-log && npm run build && cd ../school-meal && npm run build",
+    "install:apps": "npm ci --no-audit --fund=false --prefix apps/life-tracker && npm ci --no-audit --fund=false --prefix apps/dev-notes && npm ci --no-audit --fund=false --prefix apps/study-planner && npm ci --no-audit --fund=false --prefix apps/cornell-notes && npm ci --no-audit --fund=false --prefix apps/coding-log && npm ci --no-audit --fund=false --prefix apps/school-meal",
+    "install:all": "npm ci --no-audit --fund=false && npm run install:apps",
+    "build:apps": "npm run build --prefix apps/life-tracker && npm run build --prefix apps/dev-notes && npm run build --prefix apps/study-planner && npm run build --prefix apps/cornell-notes && npm run build --prefix apps/coding-log && npm run build --prefix apps/school-meal",
+    "build:all": "npm run build && npm run build:apps",
     "start": "node server/index.js"
   },
   "dependencies": {

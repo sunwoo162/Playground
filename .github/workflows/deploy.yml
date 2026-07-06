@@ -24,6 +24,21 @@ jobs:
           gradle-version: '8.7'
           cache-read-only: false
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            apps/*/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm run install:all
+
+      - name: Build frontend apps
+        run: npm run build:all
+
       - name: Build Spring Boot JAR
         run: |
           cd backend
@@ -58,7 +73,7 @@ jobs:
             git reset --hard origin/main
 
             # 의존성 설치 및 프론트 빌드
-            npm install --legacy-peer-deps
+            npm run install:all
             npm run build:all
 
             # playground (Node.js) 재시작 - ecosystem으로 환경변수 포함
