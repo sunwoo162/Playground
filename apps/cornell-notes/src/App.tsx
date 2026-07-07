@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
 import type { CornellNote, Subject } from './types';
 import { getNotes, saveNote, deleteNote, getSubjects, saveSubjects, generateId, getTodayStr } from './storage';
 import { StudyTimerBadge } from './StudyTimerBadge';
@@ -220,7 +221,13 @@ export default function App() {
               </div>
               <div className="cornell-notes-panel">
                 <div className="cornell-label">📖 세부 내용</div>
-                <p className="cornell-text">{selected.notes || '—'}</p>
+                {selected.notes ? (
+                  <div className="cornell-markdown">
+                    <ReactMarkdown>{selected.notes}</ReactMarkdown>
+                  </div>
+                ) : (
+                  <p className="cornell-text">—</p>
+                )}
               </div>
             </div>
             <div className="cornell-summary-panel">

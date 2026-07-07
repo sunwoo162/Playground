@@ -1,0 +1,16 @@
+{
+  "sender": {
+    "login": "octocat"
+  },
+  "commits": [
+    {
+      "id": "abc123",
+      "added": [
+        "백준/Bronze/1000. A+B/main.py"
+      ],
+      "modified": [],
+      "removed": []
+    }
+  ]
+}
+

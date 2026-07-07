@@ -96,6 +96,126 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .summary-textarea { min-height: 80px; max-height: 140px; }
 .cornell-text { padding: 12px 14px; font-size: 0.88rem; line-height: 1.8; white-space: pre-wrap; flex: 1; }
 
+/* Markdown rendering */
+.cornell-markdown {
+  padding: 12px 14px;
+  font-size: 0.88rem;
+  line-height: 1.8;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.cornell-markdown p {
+  margin: 8px 0;
+  color: var(--text);
+}
+
+.cornell-markdown h1,
+.cornell-markdown h2,
+.cornell-markdown h3,
+.cornell-markdown h4,
+.cornell-markdown h5,
+.cornell-markdown h6 {
+  margin: 12px 0 8px 0;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.cornell-markdown h1 { font-size: 1.3rem; }
+.cornell-markdown h2 { font-size: 1.15rem; }
+.cornell-markdown h3 { font-size: 1rem; }
+.cornell-markdown h4 { font-size: 0.95rem; }
+.cornell-markdown h5,
+.cornell-markdown h6 { font-size: 0.9rem; }
+
+.cornell-markdown ul,
+.cornell-markdown ol {
+  margin: 8px 0;
+  padding-left: 24px;
+  color: var(--text);
+}
+
+.cornell-markdown li {
+  margin: 4px 0;
+}
+
+.cornell-markdown blockquote {
+  margin: 8px 0;
+  padding-left: 12px;
+  border-left: 3px solid var(--accent);
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.cornell-markdown code {
+  background: var(--surface-2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Monaco', 'Courier New', monospace;
+  font-size: 0.82rem;
+  color: var(--accent);
+}
+
+.cornell-markdown pre {
+  background: var(--surface-2);
+  padding: 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 8px 0;
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+.cornell-markdown pre code {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  color: var(--text);
+}
+
+.cornell-markdown strong {
+  font-weight: 600;
+}
+
+.cornell-markdown em {
+  font-style: italic;
+}
+
+.cornell-markdown a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid var(--accent);
+}
+
+.cornell-markdown a:hover {
+  opacity: 0.8;
+}
+
+.cornell-markdown table {
+  border-collapse: collapse;
+  margin: 8px 0;
+  width: 100%;
+  font-size: 0.85rem;
+}
+
+.cornell-markdown table th,
+.cornell-markdown table td {
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.cornell-markdown table th {
+  background: var(--surface-2);
+  font-weight: 600;
+}
+
+.cornell-markdown hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 12px 0;
+}
+
 /* Viewer */
 .viewer-header { display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap; }
 .viewer-title-block { flex: 1; }

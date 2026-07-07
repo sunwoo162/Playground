@@ -9,6 +9,7 @@ import { Timer } from '../features/timer';
 import { Stats } from '../features/stats';
 import { CalendarView } from '../features/calendar';
 import { Subjects } from '../features/subjects';
+import { Group } from '../features/group';
 import { TabNav } from '../widgets/tab-nav';
 import { MiniTimer } from '../widgets/mini-timer';
 import { StopModal } from '../widgets/stop-modal/StopModal';
@@ -242,6 +243,7 @@ function App() {
             onGoalChange={setDailyGoalMinutes}
           />
         )}
+        {activeTab === 'group' && <Group />}
       </main>
       {modalStep > 0 && (
         <StopModal
