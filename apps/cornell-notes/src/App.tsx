@@ -274,8 +274,11 @@ export default function App() {
                 {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
               <input type="date" className="select-field" value={selected.date} onChange={e => setSelected({ ...selected, date: e.target.value })} />
-              <button className="btn-primary" onClick={handleSave}>저장</button>
-              <button className="btn-ghost" onClick={() => setView(notes.find(n => n.id === selected.id) ? 'view' : 'list')}>취소</button>
+              <div className="toolbar-actions">
+                <button className="btn-ghost" onClick={() => { setRepoDraft(repoSettings); setView('repo'); }}>GitHub 설정</button>
+                <button className="btn-primary" onClick={handleSave}>저장</button>
+                <button className="btn-ghost" onClick={() => setView(notes.find(n => n.id === selected.id) ? 'view' : 'list')}>취소</button>
+              </div>
             </div>
           </div>
           <div className="cornell-layout">
@@ -366,6 +369,7 @@ export default function App() {
               <option value="all">전체 과목</option>
               {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
+            <button className="btn-ghost" onClick={() => { setRepoDraft(repoSettings); setView('repo'); }}>GitHub 설정</button>
             <button className="btn-primary" onClick={handleNew}>+ 새 노트</button>
           </div>
 
