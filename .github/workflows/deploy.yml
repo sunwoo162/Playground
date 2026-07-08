@@ -26,12 +26,16 @@ jobs:
       - name: Install frontend dependencies
         run: npm run install:all
 
-      - name: Fix cornell-notes dependencies
+      - name: Clean npm cache and rebuild all apps
         run: |
-          cd apps/cornell-notes
-          rm -rf node_modules package-lock.json
           npm cache clean --force
-          npm install
+          for app in apps/life-tracker apps/dev-notes apps/study-planner apps/cornell-notes apps/coding-log apps/school-meal; do
+            echo "Cleaning $app..."
+            cd $app
+            rm -rf node_modules package-lock.json
+            npm install
+            cd ../../
+          done
 
       - name: Build frontend apps
         run: npm run build:all
