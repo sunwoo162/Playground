@@ -16,6 +16,7 @@ import { StopModal } from '../widgets/stop-modal/StopModal';
 import './App.css';
 
 const TIMER_KEY = 'study-planner-timer';
+const DAILY_REMINDER_KEY = 'study-planner-daily-reminders';
 type Theme = 'dark' | 'light';
 const THEME_KEY = 'playground-theme';
 const getTheme = (): Theme => localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark';
@@ -45,6 +46,45 @@ function loadTimerState() {
   } catch {
     return null;
   }
+}
+
+function getReminderTarget(now = new Date()) {
+  const targets = [10, 22].map(hour => {
+    const target = new Date(now);
+    target.setHours(hour, 0, 0, 0);
+    return target;
+  });
+  const todayTarget = targets.find(target => target.getTime() > now.getTime());
+  if (todayTarget) return todayTarget;
+
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(10, 0, 0, 0);
+  return tomorrow;
+}
+
+function getReminderId(date: Date) {
+  const y = date.getFullYear();
+  const m = `${date.getMonth() + 1}`.padStart(2, '0');
+  const d = `${date.getDate()}`.padStart(2, '0');
+  const slot = date.getHours() === 10 ? 'am10' : 'pm10';
+  return `${y}-${m}-${d}-${slot}`;
+}
+
+function loadSentReminderIds() {
+  try {
+    const raw = localStorage.getItem(DAILY_REMINDER_KEY);
+    const ids = raw ? JSON.parse(raw) : [];
+    return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function markReminderSent(id: string) {
+  const ids = loadSentReminderIds();
+  const next = [id, ...ids.filter(saved => saved !== id)].slice(0, 20);
+  localStorage.setItem(DAILY_REMINDER_KEY, JSON.stringify(next));
 }
 
 function App() {
@@ -94,6 +134,34 @@ function App() {
         }
       })
       .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    let reminderTimer: ReturnType<typeof setTimeout> | null = null;
+    let cancelled = false;
+
+    const scheduleReminder = () => {
+      if (cancelled) return;
+      const target = getReminderTarget();
+      const delay = Math.max(target.getTime() - Date.now(), 1000);
+
+      reminderTimer = setTimeout(() => {
+        const reminderId = getReminderId(target);
+        const sentIds = loadSentReminderIds();
+        if (!sentIds.includes(reminderId)) {
+          sendNotification('스터디 플래너', '오늘 공부도 기록해봐요', 5000);
+          markReminderSent(reminderId);
+        }
+        scheduleReminder();
+      }, delay);
+    };
+
+    scheduleReminder();
+
+    return () => {
+      cancelled = true;
+      if (reminderTimer) clearTimeout(reminderTimer);
+    };
   }, []);
 
   useEffect(() => {
