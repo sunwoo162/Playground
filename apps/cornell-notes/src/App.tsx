@@ -5,11 +5,12 @@ import { getNotes, saveNote, deleteNote, getSubjects, saveSubjects, getGitRepoSe
 import { StudyTimerBadge } from './StudyTimerBadge';
 import { useAuth } from './useAuth';
 
-type View = 'list' | 'edit' | 'view' | 'subjects' | 'repo';
+type View = 'list' | 'edit' | 'view' | 'subjects' | 'repo' | 'detailOnly';
 type Theme = 'dark' | 'light';
 const THEME_KEY = 'playground-theme';
 const getTheme = (): Theme => localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark';
 const SHARE_HASH_PREFIX = '#share=';
+const DETAIL_HASH_PREFIX = '#detail=';
 
 const EMPTY_NOTE = (subjectId: string): CornellNote => ({
   id: generateId(),
@@ -148,12 +149,20 @@ export default function App() {
     if (!authed) return;
     const loadedSubjects = getSubjects();
     const imported = importSharedNoteFromHash(loadedSubjects);
+    const detailNoteId = window.location.hash.startsWith(DETAIL_HASH_PREFIX)
+      ? window.location.hash.slice(DETAIL_HASH_PREFIX.length)
+      : '';
+    const loadedNotes = getNotes();
+    const detailNote = detailNoteId ? loadedNotes.find(note => note.id === detailNoteId) : null;
     setSubjects(imported?.subjects ?? loadedSubjects);
-    setNotes(getNotes());
+    setNotes(loadedNotes);
     if (imported) {
       setSelected(imported.note);
       setView('view');
       setShareStatus('공유 노트를 가져왔어요.');
+    } else if (detailNote) {
+      setSelected(detailNote);
+      setView('detailOnly');
     }
   }, [authed]);
 
@@ -179,6 +188,24 @@ export default function App() {
     setNotes(getNotes());
     setSelected(updated);
     setView('view');
+  };
+
+  const handleSaveDetailOnly = () => {
+    if (!selected) return;
+    const updated = { ...selected, updatedAt: new Date().toISOString() };
+    saveNote(updated);
+    setNotes(getNotes());
+    setSelected(updated);
+  };
+
+  const openDetailOnlyWindow = () => {
+    if (!selected) return;
+    const updated = { ...selected, updatedAt: new Date().toISOString() };
+    saveNote(updated);
+    setNotes(getNotes());
+    setSelected(updated);
+    const url = `${window.location.origin}${window.location.pathname}${window.location.search}${DETAIL_HASH_PREFIX}${updated.id}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   const handleDelete = (id: string) => {
@@ -296,7 +323,7 @@ export default function App() {
           <p className="app-subtitle">구조적으로 배운 내용을 정리하세요</p>
         </div>
         <nav className="header-nav">
-          <button className={`nav-btn ${view !== 'subjects' && view !== 'repo' ? 'active' : ''}`} onClick={() => setView('list')}>📋 노트</button>
+          <button className={`nav-btn ${view !== 'subjects' && view !== 'repo' && view !== 'detailOnly' ? 'active' : ''}`} onClick={() => setView('list')}>📋 노트</button>
           <button className={`nav-btn ${view === 'subjects' ? 'active' : ''}`} onClick={() => setView('subjects')}>📚 과목</button>
           <button className={`nav-btn ${view === 'repo' ? 'active' : ''}`} onClick={() => { setRepoDraft(repoSettings); setView('repo'); }}>GitHub</button>
         </nav>
@@ -306,7 +333,27 @@ export default function App() {
         </button>
       </header>
 
-      {view === 'repo' ? (
+      {view === 'detailOnly' && selected ? (
+        <main className="detail-only-page">
+          <div className="detail-only-toolbar">
+            <div className="detail-only-title-block">
+              <span className="note-subject" style={{ color: subjectColor(selected.subjectId) }}>{subjectName(selected.subjectId)}</span>
+              <h2 className="detail-only-title">{selected.title || '(제목 없음)'}</h2>
+            </div>
+            <div className="viewer-actions">
+              <button className="btn-primary" onClick={handleSaveDetailOnly}>저장</button>
+              <button className="btn-ghost" onClick={() => setView('view')}>전체 노트</button>
+              <button className="btn-ghost" onClick={() => window.close()}>닫기</button>
+            </div>
+          </div>
+          <textarea
+            className="detail-only-textarea"
+            placeholder={'강의 내용, 개념 설명,\n예시 등을 자세히 적어보세요'}
+            value={selected.notes}
+            onChange={e => setSelected({ ...selected, notes: e.target.value })}
+          />
+        </main>
+      ) : view === 'repo' ? (
         <main className="app-main">
           <div className="repo-panel">
             <h2 className="section-title">GitHub 연동</h2>
@@ -386,6 +433,7 @@ export default function App() {
               <input type="date" className="select-field" value={selected.date} onChange={e => setSelected({ ...selected, date: e.target.value })} />
               <div className="toolbar-actions">
                 <button className="btn-ghost" onClick={() => { setRepoDraft(repoSettings); setView('repo'); }}>GitHub 설정</button>
+                <button className="btn-ghost" onClick={openDetailOnlyWindow}>세부 내용 웹 보기</button>
                 <button className="btn-primary" onClick={handleSave}>저장</button>
                 <button className="btn-ghost" onClick={() => setView(notes.find(n => n.id === selected.id) ? 'view' : 'list')}>취소</button>
               </div>
@@ -437,6 +485,7 @@ export default function App() {
               </div>
             </div>
             <div className="viewer-actions">
+              <button className="btn-ghost" onClick={openDetailOnlyWindow}>세부 내용 웹 보기</button>
               <button className="btn-ghost" onClick={handleShareNote}>공유 링크</button>
               <button className="btn-ghost" onClick={handleCommitNote} disabled={committing}>{committing ? '커밋 중...' : 'GitHub 커밋'}</button>
               <button className="btn-ghost" onClick={() => setView('edit')}>✏️ 수정</button>
