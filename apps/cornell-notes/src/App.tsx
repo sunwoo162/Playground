@@ -34,27 +34,29 @@ const sanitizePathPart = (value: string): string =>
 const normalizeBasePath = (value: string): string =>
   value.trim().replace(/^\/+|\/+$/g, '');
 
-const noteToMarkdown = (note: CornellNote, subject: string): string => [
-  `# ${note.title || '(제목 없음)'}`,
-  '',
-  `- 과목: ${subject}`,
-  `- 날짜: ${note.date}`,
-  `- 생성: ${note.createdAt}`,
-  `- 수정: ${note.updatedAt}`,
-  '',
-  '## 키워드 / 질문',
-  '',
-  note.cues || '-',
-  '',
-  '## 세부 내용',
-  '',
-  note.notes || '-',
-  '',
-  '## 요약',
-  '',
-  note.summary || '-',
-  '',
-].join('\n');
+const noteToMarkdown = (note: CornellNote, subject: string): string => {
+  const lines = [
+    `# ${note.title || '(제목 없음)'}`,
+    '',
+    `- 과목: ${subject}`,
+    `- 날짜: ${note.date}`,
+    `- 생성: ${note.createdAt}`,
+    `- 수정: ${note.updatedAt}`,
+    '',
+  ];
+
+  if (note.cues.trim()) {
+    lines.push('## 키워드 / 질문', '', note.cues, '');
+  }
+
+  lines.push('## 세부 내용', '', note.notes || '-', '');
+
+  if (note.summary.trim()) {
+    lines.push('## 요약', '', note.summary, '');
+  }
+
+  return lines.join('\n');
+};
 
 export default function App() {
   const authed = useAuth();
