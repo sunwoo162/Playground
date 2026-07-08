@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Project } from '../types';
-import { createProjectAsync, deleteProjectAsync } from '../storage';
+import { createProjectAsync, deleteProjectAsync, getProjectsAsync } from '../storage';
 import { ConfirmModal } from '../components/ConfirmModal';
 
 interface Props {
@@ -9,12 +9,30 @@ interface Props {
   onSelect: (project: Project) => void;
 }
 
+interface ProjectInvitation {
+  shareId: string;
+  projectTitle: string;
+  ownerLogin: string;
+  ownerName: string | null;
+  ownerAvatarUrl: string | null;
+}
+
 export function ProjectList({ projects, onProjectsChange, onSelect }: Props) {
   const [showForm, setShowForm] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [invitations, setInvitations] = useState<ProjectInvitation[]>([]);
+
+  useEffect(() => {
+    loadInvitations();
+  }, []);
+
+  const loadInvitations = async () => {
+    const res = await fetch('/api/dev-notes/projects/invitations', { credentials: 'include' });
+    if (res.ok) setInvitations(await res.json());
+  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,6 +53,16 @@ export function ProjectList({ projects, onProjectsChange, onSelect }: Props) {
     await deleteProjectAsync(id);
     onProjectsChange(projects.filter((p) => p.id !== id));
     setDeleteTarget(null);
+  };
+
+  const handleInvitation = async (shareId: string, action: 'accept' | 'reject') => {
+    const res = await fetch(`/api/dev-notes/projects/invitations/${shareId}/${action}`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+    if (!res.ok) return;
+    await loadInvitations();
+    if (action === 'accept') onProjectsChange(await getProjectsAsync());
   };
 
   const formatDate = (iso: string) =>
@@ -86,6 +114,25 @@ export function ProjectList({ projects, onProjectsChange, onSelect }: Props) {
             <button type="button" className="btn-ghost" onClick={() => setShowForm(false)}>취소</button>
           </div>
         </form>
+      )}
+
+      {invitations.length > 0 && (
+        <section className="invite-card">
+          <h2 className="invite-card-title">받은 공유 초대</h2>
+          <div className="invite-card-list">
+            {invitations.map(inv => (
+              <div key={inv.shareId} className="invite-card-item">
+                {inv.ownerAvatarUrl && <img src={inv.ownerAvatarUrl} alt={inv.ownerLogin} className="share-avatar" />}
+                <div className="invite-card-info">
+                  <span className="invite-card-name">{inv.projectTitle}</span>
+                  <span className="invite-card-meta">{inv.ownerName || inv.ownerLogin}님이 공유했어요.</span>
+                </div>
+                <button className="btn-primary btn-sm" onClick={() => handleInvitation(inv.shareId, 'accept')}>수락</button>
+                <button className="btn-ghost btn-sm" onClick={() => handleInvitation(inv.shareId, 'reject')}>거절</button>
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
       {projects.length === 0 && !showForm && (

@@ -4,6 +4,7 @@ import com.playground.domain.study.entity.StudyGroup;
 import com.playground.domain.study.entity.StudyGroupMember;
 import com.playground.domain.study.entity.StudySession;
 import com.playground.domain.study.repository.StudyGroupRepository;
+import com.playground.domain.study.repository.StudyGroupMemberRepository;
 import com.playground.domain.study.repository.StudySessionRepository;
 import com.playground.domain.user.entity.User;
 import com.playground.domain.user.repository.UserRepository;
@@ -28,6 +29,7 @@ import java.util.stream.Collectors;
 public class StudyGroupService {
 
     private final StudyGroupRepository groupRepo;
+    private final StudyGroupMemberRepository memberRepo;
     private final StudySessionRepository sessionRepo;
     private final UserRepository userRepo;
     private final RestTemplate restTemplate = new RestTemplate();
@@ -37,7 +39,7 @@ public class StudyGroupService {
 
     // 내 그룹 목록
     public List<Map<String, Object>> getMyGroups(String userId) {
-        return groupRepo.findByMemberOrOwner(userId).stream()
+        return groupRepo.findByMemberOrOwner(userId, StudyGroupMember.Status.ACCEPTED).stream()
             .map(g -> toGroupMap(g, userId))
             .collect(Collectors.toList());
     }
@@ -54,6 +56,7 @@ public class StudyGroupService {
         StudyGroupMember ownerMember = StudyGroupMember.builder()
             .group(group)
             .userId(userId)
+            .status(StudyGroupMember.Status.ACCEPTED)
             .build();
         group.getMembers().add(ownerMember);
         return toGroupMap(groupRepo.save(group), userId);
@@ -73,9 +76,49 @@ public class StudyGroupService {
         userRepo.findById(targetUserId)
             .orElseThrow(() -> new RuntimeException("존재하지 않는 유저예요"));
 
-        group.getMembers().add(StudyGroupMember.builder().group(group).userId(targetUserId).build());
+        group.getMembers().add(StudyGroupMember.builder()
+            .group(group)
+            .userId(targetUserId)
+            .status(StudyGroupMember.Status.PENDING)
+            .build());
         groupRepo.save(group);
         sendInviteNotification(group, ownerId, targetUserId);
+    }
+
+    public List<Map<String, Object>> getInvitations(String userId) {
+        return memberRepo.findByUserIdAndStatus(userId, StudyGroupMember.Status.PENDING).stream()
+            .map(member -> {
+                StudyGroup group = member.getGroup();
+                User owner = userRepo.findById(group.getOwnerId()).orElse(null);
+                Map<String, Object> m = new HashMap<>();
+                m.put("memberId", member.getId());
+                m.put("groupId", group.getId());
+                m.put("groupName", group.getName());
+                m.put("groupDescription", group.getDescription());
+                m.put("ownerId", group.getOwnerId());
+                m.put("ownerLogin", owner != null ? owner.getLogin() : group.getOwnerId());
+                m.put("ownerName", owner != null ? owner.getName() : group.getOwnerId());
+                m.put("ownerAvatarUrl", owner != null ? owner.getAvatarUrl() : null);
+                m.put("createdAt", member.getJoinedAt());
+                return m;
+            })
+            .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public void acceptInvitation(Long memberId, String userId) {
+        StudyGroupMember member = memberRepo.findById(memberId)
+            .orElseThrow(() -> new RuntimeException("초대를 찾을 수 없어요"));
+        if (!member.getUserId().equals(userId)) throw new IllegalArgumentException("권한 없음");
+        member.setStatus(StudyGroupMember.Status.ACCEPTED);
+    }
+
+    @Transactional
+    public void rejectInvitation(Long memberId, String userId) {
+        StudyGroupMember member = memberRepo.findById(memberId)
+            .orElseThrow(() -> new RuntimeException("초대를 찾을 수 없어요"));
+        if (!member.getUserId().equals(userId)) throw new IllegalArgumentException("권한 없음");
+        memberRepo.delete(member);
     }
 
     // 그룹 탈퇴
@@ -95,7 +138,8 @@ public class StudyGroupService {
     public List<Map<String, Object>> getRanking(Long groupId, String userId, String period) {
         StudyGroup group = groupRepo.findById(groupId)
             .orElseThrow(() -> new RuntimeException("그룹을 찾을 수 없어요"));
-        boolean isMember = group.getMembers().stream().anyMatch(m -> m.getUserId().equals(userId));
+        boolean isMember = group.getOwnerId().equals(userId) || group.getMembers().stream()
+            .anyMatch(m -> m.getUserId().equals(userId) && isAccepted(m));
         if (!isMember) throw new IllegalArgumentException("멤버만 랭킹을 볼 수 있어요");
 
         LocalDate now = LocalDate.now();
@@ -106,6 +150,7 @@ public class StudyGroupService {
         };
 
         List<String> memberIds = group.getMembers().stream()
+            .filter(this::isAccepted)
             .map(StudyGroupMember::getUserId)
             .collect(Collectors.toList());
 
@@ -140,8 +185,11 @@ public class StudyGroupService {
         m.put("description", g.getDescription());
         m.put("ownerId", g.getOwnerId());
         m.put("isOwner", g.getOwnerId().equals(userId));
-        m.put("memberCount", g.getMembers().size());
-        m.put("members", g.getMembers().stream().map(mem -> {
+        List<StudyGroupMember> acceptedMembers = g.getMembers().stream()
+            .filter(this::isAccepted)
+            .collect(Collectors.toList());
+        m.put("memberCount", acceptedMembers.size());
+        m.put("members", acceptedMembers.stream().map(mem -> {
             User u = userRepo.findById(mem.getUserId()).orElse(null);
             Map<String, Object> um = new HashMap<>();
             um.put("userId", mem.getUserId());
@@ -153,14 +201,18 @@ public class StudyGroupService {
         return m;
     }
 
+    private boolean isAccepted(StudyGroupMember member) {
+        return member.getStatus() == null || member.getStatus() == StudyGroupMember.Status.ACCEPTED;
+    }
+
     private void sendInviteNotification(StudyGroup group, String ownerId, String targetUserId) {
         try {
             User owner = userRepo.findById(ownerId).orElse(null);
             String ownerName = owner != null ? (owner.getName() != null ? owner.getName() : owner.getLogin()) : ownerId;
             sendPush(
                 targetUserId,
-                "스터디 그룹에 추가됨",
-                ownerName + "님이 '" + group.getName() + "' 그룹에 추가했어요!",
+                "스터디 그룹 초대",
+                ownerName + "님이 '" + group.getName() + "' 그룹에 초대했어요!",
                 "/apps/study-planner/"
             );
         } catch (Exception e) {

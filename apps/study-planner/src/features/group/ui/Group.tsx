@@ -17,6 +17,14 @@ interface RankEntry {
   rank: number; userId: string; login: string; name: string;
   avatarUrl: string | null; totalMinutes: number; isMe: boolean;
 }
+interface GroupInvitation {
+  memberId: number;
+  groupName: string;
+  groupDescription: string | null;
+  ownerLogin: string;
+  ownerName: string | null;
+  ownerAvatarUrl: string | null;
+}
 
 async function api(url: string, options?: RequestInit) {
   const res = await fetch(url, { credentials: 'include', headers: { 'Content-Type': 'application/json' }, ...options });
@@ -45,11 +53,19 @@ export function Group() {
   const [friends, setFriends] = useState<InviteUser[]>([]);
   const [recentUsers, setRecentUsers] = useState<InviteUser[]>([]);
   const [loadingInviteUsers, setLoadingInviteUsers] = useState(false);
+  const [invitations, setInvitations] = useState<GroupInvitation[]>([]);
 
   useEffect(() => { loadGroups(); }, []);
 
   const loadGroups = async () => {
-    try { setGroups(await api('/api/study/groups')); } catch {}
+    try {
+      const [groupList, inviteList] = await Promise.all([
+        api('/api/study/groups'),
+        api('/api/study/groups/invitations'),
+      ]);
+      setGroups(groupList);
+      setInvitations(inviteList);
+    } catch {}
   };
 
   const loadInviteUsers = async () => {
@@ -123,6 +139,11 @@ export function Group() {
   const handlePeriodChange = (p: 'today' | 'week' | 'month') => {
     setPeriod(p);
     if (selected) loadRanking(selected.id, p);
+  };
+
+  const handleInvitation = async (memberId: number, action: 'accept' | 'reject') => {
+    await api(`/api/study/groups/invitations/${memberId}/${action}`, { method: 'POST' });
+    await loadGroups();
   };
 
   const medalEmoji = (rank: number) => rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `${rank}위`;
@@ -270,6 +291,24 @@ export function Group() {
         <h3 className="section-title">내 그룹</h3>
         <button className="btn-primary btn-sm" onClick={() => setView('create')}>+ 그룹 만들기</button>
       </div>
+      {invitations.length > 0 && (
+        <div className="section-card invite-request-card">
+          <h3 className="section-title">받은 그룹 초대</h3>
+          <div className="invite-request-list">
+            {invitations.map(inv => (
+              <div key={inv.memberId} className="invite-request-item">
+                {inv.ownerAvatarUrl && <img src={inv.ownerAvatarUrl} alt={inv.ownerLogin} className="invite-avatar" />}
+                <div className="invite-user-info">
+                  <span className="invite-user-name">{inv.groupName}</span>
+                  <span className="invite-user-login">{inv.ownerName || inv.ownerLogin}님이 초대했어요.</span>
+                </div>
+                <button className="btn-primary btn-sm" onClick={() => handleInvitation(inv.memberId, 'accept')}>수락</button>
+                <button className="btn-ghost btn-sm" onClick={() => handleInvitation(inv.memberId, 'reject')}>거절</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {groups.length === 0 ? (
         <div className="section-card" style={{ textAlign: 'center', padding: 40 }}>
           <p style={{ fontSize: '2rem' }}>👥</p>

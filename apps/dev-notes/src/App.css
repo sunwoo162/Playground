@@ -762,6 +762,52 @@
   padding: 8px 0;
 }
 
+.invite-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.invite-card-title {
+  font-size: 1rem;
+  font-weight: 600;
+}
+.invite-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.invite-card-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.invite-card-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.invite-card-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.invite-card-meta {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
 .btn-ghost {
   padding: 6px 12px;
   background: transparent;
@@ -787,6 +833,11 @@
   background: rgba(112, 161, 255, 0.15);
   color: var(--accent);
   border: 1px solid var(--accent);
+}
+.role-badge.pending {
+  background: rgba(255, 165, 2, 0.14);
+  color: #ffa502;
+  border: 1px solid rgba(255, 165, 2, 0.42);
 }
 
 /* ========== App Shell (공통 헤더) ========== */

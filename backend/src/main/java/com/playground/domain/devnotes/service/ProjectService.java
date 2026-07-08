@@ -35,7 +35,7 @@ public class ProjectService {
     // ── 목록 조회 (내 프로젝트 + 공유받은 프로젝트) ──────────
     public List<ProjectDto.Response> getProjects(String userId) {
         List<Project> myProjects = projectRepository.findByUserIdOrderByUpdatedAtDesc(userId);
-        List<Project> sharedProjects = projectShareRepository.findByUserId(userId).stream()
+        List<Project> sharedProjects = projectShareRepository.findAcceptedByUserId(userId, ProjectShare.Status.ACCEPTED).stream()
             .map(ps -> ps.getProject())
             .collect(Collectors.toList());
 
@@ -145,14 +145,50 @@ public class ProjectService {
         projectShareRepository.save(ProjectShare.builder()
                 .project(project)
                 .userId(targetUserId)
+                .status(ProjectShare.Status.PENDING)
                 .build());
 
-        // 공유 알림
+        // 공유 초대 알림
         User owner = userRepository.findById(ownerId).orElse(null);
         String ownerName = owner != null ? (owner.getName() != null ? owner.getName() : owner.getLogin()) : ownerId;
-        sendPush(targetUserId, "프로젝트 공유됨",
-            ownerName + "님이 '" + project.getTitle() + "' 프로젝트를 공유했어요!",
+        sendPush(targetUserId, "프로젝트 공유 초대",
+            ownerName + "님이 '" + project.getTitle() + "' 프로젝트 공유에 초대했어요!",
             "/apps/dev-notes/");
+    }
+
+    public List<Map<String, String>> getShareInvitations(String userId) {
+        return projectShareRepository.findByUserIdAndStatus(userId, ProjectShare.Status.PENDING).stream()
+            .map(ps -> {
+                Project project = ps.getProject();
+                User owner = userRepository.findById(project.getUserId()).orElse(null);
+                Map<String, String> m = new HashMap<>();
+                m.put("shareId", String.valueOf(ps.getId()));
+                m.put("projectId", String.valueOf(project.getId()));
+                m.put("projectTitle", project.getTitle());
+                m.put("ownerId", project.getUserId());
+                m.put("ownerLogin", owner != null ? owner.getLogin() : project.getUserId());
+                m.put("ownerName", owner != null ? owner.getName() : project.getUserId());
+                m.put("ownerAvatarUrl", owner != null ? owner.getAvatarUrl() : null);
+                m.put("createdAt", ps.getCreatedAt() != null ? ps.getCreatedAt().toString() : "");
+                return m;
+            })
+            .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public void acceptShareInvitation(Long shareId, String userId) {
+        ProjectShare share = projectShareRepository.findById(shareId)
+            .orElseThrow(() -> new RuntimeException("Invitation not found"));
+        if (!share.getUserId().equals(userId)) throw new IllegalArgumentException("No permission");
+        share.setStatus(ProjectShare.Status.ACCEPTED);
+    }
+
+    @Transactional
+    public void rejectShareInvitation(Long shareId, String userId) {
+        ProjectShare share = projectShareRepository.findById(shareId)
+            .orElseThrow(() -> new RuntimeException("Invitation not found"));
+        if (!share.getUserId().equals(userId)) throw new IllegalArgumentException("No permission");
+        projectShareRepository.delete(share);
     }
 
     // ── 공유 취소 ──────────────────────────────────────────
@@ -182,7 +218,7 @@ public class ProjectService {
         }
         
         // 공유받은 팀원 추가
-        projectShareRepository.findByProjectId(projectId).forEach(ps -> {
+        projectShareRepository.findAcceptedByProjectId(projectId, ProjectShare.Status.ACCEPTED).forEach(ps -> {
             User u = userRepository.findById(ps.getUserId()).orElse(null);
             Map<String, String> m = new HashMap<>();
             m.put("userId", ps.getUserId());
@@ -192,6 +228,19 @@ public class ProjectService {
             m.put("role", "EDITOR");
             result.add(m);
         });
+
+        projectShareRepository.findByProjectId(projectId).stream()
+            .filter(ps -> ps.getStatus() == ProjectShare.Status.PENDING)
+            .forEach(ps -> {
+                User u = userRepository.findById(ps.getUserId()).orElse(null);
+                Map<String, String> m = new HashMap<>();
+                m.put("userId", ps.getUserId());
+                m.put("login", u != null ? u.getLogin() : ps.getUserId());
+                m.put("name", u != null ? u.getName() : null);
+                m.put("avatarUrl", u != null ? u.getAvatarUrl() : null);
+                m.put("role", "PENDING");
+                result.add(m);
+            });
         
         return result;
     }
@@ -200,7 +249,7 @@ public class ProjectService {
     private Project getAccessibleProject(Long id, String userId) {
         return projectRepository.findById(id)
             .filter(p -> p.getUserId().equals(userId) ||
-                        projectShareRepository.existsByProjectIdAndUserId(id, userId))
+                        projectShareRepository.existsAcceptedByProjectIdAndUserId(id, userId, ProjectShare.Status.ACCEPTED))
             .orElseThrow(() -> new RuntimeException("Project not found or no permission"));
     }
 
@@ -213,7 +262,7 @@ public class ProjectService {
             // 알림 받을 사람: 소유자 + 공유 팀원 - 수정자
             Set<String> recipients = new HashSet<>();
             recipients.add(project.getUserId());
-            projectShareRepository.findByProjectId(project.getId())
+            projectShareRepository.findAcceptedByProjectId(project.getId(), ProjectShare.Status.ACCEPTED)
                 .forEach(ps -> recipients.add(ps.getUserId()));
             recipients.remove(editorId); // 수정자 제외
 
@@ -244,7 +293,7 @@ public class ProjectService {
 
     // ── Response 변환 ──────────────────────────────────────
     private ProjectDto.Response toResponse(Project p, String currentUserId) {
-        List<String> sharedWith = projectShareRepository.findByProjectId(p.getId())
+        List<String> sharedWith = projectShareRepository.findAcceptedByProjectId(p.getId(), ProjectShare.Status.ACCEPTED)
             .stream().map(ProjectShare::getUserId).collect(Collectors.toList());
 
         return ProjectDto.Response.builder()

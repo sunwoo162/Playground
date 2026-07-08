@@ -56,6 +56,28 @@ public class ProjectController {
 
     // ── 공유 API ──────────────────────────────────────────
 
+    @GetMapping("/invitations")
+    public ResponseEntity<List<Map<String, String>>> getShareInvitations(
+            @AuthenticationPrincipal JwtAuthenticationToken auth) {
+        return ResponseEntity.ok(projectService.getShareInvitations(auth.getUserId()));
+    }
+
+    @PostMapping("/invitations/{shareId}/accept")
+    public ResponseEntity<Map<String, Boolean>> acceptShareInvitation(
+            @PathVariable Long shareId,
+            @AuthenticationPrincipal JwtAuthenticationToken auth) {
+        projectService.acceptShareInvitation(shareId, auth.getUserId());
+        return ResponseEntity.ok(Map.of("success", true));
+    }
+
+    @PostMapping("/invitations/{shareId}/reject")
+    public ResponseEntity<Map<String, Boolean>> rejectShareInvitation(
+            @PathVariable Long shareId,
+            @AuthenticationPrincipal JwtAuthenticationToken auth) {
+        projectService.rejectShareInvitation(shareId, auth.getUserId());
+        return ResponseEntity.ok(Map.of("success", true));
+    }
+
     @PostMapping("/{id}/share/{targetUserId}")
     public ResponseEntity<Map<String, Boolean>> shareProject(
             @PathVariable Long id,

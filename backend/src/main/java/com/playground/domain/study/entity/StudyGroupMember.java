@@ -12,6 +12,8 @@ import java.time.LocalDateTime;
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class StudyGroupMember {
 
+    public enum Status { PENDING, ACCEPTED }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -22,6 +24,11 @@ public class StudyGroupMember {
 
     @Column(name = "user_id", nullable = false)
     private String userId;
+
+    @Enumerated(EnumType.STRING)
+    @Column
+    @Builder.Default
+    private Status status = Status.ACCEPTED;
 
     @CreationTimestamp
     private LocalDateTime joinedAt;

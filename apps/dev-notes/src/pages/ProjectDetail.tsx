@@ -158,6 +158,7 @@ export function ProjectDetail({ project, onBack, onUpdate }: Props) {
                   <span className="share-user-name">{u.name || u.login}</span>
                   <span className="share-user-login">@{u.login}</span>
                   {(u as any).role === 'OWNER' && <span className="role-badge owner">소유자</span>}
+                  {(u as any).role === 'PENDING' && <span className="role-badge pending">수락 대기</span>}
                   {(u as any).role === 'EDITOR' && project.isOwner !== false && (
                     <button className="btn-text danger" onClick={() => handleUnshare(u.userId)}>제거</button>
                   )}

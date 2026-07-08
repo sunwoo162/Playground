@@ -16,6 +16,8 @@ import java.time.LocalDateTime;
 @Builder
 public class ProjectShare {
 
+    public enum Status { PENDING, ACCEPTED }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -26,6 +28,11 @@ public class ProjectShare {
 
     @Column(name = "user_id", nullable = false)
     private String userId; // 공유받은 유저 ID
+
+    @Enumerated(EnumType.STRING)
+    @Column
+    @Builder.Default
+    private Status status = Status.ACCEPTED;
 
     @CreationTimestamp
     private LocalDateTime createdAt;

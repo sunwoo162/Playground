@@ -40,6 +40,28 @@ public class StudyGroupController {
         return ResponseEntity.ok(Map.of("success", true));
     }
 
+    @GetMapping("/invitations")
+    public ResponseEntity<List<Map<String, Object>>> getInvitations(
+            @AuthenticationPrincipal JwtAuthenticationToken auth) {
+        return ResponseEntity.ok(groupService.getInvitations(auth.getUserId()));
+    }
+
+    @PostMapping("/invitations/{memberId}/accept")
+    public ResponseEntity<Map<String, Boolean>> acceptInvitation(
+            @PathVariable Long memberId,
+            @AuthenticationPrincipal JwtAuthenticationToken auth) {
+        groupService.acceptInvitation(memberId, auth.getUserId());
+        return ResponseEntity.ok(Map.of("success", true));
+    }
+
+    @PostMapping("/invitations/{memberId}/reject")
+    public ResponseEntity<Map<String, Boolean>> rejectInvitation(
+            @PathVariable Long memberId,
+            @AuthenticationPrincipal JwtAuthenticationToken auth) {
+        groupService.rejectInvitation(memberId, auth.getUserId());
+        return ResponseEntity.ok(Map.of("success", true));
+    }
+
     @DeleteMapping("/{groupId}/leave")
     public ResponseEntity<Map<String, Boolean>> leave(
             @PathVariable Long groupId,
