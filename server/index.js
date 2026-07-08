@@ -526,10 +526,17 @@ app.post('/auth/logout', (req, res) => {
 // 정적 파일 서빙
 // ============================================
 
+function requireSessionUser(req, res, next) {
+  if (req.session?.user) return next();
+  const returnTo = encodeURIComponent(req.originalUrl || req.url);
+  return res.redirect(`/?returnTo=${returnTo}`);
+}
+
 // 놀이터 메인 (Vite 빌드 결과물)
 app.use(express.static(path.join(__dirname, '..', 'dist')));
 
 // Life Tracker 앱 (서브 경로에서 서빙)
+app.use('/apps/life-tracker', requireSessionUser);
 app.use('/apps/life-tracker', express.static(path.join(__dirname, '..', 'apps', 'life-tracker', 'dist')));
 app.get('/apps/life-tracker/*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'apps', 'life-tracker', 'dist', 'index.html'));
