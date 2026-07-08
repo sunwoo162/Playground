@@ -27,7 +27,11 @@ jobs:
         run: npm run install:all
 
       - name: Fix cornell-notes dependencies
-        run: cd apps/cornell-notes && rm -rf node_modules && npm install --force
+        run: |
+          cd apps/cornell-notes
+          rm -rf node_modules package-lock.json
+          npm cache clean --force
+          npm install
 
       - name: Build frontend apps
         run: npm run build:all
