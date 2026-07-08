@@ -41,14 +41,7 @@ public class FriendService {
 
     // 최근 가입자 목록 (자기 자신 제외, 최근 20명)
     public List<FriendDto.UserResponse> getRecentUsers(String myId) {
-        return userRepository.findAll().stream()
-            .filter(u -> !u.getGithubId().equals(myId))
-            .sorted((a, b) -> {
-                if (a.getLastLoginAt() == null) return 1;
-                if (b.getLastLoginAt() == null) return -1;
-                return b.getLastLoginAt().compareTo(a.getLastLoginAt());
-            })
-            .limit(20)
+        return userRepository.findTop20ByGithubIdNotOrderByCreatedAtDesc(myId).stream()
             .map(u -> toUserResponse(u, myId))
             .collect(Collectors.toList());
     }
@@ -69,6 +62,7 @@ public class FriendService {
             .login(u.getLogin())
             .name(u.getName())
             .avatarUrl(u.getAvatarUrl())
+            .createdAt(u.getCreatedAt() != null ? u.getCreatedAt().toString() : null)
             .friendStatus(status)
             .build();
     }

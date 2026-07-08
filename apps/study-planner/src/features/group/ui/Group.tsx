@@ -11,6 +11,7 @@ interface InviteUser {
   login: string;
   name: string | null;
   avatarUrl: string | null;
+  createdAt?: string;
   friendStatus?: string | null;
 }
 interface RankEntry {

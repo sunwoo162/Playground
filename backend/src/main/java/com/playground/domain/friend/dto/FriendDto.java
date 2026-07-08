@@ -11,6 +11,7 @@ public class FriendDto {
         private String login;
         private String name;
         private String avatarUrl;
+        private String createdAt;
         private String friendStatus; // null, "PENDING_SENT", "PENDING_RECEIVED", "ACCEPTED"
     }
 

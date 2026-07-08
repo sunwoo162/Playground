@@ -12,6 +12,7 @@ interface FriendUser {
   login: string;
   name: string;
   avatarUrl: string;
+  createdAt?: string;
   friendStatus: string | null;
 }
 

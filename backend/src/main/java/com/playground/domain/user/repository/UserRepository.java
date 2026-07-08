@@ -7,4 +7,5 @@ import java.util.List;
 
 public interface UserRepository extends JpaRepository<User, String> {
     List<User> findByLoginContainingIgnoreCase(String login);
+    List<User> findTop20ByGithubIdNotOrderByCreatedAtDesc(String githubId);
 }
