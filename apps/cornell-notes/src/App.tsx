@@ -198,6 +198,15 @@ export default function App() {
     setSelected(updated);
   };
 
+  const handleBackToFullNote = () => {
+    if (!selected) return;
+    const current = getNotes().find(note => note.id === selected.id) ?? selected;
+    setNotes(getNotes());
+    setSelected(current);
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+    setView('view');
+  };
+
   const openDetailOnlyWindow = () => {
     if (!selected) return;
     const updated = { ...selected, updatedAt: new Date().toISOString() };
@@ -341,9 +350,9 @@ export default function App() {
               <h2 className="detail-only-title">{selected.title || '(제목 없음)'}</h2>
             </div>
             <div className="viewer-actions">
-              <button className="btn-primary" onClick={handleSaveDetailOnly}>저장</button>
-              <button className="btn-ghost" onClick={() => setView('view')}>전체 노트</button>
-              <button className="btn-ghost" onClick={() => window.close()}>닫기</button>
+              <button type="button" className="btn-primary" onClick={handleSaveDetailOnly}>저장</button>
+              <button type="button" className="btn-ghost" onClick={handleBackToFullNote}>전체 노트</button>
+              <button type="button" className="btn-ghost" onClick={() => window.close()}>닫기</button>
             </div>
           </div>
           <textarea
