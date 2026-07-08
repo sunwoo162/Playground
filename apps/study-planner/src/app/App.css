@@ -235,6 +235,75 @@
 
 /* ===== Group ===== */
 .group-page { display: flex; flex-direction: column; gap: 14px; }
+.invite-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 14px;
+}
+.invite-users {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.invite-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.invite-section-title {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.invite-user-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.invite-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.invite-user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.invite-user-name {
+  color: var(--text);
+  font-size: 0.84rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.invite-user-login {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.invite-user-tag {
+  color: var(--accent);
+  background: rgba(112,161,255,0.12);
+  border: 1px solid rgba(112,161,255,0.32);
+  border-radius: 999px;
+  padding: 2px 7px;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
 
 .theme-toggle {
   position: absolute;
@@ -257,4 +326,5 @@
 @media (max-width: 560px) {
   .app-header { padding-right: 68px; }
   .header-title-row { flex-direction: column; align-items: flex-start; }
+  .invite-users { grid-template-columns: 1fr; }
 }

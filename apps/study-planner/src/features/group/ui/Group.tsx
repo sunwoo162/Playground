@@ -6,6 +6,13 @@ interface StudyGroup {
   ownerId: string; isOwner: boolean; memberCount: number;
   members: GroupMember[];
 }
+interface InviteUser {
+  githubId: string;
+  login: string;
+  name: string | null;
+  avatarUrl: string | null;
+  friendStatus?: string | null;
+}
 interface RankEntry {
   rank: number; userId: string; login: string; name: string;
   avatarUrl: string | null; totalMinutes: number; isMe: boolean;
@@ -35,11 +42,31 @@ export function Group() {
   const [newName, setNewName] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [inviteId, setInviteId] = useState('');
+  const [friends, setFriends] = useState<InviteUser[]>([]);
+  const [recentUsers, setRecentUsers] = useState<InviteUser[]>([]);
+  const [loadingInviteUsers, setLoadingInviteUsers] = useState(false);
 
   useEffect(() => { loadGroups(); }, []);
 
   const loadGroups = async () => {
     try { setGroups(await api('/api/study/groups')); } catch {}
+  };
+
+  const loadInviteUsers = async () => {
+    setLoadingInviteUsers(true);
+    try {
+      const [friendList, recentList] = await Promise.all([
+        api('/api/friends'),
+        api('/api/friends/recent'),
+      ]);
+      setFriends(friendList);
+      setRecentUsers(recentList);
+    } catch {
+      setFriends([]);
+      setRecentUsers([]);
+    } finally {
+      setLoadingInviteUsers(false);
+    }
   };
 
   const loadRanking = async (groupId: number, p: string) => {
@@ -51,6 +78,7 @@ export function Group() {
   const handleSelectGroup = (g: StudyGroup) => {
     setSelected(g); setView('detail');
     loadRanking(g.id, period);
+    if (g.isOwner) loadInviteUsers();
   };
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -64,13 +92,21 @@ export function Group() {
     } catch (err) { alert('그룹 생성 실패'); }
   };
 
-  const handleInvite = async () => {
-    if (!selected || !inviteId.trim()) return;
+  const refreshSelectedGroup = (updatedGroups: StudyGroup[]) => {
+    if (!selected) return;
+    setSelected(updatedGroups.find(g => g.id === selected.id) ?? null);
+  };
+
+  const handleInvite = async (targetId = inviteId.trim()) => {
+    if (!selected || !targetId) return;
     try {
-      await api(`/api/study/groups/${selected.id}/invite/${inviteId.trim()}`, { method: 'POST' });
+      await api(`/api/study/groups/${selected.id}/invite/${targetId}`, { method: 'POST' });
       alert('초대 완료!');
       setInviteId('');
-      await loadGroups();
+      const updatedGroups = await api('/api/study/groups');
+      setGroups(updatedGroups);
+      refreshSelectedGroup(updatedGroups);
+      await loadInviteUsers();
     } catch { alert('초대 실패. GitHub ID를 확인해주세요.'); }
   };
 
@@ -90,6 +126,22 @@ export function Group() {
   };
 
   const medalEmoji = (rank: number) => rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `${rank}위`;
+  const memberIds = selected ? new Set(selected.members.map(m => m.userId)) : new Set<string>();
+  const friendCandidates = friends.filter(u => !memberIds.has(u.githubId));
+  const recentCandidates = recentUsers.filter(u =>
+    !memberIds.has(u.githubId) && !friendCandidates.some(f => f.githubId === u.githubId)
+  );
+  const renderInviteUser = (user: InviteUser, label?: string) => (
+    <div key={user.githubId} className="invite-user-item">
+      {user.avatarUrl && <img src={user.avatarUrl} alt={user.login} className="invite-avatar" />}
+      <div className="invite-user-info">
+        <span className="invite-user-name">{user.name || user.login}</span>
+        <span className="invite-user-login">@{user.login}</span>
+      </div>
+      {label && <span className="invite-user-tag">{label}</span>}
+      <button className="btn-primary btn-sm" onClick={() => handleInvite(user.githubId)}>추가</button>
+    </div>
+  );
 
   if (view === 'create') return (
     <div className="group-page">
@@ -142,9 +194,35 @@ export function Group() {
 
         {/* 초대 (소유자만) */}
         {selected.isOwner && (
-          <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-            <input value={inviteId} onChange={e => setInviteId(e.target.value)} placeholder="초대할 GitHub ID" style={{ flex: 1, padding: '8px 12px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', fontSize: '0.88rem' }} />
-            <button className="btn-primary btn-sm" onClick={handleInvite}>초대</button>
+          <div className="invite-panel">
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input value={inviteId} onChange={e => setInviteId(e.target.value)} placeholder="초대할 GitHub ID" style={{ flex: 1, padding: '8px 12px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', fontSize: '0.88rem' }} />
+              <button className="btn-primary btn-sm" onClick={() => handleInvite()}>초대</button>
+            </div>
+
+            <div className="invite-users">
+              <div className="invite-section">
+                <p className="invite-section-title">친구</p>
+                {loadingInviteUsers ? (
+                  <p className="empty-text">불러오는 중...</p>
+                ) : friendCandidates.length === 0 ? (
+                  <p className="empty-text">추가할 친구가 없어요.</p>
+                ) : (
+                  friendCandidates.map(user => renderInviteUser(user, '친구'))
+                )}
+              </div>
+
+              <div className="invite-section">
+                <p className="invite-section-title">최근 가입 사용자</p>
+                {loadingInviteUsers ? (
+                  <p className="empty-text">불러오는 중...</p>
+                ) : recentCandidates.length === 0 ? (
+                  <p className="empty-text">추가할 사용자가 없어요.</p>
+                ) : (
+                  recentCandidates.map(user => renderInviteUser(user))
+                )}
+              </div>
+            </div>
           </div>
         )}
       </div>
