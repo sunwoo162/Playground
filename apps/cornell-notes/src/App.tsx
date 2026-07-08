@@ -439,7 +439,7 @@ export default function App() {
               <select className="select-field" value={selected.subjectId} onChange={e => setSelected({ ...selected, subjectId: e.target.value })}>
                 {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
-              <input type="date" className="select-field" value={selected.date} onChange={e => setSelected({ ...selected, date: e.target.value })} />
+              <input type="date" className="select-field" value={selected.date} disabled aria-label="노트 날짜" />
               <div className="toolbar-actions">
                 <button className="btn-ghost" onClick={() => { setRepoDraft(repoSettings); setView('repo'); }}>GitHub 설정</button>
                 <button className="btn-ghost" onClick={openDetailOnlyWindow}>세부 내용 웹 보기</button>
