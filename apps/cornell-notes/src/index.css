@@ -49,6 +49,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .btn-primary:hover { opacity: 0.85; }
 .btn-ghost { padding: 7px 14px; background: transparent; border: 1px solid var(--border); border-radius: 8px; color: var(--text-muted); font-size: 0.82rem; cursor: pointer; }
 .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+.btn-ghost:disabled { cursor: default; opacity: 0.55; }
+.btn-ghost:disabled:hover { border-color: var(--border); color: var(--text-muted); }
 .btn-delete { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.9rem; padding: 2px 6px; }
 .btn-delete:hover { color: #ff4757; }
 .btn-danger { padding: 7px 14px; background: transparent; border: 1px solid var(--border); border-radius: 8px; color: var(--text-muted); font-size: 0.82rem; cursor: pointer; }
@@ -238,6 +240,39 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .subject-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
 .subject-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
 .subject-name { flex: 1; font-size: 0.9rem; }
+
+/* GitHub repo settings */
+.repo-panel {
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  box-shadow: var(--shadow);
+}
+.repo-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+.repo-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.repo-status {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+.repo-status.compact {
+  margin-top: -6px;
+}
 
 .theme-toggle {
   width: 36px;

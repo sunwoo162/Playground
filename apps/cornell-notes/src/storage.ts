@@ -1,7 +1,8 @@
-import type { CornellNote, Subject } from './types';
+import type { CornellNote, GitRepoSettings, Subject } from './types';
 
 const NOTES_KEY = 'cornell-notes';
 const SUBJECTS_KEY = 'cornell-subjects';
+const GIT_REPO_KEY = 'cornell-git-repo-settings';
 
 // ── Notes ──────────────────────────────────────────
 export function getNotes(): CornellNote[] {
@@ -36,6 +37,16 @@ export function getSubjects(): Subject[] {
 
 export function saveSubjects(subjects: Subject[]): void {
   localStorage.setItem(SUBJECTS_KEY, JSON.stringify(subjects));
+}
+
+// ── GitHub repo settings ───────────────────────────
+export function getGitRepoSettings(): GitRepoSettings {
+  const raw = localStorage.getItem(GIT_REPO_KEY);
+  return raw ? JSON.parse(raw) : { repo: '', basePath: 'cornell-notes' };
+}
+
+export function saveGitRepoSettings(settings: GitRepoSettings): void {
+  localStorage.setItem(GIT_REPO_KEY, JSON.stringify(settings));
 }
 
 export function generateId(): string {

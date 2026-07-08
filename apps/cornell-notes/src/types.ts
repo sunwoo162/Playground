@@ -15,3 +15,8 @@ export interface Subject {
   name: string;
   color: string;
 }
+
+export interface GitRepoSettings {
+  repo: string;
+  basePath: string;
+}

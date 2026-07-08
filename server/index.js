@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 놀이터 서버
  * 
  * 역할:
@@ -262,6 +262,52 @@ app.post('/internal/push/send', async (req, res) => {
 // ============================================
 // GitHub 커밋 API
 // ============================================
+
+app.post('/github/commit-file', async (req, res) => {
+  const githubToken = req.session?.githubToken;
+  if (!githubToken) return res.status(401).json({ error: 'GitHub token is required. Please sign in again.' });
+
+  const { repo, filePath, content, message } = req.body;
+  if (!repo || !filePath || !content) {
+    return res.status(400).json({ error: 'repo, filePath, and content are required.' });
+  }
+
+  try {
+    const headers = {
+      'Authorization': `Bearer ${githubToken}`,
+      'Accept': 'application/vnd.github+json',
+      'User-Agent': 'playground-app',
+      'Content-Type': 'application/json',
+    };
+
+    let sha;
+    const getRes = await fetch(`https://api.github.com/repos/${repo}/contents/${encodeURIComponent(filePath)}`, { headers });
+    if (getRes.ok) {
+      const getData = await getRes.json();
+      sha = getData.sha;
+    }
+
+    const putRes = await fetch(`https://api.github.com/repos/${repo}/contents/${encodeURIComponent(filePath)}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({
+        message: message || `Update ${filePath}`,
+        content: Buffer.from(content, 'utf-8').toString('base64'),
+        ...(sha && { sha }),
+      }),
+    });
+
+    if (!putRes.ok) {
+      const err = await putRes.json();
+      return res.status(putRes.status).json({ error: err.message });
+    }
+
+    const result = await putRes.json();
+    res.json({ success: true, url: result.content?.html_url, sha: result.content?.sha });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 /**
  * POST /github/commit

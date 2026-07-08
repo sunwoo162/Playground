@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
-import type { CornellNote, Subject } from './types';
-import { getNotes, saveNote, deleteNote, getSubjects, saveSubjects, generateId, getTodayStr } from './storage';
+import type { CornellNote, GitRepoSettings, Subject } from './types';
+import { getNotes, saveNote, deleteNote, getSubjects, saveSubjects, getGitRepoSettings, saveGitRepoSettings, generateId, getTodayStr } from './storage';
 import { StudyTimerBadge } from './StudyTimerBadge';
 import { useAuth } from './useAuth';
 
-type View = 'list' | 'edit' | 'view' | 'subjects';
+type View = 'list' | 'edit' | 'view' | 'subjects' | 'repo';
 type Theme = 'dark' | 'light';
 const THEME_KEY = 'playground-theme';
 const getTheme = (): Theme => localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark';
@@ -24,6 +24,38 @@ const EMPTY_NOTE = (subjectId: string): CornellNote => ({
 
 const COLORS = ['#70a1ff','#2ed573','#ffa502','#ff4757','#ff6b81','#a29bfe','#00cec9','#fd79a8','#fdcb6e','#55efc4'];
 
+const sanitizePathPart = (value: string): string =>
+  (value || 'untitled')
+    .trim()
+    .replace(/[\\/:*?"<>|#{}%~&]/g, '_')
+    .replace(/\s+/g, '-')
+    .slice(0, 80) || 'untitled';
+
+const normalizeBasePath = (value: string): string =>
+  value.trim().replace(/^\/+|\/+$/g, '');
+
+const noteToMarkdown = (note: CornellNote, subject: string): string => [
+  `# ${note.title || '(제목 없음)'}`,
+  '',
+  `- 과목: ${subject}`,
+  `- 날짜: ${note.date}`,
+  `- 생성: ${note.createdAt}`,
+  `- 수정: ${note.updatedAt}`,
+  '',
+  '## 키워드 / 질문',
+  '',
+  note.cues || '-',
+  '',
+  '## 세부 내용',
+  '',
+  note.notes || '-',
+  '',
+  '## 요약',
+  '',
+  note.summary || '-',
+  '',
+].join('\n');
+
 export default function App() {
   const authed = useAuth();
   const [notes, setNotes] = useState<CornellNote[]>([]);
@@ -35,6 +67,10 @@ export default function App() {
   const [newSubjectName, setNewSubjectName] = useState('');
   const [newSubjectColor, setNewSubjectColor] = useState(COLORS[0]);
   const [theme, setTheme] = useState<Theme>(getTheme);
+  const [repoSettings, setRepoSettings] = useState<GitRepoSettings>(() => getGitRepoSettings());
+  const [repoDraft, setRepoDraft] = useState<GitRepoSettings>(() => getGitRepoSettings());
+  const [commitStatus, setCommitStatus] = useState('');
+  const [committing, setCommitting] = useState(false);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -92,6 +128,55 @@ export default function App() {
     saveSubjects(updated);
   };
 
+  const handleSaveRepoSettings = () => {
+    const updated = {
+      repo: repoDraft.repo.trim(),
+      basePath: normalizeBasePath(repoDraft.basePath) || 'cornell-notes',
+    };
+    setRepoSettings(updated);
+    setRepoDraft(updated);
+    saveGitRepoSettings(updated);
+    setCommitStatus('레포 설정을 저장했어요.');
+  };
+
+  const handleCommitNote = async () => {
+    if (!selected || committing) return;
+    if (!repoSettings.repo.trim()) {
+      setRepoDraft(repoSettings);
+      setView('repo');
+      setCommitStatus('먼저 GitHub 레포를 owner/repo 형식으로 설정해주세요.');
+      return;
+    }
+
+    setCommitting(true);
+    setCommitStatus('GitHub에 커밋하는 중...');
+    const fileName = `${selected.date}-${sanitizePathPart(selected.title)}.md`;
+    const basePath = normalizeBasePath(repoSettings.basePath);
+    const filePath = basePath ? `${basePath}/${fileName}` : fileName;
+
+    try {
+      const res = await fetch('/github/commit-file', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          repo: repoSettings.repo.trim(),
+          filePath,
+          content: noteToMarkdown(selected, subjectName(selected.subjectId)),
+          message: `Add Cornell note: ${selected.title || selected.date}`,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '커밋에 실패했어요.');
+      setCommitStatus(`커밋 완료: ${filePath}`);
+      if (data.url) window.open(data.url, '_blank', 'noopener,noreferrer');
+    } catch (e) {
+      setCommitStatus(e instanceof Error ? e.message : '커밋에 실패했어요.');
+    } finally {
+      setCommitting(false);
+    }
+  };
+
   return (
     <div className="app">
       <header className="app-header">
@@ -101,8 +186,9 @@ export default function App() {
           <p className="app-subtitle">구조적으로 배운 내용을 정리하세요</p>
         </div>
         <nav className="header-nav">
-          <button className={`nav-btn ${view !== 'subjects' ? 'active' : ''}`} onClick={() => setView('list')}>📋 노트</button>
+          <button className={`nav-btn ${view !== 'subjects' && view !== 'repo' ? 'active' : ''}`} onClick={() => setView('list')}>📋 노트</button>
           <button className={`nav-btn ${view === 'subjects' ? 'active' : ''}`} onClick={() => setView('subjects')}>📚 과목</button>
+          <button className={`nav-btn ${view === 'repo' ? 'active' : ''}`} onClick={() => { setRepoDraft(repoSettings); setView('repo'); }}>GitHub</button>
         </nav>
         <StudyTimerBadge />
         <button className="theme-toggle" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} aria-label="테마 전환">
@@ -110,7 +196,36 @@ export default function App() {
         </button>
       </header>
 
-      {view === 'subjects' ? (
+      {view === 'repo' ? (
+        <main className="app-main">
+          <div className="repo-panel">
+            <h2 className="section-title">GitHub 연동</h2>
+            <label className="repo-field">
+              <span>레포</span>
+              <input
+                className="subject-input"
+                placeholder="owner/repository"
+                value={repoDraft.repo}
+                onChange={e => setRepoDraft({ ...repoDraft, repo: e.target.value })}
+              />
+            </label>
+            <label className="repo-field">
+              <span>저장 폴더</span>
+              <input
+                className="subject-input"
+                placeholder="cornell-notes"
+                value={repoDraft.basePath}
+                onChange={e => setRepoDraft({ ...repoDraft, basePath: e.target.value })}
+              />
+            </label>
+            <div className="repo-actions">
+              <button className="btn-primary" onClick={handleSaveRepoSettings}>설정 저장</button>
+              <button className="btn-ghost" onClick={() => setView(selected ? 'view' : 'list')}>돌아가기</button>
+            </div>
+            {commitStatus && <p className="repo-status">{commitStatus}</p>}
+          </div>
+        </main>
+      ) : view === 'subjects' ? (
         <main className="app-main">
           <div className="subjects-panel">
             <h2 className="section-title">과목 관리</h2>
@@ -209,10 +324,12 @@ export default function App() {
               </div>
             </div>
             <div className="viewer-actions">
+              <button className="btn-ghost" onClick={handleCommitNote} disabled={committing}>{committing ? '커밋 중...' : 'GitHub 커밋'}</button>
               <button className="btn-ghost" onClick={() => setView('edit')}>✏️ 수정</button>
               <button className="btn-danger" onClick={() => handleDelete(selected.id)}>🗑️ 삭제</button>
             </div>
           </div>
+          {commitStatus && <p className="repo-status compact">{commitStatus}</p>}
           <div className="cornell-layout">
             <div className="cornell-top">
               <div className="cornell-cues-panel">
