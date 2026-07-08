@@ -9,6 +9,7 @@ type View = 'list' | 'edit' | 'view' | 'subjects' | 'repo';
 type Theme = 'dark' | 'light';
 const THEME_KEY = 'playground-theme';
 const getTheme = (): Theme => localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark';
+const SHARE_HASH_PREFIX = '#share=';
 
 const EMPTY_NOTE = (subjectId: string): CornellNote => ({
   id: generateId(),
@@ -58,6 +59,69 @@ const noteToMarkdown = (note: CornellNote, subject: string): string => {
   return lines.join('\n');
 };
 
+interface SharedNotePayload {
+  note: Omit<CornellNote, 'id' | 'createdAt' | 'updatedAt'>;
+  subjectName: string;
+  subjectColor: string;
+}
+
+const encodeSharePayload = (payload: SharedNotePayload): string =>
+  btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+
+const decodeSharePayload = (value: string): SharedNotePayload | null => {
+  try {
+    return JSON.parse(decodeURIComponent(escape(atob(value))));
+  } catch {
+    return null;
+  }
+};
+
+const createShareUrl = (note: CornellNote, subject: Subject | undefined): string => {
+  const payload: SharedNotePayload = {
+    note: {
+      subjectId: note.subjectId,
+      date: note.date,
+      title: note.title,
+      cues: note.cues,
+      notes: note.notes,
+      summary: note.summary,
+    },
+    subjectName: subject?.name || '공유 노트',
+    subjectColor: subject?.color || COLORS[0],
+  };
+
+  return `${window.location.origin}${window.location.pathname}${window.location.search}${SHARE_HASH_PREFIX}${encodeSharePayload(payload)}`;
+};
+
+const importSharedNoteFromHash = (currentSubjects: Subject[]): { note: CornellNote; subjects: Subject[] } | null => {
+  if (!window.location.hash.startsWith(SHARE_HASH_PREFIX)) return null;
+
+  const payload = decodeSharePayload(window.location.hash.slice(SHARE_HASH_PREFIX.length));
+  if (!payload?.note) return null;
+
+  const subjectName = payload.subjectName?.trim() || '공유 노트';
+  let subjects = currentSubjects;
+  let subject = subjects.find(s => s.name === subjectName);
+  if (!subject) {
+    subject = { id: generateId(), name: subjectName, color: payload.subjectColor || COLORS[0] };
+    subjects = [...subjects, subject];
+    saveSubjects(subjects);
+  }
+
+  const now = new Date().toISOString();
+  const note: CornellNote = {
+    ...payload.note,
+    id: generateId(),
+    subjectId: subject.id,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  saveNote(note);
+  window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+  return { note, subjects };
+};
+
 export default function App() {
   const authed = useAuth();
   const [notes, setNotes] = useState<CornellNote[]>([]);
@@ -73,6 +137,7 @@ export default function App() {
   const [repoDraft, setRepoDraft] = useState<GitRepoSettings>(() => getGitRepoSettings());
   const [commitStatus, setCommitStatus] = useState('');
   const [committing, setCommitting] = useState(false);
+  const [shareStatus, setShareStatus] = useState('');
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -81,8 +146,15 @@ export default function App() {
 
   useEffect(() => {
     if (!authed) return;
+    const loadedSubjects = getSubjects();
+    const imported = importSharedNoteFromHash(loadedSubjects);
+    setSubjects(imported?.subjects ?? loadedSubjects);
     setNotes(getNotes());
-    setSubjects(getSubjects());
+    if (imported) {
+      setSelected(imported.note);
+      setView('view');
+      setShareStatus('공유 노트를 가져왔어요.');
+    }
   }, [authed]);
 
   if (!authed) return null;
@@ -176,6 +248,42 @@ export default function App() {
       setCommitStatus(e instanceof Error ? e.message : '커밋에 실패했어요.');
     } finally {
       setCommitting(false);
+    }
+  };
+
+  const handleShareNote = async () => {
+    if (!selected) return;
+    const subject = subjects.find(s => s.id === selected.subjectId);
+    const url = createShareUrl(selected, subject);
+    const nav = navigator as Navigator & {
+      share?: (data: ShareData) => Promise<void>;
+      clipboard?: Clipboard;
+    };
+    const copyShareUrl = async () => {
+      if (!nav.clipboard) throw new Error('Clipboard API is unavailable.');
+      await nav.clipboard.writeText(url);
+    };
+
+    try {
+      if (nav.share) {
+        await nav.share({
+          title: selected.title || '코넬 노트',
+          text: '코넬 노트를 공유했어요.',
+          url,
+        });
+        setShareStatus('공유 창을 열었어요.');
+      } else {
+        await copyShareUrl();
+        setShareStatus('공유 링크를 복사했어요.');
+      }
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return;
+      try {
+        await copyShareUrl();
+        setShareStatus('공유 링크를 복사했어요.');
+      } catch {
+        setShareStatus('공유 링크를 만들지 못했어요.');
+      }
     }
   };
 
@@ -329,11 +437,13 @@ export default function App() {
               </div>
             </div>
             <div className="viewer-actions">
+              <button className="btn-ghost" onClick={handleShareNote}>공유 링크</button>
               <button className="btn-ghost" onClick={handleCommitNote} disabled={committing}>{committing ? '커밋 중...' : 'GitHub 커밋'}</button>
               <button className="btn-ghost" onClick={() => setView('edit')}>✏️ 수정</button>
               <button className="btn-danger" onClick={() => handleDelete(selected.id)}>🗑️ 삭제</button>
             </div>
           </div>
+          {shareStatus && <p className="repo-status compact">{shareStatus}</p>}
           {commitStatus && <p className="repo-status compact">{commitStatus}</p>}
           <div className="cornell-layout">
             <div className="cornell-top">
