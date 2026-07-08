@@ -8,14 +8,21 @@ import com.playground.domain.study.repository.StudySessionRepository;
 import com.playground.domain.user.entity.User;
 import com.playground.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class StudyGroupService {
@@ -23,6 +30,10 @@ public class StudyGroupService {
     private final StudyGroupRepository groupRepo;
     private final StudySessionRepository sessionRepo;
     private final UserRepository userRepo;
+    private final RestTemplate restTemplate = new RestTemplate();
+
+    @Value("${app.node-url:http://localhost:3000}")
+    private String nodeUrl;
 
     // 내 그룹 목록
     public List<Map<String, Object>> getMyGroups(String userId) {
@@ -58,8 +69,13 @@ public class StudyGroupService {
         boolean alreadyMember = group.getMembers().stream()
             .anyMatch(m -> m.getUserId().equals(targetUserId));
         if (alreadyMember) throw new IllegalStateException("이미 멤버예요");
+
+        userRepo.findById(targetUserId)
+            .orElseThrow(() -> new RuntimeException("존재하지 않는 유저예요"));
+
         group.getMembers().add(StudyGroupMember.builder().group(group).userId(targetUserId).build());
         groupRepo.save(group);
+        sendInviteNotification(group, ownerId, targetUserId);
     }
 
     // 그룹 탈퇴
@@ -135,5 +151,36 @@ public class StudyGroupService {
         }).collect(Collectors.toList()));
         m.put("createdAt", g.getCreatedAt());
         return m;
+    }
+
+    private void sendInviteNotification(StudyGroup group, String ownerId, String targetUserId) {
+        try {
+            User owner = userRepo.findById(ownerId).orElse(null);
+            String ownerName = owner != null ? (owner.getName() != null ? owner.getName() : owner.getLogin()) : ownerId;
+            sendPush(
+                targetUserId,
+                "스터디 그룹에 추가됨",
+                ownerName + "님이 '" + group.getName() + "' 그룹에 추가했어요!",
+                "/apps/study-planner/"
+            );
+        } catch (Exception e) {
+            log.warn("Study group invite notification failed: {}", e.getMessage());
+        }
+    }
+
+    private void sendPush(String userId, String title, String body, String url) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            Map<String, String> payload = Map.of(
+                "userId", userId,
+                "title", title,
+                "body", body,
+                "url", url
+            );
+            restTemplate.postForEntity(nodeUrl + "/internal/push/send", new HttpEntity<>(payload, headers), String.class);
+        } catch (Exception e) {
+            log.warn("Push notification failed for study group invite: {}", e.getMessage());
+        }
     }
 }
