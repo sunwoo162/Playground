@@ -26,6 +26,9 @@ jobs:
       - name: Install frontend dependencies
         run: npm run install:all
 
+      - name: Fix cornell-notes dependencies
+        run: cd apps/cornell-notes && rm -rf node_modules && npm install --force
+
       - name: Build frontend apps
         run: npm run build:all
 
