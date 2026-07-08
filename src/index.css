@@ -511,6 +511,16 @@ body {
   background: var(--surface-2);
 }
 
+.mypage-app-card.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mypage-app-card.disabled:hover {
+  border-color: var(--border);
+  background: var(--surface);
+}
+
 .mypage-app-emoji {
   font-size: 1.4rem;
 }
@@ -529,6 +539,11 @@ body {
 .mypage-app-card:hover .mypage-app-arrow {
   transform: translateX(4px);
   color: var(--accent-blue);
+}
+
+.mypage-app-card.disabled:hover .mypage-app-arrow {
+  transform: none;
+  color: var(--text-muted);
 }
 
 /* 계정 정보 */

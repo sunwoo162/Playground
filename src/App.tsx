@@ -65,6 +65,7 @@ const APPS: AppItem[] = [
     emoji: '📊',
     url: '/apps/life-tracker/',
     color: '#70a1ff',
+    disabled: true,
   },
   {
     id: 'cornell-notes',

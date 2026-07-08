@@ -35,7 +35,7 @@ interface MyPageProps {
 type Tab = 'apps' | 'friends';
 
 const APPS = [
-  { id: 'life-tracker', title: 'Life Tracker', emoji: '📊', url: '/apps/life-tracker/' },
+  { id: 'life-tracker', title: 'Life Tracker', emoji: '📊', url: '/apps/life-tracker/', disabled: true },
   { id: 'dev-notes', title: '개발자 노트', emoji: '📒', url: '/apps/dev-notes/' },
   { id: 'study-planner', title: '스터디 플래너', emoji: '📅', url: '/apps/study-planner/' },
 ];
@@ -160,10 +160,15 @@ export function MyPage({ user, onLogout, onBack, initialTab = 'apps' }: MyPagePr
             <section className="mypage-section">
               <div className="mypage-apps">
                 {APPS.map((app) => (
-                  <a key={app.id} href={app.url} className="mypage-app-card">
+                  <a
+                    key={app.id}
+                    href={app.disabled ? undefined : app.url}
+                    className={`mypage-app-card ${app.disabled ? 'disabled' : ''}`}
+                    onClick={(e) => { if (app.disabled) e.preventDefault(); }}
+                  >
                     <span className="mypage-app-emoji">{app.emoji}</span>
                     <span className="mypage-app-title">{app.title}</span>
-                    <span className="mypage-app-arrow">→</span>
+                    <span className="mypage-app-arrow">{app.disabled ? '준비 중' : '→'}</span>
                   </a>
                 ))}
               </div>
