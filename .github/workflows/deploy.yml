@@ -17,7 +17,11 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: gradle
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.7'
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -44,12 +48,10 @@ jobs:
       - name: Build Spring Boot JAR
         run: |
           cd backend
-          chmod +x ./gradlew
-          ./gradlew bootJar -x test --no-daemon --info
+          gradle bootJar -x test --no-daemon
         env:
           GITHUB_CLIENT_ID: ${{ secrets.GITHUB_CLIENT_ID }}
           GITHUB_CLIENT_SECRET: ${{ secrets.GITHUB_CLIENT_SECRET }}
-          JAVA_HOME: ${{ env.JAVA_HOME }}
 
       - name: Copy JAR to server
         uses: appleboy/scp-action@v0.1.7
