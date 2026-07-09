@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 interface School {
   name: string;
@@ -21,6 +21,13 @@ interface TimetableItem {
   date: string;
 }
 
+interface MealAlert {
+  id: string;
+  mealType: string;
+  alertTime: string;
+  enabled: boolean;
+}
+
 interface SavedSchool {
   name: string;
   orgCode: string;
@@ -28,9 +35,10 @@ interface SavedSchool {
   schoolType: string;
   grade: string;
   className: string;
-  alertEnabled: boolean;
-  alertTime: string;
-  mealType: string;
+  alerts: MealAlert[];
+  alertEnabled?: boolean;
+  alertTime?: string;
+  mealType?: string;
 }
 
 const STORAGE_KEY = 'school-meal-settings';
@@ -53,6 +61,11 @@ const MEAL_TYPE_COLORS: Record<string, string> = {
   '조식': '#ffa502',
   '중식': '#2ed573',
   '석식': '#70a1ff',
+};
+const DEFAULT_ALERT_TIMES: Record<string, string> = {
+  '조식': '07:50',
+  '중식': '12:20',
+  '석식': '18:00',
 };
 const getTheme = (): Theme => localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark';
 
@@ -82,16 +95,29 @@ function getGradeOptions(schoolType: string): string[] {
   return schoolType.includes('초등') ? ELEMENTARY_GRADES : SECONDARY_GRADES;
 }
 
+function createMealAlert(mealType = '중식'): MealAlert {
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    mealType,
+    alertTime: DEFAULT_ALERT_TIMES[mealType] || '12:20',
+    enabled: true,
+  };
+}
+
 function normalizeSavedSchool(raw: SavedSchool): SavedSchool {
   const schoolType = raw.schoolType || '';
   const gradeOptions = getGradeOptions(schoolType);
   const grade = gradeOptions.includes(raw.grade) ? raw.grade : gradeOptions[0];
+  const legacyAlerts = raw.alertTime && raw.mealType
+    ? [{ id: 'legacy-meal-alert', mealType: raw.mealType, alertTime: raw.alertTime, enabled: !!raw.alertEnabled }]
+    : [];
 
   return {
     ...raw,
     schoolType,
     grade,
     className: raw.className || '1',
+    alerts: Array.isArray(raw.alerts) ? raw.alerts : legacyAlerts,
   };
 }
 
@@ -111,6 +137,7 @@ export default function App() {
   const [selectedDate, setSelectedDate] = useState<Date>(defaultMealTarget.date);
   const [selectedMealType, setSelectedMealType] = useState<string>(defaultMealTarget.mealType);
   const [theme, setTheme] = useState<Theme>(getTheme);
+  const alertTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const gradeOptions = saved ? getGradeOptions(saved.schoolType) : SECONDARY_GRADES;
 
   useEffect(() => {
@@ -125,12 +152,15 @@ export default function App() {
       setSaved(s);
       fetchMeals(s.orgCode, s.schoolCode, defaultMealTarget.date);
       fetchTimetable(s, defaultMealTarget.date);
+      scheduleAlerts(s);
     }
+    return () => clearAlertTimers();
   }, []);
 
   const saveSettings = (settings: SavedSchool) => {
     setSaved(settings);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+    scheduleAlerts(settings);
   };
 
   const fetchMeals = async (orgCode: string, schoolCode: string, date: Date) => {
@@ -192,9 +222,7 @@ export default function App() {
       schoolType: school.type,
       grade: '1',
       className: '1',
-      alertEnabled: false,
-      alertTime: '12:20',
-      mealType: '중식',
+      alerts: [],
     };
     saveSettings(settings);
     fetchMeals(school.orgCode, school.schoolCode, selectedDate);
@@ -211,41 +239,68 @@ export default function App() {
     fetchTimetable(updated, selectedDate);
   };
 
-  const requestNotification = async () => {
+  const requestNotification = async (): Promise<boolean> => {
     const perm = await Notification.requestPermission();
     setNotifPermission(perm);
-    if (perm === 'granted' && saved) {
-      const updated = { ...saved, alertEnabled: true };
-      saveSettings(updated);
-      scheduleAlert(updated);
-    }
+    return perm === 'granted';
   };
 
-  const toggleAlert = () => {
+  const clearAlertTimers = () => {
+    alertTimersRef.current.forEach(timer => clearTimeout(timer));
+    alertTimersRef.current = [];
+  };
+
+  const scheduleAlerts = (settings: SavedSchool) => {
+    clearAlertTimers();
+    settings.alerts
+      .filter(alert => alert.enabled)
+      .forEach(alert => {
+        const [h, m] = alert.alertTime.split(':').map(Number);
+        const now = new Date();
+        const target = new Date();
+        target.setHours(h, m, 0, 0);
+        const diff = target.getTime() - now.getTime();
+        if (diff <= 0) return;
+
+        const timer = setTimeout(() => {
+          const meal = meals.find(meal => meal.mealType.includes(alert.mealType));
+          const body = meal ? meal.menu.split('\n').slice(0, 3).join(', ') : '급식 정보를 확인하세요';
+          new Notification(`🍱 ${alert.mealType} 알림`, { body, icon: '/favicon.svg', tag: `meal-alert-${alert.id}` });
+        }, diff);
+        alertTimersRef.current.push(timer);
+      });
+  };
+
+  const addAlert = async () => {
     if (!saved) return;
-    if (!saved.alertEnabled && notifPermission !== 'granted') {
-      requestNotification();
+    if (notifPermission !== 'granted' && !(await requestNotification())) return;
+    const updated = { ...saved, alerts: [...saved.alerts, createMealAlert(selectedMealType)] };
+    saveSettings(updated);
+  };
+
+  const updateAlert = (id: string, patch: Partial<MealAlert>) => {
+    if (!saved) return;
+    const updated = {
+      ...saved,
+      alerts: saved.alerts.map(alert => alert.id === id ? { ...alert, ...patch } : alert),
+    };
+    saveSettings(updated);
+  };
+
+  const toggleAlert = async (id: string) => {
+    if (!saved) return;
+    const alert = saved.alerts.find(alert => alert.id === id);
+    if (!alert) return;
+    if (!alert.enabled && notifPermission !== 'granted' && !(await requestNotification())) {
       return;
     }
-    const updated = { ...saved, alertEnabled: !saved.alertEnabled };
-    saveSettings(updated);
-    if (updated.alertEnabled) scheduleAlert(updated);
+    updateAlert(id, { enabled: !alert.enabled });
   };
 
-  const scheduleAlert = (settings: SavedSchool) => {
-    if (!settings.alertEnabled) return;
-    const [h, m] = settings.alertTime.split(':').map(Number);
-    const now = new Date();
-    const target = new Date();
-    target.setHours(h, m, 0, 0);
-    const diff = target.getTime() - now.getTime();
-    if (diff > 0) {
-      setTimeout(() => {
-        const meal = meals.find(meal => meal.mealType.includes(settings.mealType));
-        const body = meal ? meal.menu.split('\n').slice(0, 3).join(', ') : '급식 정보를 확인하세요';
-        new Notification(`🍱 ${settings.mealType} 10분 전!`, { body, icon: '/favicon.svg', tag: 'meal-alert' });
-      }, diff);
-    }
+  const removeAlert = (id: string) => {
+    if (!saved) return;
+    const updated = { ...saved, alerts: saved.alerts.filter(alert => alert.id !== id) };
+    saveSettings(updated);
   };
 
   return (
@@ -311,26 +366,34 @@ export default function App() {
               {CLASS_NAMES.map(className => <option key={className} value={className}>{className}반</option>)}
             </select>
           </div>
-          <div className="settings-row">
-            <span>알림 사용</span>
-            <button className={`toggle-btn ${saved.alertEnabled ? 'on' : 'off'}`} onClick={toggleAlert}>
-              {saved.alertEnabled ? 'ON' : 'OFF'}
-            </button>
-          </div>
-          <div className="settings-row">
-            <span>알림 시간</span>
-            <input
-              type="time"
-              className="time-input"
-              value={saved.alertTime}
-              onChange={e => saveSettings({ ...saved, alertTime: e.target.value })}
-            />
-          </div>
-          <div className="settings-row">
-            <span>알림 급식</span>
-            <select className="select-field" value={saved.mealType} onChange={e => saveSettings({ ...saved, mealType: e.target.value })}>
-              {MEAL_TYPES.map(type => <option key={type.value} value={type.value}>{type.value}</option>)}
-            </select>
+          <div className="settings-section">
+            <div className="settings-section-header">
+              <span>급식 알림</span>
+              <button className="btn-ghost" onClick={addAlert}>+ 추가</button>
+            </div>
+            {saved.alerts.length === 0 ? (
+              <p className="settings-empty">등록된 알림이 없어요.</p>
+            ) : (
+              <div className="alert-list">
+                {saved.alerts.map(alert => (
+                  <div key={alert.id} className="alert-row">
+                    <select className="select-field" value={alert.mealType} onChange={e => updateAlert(alert.id, { mealType: e.target.value })}>
+                      {MEAL_TYPES.map(type => <option key={type.value} value={type.value}>{type.value}</option>)}
+                    </select>
+                    <input
+                      type="time"
+                      className="time-input"
+                      value={alert.alertTime}
+                      onChange={e => updateAlert(alert.id, { alertTime: e.target.value })}
+                    />
+                    <button className={`toggle-btn ${alert.enabled ? 'on' : 'off'}`} onClick={() => toggleAlert(alert.id)}>
+                      {alert.enabled ? 'ON' : 'OFF'}
+                    </button>
+                    <button className="btn-ghost danger" onClick={() => removeAlert(alert.id)}>삭제</button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           {notifPermission === 'denied' && (
             <p className="settings-warn">브라우저에서 알림이 차단됐어요. 브라우저 설정에서 허용해주세요.</p>
@@ -429,12 +492,12 @@ export default function App() {
                       ));
                     })()}
 
-                    {saved.alertEnabled ? (
+                    {saved.alerts.some(alert => alert.enabled) ? (
                       <div className="alert-status on">
-                        🔔 {saved.mealType} {saved.alertTime} 알림 설정됨
+                        🔔 {saved.alerts.filter(alert => alert.enabled).map(alert => `${alert.mealType} ${alert.alertTime}`).join(' · ')} 알림 설정됨
                       </div>
                     ) : (
-                      <button className="alert-cta" onClick={toggleAlert}>
+                      <button className="alert-cta" onClick={addAlert}>
                         🔔 급식 알림 받기
                       </button>
                     )}
