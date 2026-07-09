@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="학교 알리미">
+  <rect width="128" height="128" rx="28" fill="#0a0a0a"/>
+  <rect x="18" y="42" width="92" height="64" rx="12" fill="#151515" stroke="#2ed573" stroke-width="5"/>
+  <path d="M22 50 64 22l42 28" fill="none" stroke="#70a1ff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="48" y="72" width="32" height="34" rx="5" fill="#2ed573"/>
+  <circle cx="89" cy="28" r="14" fill="#ffa502"/>
+  <path d="M89 9v8M89 39v8M70 28h8M100 28h8M76 15l6 6M96 35l6 6M102 15l-6 6M82 35l-6 6" stroke="#ffa502" stroke-width="5" stroke-linecap="round"/>
+  <path d="M39 58h50" stroke="#e8e8e8" stroke-width="5" stroke-linecap="round"/>
+  <path d="M35 88h11M82 88h11" stroke="#e8e8e8" stroke-width="5" stroke-linecap="round"/>
+</svg>

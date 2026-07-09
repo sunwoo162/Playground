@@ -23,21 +23,9 @@ async function getStoredUrl() {
   return normalizeSchoolMealUrl(result[STORAGE_KEY]);
 }
 
-function getUrlFromTab(tab) {
-  if (!tab?.url) return '';
-
-  try {
-    const url = new URL(tab.url);
-    if (!['http:', 'https:'].includes(url.protocol)) return '';
-    return `${url.origin}${APP_PATH}`;
-  } catch {
-    return '';
-  }
-}
-
-chrome.action.onClicked.addListener(async (tab) => {
+chrome.action.onClicked.addListener(async () => {
   const storedUrl = await getStoredUrl();
-  const targetUrl = storedUrl || getUrlFromTab(tab) || DEFAULT_SCHOOL_MEAL_URL;
+  const targetUrl = storedUrl || DEFAULT_SCHOOL_MEAL_URL;
 
   if (!storedUrl) {
     await chrome.storage.sync.set({ [STORAGE_KEY]: targetUrl });
