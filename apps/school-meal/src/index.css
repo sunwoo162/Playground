@@ -52,7 +52,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 /* 메인 */
 .app-main { flex: 1; width: 100%; max-width: calc(var(--content-width) + 40px); margin: 0 auto; padding: 20px; display: flex; flex-direction: column; align-items: center; }
 .today-label { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px; }
-.meal-list { width: 100%; max-width: var(--content-width); display: flex; flex-direction: column; gap: 16px; }
+.meal-list { width: 100%; max-width: var(--content-width); margin-left: auto; margin-right: auto; display: flex; flex-direction: column; gap: 16px; }
 .meal-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
 .meal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
 .meal-type { font-size: 1rem; font-weight: 700; }
@@ -76,6 +76,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .date-nav {
   width: 100%;
   max-width: var(--content-width);
+  margin-left: auto;
+  margin-right: auto;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -98,6 +100,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .main-tabs {
   width: 100%;
   max-width: var(--content-width);
+  margin-left: auto;
+  margin-right: auto;
   display: flex;
   gap: 8px;
   margin-bottom: 12px;
@@ -119,6 +123,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .class-selector {
   width: 100%;
   max-width: var(--content-width);
+  margin-left: auto;
+  margin-right: auto;
   display: flex;
   gap: 8px;
   margin-bottom: 16px;
@@ -129,6 +135,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .meal-type-tabs {
   width: 100%;
   max-width: var(--content-width);
+  margin-left: auto;
+  margin-right: auto;
   display: flex;
   gap: 8px;
   margin-bottom: 16px;
@@ -160,6 +168,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .timetable-list {
   width: 100%;
   max-width: var(--content-width);
+  margin-left: auto;
+  margin-right: auto;
   display: flex;
   flex-direction: column;
   gap: 10px;
