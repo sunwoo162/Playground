@@ -37,7 +37,8 @@ const STORAGE_KEY = 'school-meal-settings';
 type Theme = 'dark' | 'light';
 type MainTab = 'meal' | 'timetable';
 const THEME_KEY = 'playground-theme';
-const GRADES = ['1', '2', '3', '4', '5', '6'];
+const ELEMENTARY_GRADES = ['1', '2', '3', '4', '5', '6'];
+const SECONDARY_GRADES = ['1', '2', '3'];
 const CLASS_NAMES = Array.from({ length: 20 }, (_, i) => String(i + 1));
 const MEAL_TYPES = [
   { value: '조식', label: '🌅 아침' },
@@ -69,11 +70,19 @@ function addDays(date: Date, n: number): Date {
   return d;
 }
 
+function getGradeOptions(schoolType: string): string[] {
+  return schoolType.includes('초등') ? ELEMENTARY_GRADES : SECONDARY_GRADES;
+}
+
 function normalizeSavedSchool(raw: SavedSchool): SavedSchool {
+  const schoolType = raw.schoolType || '';
+  const gradeOptions = getGradeOptions(schoolType);
+  const grade = gradeOptions.includes(raw.grade) ? raw.grade : gradeOptions[0];
+
   return {
     ...raw,
-    schoolType: raw.schoolType || '',
-    grade: raw.grade || '1',
+    schoolType,
+    grade,
     className: raw.className || '1',
   };
 }
@@ -93,6 +102,7 @@ export default function App() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedMealType, setSelectedMealType] = useState<string>('중식');
   const [theme, setTheme] = useState<Theme>(getTheme);
+  const gradeOptions = saved ? getGradeOptions(saved.schoolType) : SECONDARY_GRADES;
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -283,7 +293,7 @@ export default function App() {
           <div className="settings-row">
             <span>학년</span>
             <select className="select-field" value={saved.grade} onChange={e => handleClassSettingChange('grade', e.target.value)}>
-              {GRADES.map(grade => <option key={grade} value={grade}>{grade}학년</option>)}
+              {gradeOptions.map(grade => <option key={grade} value={grade}>{grade}학년</option>)}
             </select>
           </div>
           <div className="settings-row">
@@ -322,123 +332,125 @@ export default function App() {
 
       {view === 'main' && (
         <main className="app-main">
-          <div className="date-nav">
-            <button className="date-nav-btn" onClick={() => handleDateChange(-1)}>‹</button>
-            <span className="date-label">{dateToDisplay(selectedDate)}</span>
-            <button className="date-nav-btn" onClick={() => handleDateChange(1)}>›</button>
-          </div>
-
-          {saved && (
-            <>
-              <div className="main-tabs">
-                {MAIN_TABS.map(tab => (
-                  <button
-                    key={tab.value}
-                    className={`main-tab ${activeTab === tab.value ? 'active' : ''}`}
-                    onClick={() => setActiveTab(tab.value)}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-              <div className="class-selector">
-                <select className="select-field" value={saved.grade} onChange={e => handleClassSettingChange('grade', e.target.value)}>
-                  {GRADES.map(grade => <option key={grade} value={grade}>{grade}학년</option>)}
-                </select>
-                <select className="select-field" value={saved.className} onChange={e => handleClassSettingChange('className', e.target.value)}>
-                  {CLASS_NAMES.map(className => <option key={className} value={className}>{className}반</option>)}
-                </select>
-              </div>
-            </>
-          )}
-
-          {!saved ? (
-            <div className="empty-state">
-              <p className="empty-icon">🏫</p>
-              <p>학교를 먼저 선택해주세요.</p>
-              <button className="btn-primary mt" onClick={() => setView('search')}>🔍 학교 검색</button>
+          <div className="content-shell">
+            <div className="date-nav">
+              <button className="date-nav-btn" onClick={() => handleDateChange(-1)}>‹</button>
+              <span className="date-label">{dateToDisplay(selectedDate)}</span>
+              <button className="date-nav-btn" onClick={() => handleDateChange(1)}>›</button>
             </div>
-          ) : activeTab === 'meal' ? (
-            <>
-              {meals.length > 0 && (
-                <div className="meal-type-tabs">
-                  {MEAL_TYPES.map(type => (
+
+            {saved && (
+              <>
+                <div className="main-tabs">
+                  {MAIN_TABS.map(tab => (
                     <button
-                      key={type.value}
-                      className={`meal-type-tab ${selectedMealType === type.value ? 'active' : ''} ${!meals.find(m => m.mealType.includes(type.value)) ? 'disabled' : ''}`}
-                      onClick={() => setSelectedMealType(type.value)}
+                      key={tab.value}
+                      className={`main-tab ${activeTab === tab.value ? 'active' : ''}`}
+                      onClick={() => setActiveTab(tab.value)}
                     >
-                      {type.label}
+                      {tab.label}
                     </button>
                   ))}
                 </div>
-              )}
-
-              {mealLoading ? (
-                <div className="empty-state"><div className="spinner" /></div>
-              ) : meals.length === 0 ? (
-                <div className="empty-state">
-                  <p className="empty-icon">🤷</p>
-                  <p>이 날은 급식 정보가 없어요.</p>
-                  <p className="empty-sub">{dateToDisplay(selectedDate)}</p>
+                <div className="class-selector">
+                  <select className="select-field" value={saved.grade} onChange={e => handleClassSettingChange('grade', e.target.value)}>
+                    {gradeOptions.map(grade => <option key={grade} value={grade}>{grade}학년</option>)}
+                  </select>
+                  <select className="select-field" value={saved.className} onChange={e => handleClassSettingChange('className', e.target.value)}>
+                    {CLASS_NAMES.map(className => <option key={className} value={className}>{className}반</option>)}
+                  </select>
                 </div>
-              ) : (
-                <div className="meal-list">
-                  {(() => {
-                    const filtered = meals.filter(m => m.mealType.includes(selectedMealType));
-                    if (filtered.length === 0) return (
-                      <div className="empty-state">
-                        <p className="empty-icon">🍽️</p>
-                        <p>{selectedMealType} 정보가 없어요.</p>
-                      </div>
-                    );
-                    return filtered.map((meal, i) => (
-                      <div key={i} className="meal-card" style={{ borderTop: `3px solid ${MEAL_TYPE_COLORS[meal.mealType] || '#888'}` }}>
-                        <div className="meal-header">
-                          <span className="meal-type" style={{ color: MEAL_TYPE_COLORS[meal.mealType] || '#888' }}>
-                            {meal.mealType}
-                          </span>
-                          {meal.calories && <span className="meal-cal">{meal.calories}</span>}
+              </>
+            )}
+
+            {!saved ? (
+              <div className="empty-state">
+                <p className="empty-icon">🏫</p>
+                <p>학교를 먼저 선택해주세요.</p>
+                <button className="btn-primary mt" onClick={() => setView('search')}>🔍 학교 검색</button>
+              </div>
+            ) : activeTab === 'meal' ? (
+              <>
+                {meals.length > 0 && (
+                  <div className="meal-type-tabs">
+                    {MEAL_TYPES.map(type => (
+                      <button
+                        key={type.value}
+                        className={`meal-type-tab ${selectedMealType === type.value ? 'active' : ''} ${!meals.find(m => m.mealType.includes(type.value)) ? 'disabled' : ''}`}
+                        onClick={() => setSelectedMealType(type.value)}
+                      >
+                        {type.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {mealLoading ? (
+                  <div className="empty-state"><div className="spinner" /></div>
+                ) : meals.length === 0 ? (
+                  <div className="empty-state">
+                    <p className="empty-icon">🤷</p>
+                    <p>이 날은 급식 정보가 없어요.</p>
+                    <p className="empty-sub">{dateToDisplay(selectedDate)}</p>
+                  </div>
+                ) : (
+                  <div className="meal-list">
+                    {(() => {
+                      const filtered = meals.filter(m => m.mealType.includes(selectedMealType));
+                      if (filtered.length === 0) return (
+                        <div className="empty-state">
+                          <p className="empty-icon">🍽️</p>
+                          <p>{selectedMealType} 정보가 없어요.</p>
                         </div>
-                        <ul className="menu-list">
-                          {meal.menu.split('\n').filter(Boolean).map((item, j) => (
-                            <li key={j} className="menu-item">{item.trim()}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    ));
-                  })()}
+                      );
+                      return filtered.map((meal, i) => (
+                        <div key={i} className="meal-card" style={{ borderTop: `3px solid ${MEAL_TYPE_COLORS[meal.mealType] || '#888'}` }}>
+                          <div className="meal-header">
+                            <span className="meal-type" style={{ color: MEAL_TYPE_COLORS[meal.mealType] || '#888' }}>
+                              {meal.mealType}
+                            </span>
+                            {meal.calories && <span className="meal-cal">{meal.calories}</span>}
+                          </div>
+                          <ul className="menu-list">
+                            {meal.menu.split('\n').filter(Boolean).map((item, j) => (
+                              <li key={j} className="menu-item">{item.trim()}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      ));
+                    })()}
 
-                  {saved.alertEnabled ? (
-                    <div className="alert-status on">
-                      🔔 {saved.mealType} {saved.alertTime} 알림 설정됨
-                    </div>
-                  ) : (
-                    <button className="alert-cta" onClick={toggleAlert}>
-                      🔔 급식 알림 받기
-                    </button>
-                  )}
-                </div>
-              )}
-            </>
-          ) : timetableLoading ? (
-            <div className="empty-state"><div className="spinner" /></div>
-          ) : timetable.length === 0 ? (
-            <div className="empty-state">
-              <p className="empty-icon">📚</p>
-              <p>{saved.grade}학년 {saved.className}반 시간표 정보가 없어요.</p>
-              <p className="empty-sub">{dateToDisplay(selectedDate)}</p>
-            </div>
-          ) : (
-            <div className="timetable-list">
-              {timetable.map(item => (
-                <div key={`${item.period}-${item.subject}`} className="timetable-item">
-                  <span className="period-badge">{item.period}교시</span>
-                  <span className="subject-name">{item.subject}</span>
-                </div>
-              ))}
-            </div>
-          )}
+                    {saved.alertEnabled ? (
+                      <div className="alert-status on">
+                        🔔 {saved.mealType} {saved.alertTime} 알림 설정됨
+                      </div>
+                    ) : (
+                      <button className="alert-cta" onClick={toggleAlert}>
+                        🔔 급식 알림 받기
+                      </button>
+                    )}
+                  </div>
+                )}
+              </>
+            ) : timetableLoading ? (
+              <div className="empty-state"><div className="spinner" /></div>
+            ) : timetable.length === 0 ? (
+              <div className="empty-state">
+                <p className="empty-icon">📚</p>
+                <p>{saved.grade}학년 {saved.className}반 시간표 정보가 없어요.</p>
+                <p className="empty-sub">{dateToDisplay(selectedDate)}</p>
+              </div>
+            ) : (
+              <div className="timetable-list">
+                {timetable.map(item => (
+                  <div key={`${item.period}-${item.subject}`} className="timetable-item">
+                    <span className="period-badge">{item.period}교시</span>
+                    <span className="subject-name">{item.subject}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </main>
       )}
     </div>
