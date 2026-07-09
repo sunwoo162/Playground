@@ -1,5 +1,6 @@
 const STORAGE_KEY = 'schoolMealUrl';
 const APP_PATH = '/apps/school-meal/';
+const DEFAULT_SCHOOL_MEAL_URL = 'https://playground.https.gsmsv.site/apps/school-meal/';
 
 const input = document.querySelector('#schoolMealUrl');
 const saveButton = document.querySelector('#saveButton');
@@ -41,7 +42,7 @@ async function saveUrl() {
 
 async function loadUrl() {
   const result = await chrome.storage.sync.get(STORAGE_KEY);
-  input.value = result[STORAGE_KEY] || '';
+  input.value = result[STORAGE_KEY] || DEFAULT_SCHOOL_MEAL_URL;
 }
 
 saveButton.addEventListener('click', saveUrl);

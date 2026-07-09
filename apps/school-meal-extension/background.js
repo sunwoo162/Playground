@@ -1,5 +1,6 @@
 const STORAGE_KEY = 'schoolMealUrl';
 const APP_PATH = '/apps/school-meal/';
+const DEFAULT_SCHOOL_MEAL_URL = 'https://playground.https.gsmsv.site/apps/school-meal/';
 
 function normalizeSchoolMealUrl(value) {
   if (!value) return '';
@@ -36,12 +37,7 @@ function getUrlFromTab(tab) {
 
 chrome.action.onClicked.addListener(async (tab) => {
   const storedUrl = await getStoredUrl();
-  const targetUrl = storedUrl || getUrlFromTab(tab);
-
-  if (!targetUrl) {
-    await chrome.runtime.openOptionsPage();
-    return;
-  }
+  const targetUrl = storedUrl || getUrlFromTab(tab) || DEFAULT_SCHOOL_MEAL_URL;
 
   if (!storedUrl) {
     await chrome.storage.sync.set({ [STORAGE_KEY]: targetUrl });
