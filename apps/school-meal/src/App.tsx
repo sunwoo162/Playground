@@ -91,7 +91,6 @@ const ALLERGEN_CATEGORIES = [
   { id: '17', label: '오징어', codes: ['17'] },
   { id: '18', label: '조개류', codes: ['18'] },
   { id: '19', label: '잣', codes: ['19'] },
-  { id: 'seafood', label: '어패류', codes: ['7', '8', '9', '17', '18'] },
 ];
 const getTheme = (): Theme => localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark';
 
