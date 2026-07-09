@@ -69,8 +69,16 @@ const DEFAULT_ALERT_TIMES: Record<string, string> = {
 };
 const getTheme = (): Theme => localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark';
 
+function padDatePart(value: number): string {
+  return String(value).padStart(2, '0');
+}
+
+function dateToInput(date: Date): string {
+  return `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}-${padDatePart(date.getDate())}`;
+}
+
 function dateToApi(date: Date): string {
-  return date.toISOString().slice(0, 10).replace(/-/g, '');
+  return dateToInput(date).replace(/-/g, '');
 }
 
 function dateToDisplay(date: Date): string {
@@ -81,6 +89,11 @@ function addDays(date: Date, n: number): Date {
   const d = new Date(date);
   d.setDate(d.getDate() + n);
   return d;
+}
+
+function inputToDate(value: string): Date {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day);
 }
 
 function getDefaultMealTarget(now = new Date()): { date: Date; mealType: string } {
@@ -193,13 +206,21 @@ export default function App() {
     }
   };
 
-  const handleDateChange = (delta: number) => {
-    const newDate = addDays(selectedDate, delta);
+  const loadDate = (newDate: Date) => {
     setSelectedDate(newDate);
     if (saved) {
       fetchMeals(saved.orgCode, saved.schoolCode, newDate);
       fetchTimetable(saved, newDate);
     }
+  };
+
+  const handleDateChange = (delta: number) => {
+    loadDate(addDays(selectedDate, delta));
+  };
+
+  const handleCalendarChange = (value: string) => {
+    if (!value) return;
+    loadDate(inputToDate(value));
   };
 
   const handleSearch = async (e: React.FormEvent) => {
@@ -408,6 +429,14 @@ export default function App() {
             <div className="date-nav">
               <button className="date-nav-btn" onClick={() => handleDateChange(-1)}>‹</button>
               <span className="date-label">{dateToDisplay(selectedDate)}</span>
+              <label className="calendar-picker">
+                <span>📅</span>
+                <input
+                  type="date"
+                  value={dateToInput(selectedDate)}
+                  onChange={e => handleCalendarChange(e.target.value)}
+                />
+              </label>
               <button className="date-nav-btn" onClick={() => handleDateChange(1)}>›</button>
             </div>
 

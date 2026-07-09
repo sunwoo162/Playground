@@ -104,6 +104,27 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 }
 .date-nav-btn:hover { border-color: var(--accent); color: var(--accent); }
 .date-label { font-size: 0.95rem; font-weight: 600; flex: 1; }
+.calendar-picker {
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+}
+.calendar-picker input {
+  width: 132px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  outline: none;
+}
+.calendar-picker input::-webkit-calendar-picker-indicator { cursor: pointer; filter: invert(0.8); }
 
 .main-tabs {
   width: 100%;
@@ -205,4 +226,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
   .alert-row .toggle-btn,
   .alert-row .btn-ghost { width: 100%; }
   .alert-status { align-items: stretch; flex-direction: column; }
+  .date-nav { flex-wrap: wrap; }
+  .date-label { order: -1; flex: 1 0 100%; }
+  .calendar-picker { flex: 1; justify-content: center; }
 }
