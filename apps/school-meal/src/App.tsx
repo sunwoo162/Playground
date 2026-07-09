@@ -70,6 +70,14 @@ function addDays(date: Date, n: number): Date {
   return d;
 }
 
+function getDefaultMealTarget(now = new Date()): { date: Date; mealType: string } {
+  const hour = now.getHours();
+  if (hour >= 19) return { date: addDays(now, 1), mealType: '조식' };
+  if (hour >= 13) return { date: now, mealType: '석식' };
+  if (hour >= 8) return { date: now, mealType: '중식' };
+  return { date: now, mealType: '조식' };
+}
+
 function getGradeOptions(schoolType: string): string[] {
   return schoolType.includes('초등') ? ELEMENTARY_GRADES : SECONDARY_GRADES;
 }
@@ -88,6 +96,7 @@ function normalizeSavedSchool(raw: SavedSchool): SavedSchool {
 }
 
 export default function App() {
+  const defaultMealTarget = getDefaultMealTarget();
   const [saved, setSaved] = useState<SavedSchool | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<School[]>([]);
@@ -99,8 +108,8 @@ export default function App() {
   const [view, setView] = useState<'main' | 'search' | 'settings'>('main');
   const [activeTab, setActiveTab] = useState<MainTab>('meal');
   const [notifPermission, setNotifPermission] = useState(Notification.permission);
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [selectedMealType, setSelectedMealType] = useState<string>('중식');
+  const [selectedDate, setSelectedDate] = useState<Date>(defaultMealTarget.date);
+  const [selectedMealType, setSelectedMealType] = useState<string>(defaultMealTarget.mealType);
   const [theme, setTheme] = useState<Theme>(getTheme);
   const gradeOptions = saved ? getGradeOptions(saved.schoolType) : SECONDARY_GRADES;
 
@@ -114,8 +123,8 @@ export default function App() {
     if (raw) {
       const s = normalizeSavedSchool(JSON.parse(raw) as SavedSchool);
       setSaved(s);
-      fetchMeals(s.orgCode, s.schoolCode, new Date());
-      fetchTimetable(s, new Date());
+      fetchMeals(s.orgCode, s.schoolCode, defaultMealTarget.date);
+      fetchTimetable(s, defaultMealTarget.date);
     }
   }, []);
 
