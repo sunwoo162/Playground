@@ -15,10 +15,19 @@ interface Meal {
   date: string;
 }
 
+interface TimetableItem {
+  period: number;
+  subject: string;
+  date: string;
+}
+
 interface SavedSchool {
   name: string;
   orgCode: string;
   schoolCode: string;
+  schoolType: string;
+  grade: string;
+  className: string;
   alertEnabled: boolean;
   alertTime: string;
   mealType: string;
@@ -26,6 +35,7 @@ interface SavedSchool {
 
 const STORAGE_KEY = 'school-meal-settings';
 type Theme = 'dark' | 'light';
+type MainTab = 'meal' | 'timetable';
 const THEME_KEY = 'playground-theme';
 const getTheme = (): Theme => localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark';
 
@@ -43,14 +53,26 @@ function addDays(date: Date, n: number): Date {
   return d;
 }
 
+function normalizeSavedSchool(raw: SavedSchool): SavedSchool {
+  return {
+    ...raw,
+    schoolType: raw.schoolType || '',
+    grade: raw.grade || '1',
+    className: raw.className || '1',
+  };
+}
+
 export default function App() {
   const [saved, setSaved] = useState<SavedSchool | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<School[]>([]);
   const [searching, setSearching] = useState(false);
   const [meals, setMeals] = useState<Meal[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [timetable, setTimetable] = useState<TimetableItem[]>([]);
+  const [mealLoading, setMealLoading] = useState(false);
+  const [timetableLoading, setTimetableLoading] = useState(false);
   const [view, setView] = useState<'main' | 'search' | 'settings'>('main');
+  const [activeTab, setActiveTab] = useState<MainTab>('meal');
   const [notifPermission, setNotifPermission] = useState(Notification.permission);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedMealType, setSelectedMealType] = useState<string>('중식');
@@ -64,27 +86,55 @@ export default function App() {
   useEffect(() => {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      const s = JSON.parse(raw) as SavedSchool;
+      const s = normalizeSavedSchool(JSON.parse(raw) as SavedSchool);
       setSaved(s);
       fetchMeals(s.orgCode, s.schoolCode, new Date());
+      fetchTimetable(s, new Date());
     }
   }, []);
 
+  const saveSettings = (settings: SavedSchool) => {
+    setSaved(settings);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  };
+
   const fetchMeals = async (orgCode: string, schoolCode: string, date: Date) => {
-    setLoading(true);
+    setMealLoading(true);
     try {
       const res = await fetch(`/neis/meal?orgCode=${orgCode}&schoolCode=${schoolCode}&date=${dateToApi(date)}`);
       const data = await res.json();
-      setMeals(data);
+      setMeals(Array.isArray(data) ? data : []);
     } finally {
-      setLoading(false);
+      setMealLoading(false);
+    }
+  };
+
+  const fetchTimetable = async (settings: SavedSchool, date: Date) => {
+    setTimetableLoading(true);
+    try {
+      const params = new URLSearchParams({
+        orgCode: settings.orgCode,
+        schoolCode: settings.schoolCode,
+        schoolType: settings.schoolType,
+        grade: settings.grade,
+        className: settings.className,
+        date: dateToApi(date),
+      });
+      const res = await fetch(`/neis/timetable?${params.toString()}`);
+      const data = await res.json();
+      setTimetable(Array.isArray(data) ? data : []);
+    } finally {
+      setTimetableLoading(false);
     }
   };
 
   const handleDateChange = (delta: number) => {
     const newDate = addDays(selectedDate, delta);
     setSelectedDate(newDate);
-    if (saved) fetchMeals(saved.orgCode, saved.schoolCode, newDate);
+    if (saved) {
+      fetchMeals(saved.orgCode, saved.schoolCode, newDate);
+      fetchTimetable(saved, newDate);
+    }
   };
 
   const handleSearch = async (e: React.FormEvent) => {
@@ -104,16 +154,26 @@ export default function App() {
       name: school.name,
       orgCode: school.orgCode,
       schoolCode: school.schoolCode,
+      schoolType: school.type,
+      grade: '1',
+      className: '1',
       alertEnabled: false,
       alertTime: '12:20',
       mealType: '중식',
     };
-    setSaved(settings);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+    saveSettings(settings);
     fetchMeals(school.orgCode, school.schoolCode, selectedDate);
+    fetchTimetable(settings, selectedDate);
     setView('main');
     setSearchResults([]);
     setSearchQuery('');
+  };
+
+  const handleClassSettingChange = (field: 'grade' | 'className', value: string) => {
+    if (!saved) return;
+    const updated = { ...saved, [field]: value };
+    saveSettings(updated);
+    fetchTimetable(updated, selectedDate);
   };
 
   const requestNotification = async () => {
@@ -121,8 +181,7 @@ export default function App() {
     setNotifPermission(perm);
     if (perm === 'granted' && saved) {
       const updated = { ...saved, alertEnabled: true };
-      setSaved(updated);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      saveSettings(updated);
       scheduleAlert(updated);
     }
   };
@@ -134,8 +193,7 @@ export default function App() {
       return;
     }
     const updated = { ...saved, alertEnabled: !saved.alertEnabled };
-    setSaved(updated);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    saveSettings(updated);
     if (updated.alertEnabled) scheduleAlert(updated);
   };
 
@@ -164,8 +222,8 @@ export default function App() {
       <header className="app-header">
         <a href="/" className="back-link">← 놀이터</a>
         <div className="header-info">
-          <h1 className="app-title">🍱 급식 알리미</h1>
-          <p className="app-subtitle">{saved ? saved.name : '학교를 선택하세요'}</p>
+          <h1 className="app-title">🏫 학교 알리미</h1>
+          <p className="app-subtitle">{saved ? `${saved.name} · ${saved.grade}학년 ${saved.className}반` : '학교를 선택하세요'}</p>
         </div>
         <div className="header-actions">
           {saved && (
@@ -209,7 +267,19 @@ export default function App() {
 
       {view === 'settings' && saved && (
         <div className="settings-panel">
-          <h2 className="settings-title">알림 설정</h2>
+          <h2 className="settings-title">설정</h2>
+          <div className="settings-row">
+            <span>학년</span>
+            <select className="select-field" value={saved.grade} onChange={e => handleClassSettingChange('grade', e.target.value)}>
+              {[1, 2, 3, 4, 5, 6].map(grade => <option key={grade} value={String(grade)}>{grade}학년</option>)}
+            </select>
+          </div>
+          <div className="settings-row">
+            <span>반</span>
+            <select className="select-field" value={saved.className} onChange={e => handleClassSettingChange('className', e.target.value)}>
+              {Array.from({ length: 20 }, (_, i) => String(i + 1)).map(className => <option key={className} value={className}>{className}반</option>)}
+            </select>
+          </div>
           <div className="settings-row">
             <span>알림 사용</span>
             <button className={`toggle-btn ${saved.alertEnabled ? 'on' : 'off'}`} onClick={toggleAlert}>
@@ -222,31 +292,19 @@ export default function App() {
               type="time"
               className="time-input"
               value={saved.alertTime}
-              onChange={e => {
-                const updated = { ...saved, alertTime: e.target.value };
-                setSaved(updated);
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-              }}
+              onChange={e => saveSettings({ ...saved, alertTime: e.target.value })}
             />
           </div>
           <div className="settings-row">
             <span>알림 급식</span>
-            <select
-              className="select-field"
-              value={saved.mealType}
-              onChange={e => {
-                const updated = { ...saved, mealType: e.target.value };
-                setSaved(updated);
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-              }}
-            >
+            <select className="select-field" value={saved.mealType} onChange={e => saveSettings({ ...saved, mealType: e.target.value })}>
               <option>조식</option>
               <option>중식</option>
               <option>석식</option>
             </select>
           </div>
           {notifPermission === 'denied' && (
-            <p className="settings-warn">⚠️ 브라우저에서 알림이 차단됐어요. 브라우저 설정에서 허용해주세요.</p>
+            <p className="settings-warn">브라우저에서 알림이 차단됐어요. 브라우저 설정에서 허용해주세요.</p>
           )}
           <button className="btn-ghost mt" onClick={() => setView('main')}>← 돌아가기</button>
         </div>
@@ -255,25 +313,27 @@ export default function App() {
       {view === 'main' && (
         <main className="app-main">
           <div className="date-nav">
-              <button className="date-nav-btn" onClick={() => handleDateChange(-1)}>‹</button>
-              <span className="date-label">{dateToDisplay(selectedDate)}</span>
-              <button className="date-nav-btn" onClick={() => handleDateChange(1)}>›</button>
-            </div>
+            <button className="date-nav-btn" onClick={() => handleDateChange(-1)}>‹</button>
+            <span className="date-label">{dateToDisplay(selectedDate)}</span>
+            <button className="date-nav-btn" onClick={() => handleDateChange(1)}>›</button>
+          </div>
 
-          {/* 아침/점심/저녁 탭 */}
-          {meals.length > 0 && (
-              <div className="meal-type-tabs">
-                {['조식', '중식', '석식'].map(type => (
-                  <button
-                    key={type}
-                    className={`meal-type-tab ${selectedMealType === type ? 'active' : ''} ${!meals.find(m => m.mealType.includes(type)) ? 'disabled' : ''}`}
-                    onClick={() => setSelectedMealType(type)}
-                  >
-                    {type === '조식' ? '🌅 아침' : type === '중식' ? '☀️ 점심' : '🌙 저녁'}
-                  </button>
-                ))}
+          {saved && (
+            <>
+              <div className="main-tabs">
+                <button className={`main-tab ${activeTab === 'meal' ? 'active' : ''}`} onClick={() => setActiveTab('meal')}>🍱 급식</button>
+                <button className={`main-tab ${activeTab === 'timetable' ? 'active' : ''}`} onClick={() => setActiveTab('timetable')}>📚 시간표</button>
               </div>
-            )}
+              <div className="class-selector">
+                <select className="select-field" value={saved.grade} onChange={e => handleClassSettingChange('grade', e.target.value)}>
+                  {[1, 2, 3, 4, 5, 6].map(grade => <option key={grade} value={String(grade)}>{grade}학년</option>)}
+                </select>
+                <select className="select-field" value={saved.className} onChange={e => handleClassSettingChange('className', e.target.value)}>
+                  {Array.from({ length: 20 }, (_, i) => String(i + 1)).map(className => <option key={className} value={className}>{className}반</option>)}
+                </select>
+              </div>
+            </>
+          )}
 
           {!saved ? (
             <div className="empty-state">
@@ -281,50 +341,85 @@ export default function App() {
               <p>학교를 먼저 선택해주세요.</p>
               <button className="btn-primary mt" onClick={() => setView('search')}>🔍 학교 검색</button>
             </div>
-          ) : loading ? (
+          ) : activeTab === 'meal' ? (
+            <>
+              {meals.length > 0 && (
+                <div className="meal-type-tabs">
+                  {['조식', '중식', '석식'].map(type => (
+                    <button
+                      key={type}
+                      className={`meal-type-tab ${selectedMealType === type ? 'active' : ''} ${!meals.find(m => m.mealType.includes(type)) ? 'disabled' : ''}`}
+                      onClick={() => setSelectedMealType(type)}
+                    >
+                      {type === '조식' ? '🌅 아침' : type === '중식' ? '☀️ 점심' : '🌙 저녁'}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {mealLoading ? (
+                <div className="empty-state"><div className="spinner" /></div>
+              ) : meals.length === 0 ? (
+                <div className="empty-state">
+                  <p className="empty-icon">🤷</p>
+                  <p>이 날은 급식 정보가 없어요.</p>
+                  <p className="empty-sub">{dateToDisplay(selectedDate)}</p>
+                </div>
+              ) : (
+                <div className="meal-list">
+                  {(() => {
+                    const filtered = meals.filter(m => m.mealType.includes(selectedMealType));
+                    if (filtered.length === 0) return (
+                      <div className="empty-state">
+                        <p className="empty-icon">🍽️</p>
+                        <p>{selectedMealType} 정보가 없어요.</p>
+                      </div>
+                    );
+                    return filtered.map((meal, i) => (
+                      <div key={i} className="meal-card" style={{ borderTop: `3px solid ${mealTypeColors[meal.mealType] || '#888'}` }}>
+                        <div className="meal-header">
+                          <span className="meal-type" style={{ color: mealTypeColors[meal.mealType] || '#888' }}>
+                            {meal.mealType}
+                          </span>
+                          {meal.calories && <span className="meal-cal">{meal.calories}</span>}
+                        </div>
+                        <ul className="menu-list">
+                          {meal.menu.split('\n').filter(Boolean).map((item, j) => (
+                            <li key={j} className="menu-item">{item.trim()}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ));
+                  })()}
+
+                  {saved.alertEnabled ? (
+                    <div className="alert-status on">
+                      🔔 {saved.mealType} {saved.alertTime} 알림 설정됨
+                    </div>
+                  ) : (
+                    <button className="alert-cta" onClick={toggleAlert}>
+                      🔔 급식 알림 받기
+                    </button>
+                  )}
+                </div>
+              )}
+            </>
+          ) : timetableLoading ? (
             <div className="empty-state"><div className="spinner" /></div>
-          ) : meals.length === 0 ? (
+          ) : timetable.length === 0 ? (
             <div className="empty-state">
-              <p className="empty-icon">🤷</p>
-              <p>이 날은 급식 정보가 없어요.</p>
+              <p className="empty-icon">📚</p>
+              <p>{saved.grade}학년 {saved.className}반 시간표 정보가 없어요.</p>
               <p className="empty-sub">{dateToDisplay(selectedDate)}</p>
             </div>
           ) : (
-            <div className="meal-list">
-              {(() => {
-                const filtered = meals.filter(m => m.mealType.includes(selectedMealType));
-                if (filtered.length === 0) return (
-                  <div className="empty-state">
-                    <p className="empty-icon">🍽️</p>
-                    <p>{selectedMealType} 정보가 없어요.</p>
-                  </div>
-                );
-                return filtered.map((meal, i) => (
-                  <div key={i} className="meal-card" style={{ borderTop: `3px solid ${mealTypeColors[meal.mealType] || '#888'}` }}>
-                    <div className="meal-header">
-                      <span className="meal-type" style={{ color: mealTypeColors[meal.mealType] || '#888' }}>
-                        {meal.mealType}
-                      </span>
-                      {meal.calories && <span className="meal-cal">{meal.calories}</span>}
-                    </div>
-                    <ul className="menu-list">
-                      {meal.menu.split('\n').filter(Boolean).map((item, j) => (
-                        <li key={j} className="menu-item">{item.trim()}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ));
-              })()}
-
-              {saved.alertEnabled ? (
-                <div className="alert-status on">
-                  🔔 {saved.mealType} {saved.alertTime} 알림 설정됨
+            <div className="timetable-list">
+              {timetable.map(item => (
+                <div key={`${item.period}-${item.subject}`} className="timetable-item">
+                  <span className="period-badge">{item.period}교시</span>
+                  <span className="subject-name">{item.subject}</span>
                 </div>
-              ) : (
-                <button className="alert-cta" onClick={toggleAlert}>
-                  🔔 급식 알림 받기
-                </button>
-              )}
+              ))}
             </div>
           )}
         </main>

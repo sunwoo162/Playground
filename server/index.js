@@ -209,6 +209,35 @@ app.get('/neis/meal', async (req, res) => {
   }
 });
 
+/** GET /neis/timetable?orgCode=&schoolCode=&schoolType=&grade=&className=&date=YYYYMMDD - 시간표 조회 */
+app.get('/neis/timetable', async (req, res) => {
+  const { orgCode, schoolCode, schoolType, grade, className, date } = req.query;
+  if (!orgCode || !schoolCode || !grade || !className) {
+    return res.status(400).json({ error: 'orgCode, schoolCode, grade, className required' });
+  }
+
+  const targetDate = date || new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const type = String(schoolType || '');
+  const endpoint = type.includes('초등') ? 'elsTimetable' : type.includes('중학교') ? 'misTimetable' : 'hisTimetable';
+
+  try {
+    const url = `${NEIS_BASE}/${endpoint}?KEY=${process.env.NEIS_API_KEY}&Type=json&ATPT_OFCDC_SC_CODE=${orgCode}&SD_SCHUL_CODE=${schoolCode}&GRADE=${grade}&CLASS_NM=${encodeURIComponent(className)}&ALL_TI_YMD=${targetDate}`;
+    const r = await fetch(url);
+    const data = await r.json();
+    const rows = data?.[endpoint]?.[1]?.row || [];
+    res.json(rows
+      .map(t => ({
+        period: Number(t.PERIO || 0),
+        subject: t.ITRT_CNTNT || '',
+        date: t.ALL_TI_YMD,
+      }))
+      .filter(t => t.period > 0 && t.subject)
+      .sort((a, b) => a.period - b.period));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ============================================
 // Web Push
 // ============================================

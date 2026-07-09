@@ -18,7 +18,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .header-info { flex: 1; }
 .app-title { font-size: 1.2rem; font-weight: 700; }
 .app-subtitle { font-size: 0.8rem; color: var(--text-muted); }
-.header-actions { display: flex; gap: 8px; }
+.header-actions { display: flex; gap: 8px; align-items: center; }
 
 .btn-primary { padding: 9px 18px; background: var(--accent); color: #fff; border: none; border-radius: var(--radius-sm); font-size: 0.88rem; font-weight: 600; cursor: pointer; }
 .btn-primary:hover { opacity: 0.85; }
@@ -92,6 +92,34 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .date-nav-btn:hover { border-color: var(--accent); color: var(--accent); }
 .date-label { font-size: 0.95rem; font-weight: 600; flex: 1; }
 
+.main-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  max-width: 600px;
+}
+.main-tab {
+  flex: 1;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.main-tab:hover { border-color: var(--accent); color: var(--accent); }
+.main-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+.class-selector {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  max-width: 600px;
+}
+.class-selector .select-field { flex: 1; }
+
 /* 아침/점심/저녁 탭 */
 .meal-type-tabs {
   display: flex;
@@ -121,3 +149,42 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
   cursor: default;
 }
 .meal-type-tab.disabled:hover { border-color: var(--border); color: var(--text-muted); }
+
+.timetable-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 600px;
+}
+.timetable-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.period-badge {
+  flex: 0 0 auto;
+  min-width: 58px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(46,213,115,0.12);
+  color: var(--accent);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-align: center;
+}
+.subject-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+@media (max-width: 640px) {
+  .app-header { align-items: flex-start; flex-wrap: wrap; }
+  .header-info { min-width: 180px; }
+  .header-actions { width: 100%; justify-content: flex-end; flex-wrap: wrap; }
+  .search-form { flex-direction: column; }
+}

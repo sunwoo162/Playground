@@ -85,9 +85,9 @@ const APPS: AppItem[] = [
   },
   {
     id: 'school-meal',
-    title: '급식 알리미',
-    description: '학교 급식 조회 + 급식 시간 전 알림',
-    emoji: '🍱',
+    title: '학교 알리미',
+    description: '학교 급식과 학급 시간표를 한 곳에서 확인',
+    emoji: '🏫',
     url: '/apps/school-meal/',
     color: '#ffa502',
   },
