@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>학교 알리미 설정</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main class="panel">
+      <h1>학교 알리미</h1>
+      <p class="description">확장 아이콘을 눌렀을 때 열 학교 알리미 주소를 설정하세요.</p>
+
+      <label class="field">
+        <span>서비스 주소</span>
+        <input id="schoolMealUrl" type="url" placeholder="https://example.com/apps/school-meal/" />
+      </label>
+
+      <div class="actions">
+        <button id="saveButton" type="button">저장</button>
+        <button id="testButton" type="button" class="secondary">열기 테스트</button>
+      </div>
+
+      <p id="status" class="status"></p>
+    </main>
+
+    <script src="options.js"></script>
+  </body>
+</html>

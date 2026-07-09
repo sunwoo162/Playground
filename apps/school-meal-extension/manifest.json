@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "학교 알리미",
+  "description": "확장 아이콘을 누르면 학교 알리미 급식표와 시간표를 바로 엽니다.",
+  "version": "1.0.0",
+  "permissions": ["storage", "tabs"],
+  "action": {
+    "default_title": "학교 알리미 열기"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "options_page": "options.html"
+}
