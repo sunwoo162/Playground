@@ -37,6 +37,22 @@ const STORAGE_KEY = 'school-meal-settings';
 type Theme = 'dark' | 'light';
 type MainTab = 'meal' | 'timetable';
 const THEME_KEY = 'playground-theme';
+const GRADES = ['1', '2', '3', '4', '5', '6'];
+const CLASS_NAMES = Array.from({ length: 20 }, (_, i) => String(i + 1));
+const MEAL_TYPES = [
+  { value: '조식', label: '🌅 아침' },
+  { value: '중식', label: '☀️ 점심' },
+  { value: '석식', label: '🌙 저녁' },
+];
+const MAIN_TABS: { value: MainTab; label: string }[] = [
+  { value: 'meal', label: '🍱 급식' },
+  { value: 'timetable', label: '📚 시간표' },
+];
+const MEAL_TYPE_COLORS: Record<string, string> = {
+  '조식': '#ffa502',
+  '중식': '#2ed573',
+  '석식': '#70a1ff',
+};
 const getTheme = (): Theme => localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark';
 
 function dateToApi(date: Date): string {
@@ -213,10 +229,6 @@ export default function App() {
     }
   };
 
-  const mealTypeColors: Record<string, string> = {
-    '조식': '#ffa502', '중식': '#2ed573', '석식': '#70a1ff',
-  };
-
   return (
     <div className="app">
       <header className="app-header">
@@ -271,13 +283,13 @@ export default function App() {
           <div className="settings-row">
             <span>학년</span>
             <select className="select-field" value={saved.grade} onChange={e => handleClassSettingChange('grade', e.target.value)}>
-              {[1, 2, 3, 4, 5, 6].map(grade => <option key={grade} value={String(grade)}>{grade}학년</option>)}
+              {GRADES.map(grade => <option key={grade} value={grade}>{grade}학년</option>)}
             </select>
           </div>
           <div className="settings-row">
             <span>반</span>
             <select className="select-field" value={saved.className} onChange={e => handleClassSettingChange('className', e.target.value)}>
-              {Array.from({ length: 20 }, (_, i) => String(i + 1)).map(className => <option key={className} value={className}>{className}반</option>)}
+              {CLASS_NAMES.map(className => <option key={className} value={className}>{className}반</option>)}
             </select>
           </div>
           <div className="settings-row">
@@ -298,9 +310,7 @@ export default function App() {
           <div className="settings-row">
             <span>알림 급식</span>
             <select className="select-field" value={saved.mealType} onChange={e => saveSettings({ ...saved, mealType: e.target.value })}>
-              <option>조식</option>
-              <option>중식</option>
-              <option>석식</option>
+              {MEAL_TYPES.map(type => <option key={type.value} value={type.value}>{type.value}</option>)}
             </select>
           </div>
           {notifPermission === 'denied' && (
@@ -321,15 +331,22 @@ export default function App() {
           {saved && (
             <>
               <div className="main-tabs">
-                <button className={`main-tab ${activeTab === 'meal' ? 'active' : ''}`} onClick={() => setActiveTab('meal')}>🍱 급식</button>
-                <button className={`main-tab ${activeTab === 'timetable' ? 'active' : ''}`} onClick={() => setActiveTab('timetable')}>📚 시간표</button>
+                {MAIN_TABS.map(tab => (
+                  <button
+                    key={tab.value}
+                    className={`main-tab ${activeTab === tab.value ? 'active' : ''}`}
+                    onClick={() => setActiveTab(tab.value)}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
               </div>
               <div className="class-selector">
                 <select className="select-field" value={saved.grade} onChange={e => handleClassSettingChange('grade', e.target.value)}>
-                  {[1, 2, 3, 4, 5, 6].map(grade => <option key={grade} value={String(grade)}>{grade}학년</option>)}
+                  {GRADES.map(grade => <option key={grade} value={grade}>{grade}학년</option>)}
                 </select>
                 <select className="select-field" value={saved.className} onChange={e => handleClassSettingChange('className', e.target.value)}>
-                  {Array.from({ length: 20 }, (_, i) => String(i + 1)).map(className => <option key={className} value={className}>{className}반</option>)}
+                  {CLASS_NAMES.map(className => <option key={className} value={className}>{className}반</option>)}
                 </select>
               </div>
             </>
@@ -345,13 +362,13 @@ export default function App() {
             <>
               {meals.length > 0 && (
                 <div className="meal-type-tabs">
-                  {['조식', '중식', '석식'].map(type => (
+                  {MEAL_TYPES.map(type => (
                     <button
-                      key={type}
-                      className={`meal-type-tab ${selectedMealType === type ? 'active' : ''} ${!meals.find(m => m.mealType.includes(type)) ? 'disabled' : ''}`}
-                      onClick={() => setSelectedMealType(type)}
+                      key={type.value}
+                      className={`meal-type-tab ${selectedMealType === type.value ? 'active' : ''} ${!meals.find(m => m.mealType.includes(type.value)) ? 'disabled' : ''}`}
+                      onClick={() => setSelectedMealType(type.value)}
                     >
-                      {type === '조식' ? '🌅 아침' : type === '중식' ? '☀️ 점심' : '🌙 저녁'}
+                      {type.label}
                     </button>
                   ))}
                 </div>
@@ -376,9 +393,9 @@ export default function App() {
                       </div>
                     );
                     return filtered.map((meal, i) => (
-                      <div key={i} className="meal-card" style={{ borderTop: `3px solid ${mealTypeColors[meal.mealType] || '#888'}` }}>
+                      <div key={i} className="meal-card" style={{ borderTop: `3px solid ${MEAL_TYPE_COLORS[meal.mealType] || '#888'}` }}>
                         <div className="meal-header">
-                          <span className="meal-type" style={{ color: mealTypeColors[meal.mealType] || '#888' }}>
+                          <span className="meal-type" style={{ color: MEAL_TYPE_COLORS[meal.mealType] || '#888' }}>
                             {meal.mealType}
                           </span>
                           {meal.calories && <span className="meal-cal">{meal.calories}</span>}
