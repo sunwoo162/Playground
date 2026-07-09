@@ -1,3 +1,18 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-export default defineConfig({ plugins: [react()], base: '/apps/school-meal/' })
+
+const buildVersion = process.env.BUILD_VERSION || String(Date.now());
+
+export default defineConfig({
+  plugins: [react()],
+  base: '/apps/school-meal/',
+  build: {
+    rollupOptions: {
+      output: {
+        entryFileNames: `assets/[name]-${buildVersion}-[hash].js`,
+        chunkFileNames: `assets/[name]-${buildVersion}-[hash].js`,
+        assetFileNames: `assets/[name]-${buildVersion}-[hash][extname]`,
+      },
+    },
+  },
+})
