@@ -36,6 +36,8 @@ interface SavedSchool {
   grade: string;
   className: string;
   alerts: MealAlert[];
+  allergyCodes: string[];
+  dislikeCodes: string[];
   allergyKeywords: string[];
   dislikeKeywords: string[];
   alertEnabled?: boolean;
@@ -69,6 +71,28 @@ const DEFAULT_ALERT_TIMES: Record<string, string> = {
   '중식': '12:20',
   '석식': '18:00',
 };
+const ALLERGEN_CATEGORIES = [
+  { id: '1', label: '난류', codes: ['1'] },
+  { id: '2', label: '우유', codes: ['2'] },
+  { id: '3', label: '메밀', codes: ['3'] },
+  { id: '4', label: '땅콩', codes: ['4'] },
+  { id: '5', label: '대두류', codes: ['5'] },
+  { id: '6', label: '밀', codes: ['6'] },
+  { id: '7', label: '고등어', codes: ['7'] },
+  { id: '8', label: '게', codes: ['8'] },
+  { id: '9', label: '새우', codes: ['9'] },
+  { id: '10', label: '돼지고기', codes: ['10'] },
+  { id: '11', label: '복숭아', codes: ['11'] },
+  { id: '12', label: '토마토', codes: ['12'] },
+  { id: '13', label: '아황산류', codes: ['13'] },
+  { id: '14', label: '호두', codes: ['14'] },
+  { id: '15', label: '닭고기', codes: ['15'] },
+  { id: '16', label: '쇠고기', codes: ['16'] },
+  { id: '17', label: '오징어', codes: ['17'] },
+  { id: '18', label: '조개류', codes: ['18'] },
+  { id: '19', label: '잣', codes: ['19'] },
+  { id: 'seafood', label: '어패류', codes: ['7', '8', '9', '17', '18'] },
+];
 const getTheme = (): Theme => localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark';
 
 function padDatePart(value: number): string {
@@ -126,6 +150,28 @@ function getMenuMatch(item: string, keywords: string[]): string[] {
   return keywords.filter(keyword => normalizedItem.includes(keyword.toLowerCase()));
 }
 
+function extractAllergenCodes(item: string): string[] {
+  const codes = new Set<string>();
+  for (const match of item.matchAll(/\(([^)]*)\)/g)) {
+    match[1]
+      .split(/[^0-9]+/)
+      .filter(Boolean)
+      .forEach(code => codes.add(String(Number(code))));
+  }
+  return Array.from(codes);
+}
+
+function getAllergenCategoryMatches(itemCodes: string[], selectedCategoryIds: string[]): string[] {
+  return ALLERGEN_CATEGORIES
+    .filter(category => selectedCategoryIds.includes(category.id))
+    .filter(category => category.codes.some(code => itemCodes.includes(code)))
+    .map(category => category.label);
+}
+
+function mergeMatches(...groups: string[][]): string[] {
+  return Array.from(new Set(groups.flat()));
+}
+
 function createMealAlert(mealType = '중식'): MealAlert {
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -149,6 +195,8 @@ function normalizeSavedSchool(raw: SavedSchool): SavedSchool {
     grade,
     className: raw.className || '1',
     alerts: Array.isArray(raw.alerts) ? raw.alerts : legacyAlerts,
+    allergyCodes: Array.isArray(raw.allergyCodes) ? raw.allergyCodes : [],
+    dislikeCodes: Array.isArray(raw.dislikeCodes) ? raw.dislikeCodes : [],
     allergyKeywords: Array.isArray(raw.allergyKeywords) ? raw.allergyKeywords : [],
     dislikeKeywords: Array.isArray(raw.dislikeKeywords) ? raw.dislikeKeywords : [],
   };
@@ -266,6 +314,8 @@ export default function App() {
       grade: '1',
       className: '1',
       alerts: [],
+      allergyCodes: [],
+      dislikeCodes: [],
       allergyKeywords: [],
       dislikeKeywords: [],
     };
@@ -287,6 +337,15 @@ export default function App() {
   const handleKeywordSettingChange = (field: 'allergyKeywords' | 'dislikeKeywords', value: string) => {
     if (!saved) return;
     saveSettings({ ...saved, [field]: splitKeywords(value) });
+  };
+
+  const toggleAllergenSetting = (field: 'allergyCodes' | 'dislikeCodes', categoryId: string) => {
+    if (!saved) return;
+    const current = saved[field];
+    const updatedCodes = current.includes(categoryId)
+      ? current.filter(id => id !== categoryId)
+      : [...current, categoryId];
+    saveSettings({ ...saved, [field]: updatedCodes });
   };
 
   const requestNotification = async (): Promise<boolean> => {
@@ -482,8 +541,38 @@ export default function App() {
             <div className="settings-section-header">
               <span>식재료 표시</span>
             </div>
+            <div className="category-field">
+              <span>알레르기 카테고리</span>
+              <div className="category-grid">
+                {ALLERGEN_CATEGORIES.map(category => (
+                  <button
+                    key={`allergy-${category.id}`}
+                    className={`category-chip allergy ${saved.allergyCodes.includes(category.id) ? 'active' : ''}`}
+                    onClick={() => toggleAllergenSetting('allergyCodes', category.id)}
+                  >
+                    {category.label}
+                  </button>
+                ))}
+              </div>
+              <small>급식명 옆 숫자 코드와 맞으면 빨간색으로 표시됩니다.</small>
+            </div>
+            <div className="category-field">
+              <span>싫어하는 카테고리</span>
+              <div className="category-grid">
+                {ALLERGEN_CATEGORIES.map(category => (
+                  <button
+                    key={`dislike-${category.id}`}
+                    className={`category-chip dislike ${saved.dislikeCodes.includes(category.id) ? 'active' : ''}`}
+                    onClick={() => toggleAllergenSetting('dislikeCodes', category.id)}
+                  >
+                    {category.label}
+                  </button>
+                ))}
+              </div>
+              <small>급식명 옆 숫자 코드와 맞으면 주황색으로 표시됩니다.</small>
+            </div>
             <label className="keyword-field">
-              <span>알레르기 식재료</span>
+              <span>직접 입력 - 알레르기</span>
               <textarea
                 className="keyword-input"
                 value={keywordsToText(saved.allergyKeywords)}
@@ -493,7 +582,7 @@ export default function App() {
               <small>포함된 메뉴는 빨간색으로 표시됩니다.</small>
             </label>
             <label className="keyword-field">
-              <span>싫어하는 식재료</span>
+              <span>직접 입력 - 싫어함</span>
               <textarea
                 className="keyword-input"
                 value={keywordsToText(saved.dislikeKeywords)}
@@ -603,8 +692,15 @@ export default function App() {
                           <ul className="menu-list">
                             {meal.menu.split('\n').filter(Boolean).map((item, j) => {
                               const trimmed = item.trim();
-                              const allergyMatches = getMenuMatch(trimmed, saved.allergyKeywords);
-                              const dislikeMatches = getMenuMatch(trimmed, saved.dislikeKeywords);
+                              const itemCodes = extractAllergenCodes(trimmed);
+                              const allergyMatches = mergeMatches(
+                                getAllergenCategoryMatches(itemCodes, saved.allergyCodes),
+                                getMenuMatch(trimmed, saved.allergyKeywords),
+                              );
+                              const dislikeMatches = mergeMatches(
+                                getAllergenCategoryMatches(itemCodes, saved.dislikeCodes),
+                                getMenuMatch(trimmed, saved.dislikeKeywords),
+                              );
                               const matchClass = allergyMatches.length > 0 ? 'allergy' : dislikeMatches.length > 0 ? 'dislike' : '';
                               const matches = allergyMatches.length > 0 ? allergyMatches : dislikeMatches;
 
