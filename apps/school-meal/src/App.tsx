@@ -150,8 +150,10 @@ export default function App() {
   const [selectedDate, setSelectedDate] = useState<Date>(defaultMealTarget.date);
   const [selectedMealType, setSelectedMealType] = useState<string>(defaultMealTarget.mealType);
   const [theme, setTheme] = useState<Theme>(getTheme);
+  const [extensionStatus, setExtensionStatus] = useState('');
   const alertTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const gradeOptions = saved ? getGradeOptions(saved.schoolType) : SECONDARY_GRADES;
+  const extensionUrl = `${window.location.origin}/apps/school-meal/`;
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -324,6 +326,15 @@ export default function App() {
     saveSettings(updated);
   };
 
+  const copyExtensionUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(extensionUrl);
+      setExtensionStatus('서비스 주소를 복사했어요. 확장프로그램 옵션에 붙여넣으면 됩니다.');
+    } catch {
+      setExtensionStatus('복사에 실패했어요. 아래 주소를 직접 복사해주세요.');
+    }
+  };
+
   return (
     <div className="app">
       <header className="app-header">
@@ -415,6 +426,22 @@ export default function App() {
                 ))}
               </div>
             )}
+          </div>
+          <div className="settings-section">
+            <div className="settings-section-header">
+              <span>확장프로그램 연결</span>
+              <button className="btn-ghost" onClick={copyExtensionUrl}>주소 복사</button>
+            </div>
+            <div className="extension-setup">
+              <p>Chrome 확장프로그램에서 이 주소를 저장하면 아이콘 클릭으로 급식표와 시간표를 바로 열 수 있어요.</p>
+              <code>{extensionUrl}</code>
+              <ol>
+                <li><span>Chrome에서 확장프로그램 옵션을 엽니다.</span></li>
+                <li><span>복사한 서비스 주소를 붙여넣고 저장합니다.</span></li>
+                <li><span>확장 아이콘을 누르면 학교 알리미가 팝업으로 열립니다.</span></li>
+              </ol>
+              {extensionStatus && <p className="extension-status">{extensionStatus}</p>}
+            </div>
           </div>
           {notifPermission === 'denied' && (
             <p className="settings-warn">브라우저에서 알림이 차단됐어요. 브라우저 설정에서 허용해주세요.</p>
