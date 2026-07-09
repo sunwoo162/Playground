@@ -430,7 +430,8 @@ export default function App() {
               <button className="date-nav-btn" onClick={() => handleDateChange(-1)}>‹</button>
               <span className="date-label">{dateToDisplay(selectedDate)}</span>
               <label className="calendar-picker">
-                <span>📅</span>
+                <span>📅 날짜 선택</span>
+                <strong>{dateToInput(selectedDate)}</strong>
                 <input
                   type="date"
                   value={dateToInput(selectedDate)}
