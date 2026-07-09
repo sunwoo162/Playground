@@ -326,6 +326,11 @@ export default function App() {
     saveSettings(updated);
   };
 
+  const openExtensionSetup = () => {
+    setView('settings');
+    setExtensionStatus('아래 서비스 주소를 복사해서 확장프로그램 옵션에 저장하세요.');
+  };
+
   const copyExtensionUrl = async () => {
     try {
       await navigator.clipboard.writeText(extensionUrl);
@@ -345,9 +350,12 @@ export default function App() {
         </div>
         <div className="header-actions">
           {saved && (
-            <button className="btn-ghost" onClick={() => setView(view === 'settings' ? 'main' : 'settings')}>
-              ⚙️
-            </button>
+            <>
+              <button className="btn-ghost" onClick={openExtensionSetup}>확장</button>
+              <button className="btn-ghost" onClick={() => setView(view === 'settings' ? 'main' : 'settings')}>
+                ⚙️
+              </button>
+            </>
           )}
           <button className="btn-primary" onClick={() => setView(view === 'search' ? 'main' : 'search')}>
             {view === 'search' ? '취소' : '🔍 학교 변경'}
@@ -400,6 +408,22 @@ export default function App() {
           </div>
           <div className="settings-section">
             <div className="settings-section-header">
+              <span>확장프로그램 연결</span>
+              <button className="btn-ghost" onClick={copyExtensionUrl}>주소 복사</button>
+            </div>
+            <div className="extension-setup">
+              <p>Chrome 확장프로그램에서 이 주소를 저장하면 아이콘 클릭으로 급식표와 시간표를 바로 열 수 있어요.</p>
+              <code>{extensionUrl}</code>
+              <ol>
+                <li><span>Chrome에서 확장프로그램 옵션을 엽니다.</span></li>
+                <li><span>복사한 서비스 주소를 붙여넣고 저장합니다.</span></li>
+                <li><span>확장 아이콘을 누르면 학교 알리미가 팝업으로 열립니다.</span></li>
+              </ol>
+              {extensionStatus && <p className="extension-status">{extensionStatus}</p>}
+            </div>
+          </div>
+          <div className="settings-section">
+            <div className="settings-section-header">
               <span>급식 알림</span>
               <button className="btn-ghost" onClick={addAlert}>+ 추가</button>
             </div>
@@ -426,22 +450,6 @@ export default function App() {
                 ))}
               </div>
             )}
-          </div>
-          <div className="settings-section">
-            <div className="settings-section-header">
-              <span>확장프로그램 연결</span>
-              <button className="btn-ghost" onClick={copyExtensionUrl}>주소 복사</button>
-            </div>
-            <div className="extension-setup">
-              <p>Chrome 확장프로그램에서 이 주소를 저장하면 아이콘 클릭으로 급식표와 시간표를 바로 열 수 있어요.</p>
-              <code>{extensionUrl}</code>
-              <ol>
-                <li><span>Chrome에서 확장프로그램 옵션을 엽니다.</span></li>
-                <li><span>복사한 서비스 주소를 붙여넣고 저장합니다.</span></li>
-                <li><span>확장 아이콘을 누르면 학교 알리미가 팝업으로 열립니다.</span></li>
-              </ol>
-              {extensionStatus && <p className="extension-status">{extensionStatus}</p>}
-            </div>
           </div>
           {notifPermission === 'denied' && (
             <p className="settings-warn">브라우저에서 알림이 차단됐어요. 브라우저 설정에서 허용해주세요.</p>
