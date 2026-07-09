@@ -492,15 +492,14 @@ export default function App() {
                       ));
                     })()}
 
-                    {saved.alerts.some(alert => alert.enabled) ? (
-                      <div className="alert-status on">
-                        🔔 {saved.alerts.filter(alert => alert.enabled).map(alert => `${alert.mealType} ${alert.alertTime}`).join(' · ')} 알림 설정됨
-                      </div>
-                    ) : (
-                      <button className="alert-cta" onClick={addAlert}>
-                        🔔 급식 알림 받기
-                      </button>
-                    )}
+                    <div className={`alert-status ${saved.alerts.some(alert => alert.enabled) ? 'on' : ''}`}>
+                      <span>
+                        {saved.alerts.some(alert => alert.enabled)
+                          ? `🔔 ${saved.alerts.filter(alert => alert.enabled).map(alert => `${alert.mealType} ${alert.alertTime}`).join(' · ')} 알림 설정됨`
+                          : '🔔 등록된 급식 알림이 없어요.'}
+                      </span>
+                      <button className="alert-add-btn" onClick={addAlert}>+ 알림 추가</button>
+                    </div>
                   </div>
                 )}
               </>
