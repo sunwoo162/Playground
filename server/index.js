@@ -589,7 +589,13 @@ app.get('/apps/coding-log/*', (req, res) => {
 });
 
 // School Meal 앱
-app.use('/apps/school-meal', express.static(path.join(__dirname, '..', 'apps', 'school-meal', 'dist')));
+app.use('/apps/school-meal', express.static(path.join(__dirname, '..', 'apps', 'school-meal', 'dist'), {
+  setHeaders: (res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  },
+}));
 app.get('/apps/school-meal/*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'apps', 'school-meal', 'dist', 'index.html'));
 });
