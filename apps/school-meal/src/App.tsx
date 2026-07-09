@@ -36,6 +36,8 @@ interface SavedSchool {
   grade: string;
   className: string;
   alerts: MealAlert[];
+  allergyKeywords: string[];
+  dislikeKeywords: string[];
   alertEnabled?: boolean;
   alertTime?: string;
   mealType?: string;
@@ -108,6 +110,22 @@ function getGradeOptions(schoolType: string): string[] {
   return schoolType.includes('초등') ? ELEMENTARY_GRADES : SECONDARY_GRADES;
 }
 
+function splitKeywords(value: string): string[] {
+  return value
+    .split(/[,，\n]/)
+    .map(item => item.trim())
+    .filter(Boolean);
+}
+
+function keywordsToText(value: string[]): string {
+  return value.join(', ');
+}
+
+function getMenuMatch(item: string, keywords: string[]): string[] {
+  const normalizedItem = item.toLowerCase();
+  return keywords.filter(keyword => normalizedItem.includes(keyword.toLowerCase()));
+}
+
 function createMealAlert(mealType = '중식'): MealAlert {
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -131,6 +149,8 @@ function normalizeSavedSchool(raw: SavedSchool): SavedSchool {
     grade,
     className: raw.className || '1',
     alerts: Array.isArray(raw.alerts) ? raw.alerts : legacyAlerts,
+    allergyKeywords: Array.isArray(raw.allergyKeywords) ? raw.allergyKeywords : [],
+    dislikeKeywords: Array.isArray(raw.dislikeKeywords) ? raw.dislikeKeywords : [],
   };
 }
 
@@ -246,6 +266,8 @@ export default function App() {
       grade: '1',
       className: '1',
       alerts: [],
+      allergyKeywords: [],
+      dislikeKeywords: [],
     };
     saveSettings(settings);
     fetchMeals(school.orgCode, school.schoolCode, selectedDate);
@@ -260,6 +282,11 @@ export default function App() {
     const updated = { ...saved, [field]: value };
     saveSettings(updated);
     fetchTimetable(updated, selectedDate);
+  };
+
+  const handleKeywordSettingChange = (field: 'allergyKeywords' | 'dislikeKeywords', value: string) => {
+    if (!saved) return;
+    saveSettings({ ...saved, [field]: splitKeywords(value) });
   };
 
   const requestNotification = async (): Promise<boolean> => {
@@ -451,6 +478,31 @@ export default function App() {
               </div>
             )}
           </div>
+          <div className="settings-section">
+            <div className="settings-section-header">
+              <span>식재료 표시</span>
+            </div>
+            <label className="keyword-field">
+              <span>알레르기 식재료</span>
+              <textarea
+                className="keyword-input"
+                value={keywordsToText(saved.allergyKeywords)}
+                onChange={e => handleKeywordSettingChange('allergyKeywords', e.target.value)}
+                placeholder="예: 우유, 계란, 땅콩"
+              />
+              <small>포함된 메뉴는 빨간색으로 표시됩니다.</small>
+            </label>
+            <label className="keyword-field">
+              <span>싫어하는 식재료</span>
+              <textarea
+                className="keyword-input"
+                value={keywordsToText(saved.dislikeKeywords)}
+                onChange={e => handleKeywordSettingChange('dislikeKeywords', e.target.value)}
+                placeholder="예: 오이, 버섯, 양파"
+              />
+              <small>포함된 메뉴는 주황색으로 표시됩니다.</small>
+            </label>
+          </div>
           {notifPermission === 'denied' && (
             <p className="settings-warn">브라우저에서 알림이 차단됐어요. 브라우저 설정에서 허용해주세요.</p>
           )}
@@ -549,9 +601,22 @@ export default function App() {
                             {meal.calories && <span className="meal-cal">{meal.calories}</span>}
                           </div>
                           <ul className="menu-list">
-                            {meal.menu.split('\n').filter(Boolean).map((item, j) => (
-                              <li key={j} className="menu-item">{item.trim()}</li>
-                            ))}
+                            {meal.menu.split('\n').filter(Boolean).map((item, j) => {
+                              const trimmed = item.trim();
+                              const allergyMatches = getMenuMatch(trimmed, saved.allergyKeywords);
+                              const dislikeMatches = getMenuMatch(trimmed, saved.dislikeKeywords);
+                              const matchClass = allergyMatches.length > 0 ? 'allergy' : dislikeMatches.length > 0 ? 'dislike' : '';
+                              const matches = allergyMatches.length > 0 ? allergyMatches : dislikeMatches;
+
+                              return (
+                                <li key={j} className={`menu-item ${matchClass}`}>
+                                  <span>{trimmed}</span>
+                                  {matches.length > 0 && (
+                                    <small>{allergyMatches.length > 0 ? '알레르기' : '싫어함'}: {matches.join(', ')}</small>
+                                  )}
+                                </li>
+                              );
+                            })}
                           </ul>
                         </div>
                       ));
