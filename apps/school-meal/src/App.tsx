@@ -202,6 +202,7 @@ function normalizeSavedSchool(raw: SavedSchool): SavedSchool {
 }
 
 export default function App() {
+  const isCompact = new URLSearchParams(window.location.search).get('compact') === '1';
   const defaultMealTarget = getDefaultMealTarget();
   const [saved, setSaved] = useState<SavedSchool | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -426,8 +427,8 @@ export default function App() {
   };
 
   return (
-    <div className="app">
-      <header className="app-header">
+    <div className={`app ${isCompact ? 'compact-app' : ''}`}>
+      {!isCompact && <header className="app-header">
         <a href="/" className="back-link">← 놀이터</a>
         <div className="header-info">
           <h1 className="app-title">🏫 학교 알리미</h1>
@@ -449,7 +450,7 @@ export default function App() {
             {theme === 'dark' ? '☀️' : '🌙'}
           </button>
         </div>
-      </header>
+      </header>}
 
       {view === 'search' && (
         <div className="search-panel">

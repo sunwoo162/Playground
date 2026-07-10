@@ -16,6 +16,7 @@ function normalizeSchoolMealUrl(value) {
       url.search = '';
       url.hash = '';
     }
+    url.searchParams.delete('compact');
     return url.toString();
   } catch {
     return '';
@@ -50,11 +51,13 @@ saveButton.addEventListener('click', saveUrl);
 testButton.addEventListener('click', async () => {
   const url = await saveUrl();
   if (!url) return;
+  const popupUrl = new URL(url);
+  popupUrl.searchParams.set('compact', '1');
   await chrome.windows.create({
-    url,
+    url: popupUrl.toString(),
     type: 'popup',
-    width: 980,
-    height: 760,
+    width: 450,
+    height: 690,
   });
 });
 

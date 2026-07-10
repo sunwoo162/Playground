@@ -12,6 +12,7 @@ function normalizeSchoolMealUrl(value) {
       url.search = '';
       url.hash = '';
     }
+    url.searchParams.set('compact', '1');
     return url.toString();
   } catch {
     return '';
@@ -25,16 +26,16 @@ async function getStoredUrl() {
 
 chrome.action.onClicked.addListener(async () => {
   const storedUrl = await getStoredUrl();
-  const targetUrl = storedUrl || DEFAULT_SCHOOL_MEAL_URL;
+  const targetUrl = storedUrl || normalizeSchoolMealUrl(DEFAULT_SCHOOL_MEAL_URL);
 
   if (!storedUrl) {
-    await chrome.storage.sync.set({ [STORAGE_KEY]: targetUrl });
+    await chrome.storage.sync.set({ [STORAGE_KEY]: DEFAULT_SCHOOL_MEAL_URL });
   }
 
   await chrome.windows.create({
     url: targetUrl,
     type: 'popup',
-    width: 980,
-    height: 760,
+    width: 450,
+    height: 690,
   });
 });
