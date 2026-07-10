@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "학교 알리미",
   "description": "확장 아이콘을 누르면 학교 알리미 급식표와 시간표를 바로 엽니다.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "permissions": ["storage"],
   "icons": {
     "16": "icons/icon.svg",
