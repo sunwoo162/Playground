@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>학교 알리미</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="popup-shell">
+      <header class="popup-header">
+        <div>
+          <h1>학교 알리미</h1>
+          <p>급식표 · 시간표</p>
+        </div>
+        <button id="toggleSettings" type="button" title="알레르기 설정">설정</button>
+      </header>
+
+      <div id="loading" class="popup-state">불러오는 중...</div>
+      <iframe id="schoolFrame" class="hidden" title="학교 알리미"></iframe>
+      <section id="errorState" class="popup-state hidden">
+        <strong>서비스를 열 수 없어요.</strong>
+        <span>옵션에서 학교 알리미 주소를 확인해주세요.</span>
+        <button id="openOptionsFromError" type="button">옵션 열기</button>
+      </section>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

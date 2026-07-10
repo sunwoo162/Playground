@@ -202,7 +202,9 @@ function normalizeSavedSchool(raw: SavedSchool): SavedSchool {
 }
 
 export default function App() {
-  const isCompact = new URLSearchParams(window.location.search).get('compact') === '1';
+  const searchParams = new URLSearchParams(window.location.search);
+  const isCompact = searchParams.get('compact') === '1';
+  const initialView = isCompact && searchParams.get('view') === 'settings' ? 'settings' : 'main';
   const defaultMealTarget = getDefaultMealTarget();
   const [saved, setSaved] = useState<SavedSchool | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -212,7 +214,7 @@ export default function App() {
   const [timetable, setTimetable] = useState<TimetableItem[]>([]);
   const [mealLoading, setMealLoading] = useState(false);
   const [timetableLoading, setTimetableLoading] = useState(false);
-  const [view, setView] = useState<'main' | 'search' | 'settings'>('main');
+  const [view, setView] = useState<'main' | 'search' | 'settings'>(initialView);
   const [activeTab, setActiveTab] = useState<MainTab>('meal');
   const [notifPermission, setNotifPermission] = useState(Notification.permission);
   const [selectedDate, setSelectedDate] = useState<Date>(defaultMealTarget.date);
@@ -492,7 +494,7 @@ export default function App() {
               {CLASS_NAMES.map(className => <option key={className} value={className}>{className}반</option>)}
             </select>
           </div>
-          <div className="settings-section">
+          {!isCompact && <div className="settings-section">
             <div className="settings-section-header">
               <span>확장프로그램 연결</span>
               <button className="btn-ghost" onClick={copyExtensionUrl}>주소 복사</button>
@@ -507,7 +509,7 @@ export default function App() {
               </ol>
               {extensionStatus && <p className="extension-status">{extensionStatus}</p>}
             </div>
-          </div>
+          </div>}
           <div className="settings-section">
             <div className="settings-section-header">
               <span>급식 알림</span>

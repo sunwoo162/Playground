@@ -295,6 +295,31 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .compact-app .content-shell {
   max-width: 100%;
 }
+.compact-app .settings-panel {
+  max-width: 100%;
+  padding: 12px;
+  gap: 10px;
+}
+.compact-app .settings-title {
+  font-size: 1rem;
+}
+.compact-app .settings-row,
+.compact-app .settings-section {
+  padding: 12px;
+}
+.compact-app .settings-section-header {
+  font-size: 0.9rem;
+}
+.compact-app .category-grid {
+  gap: 6px;
+}
+.compact-app .category-chip {
+  padding: 7px 9px;
+  font-size: 0.76rem;
+}
+.compact-app .keyword-input {
+  min-height: 48px;
+}
 .compact-app .date-nav {
   grid-template-columns: 42px minmax(0, 1fr) 42px;
   gap: 8px;

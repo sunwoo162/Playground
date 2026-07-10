@@ -16,6 +16,9 @@ if (Test-Path $zipPath) {
 $items = @(
   "manifest.json",
   "background.js",
+  "popup.html",
+  "popup.css",
+  "popup.js",
   "options.html",
   "options.css",
   "options.js",
