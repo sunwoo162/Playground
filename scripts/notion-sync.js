@@ -29,6 +29,170 @@ async function add(blocks) {
   }
 }
 
+async function addToPage(pageId, blocks) {
+  for (let i = 0; i < blocks.length; i += 90) {
+    await notion.blocks.children.append({ block_id: pageId, children: blocks.slice(i, i + 90) });
+  }
+}
+
+async function createChildPage(title, blocks) {
+  const page = await notion.pages.create({
+    parent: { page_id: PAGE_ID },
+    properties: {
+      title: {
+        title: [{ type: 'text', text: { content: title } }],
+      },
+    },
+  });
+  await addToPage(page.id, blocks);
+  return page;
+}
+
+const sectionTemplate = (featureItems, apiItems = [], troubleItems = []) => [
+  h2('📋 기능명세서'),
+  ...(featureItems.length ? featureItems.map(b) : [p('추가 예정')]),
+  div(),
+  h2('🔌 API 명세서'),
+  ...(apiItems.length ? apiItems.map(b) : [p('해당 없음 또는 추가 예정')]),
+  div(),
+  h2('🔧 트러블슈팅'),
+  ...(troubleItems.length ? troubleItems.map(b) : [p('추가 예정')]),
+];
+
+const implementedWebDocs = [
+  {
+    title: '1. 놀이터',
+    features: [
+      '여러 웹앱으로 이동할 수 있는 포털 홈',
+      'GitHub OAuth 로그인 및 로그인 상태 표시',
+      '친구 요청, 최근 가입자, 받은 요청 뱃지',
+      '전역 Web Push 알림 및 앱별 이동 링크',
+    ],
+    apis: [
+      'GET /auth/github - GitHub OAuth 시작',
+      'GET /auth/github/callback - OAuth 콜백 처리 및 JWT 발급',
+      'GET /auth/me - 현재 로그인 사용자 조회',
+      'POST /auth/logout - 로그아웃',
+      'POST /internal/push/send - 내부 Web Push 발송',
+    ],
+    troubles: [
+      'HTTPS 프록시 환경에서 ERR_TOO_MANY_REDIRECTS 발생 → nginx 리다이렉트 제거 및 X-Forwarded-Proto 보정',
+      'PM2 restart 시 환경변수 누락 → ecosystem.config.js 기준으로 프로세스 재시작',
+    ],
+  },
+  {
+    title: '2. 개발자 노트',
+    features: [
+      '프로젝트별 기능명세서, API 명세서, 사용자 분석 관리',
+      '프로젝트 공유 및 에디터 권한 관리',
+      '프로젝트 수정 시 팀원에게 Web Push 알림',
+      '공유 팀원 목록에서 OWNER/EDITOR 역할 표시',
+    ],
+    apis: [
+      'Dev Notes API - 프로젝트 CRUD',
+      'Project Share API - 공유 초대/수락/권한 관리',
+      'Push API - 프로젝트 공유 및 수정 알림',
+    ],
+    troubles: [
+      '공유 팀원 목록에 소유자 미표시 → 소유자를 OWNER 역할로 목록에 별도 추가',
+      '프록시 POST/PUT 요청 바디 유실 → req.body 재직렬화 및 content-length 재계산',
+    ],
+  },
+  {
+    title: '3. 스터디 플래너',
+    features: [
+      '과목별 공부 타이머',
+      '공부 세션 기록, 통계, 달력 히트맵',
+      '타이머 실행 중 전역 헤더 뱃지 표시',
+      '그룹 초대 및 수락 기반 참여',
+      '매일 오전/오후 10시 공부 기록 알림',
+    ],
+    apis: [
+      'Study Planner API - 과목/세션/목표 CRUD',
+      'Study Group API - 그룹 초대/수락/멤버 관리',
+      'Push API - 스터디 알림 발송',
+    ],
+    troubles: [
+      '다른 앱 이동 후 타이머 초기화 → 시작 시각을 localStorage에 저장하고 로드 시 경과 시간 복원',
+      'ISO 8601 Z suffix 파싱 실패 → Instant.parse 후 LocalDateTime 변환',
+    ],
+  },
+  {
+    title: '4. 코넬노트',
+    features: [
+      '키워드/질문, 세부 내용, 요약 3단 구조 노트',
+      '과목별 분류 및 색상 관리',
+      '노트 검색 및 목록/상세/수정 화면',
+      'GitHub 레포 설정 후 Markdown 커밋',
+      '세부 내용 웹 보기 및 공유 기능',
+    ],
+    apis: [
+      'POST /github/commit-file - 코넬노트 Markdown 파일 GitHub 커밋',
+      'Cornell Notes localStorage 저장 구조 - 노트/과목 설정 저장',
+    ],
+    troubles: [
+      'GitHub 레포 입력 형식 혼동 → owner/repo 형식으로 정규화 안내',
+      '커밋 시 빈 키워드/요약도 포함됨 → 내용이 있을 때만 Markdown 섹션 생성',
+    ],
+  },
+  {
+    title: '5. 코테일지',
+    features: [
+      '프로그래머스/백준 풀이 기록',
+      '접근법, 코드, 시간복잡도, 태그 관리',
+      '공개 풀이 커뮤니티 공유',
+      'Discord 봇 연동으로 풀이 작성 링크 제공',
+      'GitHub 레포에 풀이 코드 커밋',
+    ],
+    apis: [
+      'Coding Log API - 풀이 CRUD 및 공개 목록 조회',
+      'POST /github/commit - 코딩테스트 풀이 GitHub 커밋',
+      'BaekjoonHub webhook - 풀이 성공 이벤트 처리',
+    ],
+    troubles: [
+      '로그아웃 상태 URL 직접 접근 시 문제 정보 소실 → returnTo 저장 후 로그인 복귀',
+      'localStorage에서 DB 전환 후 기존 데이터 미노출 → 신규 데이터부터 DB 저장 정책으로 정리',
+    ],
+  },
+  {
+    title: '6. 학교 알리미',
+    features: [
+      '학교 검색 및 학년/반 선택',
+      '급식표와 시간표 날짜별 조회',
+      '아침/점심/저녁 탭 및 시간대별 기본 선택',
+      '여러 급식 알림 설정',
+      '알레르기/싫어하는 식재료 카테고리 표시',
+      'Chrome 확장프로그램 compact 팝업 제공',
+    ],
+    apis: [
+      'GET /neis/school?q= - 학교 검색',
+      'GET /neis/meal?orgCode=&schoolCode=&date= - 급식 조회',
+      'GET /neis/timetable?orgCode=&schoolCode=&schoolType=&grade=&className=&date= - 시간표 조회',
+    ],
+    troubles: [
+      'NEIS API 부분 검색 미지원 → 서버 시작 시 전국 학교 목록 캐싱 후 includes 검색',
+      'Vite optional native binding 누락 → Linux용 rolldown/lightningcss optional dependency 추가',
+      '확장 팝업에서 스크롤 이중 생성 → compact 모드별 스크롤 컨테이너 분리',
+    ],
+  },
+];
+
+async function createImplementedWebDocs() {
+  await add([
+    h2('📱 구현된 웹'),
+    p('아래 항목을 클릭하면 각 웹 기능의 기능명세서, API 명세서, 트러블슈팅 문서로 이동합니다.'),
+  ]);
+
+  for (const item of implementedWebDocs) {
+    await createChildPage(
+      item.title,
+      sectionTemplate(item.features, item.apis, item.troubles),
+    );
+  }
+
+  await add([div()]);
+}
+
 async function writeFullDoc() {
   const today = new Date().toLocaleDateString('ko-KR');
 
@@ -88,6 +252,8 @@ async function writeFullDoc() {
     b('헤더에 남은 시간 실시간 표시 + 1초마다 갱신'),
     div(),
   ]);
+
+  await createImplementedWebDocs();
 
   await add([
     h2('📱 구현된 앱'),
