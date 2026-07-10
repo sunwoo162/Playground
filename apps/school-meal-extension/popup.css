@@ -12,11 +12,15 @@
   box-sizing: border-box;
 }
 
+html,
 body {
   width: 430px;
   height: 640px;
   margin: 0;
   overflow: hidden;
+}
+
+body {
   background: var(--bg);
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -25,6 +29,7 @@ body {
 .popup-shell {
   width: 100%;
   height: 100%;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   background: var(--bg);
@@ -70,9 +75,12 @@ button:hover {
 
 iframe {
   flex: 1;
+  min-height: 0;
   width: 100%;
+  height: 100%;
   border: 0;
   background: var(--bg);
+  display: block;
 }
 
 .popup-state {

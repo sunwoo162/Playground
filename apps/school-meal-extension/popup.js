@@ -51,9 +51,7 @@ function setFrameView(view) {
   currentView = view === 'settings' ? 'settings' : 'main';
   currentUrl = url.toString();
   frame.contentWindow?.postMessage({ type: 'school-meal:set-view', view: currentView }, new URL(currentUrl).origin);
-  if (frame.src !== currentUrl) {
-    frame.src = currentUrl;
-  }
+  frame.src = currentUrl;
 }
 
 async function loadPopup() {

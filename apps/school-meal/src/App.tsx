@@ -231,6 +231,18 @@ export default function App() {
   }, [theme]);
 
   useEffect(() => {
+    if (isCompact) {
+      document.documentElement.dataset.compact = 'true';
+    } else {
+      delete document.documentElement.dataset.compact;
+    }
+
+    return () => {
+      delete document.documentElement.dataset.compact;
+    };
+  }, [isCompact]);
+
+  useEffect(() => {
     if (!isCompact) return;
 
     const handleMessage = (event: MessageEvent) => {
