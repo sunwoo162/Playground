@@ -231,6 +231,21 @@ export default function App() {
   }, [theme]);
 
   useEffect(() => {
+    if (!isCompact) return;
+
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type !== 'school-meal:set-view') return;
+      if (event.data.view === 'settings' || event.data.view === 'main') {
+        setView(event.data.view);
+        window.scrollTo({ top: 0, behavior: 'auto' });
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [isCompact]);
+
+  useEffect(() => {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const s = normalizeSavedSchool(JSON.parse(raw) as SavedSchool);

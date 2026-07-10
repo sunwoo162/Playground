@@ -8,6 +8,7 @@ const errorState = document.querySelector('#errorState');
 const toggleSettingsButton = document.querySelector('#toggleSettings');
 const openOptionsFromErrorButton = document.querySelector('#openOptionsFromError');
 let currentUrl = '';
+let currentView = 'main';
 
 function normalizeSchoolMealUrl(value) {
   try {
@@ -47,10 +48,12 @@ function setFrameView(view) {
     toggleSettingsButton.textContent = '설정';
     toggleSettingsButton.title = '알레르기 설정';
   }
+  currentView = view === 'settings' ? 'settings' : 'main';
   currentUrl = url.toString();
-  frame.classList.add('hidden');
-  loading.classList.remove('hidden');
-  frame.src = currentUrl;
+  frame.contentWindow?.postMessage({ type: 'school-meal:set-view', view: currentView }, new URL(currentUrl).origin);
+  if (frame.src !== currentUrl) {
+    frame.src = currentUrl;
+  }
 }
 
 async function loadPopup() {
@@ -69,15 +72,16 @@ async function loadPopup() {
   frame.addEventListener('load', () => {
     loading.classList.add('hidden');
     frame.classList.remove('hidden');
+    frame.contentWindow?.postMessage({ type: 'school-meal:set-view', view: currentView }, new URL(currentUrl).origin);
   });
   frame.addEventListener('error', showError, { once: true });
   currentUrl = targetUrl;
+  currentView = new URL(currentUrl).searchParams.get('view') === 'settings' ? 'settings' : 'main';
   frame.src = currentUrl;
 }
 
 toggleSettingsButton.addEventListener('click', () => {
-  const url = new URL(currentUrl || DEFAULT_SCHOOL_MEAL_URL);
-  setFrameView(url.searchParams.get('view') === 'settings' ? 'main' : 'settings');
+  setFrameView(currentView === 'settings' ? 'main' : 'settings');
 });
 openOptionsFromErrorButton.addEventListener('click', openOptions);
 loadPopup();
