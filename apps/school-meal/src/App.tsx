@@ -233,14 +233,17 @@ export default function App() {
   useEffect(() => {
     if (isCompact) {
       document.documentElement.dataset.compact = 'true';
+      document.documentElement.dataset.compactView = view;
     } else {
       delete document.documentElement.dataset.compact;
+      delete document.documentElement.dataset.compactView;
     }
 
     return () => {
       delete document.documentElement.dataset.compact;
+      delete document.documentElement.dataset.compactView;
     };
-  }, [isCompact]);
+  }, [isCompact, view]);
 
   useEffect(() => {
     if (!isCompact) return;
