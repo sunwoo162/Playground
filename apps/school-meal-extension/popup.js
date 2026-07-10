@@ -1,6 +1,7 @@
 const STORAGE_KEY = 'schoolMealUrl';
 const APP_PATH = '/apps/school-meal/';
 const DEFAULT_SCHOOL_MEAL_URL = 'https://playground.https.gsmsv.site/apps/school-meal/';
+const CACHE_BUSTER = String(Date.now());
 
 const frame = document.querySelector('#schoolFrame');
 const loading = document.querySelector('#loading');
@@ -18,6 +19,7 @@ function normalizeSchoolMealUrl(value) {
       url.pathname = APP_PATH;
     }
     url.searchParams.set('compact', '1');
+    url.searchParams.set('extv', CACHE_BUSTER);
     url.hash = '';
     return url.toString();
   } catch {
@@ -39,6 +41,7 @@ function setFrameView(view) {
   if (!currentUrl) return;
   const url = new URL(currentUrl);
   url.searchParams.set('compact', '1');
+  url.searchParams.set('extv', CACHE_BUSTER);
   if (view === 'settings') {
     url.searchParams.set('view', 'settings');
     toggleSettingsButton.textContent = '급식';
