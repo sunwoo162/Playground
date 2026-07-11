@@ -29,6 +29,17 @@ async function add(blocks) {
   }
 }
 
+async function updateRootPageTitle(title = '놀이터') {
+  await notion.pages.update({
+    page_id: PAGE_ID,
+    properties: {
+      title: {
+        title: [{ type: 'text', text: { content: title } }],
+      },
+    },
+  });
+}
+
 async function addToPage(pageId, blocks) {
   for (let i = 0; i < blocks.length; i += 90) {
     await notion.blocks.children.append({ block_id: pageId, children: blocks.slice(i, i + 90) });
@@ -417,6 +428,7 @@ async function main() {
     await addCommitUpdate();
   } else {
     console.log('📝 Notion 전체 문서 초기화 중...');
+    await updateRootPageTitle();
     await clearPage();
     await writeFullDoc();
   }
