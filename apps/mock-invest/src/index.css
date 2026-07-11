@@ -296,22 +296,73 @@ label {
   font-weight: 800;
 }
 
-.chart {
-  height: 180px;
+.stock-chart {
+  position: relative;
+  height: 220px;
   border: 1px solid #242e3d;
-  background: linear-gradient(180deg, #111923, #0c1118);
+  background:
+    linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+    #0c1118;
+  background-size: 64px 100%, 100% 44px, auto;
   border-radius: 8px;
-  display: flex;
-  align-items: end;
-  gap: 10px;
-  padding: 16px;
+  overflow: hidden;
+  padding: 18px 16px;
 }
 
-.chart span {
-  flex: 1;
-  min-width: 18px;
-  border-radius: 6px 6px 0 0;
-  background: linear-gradient(180deg, #6fd17b, #2d8a4f);
+.chart-grid {
+  position: absolute;
+  inset: 18px 16px;
+  background:
+    linear-gradient(180deg, transparent 24%, rgba(148, 163, 184, 0.08) 25%, transparent 26%),
+    linear-gradient(180deg, transparent 49%, rgba(148, 163, 184, 0.08) 50%, transparent 51%),
+    linear-gradient(180deg, transparent 74%, rgba(148, 163, 184, 0.08) 75%, transparent 76%);
+  pointer-events: none;
+}
+
+.chart-candles {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14px, 1fr));
+  align-items: stretch;
+  gap: 10px;
+  height: 100%;
+}
+
+.candle {
+  position: relative;
+  min-width: 14px;
+}
+
+.candle .wick,
+.candle .body {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: block;
+}
+
+.candle .wick {
+  width: 2px;
+  border-radius: 999px;
+  opacity: 0.9;
+}
+
+.candle .body {
+  width: min(100%, 22px);
+  border-radius: 3px;
+  box-shadow: 0 0 16px rgba(255, 255, 255, 0.08);
+}
+
+.candle.rise .wick,
+.candle.rise .body {
+  background: #ff4d5e;
+}
+
+.candle.fall .wick,
+.candle.fall .body {
+  background: #4d8dff;
 }
 
 .trade-box {

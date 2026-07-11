@@ -284,12 +284,34 @@ function App() {
                 <div><span>고가/저가</span><strong>{money(current.high)} / {money(current.low)}</strong></div>
                 <div><span>거래량</span><strong>{Number(current.volume || 0).toLocaleString('ko-KR')}</strong></div>
               </div>
-              <div className="chart">{(current.points || []).map((point, index) => {
-                const min = Math.min(...current.points)
-                const max = Math.max(...current.points)
-                const height = max === min ? 40 : 20 + ((point - min) / (max - min)) * 80
-                return <span key={`${point}-${index}`} style={{ height: `${height}%` }} title={money(point)} />
-              })}</div>
+              <div className="stock-chart" aria-label="최근 가격 캔들 차트">
+                <div className="chart-grid" />
+                <div className="chart-candles">
+                  {(current.points || []).map((close, index, points) => {
+                    const open = index === 0 ? close * 0.992 : points[index - 1]
+                    const high = Math.max(open, close) * 1.006
+                    const low = Math.min(open, close) * 0.994
+                    const min = Math.min(...points.map((p) => p * 0.994))
+                    const max = Math.max(...points.map((p) => p * 1.006))
+                    const range = max - min || 1
+                    const top = ((max - high) / range) * 100
+                    const wickHeight = Math.max(8, ((high - low) / range) * 100)
+                    const bodyTop = ((max - Math.max(open, close)) / range) * 100
+                    const bodyHeight = Math.max(6, (Math.abs(close - open) / range) * 100)
+                    const rising = close >= open
+                    return (
+                      <span
+                        className={`candle ${rising ? 'rise' : 'fall'}`}
+                        key={`${close}-${index}`}
+                        title={`${rising ? '상승' : '하락'} ${money(open)} → ${money(close)}`}
+                      >
+                        <i className="wick" style={{ top: `${top}%`, height: `${wickHeight}%` }} />
+                        <i className="body" style={{ top: `${bodyTop}%`, height: `${bodyHeight}%` }} />
+                      </span>
+                    )
+                  })}
+                </div>
+              </div>
               <p className="description">{current.description}</p>
               <div className="trade-box">
                 <label>주문 수량<input type="number" min={1} value={quantity} onChange={(event) => setQuantity(Number(event.target.value))} /></label>
