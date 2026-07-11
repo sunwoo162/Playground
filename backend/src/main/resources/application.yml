@@ -38,3 +38,12 @@ app:
   jwt:
     secret: ${JWT_SECRET:playground-jwt-secret-2024-secure-key}
   node-url: http://localhost:3000
+
+kis:
+  # 한국투자증권 Open API. 실전: https://openapi.koreainvestment.com:9443, 모의: https://openapivts.koreainvestment.com:29443
+  base-url: ${KIS_BASE_URL:https://openapivts.koreainvestment.com:29443}
+  app-key: ${KIS_APP_KEY:}
+  app-secret: ${KIS_APP_SECRET:}
+  account-no: ${KIS_ACCOUNT_NO:}
+  # true면 API 키 없이 샘플 시세로 동작. 실제 한국투자증권 API를 쓰려면 false로 설정.
+  mock: ${KIS_MOCK:true}
