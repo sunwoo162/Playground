@@ -330,36 +330,55 @@ const detailedWebDocs = [
   },
 ];
 
-const specTableBlocks = (rows) => rows.flatMap(([name, page, main, desc, noteText]) => [
-  h3(name),
-  b(`페이지: ${page}`),
-  b(`주 기능: ${main}`),
-  b(`설명: ${desc}`),
-  b(`비고: ${noteText}`),
-]);
+const rt = (content) => [{ type: 'text', text: { content: String(content ?? '') } }];
+const tableRow = (cells) => ({
+  object: 'block',
+  type: 'table_row',
+  table_row: {
+    cells: cells.map((cell) => rt(cell)),
+  },
+});
+const table = (headers, rows) => ({
+  object: 'block',
+  type: 'table',
+  table: {
+    table_width: headers.length,
+    has_column_header: true,
+    has_row_header: false,
+    children: [
+      tableRow(headers),
+      ...rows.map(tableRow),
+    ],
+  },
+});
 
-const apiTableBlocks = (rows) => rows.flatMap(([name, method, endpoint, auth, desc, noteText]) => [
-  h3(name),
-  b(`Method: ${method}`),
-  b(`Authorization: ${auth}`),
-  b(`Endpoint URL: ${endpoint}`),
-  b(`Description: ${desc}`),
-  b(`비고: ${noteText}`),
-]);
+const featureTable = (rows) => table(
+  ['기능명', '페이지', '주 기능', '설명', '비고'],
+  rows,
+);
 
-const troubleTableBlocks = (rows) => rows.flatMap(([name, cause, solution, reason]) => [
-  h3(name),
-  b(`문제/원인: ${cause}`),
-  b(`해결: ${solution}`),
-  b(`왜 이렇게 했는지: ${reason}`),
-]);
+const apiTable = (rows) => table(
+  ['Description', 'Method', 'Authorization', 'Endpoint URL', '담당/비고'],
+  rows.map(([name, method, endpoint, auth, desc, noteText]) => [
+    `${name}\n${desc}`,
+    method,
+    auth,
+    endpoint,
+    noteText,
+  ]),
+);
+
+const troubleTable = (rows) => table(
+  ['문제', '원인', '해결', '왜 이렇게 했는지'],
+  rows,
+);
 
 const featureSpecPage = (item) => [
   h1('기능명세서'),
   p(item.summary),
   div(),
   h2('기능 목록'),
-  ...specTableBlocks(item.featureRows),
+  featureTable(item.featureRows),
 ];
 
 const apiSpecPage = (item) => [
@@ -367,7 +386,7 @@ const apiSpecPage = (item) => [
   p(`${item.title}에서 사용하는 주요 API와 권한을 정리한다.`),
   div(),
   h2('Endpoint'),
-  ...apiTableBlocks(item.apiRows),
+  apiTable(item.apiRows),
 ];
 
 const troubleSpecPage = (item) => [
@@ -375,7 +394,7 @@ const troubleSpecPage = (item) => [
   p(`${item.title} 개발 중 발생한 문제와 해결 이유를 정리한다.`),
   div(),
   h2('문제 해결 기록'),
-  ...troubleTableBlocks(item.troubleRows),
+  troubleTable(item.troubleRows),
 ];
 
 async function createImplementedWebDocs() {
