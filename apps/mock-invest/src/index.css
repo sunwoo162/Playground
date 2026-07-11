@@ -1,0 +1,396 @@
+:root {
+  font-family: Inter, Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #f4f7fb;
+  background: #080b10;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(64, 184, 124, 0.16), transparent 28rem),
+    linear-gradient(180deg, #10151d 0%, #080b10 42%);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.app-shell {
+  min-height: 100vh;
+}
+
+.topbar {
+  min-height: 96px;
+  padding: 22px clamp(18px, 4vw, 56px);
+  border-bottom: 1px solid #222b3a;
+  background: rgba(13, 17, 24, 0.88);
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 22px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  backdrop-filter: blur(14px);
+}
+
+.back-link,
+.ghost-btn,
+.reward-btn,
+.primary-btn,
+.buy-btn,
+.sell-btn,
+.tabs button {
+  border: 1px solid #2a3445;
+  color: #e8edf5;
+  background: #121821;
+  border-radius: 8px;
+  text-decoration: none;
+  min-height: 44px;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+}
+
+.topbar h1 {
+  margin: 0 0 4px;
+  font-size: clamp(26px, 3vw, 34px);
+}
+
+.topbar p {
+  margin: 0;
+  color: #9ba8bb;
+  font-weight: 700;
+}
+
+.reward-btn,
+.primary-btn {
+  background: #6fd17b;
+  border-color: #6fd17b;
+  color: #07110a;
+}
+
+.layout {
+  width: min(1220px, calc(100% - 32px));
+  margin: 28px auto 56px;
+}
+
+.hero-panel {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.hero-panel > div,
+.panel {
+  border: 1px solid #263142;
+  background: rgba(18, 23, 32, 0.94);
+  border-radius: 8px;
+  box-shadow: 0 18px 52px rgba(0, 0, 0, 0.22);
+}
+
+.hero-panel > div {
+  padding: 22px;
+}
+
+.eyebrow,
+.panel-header span,
+.hero-panel p,
+small {
+  color: #95a1b4;
+  font-weight: 700;
+}
+
+.hero-panel strong {
+  display: block;
+  margin-top: 8px;
+  font-size: clamp(24px, 3vw, 36px);
+}
+
+.hero-panel p {
+  margin: 8px 0 0;
+}
+
+.positive {
+  color: #77df8a !important;
+}
+
+.negative {
+  color: #ff7d7d !important;
+}
+
+.tabs {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.tabs button.active {
+  background: #6fd17b;
+  border-color: #6fd17b;
+  color: #07110a;
+}
+
+.status-line {
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border: 1px solid #315a3a;
+  background: #102318;
+  color: #77df8a;
+  border-radius: 8px;
+  font-weight: 800;
+}
+
+.content-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.85fr) minmax(0, 1.4fr);
+  gap: 16px;
+}
+
+.panel {
+  padding: 20px;
+  min-width: 0;
+}
+
+.panel.wide {
+  min-width: 0;
+}
+
+.panel.full {
+  grid-column: 1 / -1;
+}
+
+.panel-header,
+.stock-detail {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.panel h2,
+.stock-detail h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.stock-detail p,
+.description,
+.empty {
+  color: #9ba8bb;
+  font-weight: 700;
+}
+
+.table-list,
+.stock-list,
+.watch-list,
+.journal-list,
+.ranking-list {
+  display: grid;
+  gap: 10px;
+}
+
+.row-button,
+.stock-list button,
+.watch-list button,
+.ranking-list div {
+  width: 100%;
+  border: 1px solid #242e3d;
+  background: #10161f;
+  color: #f4f7fb;
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  text-align: left;
+  align-items: center;
+}
+
+.row-button span,
+.stock-list span,
+.watch-list span {
+  display: grid;
+  gap: 4px;
+}
+
+.row-button.static {
+  cursor: default;
+}
+
+.stock-list button.selected {
+  border-color: #6fd17b;
+  background: #122318;
+}
+
+.search-input,
+input,
+select,
+textarea {
+  width: 100%;
+  border: 1px solid #2a3445;
+  background: #0c1118;
+  color: #f4f7fb;
+  border-radius: 8px;
+  min-height: 46px;
+  padding: 0 14px;
+}
+
+.search-input {
+  margin-bottom: 12px;
+}
+
+textarea {
+  min-height: 120px;
+  padding: 12px 14px;
+  resize: vertical;
+}
+
+label {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+  color: #c8d2df;
+  font-weight: 800;
+}
+
+.quote-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.quote-grid div {
+  border: 1px solid #242e3d;
+  background: #0f151d;
+  border-radius: 8px;
+  padding: 14px;
+  display: grid;
+  gap: 6px;
+}
+
+.quote-grid span {
+  color: #95a1b4;
+  font-weight: 800;
+}
+
+.chart {
+  height: 180px;
+  border: 1px solid #242e3d;
+  background: linear-gradient(180deg, #111923, #0c1118);
+  border-radius: 8px;
+  display: flex;
+  align-items: end;
+  gap: 10px;
+  padding: 16px;
+}
+
+.chart span {
+  flex: 1;
+  min-width: 18px;
+  border-radius: 6px 6px 0 0;
+  background: linear-gradient(180deg, #6fd17b, #2d8a4f);
+}
+
+.trade-box {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto auto;
+  gap: 12px;
+  align-items: end;
+  margin-top: 18px;
+}
+
+.trade-box > div {
+  border: 1px solid #242e3d;
+  background: #0f151d;
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: grid;
+  gap: 4px;
+}
+
+.trade-box > div span {
+  color: #95a1b4;
+  font-weight: 800;
+}
+
+.buy-btn {
+  background: #e05252;
+  border-color: #e05252;
+}
+
+.sell-btn {
+  background: #4d7df0;
+  border-color: #4d7df0;
+}
+
+.journal-list article {
+  border: 1px solid #242e3d;
+  background: #10161f;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.journal-list h3 {
+  margin: 8px 0;
+}
+
+.journal-list p {
+  margin: 0 0 10px;
+  color: #d6deea;
+  line-height: 1.6;
+}
+
+.ranking-list div {
+  display: grid;
+  grid-template-columns: 56px 1fr 1fr 100px;
+}
+
+.ranking-list .me {
+  border-color: #6fd17b;
+  background: #122318;
+}
+
+@media (max-width: 900px) {
+  .topbar {
+    grid-template-columns: 1fr;
+    position: static;
+  }
+
+  .hero-panel,
+  .content-grid,
+  .quote-grid,
+  .trade-box {
+    grid-template-columns: 1fr;
+  }
+
+  .tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ranking-list div {
+    grid-template-columns: 42px 1fr;
+  }
+}

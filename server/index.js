@@ -600,6 +600,12 @@ app.get('/apps/school-meal/*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'apps', 'school-meal', 'dist', 'index.html'));
 });
 
+// Mock Invest 앱
+app.use('/apps/mock-invest', express.static(path.join(__dirname, '..', 'apps', 'mock-invest', 'dist')));
+app.get('/apps/mock-invest/*', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'apps', 'mock-invest', 'dist', 'index.html'));
+});
+
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'dist', 'index.html'));
 });
