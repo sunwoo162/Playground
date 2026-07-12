@@ -246,7 +246,7 @@ function App() {
         <a className="back-link" href="/">← 놀이터</a>
         <div>
           <h1>📈 모의 투자</h1>
-          <p>Twelve Data 시세 연동 · 전체 미국 종목 검색과 선택 종목 실시간 시세</p>
+          <p>Twelve Data 시세 연동 · 주요 미국 종목 30개와 선택 종목 실시간 시세</p>
         </div>
         <button className="reward-btn" onClick={addActivityReward}>+ 활동 보상</button>
       </header>

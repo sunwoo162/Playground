@@ -15,6 +15,38 @@ import java.util.*;
 @RequiredArgsConstructor
 public class TwelveDataStockClient {
     private final RestTemplate restTemplate = new RestTemplate();
+    private static final List<StockSeed> POPULAR_STOCKS = List.of(
+            new StockSeed("AAPL", "애플", "NASDAQ", "기술"),
+            new StockSeed("MSFT", "마이크로소프트", "NASDAQ", "기술"),
+            new StockSeed("NVDA", "엔비디아", "NASDAQ", "반도체"),
+            new StockSeed("GOOGL", "알파벳 A", "NASDAQ", "인터넷"),
+            new StockSeed("GOOG", "알파벳 C", "NASDAQ", "인터넷"),
+            new StockSeed("AMZN", "아마존", "NASDAQ", "이커머스"),
+            new StockSeed("META", "메타", "NASDAQ", "소셜미디어"),
+            new StockSeed("TSLA", "테슬라", "NASDAQ", "전기차"),
+            new StockSeed("AVGO", "브로드컴", "NASDAQ", "반도체"),
+            new StockSeed("COST", "코스트코", "NASDAQ", "유통"),
+            new StockSeed("NFLX", "넷플릭스", "NASDAQ", "미디어"),
+            new StockSeed("AMD", "AMD", "NASDAQ", "반도체"),
+            new StockSeed("INTC", "인텔", "NASDAQ", "반도체"),
+            new StockSeed("QCOM", "퀄컴", "NASDAQ", "반도체"),
+            new StockSeed("PEP", "펩시코", "NASDAQ", "소비재"),
+            new StockSeed("ADBE", "어도비", "NASDAQ", "소프트웨어"),
+            new StockSeed("CSCO", "시스코", "NASDAQ", "네트워크"),
+            new StockSeed("ORCL", "오라클", "NYSE", "소프트웨어"),
+            new StockSeed("CRM", "세일즈포스", "NYSE", "소프트웨어"),
+            new StockSeed("IBM", "IBM", "NYSE", "기술"),
+            new StockSeed("JPM", "제이피모건 체이스", "NYSE", "금융"),
+            new StockSeed("V", "비자", "NYSE", "결제"),
+            new StockSeed("MA", "마스터카드", "NYSE", "결제"),
+            new StockSeed("WMT", "월마트", "NYSE", "유통"),
+            new StockSeed("MCD", "맥도날드", "NYSE", "외식"),
+            new StockSeed("KO", "코카콜라", "NYSE", "소비재"),
+            new StockSeed("DIS", "디즈니", "NYSE", "미디어"),
+            new StockSeed("NKE", "나이키", "NYSE", "소비재"),
+            new StockSeed("BA", "보잉", "NYSE", "항공"),
+            new StockSeed("XOM", "엑슨모빌", "NYSE", "에너지")
+    );
 
     @Value("${twelve-data.base-url:https://api.twelvedata.com}")
     private String baseUrl;
@@ -62,7 +94,7 @@ public class TwelveDataStockClient {
         List<BigDecimal> pointValues = twelveDataPoints(providerQuery);
         return MockInvestDto.StockResponse.builder()
                 .symbol(normalizedSymbol)
-                .name(text(quote.get("name"), normalizedSymbol))
+                .name(koreanName(normalizedSymbol, text(quote.get("name"), normalizedSymbol)))
                 .price(price)
                 .change(change)
                 .changeRate(changeRate)
@@ -137,23 +169,14 @@ public class TwelveDataStockClient {
     }
 
     private Object stockRows() {
-        Map<String, Map<?, ?>> rowsBySymbol = new LinkedHashMap<>();
-        for (String exchange : List.of("NASDAQ", "NYSE", "AMEX")) {
-            Map<?, ?> exchangeResult = get("/stocks?exchange=" + encode(exchange));
-            failIfProviderError(exchangeResult, "Twelve Data stock list request failed");
-            Object rows = exchangeResult != null ? exchangeResult.get("data") : null;
-            if (rows instanceof List<?> list) {
-                for (Object row : list) {
-                    if (row instanceof Map<?, ?> map) {
-                        String symbol = normalizeSymbol(text(map.get("symbol"), ""));
-                        if (!symbol.isBlank() && isMajorUsListing(map)) {
-                            rowsBySymbol.putIfAbsent(symbol, map);
-                        }
-                    }
-                }
-            }
-        }
-        return new ArrayList<>(rowsBySymbol.values());
+        return POPULAR_STOCKS.stream()
+                .map(stock -> Map.of(
+                        "symbol", stock.symbol(),
+                        "name", stock.name(),
+                        "exchange", stock.exchange(),
+                        "mic_code", stock.sector()
+                ))
+                .toList();
     }
 
     private boolean isMajorUsListing(Map<?, ?> row) {
@@ -183,6 +206,14 @@ public class TwelveDataStockClient {
 
     private String symbolQuery(String symbol) {
         return "symbol=" + encode(symbol);
+    }
+
+    private String koreanName(String symbol, String fallback) {
+        return POPULAR_STOCKS.stream()
+                .filter(stock -> stock.symbol().equals(symbol))
+                .map(StockSeed::name)
+                .findFirst()
+                .orElse(fallback);
     }
 
     private String encode(String value) {
@@ -215,6 +246,9 @@ public class TwelveDataStockClient {
             String detail = message != null ? String.valueOf(message) : fallback;
             throw new StockProviderException(code != null ? "Twelve Data " + code + ": " + detail : detail);
         }
+    }
+
+    private record StockSeed(String symbol, String name, String exchange, String sector) {
     }
 
 }
