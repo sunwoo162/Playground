@@ -48,8 +48,8 @@ public class TwelveDataStockClient {
 
     private MockInvestDto.StockResponse twelveDataQuote(String symbol) {
         String normalizedSymbol = normalizeSymbol(symbol);
-        String providerSymbol = toProviderSymbol(normalizedSymbol);
-        Map<?, ?> quote = get("/quote?symbol=" + encode(providerSymbol));
+        String providerQuery = symbolQuery(normalizedSymbol);
+        Map<?, ?> quote = get("/quote?" + providerQuery);
         if (quote == null || quote.get("status") != null && "error".equals(String.valueOf(quote.get("status")))) {
             throw new IllegalStateException("Twelve Data quote response missing");
         }
@@ -59,7 +59,7 @@ public class TwelveDataStockClient {
 
         BigDecimal change = num(quote.get("change"));
         BigDecimal changeRate = num(quote.get("percent_change"));
-        List<BigDecimal> pointValues = twelveDataPoints(providerSymbol);
+        List<BigDecimal> pointValues = twelveDataPoints(providerQuery);
         return MockInvestDto.StockResponse.builder()
                 .symbol(normalizedSymbol)
                 .name(text(quote.get("name"), normalizedSymbol))
@@ -79,8 +79,7 @@ public class TwelveDataStockClient {
 
     private List<MockInvestDto.StockResponse> twelveDataStocks(String keyword) {
         try {
-            Map<?, ?> data = get("/stocks?exchange=KRX");
-            Object rows = data != null ? data.get("data") : null;
+            Object rows = stockRows();
             if (!(rows instanceof List<?> list)) return List.of();
             return list.stream()
                     .filter(Map.class::isInstance)
@@ -115,7 +114,7 @@ public class TwelveDataStockClient {
 
     private List<BigDecimal> twelveDataPoints(String providerSymbol) {
         try {
-            Map<?, ?> data = get("/time_series?symbol=" + encode(providerSymbol) + "&interval=1day&outputsize=7");
+            Map<?, ?> data = get("/time_series?" + providerSymbol + "&interval=1day&outputsize=7");
             Object values = data != null ? data.get("values") : null;
             if (!(values instanceof List<?> rows)) return List.of();
             List<BigDecimal> result = new ArrayList<>();
@@ -132,6 +131,15 @@ public class TwelveDataStockClient {
         }
     }
 
+    private Object stockRows() {
+        Map<?, ?> exchangeResult = get("/stocks?exchange=KRX");
+        Object exchangeRows = exchangeResult != null ? exchangeResult.get("data") : null;
+        if (exchangeRows instanceof List<?> list && !list.isEmpty()) return exchangeRows;
+
+        Map<?, ?> countryResult = get("/stocks?country=" + encode("South Korea"));
+        return countryResult != null ? countryResult.get("data") : null;
+    }
+
     private Map<?, ?> get(String path) {
         String separator = path.contains("?") ? "&" : "?";
         return restTemplate.getForObject(baseUrl + path + separator + "apikey=" + encode(apiKey), Map.class);
@@ -143,8 +151,9 @@ public class TwelveDataStockClient {
         return suffixIndex > 0 ? value.substring(0, suffixIndex) : value;
     }
 
-    private String toProviderSymbol(String symbol) {
-        return symbol.matches("\\d{6}") ? symbol + ":KRX" : symbol;
+    private String symbolQuery(String symbol) {
+        String query = "symbol=" + encode(symbol);
+        return symbol.matches("\\d{6}") ? query + "&exchange=KRX" : query;
     }
 
     private String encode(String value) {

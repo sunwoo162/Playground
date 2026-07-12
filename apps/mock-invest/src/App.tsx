@@ -136,8 +136,11 @@ function App() {
   }
 
   useEffect(() => {
-    Promise.all([loadPortfolio(), loadStocks(), loadWatchlist(), loadOrders(), loadJournals(), loadRankings()])
-      .catch((err) => setMessage(err.message))
+    Promise.allSettled([loadPortfolio(), loadStocks(), loadWatchlist(), loadOrders(), loadJournals(), loadRankings()])
+      .then((results) => {
+        const failed = results.find((result) => result.status === 'rejected') as PromiseRejectedResult | undefined
+        if (failed) setMessage(failed.reason?.message || 'Twelve Data API 정보를 불러오지 못했습니다.')
+      })
       .finally(() => setLoading(false))
   }, [])
 
@@ -201,7 +204,13 @@ function App() {
   }
 
   if (loading || !portfolio) {
-    return <div className="app-shell"><main className="layout"><p className="status-line">모의 투자 정보를 불러오는 중...</p></main></div>
+    return (
+      <div className="app-shell">
+        <main className="layout">
+          <p className="status-line">{loading ? '모의 투자 정보를 불러오는 중...' : (message || '포트폴리오를 불러오지 못했습니다.')}</p>
+        </main>
+      </div>
+    )
   }
 
   const current = selectedStock || stocks[0]
