@@ -3,15 +3,15 @@ import { useEffect, useMemo, useState } from 'react'
 type Stock = {
   symbol: string
   name: string
-  price: number
-  changeRate: number
-  volume: number
-  marketCap: number
+  price?: number
+  changeRate?: number
+  volume?: number
+  marketCap?: number
   sector: string
-  high: number
-  low: number
+  high?: number
+  low?: number
   description: string
-  points: number[]
+  points?: number[]
   realtime: boolean
 }
 
@@ -122,7 +122,7 @@ function App() {
     setStocks(list)
     if (!selectedStock && list[0]) {
       setSelectedSymbol(list[0].symbol)
-      setSelectedStock(list[0])
+      setSelectedStock(await api<Stock>(`/stocks/${list[0].symbol}`))
     }
   }
 
@@ -205,6 +205,7 @@ function App() {
   }
 
   const current = selectedStock || stocks[0]
+  const hasQuote = Boolean(current?.price)
 
   return (
     <div className="app-shell">
@@ -212,7 +213,7 @@ function App() {
         <a className="back-link" href="/">← 놀이터</a>
         <div>
           <h1>📈 모의 투자</h1>
-          <p>{current?.realtime ? 'Twelve Data 시세 연동' : '샘플 시세 모드'} · 여러 유저가 DB에 저장해서 같이 사용</p>
+          <p>{current?.realtime ? 'Twelve Data 시세 연동' : '샘플 시세 모드'} · 전체 KRX 종목 검색과 선택 종목 실시간 시세</p>
         </div>
         <button className="reward-btn" onClick={addActivityReward}>+ 활동 보상</button>
       </header>
@@ -252,7 +253,7 @@ function App() {
               <div className="watch-list">
                 {watchlist.map((stock) => (
                   <button key={stock.symbol} onClick={() => { loadSelectedStock(stock.symbol); setTab('stocks') }}>
-                    <span>{stock.name}</span><strong>{money(stock.price)}</strong><small className={stock.changeRate >= 0 ? 'positive' : 'negative'}>{percent(stock.changeRate)}</small>
+                    <span>{stock.name}</span><strong>{money(stock.price || 0)}</strong><small className={(stock.changeRate || 0) >= 0 ? 'positive' : 'negative'}>{percent(stock.changeRate || 0)}</small>
                   </button>
                 ))}
               </div>
@@ -264,11 +265,19 @@ function App() {
           <div className="content-grid">
             <section className="panel stock-list-panel">
               <input className="search-input" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="종목명, 티커, 업종 검색" />
+              <div className="stock-list-meta">
+                <strong>전체 종목</strong>
+                <span>{stocks.length.toLocaleString('ko-KR')}개 표시</span>
+              </div>
               <div className="stock-list">
                 {stocks.map((stock) => (
                   <button key={stock.symbol} className={selectedSymbol === stock.symbol ? 'selected' : ''} onClick={() => loadSelectedStock(stock.symbol)}>
                     <span><strong>{stock.name}</strong><small>{stock.symbol} · {stock.sector}{holdingSymbols.has(stock.symbol) ? ' · 보유중' : ''}</small></span>
-                    <span className={stock.changeRate >= 0 ? 'positive' : 'negative'}>{percent(stock.changeRate)}</span>
+                    {stock.price ? (
+                      <span className={(stock.changeRate || 0) >= 0 ? 'positive' : 'negative'}>{percent(stock.changeRate || 0)}</span>
+                    ) : (
+                      <span className="quote-chip">시세 보기</span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -279,9 +288,9 @@ function App() {
                 <button className="ghost-btn" onClick={toggleWatch}>{watchSymbols.has(current.symbol) ? '★ 관심 해제' : '☆ 관심 등록'}</button>
               </div>
               <div className="quote-grid">
-                <div><span>현재가</span><strong>{money(current.price)}</strong></div>
-                <div><span>등락률</span><strong className={current.changeRate >= 0 ? 'positive' : 'negative'}>{percent(current.changeRate)}</strong></div>
-                <div><span>고가/저가</span><strong>{money(current.high)} / {money(current.low)}</strong></div>
+                <div><span>현재가</span><strong>{hasQuote ? money(current.price || 0) : '시세 선택 필요'}</strong></div>
+                <div><span>등락률</span><strong className={(current.changeRate || 0) >= 0 ? 'positive' : 'negative'}>{hasQuote ? percent(current.changeRate || 0) : '-'}</strong></div>
+                <div><span>고가/저가</span><strong>{hasQuote ? `${money(current.high || 0)} / ${money(current.low || 0)}` : '-'}</strong></div>
                 <div><span>거래량</span><strong>{Number(current.volume || 0).toLocaleString('ko-KR')}</strong></div>
               </div>
               <div className="stock-chart" aria-label="최근 가격 캔들 차트">
@@ -315,7 +324,7 @@ function App() {
               <p className="description">{current.description}</p>
               <div className="trade-box">
                 <label>주문 수량<input type="number" min={1} value={quantity} onChange={(event) => setQuantity(Number(event.target.value))} /></label>
-                <div><span>예상 금액</span><strong>{money(current.price * Math.max(1, quantity || 1))}</strong></div>
+                <div><span>예상 금액</span><strong>{money((current.price || 0) * Math.max(1, quantity || 1))}</strong></div>
                 <button className="buy-btn" onClick={() => trade('buy')}>매수</button>
                 <button className="sell-btn" onClick={() => trade('sell')}>매도</button>
               </div>

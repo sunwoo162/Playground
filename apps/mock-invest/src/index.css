@@ -261,6 +261,36 @@ textarea {
   margin-bottom: 12px;
 }
 
+.stock-list-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid #223047;
+  background: #0c1118;
+  border-radius: 8px;
+  color: #c8d2df;
+  font-weight: 800;
+}
+
+.stock-list-meta span {
+  color: #95a1b4;
+  font-size: 14px;
+}
+
+.quote-chip {
+  color: #9fd6ff;
+  background: #112033;
+  border: 1px solid #27415f;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
 textarea {
   min-height: 120px;
   padding: 12px 14px;

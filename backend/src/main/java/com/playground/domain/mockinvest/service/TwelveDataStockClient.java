@@ -45,11 +45,7 @@ public class TwelveDataStockClient {
 
     public MockInvestDto.StockResponse quote(String symbol) {
         if (canUseTwelveData()) {
-            try {
-                return twelveDataQuote(symbol);
-            } catch (Exception ignored) {
-                // fall through to sample data
-            }
+            return twelveDataQuote(symbol);
         }
         return sampleQuote(symbol);
     }
@@ -141,9 +137,20 @@ public class TwelveDataStockClient {
                                 || symbol.toLowerCase().contains(keyword)
                                 || name.toLowerCase().contains(keyword));
                     })
-                    .limit(keyword.isBlank() ? 40 : 20)
-                    .map(row -> quote(normalizeSymbol(text(row.get("symbol"), ""))))
-                    .filter(stock -> stock.getPrice() != null && stock.getPrice().compareTo(BigDecimal.ZERO) > 0)
+                    .limit(keyword.isBlank() ? 500 : 80)
+                    .map(row -> {
+                        String symbol = normalizeSymbol(text(row.get("symbol"), ""));
+                        String name = text(row.get("name"), symbol);
+                        String exchange = text(row.get("exchange"), "KRX");
+                        String micCode = text(row.get("mic_code"), "");
+                        return MockInvestDto.StockResponse.builder()
+                                .symbol(symbol)
+                                .name(name)
+                                .sector(!micCode.isBlank() ? micCode : exchange)
+                                .description("Twelve Data KRX 전체 종목 목록입니다. 선택하면 현재가와 차트를 불러옵니다.")
+                                .realtime(true)
+                                .build();
+                    })
                     .toList();
         } catch (Exception ignored) {
             return List.of();
