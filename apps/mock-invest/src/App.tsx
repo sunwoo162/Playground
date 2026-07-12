@@ -69,6 +69,39 @@ type Tab = 'dashboard' | 'stocks' | 'orders' | 'journal' | 'ranking'
 
 const API = '/api/mock-invest'
 
+const POPULAR_STOCKS: Stock[] = [
+  { symbol: 'AAPL', name: '애플', sector: '기술', description: '주요 미국 종목입니다.', realtime: true },
+  { symbol: 'MSFT', name: '마이크로소프트', sector: '기술', description: '주요 미국 종목입니다.', realtime: true },
+  { symbol: 'NVDA', name: '엔비디아', sector: '반도체', description: '주요 미국 종목입니다.', realtime: true },
+  { symbol: 'GOOGL', name: '구글', sector: '인터넷', description: '주요 미국 종목입니다.', realtime: true },
+  { symbol: 'UBER', name: '우버', sector: '모빌리티', description: '주요 미국 종목입니다.', realtime: true },
+  { symbol: 'AMZN', name: '아마존', sector: '이커머스', description: '주요 미국 종목입니다.', realtime: true },
+  { symbol: 'META', name: '메타', sector: '소셜미디어', description: '주요 미국 종목입니다.', realtime: true },
+  { symbol: 'TSLA', name: '테슬라', sector: '전기차', description: '주요 미국 종목입니다.', realtime: true },
+  { symbol: 'AVGO', name: '브로드컴', sector: '반도체', description: '주요 미국 종목입니다.', realtime: true },
+  { symbol: 'COST', name: '코스트코', sector: '유통', description: '주요 미국 종목입니다.', realtime: true },
+  { symbol: 'NFLX', name: '넷플릭스', sector: '미디어', description: '주요 미국 종목입니다.', realtime: true },
+  { symbol: 'AMD', name: 'AMD', sector: '반도체', description: '주요 미국 종목입니다.', realtime: true },
+  { symbol: 'INTC', name: '인텔', sector: '반도체', description: '주요 미국 종목입니다.', realtime: true },
+  { symbol: 'QCOM', name: '퀄컴', sector: '반도체', description: '주요 미국 종목입니다.', realtime: true },
+  { symbol: 'PEP', name: '펩시코', sector: '소비재', description: '주요 미국 종목입니다.', realtime: true },
+  { symbol: 'ADBE', name: '어도비', sector: '소프트웨어', description: '주요 미국 종목입니다.', realtime: true },
+  { symbol: 'CSCO', name: '시스코', sector: '네트워크', description: '주요 미국 종목입니다.', realtime: true },
+  { symbol: 'ORCL', name: '오라클', sector: '소프트웨어', description: '주요 미국 종목입니다.', realtime: true },
+  { symbol: 'CRM', name: '세일즈포스', sector: '소프트웨어', description: '주요 미국 종목입니다.', realtime: true },
+  { symbol: 'IBM', name: 'IBM', sector: '기술', description: '주요 미국 종목입니다.', realtime: true },
+  { symbol: 'JPM', name: '제이피모건 체이스', sector: '금융', description: '주요 미국 종목입니다.', realtime: true },
+  { symbol: 'V', name: '비자', sector: '결제', description: '주요 미국 종목입니다.', realtime: true },
+  { symbol: 'MA', name: '마스터카드', sector: '결제', description: '주요 미국 종목입니다.', realtime: true },
+  { symbol: 'WMT', name: '월마트', sector: '유통', description: '주요 미국 종목입니다.', realtime: true },
+  { symbol: 'MCD', name: '맥도날드', sector: '외식', description: '주요 미국 종목입니다.', realtime: true },
+  { symbol: 'KO', name: '코카콜라', sector: '소비재', description: '주요 미국 종목입니다.', realtime: true },
+  { symbol: 'DIS', name: '디즈니', sector: '미디어', description: '주요 미국 종목입니다.', realtime: true },
+  { symbol: 'NKE', name: '나이키', sector: '소비재', description: '주요 미국 종목입니다.', realtime: true },
+  { symbol: 'BA', name: '보잉', sector: '항공', description: '주요 미국 종목입니다.', realtime: true },
+  { symbol: 'XOM', name: '엑슨모빌', sector: '에너지', description: '주요 미국 종목입니다.', realtime: true },
+]
+
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API}${path}`, {
     credentials: 'include',
@@ -122,14 +155,28 @@ function App() {
   const loadRankings = async () => setRankings(await api<Ranking[]>('/rankings'))
 
   const loadStocks = async (keyword = '') => {
-    const list = await api<Stock[]>(`/stocks${keyword ? `?keyword=${encodeURIComponent(keyword)}` : ''}`)
+    const normalizedKeyword = keyword.trim().toLowerCase()
+    let list: Stock[]
+    try {
+      list = await api<Stock[]>(`/stocks${keyword ? `?keyword=${encodeURIComponent(keyword)}` : ''}`)
+    } catch (err) {
+      list = POPULAR_STOCKS.filter((stock) => !normalizedKeyword
+        || stock.symbol.toLowerCase().includes(normalizedKeyword)
+        || stock.name.toLowerCase().includes(normalizedKeyword)
+        || stock.sector.toLowerCase().includes(normalizedKeyword))
+      setMessage('종목 목록 API가 실패해서 주요 30개 종목을 표시합니다.')
+    }
     setStocks(list)
     if (!selectedStock && list[0]) {
       const preferred = list.find((stock) => stock.symbol === selectedSymbol)
         || list.find((stock) => stock.symbol === 'AAPL')
         || list[0]
       setSelectedSymbol(preferred.symbol)
-      setSelectedStock(await api<Stock>(`/stocks/${preferred.symbol}`))
+      try {
+        setSelectedStock(await api<Stock>(`/stocks/${preferred.symbol}`))
+      } catch {
+        setSelectedStock(preferred)
+      }
     }
   }
 
