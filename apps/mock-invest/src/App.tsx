@@ -85,7 +85,11 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 function money(value: number) {
-  return `${Math.round(Number(value || 0)).toLocaleString('ko-KR')}원`
+  return Number(value || 0).toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 2,
+  })
 }
 
 function percent(value: number) {
@@ -102,7 +106,7 @@ function App() {
   const [rankings, setRankings] = useState<Ranking[]>([])
   const [tab, setTab] = useState<Tab>('dashboard')
   const [query, setQuery] = useState('')
-  const [selectedSymbol, setSelectedSymbol] = useState('005930')
+  const [selectedSymbol, setSelectedSymbol] = useState('AAPL')
   const [selectedStock, setSelectedStock] = useState<Stock | null>(null)
   const [quantity, setQuantity] = useState(1)
   const [message, setMessage] = useState('')
@@ -159,7 +163,7 @@ function App() {
       method: 'POST',
       body: JSON.stringify({ amount: 250000, reason: 'PLAYGROUND_ACTIVITY' }),
     }))
-    setMessage('놀이터 활동 보상 250,000원이 지급됐습니다.')
+    setMessage(`놀이터 활동 보상 ${money(250000)}이 지급됐습니다.`)
   }
 
   const trade = async (type: 'buy' | 'sell') => {
@@ -222,7 +226,7 @@ function App() {
         <a className="back-link" href="/">← 놀이터</a>
         <div>
           <h1>📈 모의 투자</h1>
-          <p>Twelve Data 시세 연동 · 전체 KRX 종목 검색과 선택 종목 실시간 시세</p>
+          <p>Twelve Data 시세 연동 · 전체 미국 종목 검색과 선택 종목 실시간 시세</p>
         </div>
         <button className="reward-btn" onClick={addActivityReward}>+ 활동 보상</button>
       </header>

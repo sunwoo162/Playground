@@ -67,7 +67,7 @@ public class TwelveDataStockClient {
                 .changeRate(changeRate)
                 .volume(num(quote.get("volume")).longValue())
                 .marketCap(BigDecimal.ZERO)
-                .sector(text(quote.get("exchange"), "KRX"))
+                .sector(text(quote.get("exchange"), "US"))
                 .high(firstNumber(quote.get("high"), price))
                 .low(firstNumber(quote.get("low"), price))
                 .description("Twelve Data에서 조회한 시세입니다.")
@@ -86,7 +86,7 @@ public class TwelveDataStockClient {
                     .filter(row -> {
                         String symbol = normalizeSymbol(text(row.get("symbol"), ""));
                         String name = text(row.get("name"), "");
-                        return symbol.matches("\\d{6}")
+                        return symbol.matches("[A-Z.\\-]{1,12}")
                                 && (keyword.isBlank()
                                 || symbol.toLowerCase().contains(keyword)
                                 || name.toLowerCase().contains(keyword));
@@ -95,13 +95,13 @@ public class TwelveDataStockClient {
                     .map(row -> {
                         String symbol = normalizeSymbol(text(row.get("symbol"), ""));
                         String name = text(row.get("name"), symbol);
-                        String exchange = text(row.get("exchange"), "KRX");
+                        String exchange = text(row.get("exchange"), "US");
                         String micCode = text(row.get("mic_code"), "");
                         return MockInvestDto.StockResponse.builder()
                                 .symbol(symbol)
                                 .name(name)
                                 .sector(!micCode.isBlank() ? micCode : exchange)
-                                .description("Twelve Data KRX 전체 종목 목록입니다. 선택하면 현재가와 차트를 불러옵니다.")
+                                .description("Twelve Data 미국 종목 목록입니다. 선택하면 현재가와 차트를 불러옵니다.")
                                 .realtime(true)
                                 .build();
                     })
@@ -136,12 +136,7 @@ public class TwelveDataStockClient {
     }
 
     private Object stockRows() {
-        Map<?, ?> exchangeResult = get("/stocks?exchange=KRX");
-        failIfProviderError(exchangeResult, "Twelve Data stock list request failed");
-        Object exchangeRows = exchangeResult != null ? exchangeResult.get("data") : null;
-        if (exchangeRows instanceof List<?> list && !list.isEmpty()) return exchangeRows;
-
-        Map<?, ?> countryResult = get("/stocks?country=" + encode("South Korea"));
+        Map<?, ?> countryResult = get("/stocks?country=" + encode("United States"));
         failIfProviderError(countryResult, "Twelve Data stock list request failed");
         return countryResult != null ? countryResult.get("data") : null;
     }
@@ -152,14 +147,13 @@ public class TwelveDataStockClient {
     }
 
     private String normalizeSymbol(String symbol) {
-        String value = symbol == null ? "005930" : symbol.trim().toUpperCase(Locale.ROOT);
+        String value = symbol == null ? "AAPL" : symbol.trim().toUpperCase(Locale.ROOT);
         int suffixIndex = value.indexOf(":");
         return suffixIndex > 0 ? value.substring(0, suffixIndex) : value;
     }
 
     private String symbolQuery(String symbol) {
-        String query = "symbol=" + encode(symbol);
-        return symbol.matches("\\d{6}") ? query + "&exchange=KRX" : query;
+        return "symbol=" + encode(symbol);
     }
 
     private String encode(String value) {
