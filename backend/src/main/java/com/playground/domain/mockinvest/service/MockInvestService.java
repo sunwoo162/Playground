@@ -224,7 +224,7 @@ public class MockInvestService {
     }
 
     private MockInvestDto.HoldingResponse toHolding(MockInvestHolding h) {
-        MockInvestDto.StockResponse stock = stockClient.quote(h.getSymbol());
+        MockInvestDto.StockResponse stock = quoteHoldingOrFallback(h);
         BigDecimal invested = h.getAveragePrice().multiply(BigDecimal.valueOf(h.getQuantity()));
         BigDecimal evaluated = stock.getPrice().multiply(BigDecimal.valueOf(h.getQuantity()));
         BigDecimal profit = evaluated.subtract(invested);
@@ -239,6 +239,28 @@ public class MockInvestService {
                 .profit(profit)
                 .profitRate(rate(profit, invested))
                 .build();
+    }
+
+    private MockInvestDto.StockResponse quoteHoldingOrFallback(MockInvestHolding h) {
+        try {
+            return stockClient.quote(h.getSymbol());
+        } catch (RuntimeException e) {
+            return MockInvestDto.StockResponse.builder()
+                    .symbol(h.getSymbol())
+                    .name(h.getName())
+                    .price(h.getAveragePrice())
+                    .change(BigDecimal.ZERO)
+                    .changeRate(BigDecimal.ZERO)
+                    .volume(0L)
+                    .marketCap(BigDecimal.ZERO)
+                    .sector("UNAVAILABLE")
+                    .high(h.getAveragePrice())
+                    .low(h.getAveragePrice())
+                    .description("현재 시세를 불러올 수 없어 평균 매입가로 평가합니다.")
+                    .points(List.of(h.getAveragePrice()))
+                    .realtime(false)
+                    .build();
+        }
     }
 
     private MockInvestDto.OrderResponse toOrder(MockInvestOrder o) {
