@@ -111,33 +111,18 @@ public class TwelveDataStockClient {
 
     private List<MockInvestDto.StockResponse> twelveDataStocks(String keyword) {
         try {
-            Object rows = stockRows();
-            if (!(rows instanceof List<?> list)) return List.of();
-            return list.stream()
-                    .filter(Map.class::isInstance)
-                    .map(row -> (Map<?, ?>) row)
-                    .filter(row -> {
-                        String symbol = normalizeSymbol(text(row.get("symbol"), ""));
-                        String name = text(row.get("name"), "");
-                        return symbol.matches("[A-Z.\\-]{1,12}")
-                                && (keyword.isBlank()
-                                || symbol.toLowerCase().contains(keyword)
-                                || name.toLowerCase().contains(keyword));
-                    })
-                    .limit(keyword.isBlank() ? 500 : 80)
-                    .map(row -> {
-                        String symbol = normalizeSymbol(text(row.get("symbol"), ""));
-                        String name = text(row.get("name"), symbol);
-                        String exchange = text(row.get("exchange"), "US");
-                        String micCode = text(row.get("mic_code"), "");
-                        return MockInvestDto.StockResponse.builder()
-                                .symbol(symbol)
-                                .name(name)
-                                .sector(!micCode.isBlank() ? micCode : exchange)
-                                .description("Twelve Data 미국 종목 목록입니다. 선택하면 현재가와 차트를 불러옵니다.")
-                                .realtime(true)
-                                .build();
-                    })
+            return POPULAR_STOCKS.stream()
+                    .filter(stock -> keyword.isBlank()
+                            || stock.symbol().toLowerCase(Locale.ROOT).contains(keyword)
+                            || stock.name().toLowerCase(Locale.ROOT).contains(keyword)
+                            || stock.sector().toLowerCase(Locale.ROOT).contains(keyword))
+                    .map(stock -> MockInvestDto.StockResponse.builder()
+                            .symbol(stock.symbol())
+                            .name(stock.name())
+                            .sector(stock.sector())
+                            .description("주요 미국 종목입니다. 선택하면 Twelve Data 현재가와 차트를 불러옵니다.")
+                            .realtime(true)
+                            .build())
                     .toList();
         } catch (StockProviderException e) {
             throw e;
@@ -166,24 +151,6 @@ public class TwelveDataStockClient {
         } catch (Exception e) {
             return List.of();
         }
-    }
-
-    private Object stockRows() {
-        return POPULAR_STOCKS.stream()
-                .map(stock -> Map.of(
-                        "symbol", stock.symbol(),
-                        "name", stock.name(),
-                        "exchange", stock.exchange(),
-                        "mic_code", stock.sector()
-                ))
-                .toList();
-    }
-
-    private boolean isMajorUsListing(Map<?, ?> row) {
-        String exchange = text(row.get("exchange"), "").toUpperCase(Locale.ROOT);
-        String micCode = text(row.get("mic_code"), "").toUpperCase(Locale.ROOT);
-        return Set.of("NASDAQ", "NYSE", "AMEX").contains(exchange)
-                || Set.of("XNAS", "XNYS", "XASE", "ARCX").contains(micCode);
     }
 
     private Map<?, ?> get(String path) {
