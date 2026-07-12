@@ -38,7 +38,7 @@ public class TwelveDataStockClient {
 
     private boolean canUseTwelveData() {
         boolean mockEnabled = mock != null && "true".equalsIgnoreCase(mock.trim());
-        return !mockEnabled && apiKey != null && !apiKey.isBlank();
+        return !mockEnabled && !configuredApiKey().isBlank();
     }
 
     private void ensureTwelveDataEnabled() {
@@ -144,7 +144,14 @@ public class TwelveDataStockClient {
 
     private Map<?, ?> get(String path) {
         String separator = path.contains("?") ? "&" : "?";
-        return restTemplate.getForObject(baseUrl + path + separator + "apikey=" + encode(apiKey), Map.class);
+        return restTemplate.getForObject(baseUrl + path + separator + "apikey=" + encode(configuredApiKey()), Map.class);
+    }
+
+    private String configuredApiKey() {
+        String value = apiKey != null ? apiKey.trim() : "";
+        if (!value.isBlank()) return value;
+        String envValue = System.getenv("TWELVE_DATA_API_KEY");
+        return envValue != null ? envValue.trim() : "";
     }
 
     private String normalizeSymbol(String symbol) {
