@@ -125,8 +125,11 @@ function App() {
     const list = await api<Stock[]>(`/stocks${keyword ? `?keyword=${encodeURIComponent(keyword)}` : ''}`)
     setStocks(list)
     if (!selectedStock && list[0]) {
-      setSelectedSymbol(list[0].symbol)
-      setSelectedStock(await api<Stock>(`/stocks/${list[0].symbol}`))
+      const preferred = list.find((stock) => stock.symbol === selectedSymbol)
+        || list.find((stock) => stock.symbol === 'AAPL')
+        || list[0]
+      setSelectedSymbol(preferred.symbol)
+      setSelectedStock(await api<Stock>(`/stocks/${preferred.symbol}`))
     }
   }
 

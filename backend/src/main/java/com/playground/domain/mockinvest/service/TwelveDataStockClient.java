@@ -137,9 +137,30 @@ public class TwelveDataStockClient {
     }
 
     private Object stockRows() {
-        Map<?, ?> countryResult = get("/stocks?country=" + encode("United States"));
-        failIfProviderError(countryResult, "Twelve Data stock list request failed");
-        return countryResult != null ? countryResult.get("data") : null;
+        Map<String, Map<?, ?>> rowsBySymbol = new LinkedHashMap<>();
+        for (String exchange : List.of("NASDAQ", "NYSE", "AMEX")) {
+            Map<?, ?> exchangeResult = get("/stocks?exchange=" + encode(exchange));
+            failIfProviderError(exchangeResult, "Twelve Data stock list request failed");
+            Object rows = exchangeResult != null ? exchangeResult.get("data") : null;
+            if (rows instanceof List<?> list) {
+                for (Object row : list) {
+                    if (row instanceof Map<?, ?> map) {
+                        String symbol = normalizeSymbol(text(map.get("symbol"), ""));
+                        if (!symbol.isBlank() && isMajorUsListing(map)) {
+                            rowsBySymbol.putIfAbsent(symbol, map);
+                        }
+                    }
+                }
+            }
+        }
+        return new ArrayList<>(rowsBySymbol.values());
+    }
+
+    private boolean isMajorUsListing(Map<?, ?> row) {
+        String exchange = text(row.get("exchange"), "").toUpperCase(Locale.ROOT);
+        String micCode = text(row.get("mic_code"), "").toUpperCase(Locale.ROOT);
+        return Set.of("NASDAQ", "NYSE", "AMEX").contains(exchange)
+                || Set.of("XNAS", "XNYS", "XASE", "ARCX").contains(micCode);
     }
 
     private Map<?, ?> get(String path) {
