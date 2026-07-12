@@ -3,7 +3,9 @@ package com.playground.domain.mockinvest.controller;
 import com.playground.config.JwtAuthenticationToken;
 import com.playground.domain.mockinvest.dto.MockInvestDto;
 import com.playground.domain.mockinvest.service.MockInvestService;
+import com.playground.domain.mockinvest.service.StockProviderException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -120,5 +122,10 @@ public class MockInvestController {
             @PathVariable Long id) {
         service.deleteJournal(auth.getUserId(), id);
         return ResponseEntity.ok(Map.of("success", true));
+    }
+
+    @ExceptionHandler(StockProviderException.class)
+    public ResponseEntity<Map<String, String>> stockProviderError(StockProviderException e) {
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of("error", e.getMessage()));
     }
 }

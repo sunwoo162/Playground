@@ -50,12 +50,11 @@ public class TwelveDataStockClient {
         String normalizedSymbol = normalizeSymbol(symbol);
         String providerQuery = symbolQuery(normalizedSymbol);
         Map<?, ?> quote = get("/quote?" + providerQuery);
-        if (quote == null || quote.get("status") != null && "error".equals(String.valueOf(quote.get("status")))) {
-            throw new IllegalStateException("Twelve Data quote response missing");
-        }
+        failIfProviderError(quote, "Twelve Data quote request failed");
+        if (quote == null) throw new StockProviderException("Twelve Data quote response missing");
 
         BigDecimal price = firstNumber(quote.get("close"), quote.get("previous_close"));
-        if (price.compareTo(BigDecimal.ZERO) == 0) throw new IllegalStateException("Twelve Data quote price missing");
+        if (price.compareTo(BigDecimal.ZERO) == 0) throw new StockProviderException("Twelve Data quote price missing");
 
         BigDecimal change = num(quote.get("change"));
         BigDecimal changeRate = num(quote.get("percent_change"));
@@ -107,14 +106,17 @@ public class TwelveDataStockClient {
                                 .build();
                     })
                     .toList();
+        } catch (StockProviderException e) {
+            throw e;
         } catch (Exception e) {
-            throw new IllegalStateException("Twelve Data stock list request failed", e);
+            throw new StockProviderException("Twelve Data stock list request failed", e);
         }
     }
 
     private List<BigDecimal> twelveDataPoints(String providerSymbol) {
         try {
             Map<?, ?> data = get("/time_series?" + providerSymbol + "&interval=1day&outputsize=7");
+            failIfProviderError(data, "Twelve Data time series request failed");
             Object values = data != null ? data.get("values") : null;
             if (!(values instanceof List<?> rows)) return List.of();
             List<BigDecimal> result = new ArrayList<>();
@@ -126,17 +128,21 @@ public class TwelveDataStockClient {
             }
             Collections.reverse(result);
             return result;
+        } catch (StockProviderException e) {
+            throw e;
         } catch (Exception e) {
-            throw new IllegalStateException("Twelve Data time series request failed", e);
+            throw new StockProviderException("Twelve Data time series request failed", e);
         }
     }
 
     private Object stockRows() {
         Map<?, ?> exchangeResult = get("/stocks?exchange=KRX");
+        failIfProviderError(exchangeResult, "Twelve Data stock list request failed");
         Object exchangeRows = exchangeResult != null ? exchangeResult.get("data") : null;
         if (exchangeRows instanceof List<?> list && !list.isEmpty()) return exchangeRows;
 
         Map<?, ?> countryResult = get("/stocks?country=" + encode("South Korea"));
+        failIfProviderError(countryResult, "Twelve Data stock list request failed");
         return countryResult != null ? countryResult.get("data") : null;
     }
 
@@ -175,6 +181,17 @@ public class TwelveDataStockClient {
         String s = String.valueOf(value).replace(",", "").trim();
         if (s.isBlank()) return BigDecimal.ZERO;
         return new BigDecimal(s);
+    }
+
+    private void failIfProviderError(Map<?, ?> body, String fallback) {
+        if (body == null) return;
+        Object status = body.get("status");
+        if (status != null && "error".equals(String.valueOf(status))) {
+            Object code = body.get("code");
+            Object message = body.get("message");
+            String detail = message != null ? String.valueOf(message) : fallback;
+            throw new StockProviderException(code != null ? "Twelve Data " + code + ": " + detail : detail);
+        }
     }
 
 }
