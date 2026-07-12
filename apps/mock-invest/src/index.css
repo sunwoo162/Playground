@@ -360,6 +360,13 @@ label {
   height: 100%;
 }
 
+.chart-empty {
+  grid-column: 1 / -1;
+  align-self: center;
+  justify-self: center;
+  margin: 0;
+}
+
 .candle {
   position: relative;
   min-width: 14px;

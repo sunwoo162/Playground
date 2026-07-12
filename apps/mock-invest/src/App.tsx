@@ -213,7 +213,7 @@ function App() {
         <a className="back-link" href="/">← 놀이터</a>
         <div>
           <h1>📈 모의 투자</h1>
-          <p>{current?.realtime ? 'Twelve Data 시세 연동' : '샘플 시세 모드'} · 전체 KRX 종목 검색과 선택 종목 실시간 시세</p>
+          <p>Twelve Data 시세 연동 · 전체 KRX 종목 검색과 선택 종목 실시간 시세</p>
         </div>
         <button className="reward-btn" onClick={addActivityReward}>+ 활동 보상</button>
       </header>
@@ -270,6 +270,7 @@ function App() {
                 <span>{stocks.length.toLocaleString('ko-KR')}개 표시</span>
               </div>
               <div className="stock-list">
+                {stocks.length === 0 && <p className="empty">Twelve Data 종목을 불러오지 못했습니다. 서버 API 키 설정을 확인해주세요.</p>}
                 {stocks.map((stock) => (
                   <button key={stock.symbol} className={selectedSymbol === stock.symbol ? 'selected' : ''} onClick={() => loadSelectedStock(stock.symbol)}>
                     <span><strong>{stock.name}</strong><small>{stock.symbol} · {stock.sector}{holdingSymbols.has(stock.symbol) ? ' · 보유중' : ''}</small></span>
@@ -296,6 +297,7 @@ function App() {
               <div className="stock-chart" aria-label="최근 가격 캔들 차트">
                 <div className="chart-grid" />
                 <div className="chart-candles">
+                  {(current.points || []).length === 0 && <p className="empty chart-empty">차트 데이터를 불러오지 못했습니다.</p>}
                   {(current.points || []).map((close, index, points) => {
                     const open = index === 0 ? close * 0.992 : points[index - 1]
                     const high = Math.max(open, close) * 1.006
