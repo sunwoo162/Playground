@@ -134,8 +134,14 @@ function App() {
   }
 
   const loadSelectedStock = async (symbol: string) => {
-    setSelectedSymbol(symbol)
-    setSelectedStock(await api<Stock>(`/stocks/${symbol}`))
+    try {
+      const nextStock = await api<Stock>(`/stocks/${symbol}`)
+      setSelectedSymbol(symbol)
+      setSelectedStock(nextStock)
+      setMessage('')
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : '시세를 불러오지 못했습니다.')
+    }
   }
 
   const refreshAll = async () => {
@@ -222,6 +228,17 @@ function App() {
 
   const current = selectedStock || stocks[0]
   const hasQuote = Boolean(current?.price)
+  const chartPoints = current?.points || []
+  const chartMin = chartPoints.length ? Math.min(...chartPoints) : 0
+  const chartMax = chartPoints.length ? Math.max(...chartPoints) : 0
+  const chartRange = chartMax - chartMin || 1
+  const chartLine = chartPoints.map((point, index) => {
+    const x = chartPoints.length === 1 ? 50 : (index / (chartPoints.length - 1)) * 100
+    const y = 92 - ((point - chartMin) / chartRange) * 76
+    return `${x},${y}`
+  }).join(' ')
+  const chartArea = chartLine ? `0,100 ${chartLine} 100,100` : ''
+  const chartRising = chartPoints.length < 2 || chartPoints[chartPoints.length - 1] >= chartPoints[0]
 
   return (
     <div className="app-shell">
@@ -312,6 +329,19 @@ function App() {
               </div>
               <div className="stock-chart" aria-label="최근 가격 캔들 차트">
                 <div className="chart-grid" />
+                {chartPoints.length === 0 ? (
+                  <p className="empty chart-empty">차트 데이터를 불러오지 못했습니다.</p>
+                ) : (
+                  <svg className={`chart-line-svg ${chartRising ? 'rise' : 'fall'}`} viewBox="0 0 100 100" preserveAspectRatio="none" role="img">
+                    <polygon className="chart-area" points={chartArea} />
+                    <polyline className="chart-line" points={chartLine} />
+                    {chartPoints.map((point, index) => {
+                      const x = chartPoints.length === 1 ? 50 : (index / (chartPoints.length - 1)) * 100
+                      const y = 92 - ((point - chartMin) / chartRange) * 76
+                      return <circle key={`${point}-${index}`} className="chart-dot" cx={x} cy={y} r="1.6" />
+                    })}
+                  </svg>
+                )}
                 <div className="chart-candles">
                   {(current.points || []).length === 0 && <p className="empty chart-empty">차트 데이터를 불러오지 못했습니다.</p>}
                   {(current.points || []).map((close, index, points) => {

@@ -353,11 +353,61 @@ label {
 .chart-candles {
   position: relative;
   z-index: 1;
-  display: grid;
+  display: none;
   grid-template-columns: repeat(auto-fit, minmax(14px, 1fr));
   align-items: stretch;
   gap: 10px;
   height: 100%;
+}
+
+.chart-line-svg {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.chart-line,
+.chart-area {
+  vector-effect: non-scaling-stroke;
+}
+
+.chart-line {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 8px 16px rgba(255, 255, 255, 0.08));
+}
+
+.chart-area {
+  opacity: 0.18;
+}
+
+.chart-dot {
+  stroke: #0c1118;
+  stroke-width: 0.8;
+}
+
+.chart-line-svg.rise .chart-line,
+.chart-line-svg.rise .chart-dot {
+  stroke: #ff4d5e;
+  fill: #ff4d5e;
+}
+
+.chart-line-svg.rise .chart-area {
+  fill: #ff4d5e;
+}
+
+.chart-line-svg.fall .chart-line,
+.chart-line-svg.fall .chart-dot {
+  stroke: #4d8dff;
+  fill: #4d8dff;
+}
+
+.chart-line-svg.fall .chart-area {
+  fill: #4d8dff;
 }
 
 .chart-empty {

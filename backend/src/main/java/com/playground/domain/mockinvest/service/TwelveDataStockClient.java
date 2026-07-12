@@ -130,9 +130,9 @@ public class TwelveDataStockClient {
             Collections.reverse(result);
             return result;
         } catch (StockProviderException e) {
-            throw e;
+            return List.of();
         } catch (Exception e) {
-            throw new StockProviderException("Twelve Data time series request failed", e);
+            return List.of();
         }
     }
 
