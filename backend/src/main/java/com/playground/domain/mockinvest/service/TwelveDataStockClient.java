@@ -3,36 +3,27 @@ package com.playground.domain.mockinvest.service;
 import com.playground.domain.mockinvest.dto.MockInvestDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
-import java.time.Instant;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 @Component
 @RequiredArgsConstructor
-public class KisStockClient {
+public class TwelveDataStockClient {
     private final RestTemplate restTemplate = new RestTemplate();
 
-    @Value("${kis.base-url:https://openapi.koreainvestment.com:9443}")
+    @Value("${twelve-data.base-url:https://api.twelvedata.com}")
     private String baseUrl;
 
-    @Value("${kis.app-key:}")
-    private String appKey;
+    @Value("${twelve-data.api-key:}")
+    private String apiKey;
 
-    @Value("${kis.app-secret:}")
-    private String appSecret;
-
-    @Value("${kis.account-no:}")
-    private String accountNo;
-
-    @Value("${kis.mock:true}")
+    @Value("${twelve-data.mock:false}")
     private boolean mock;
-
-    private String accessToken;
-    private Instant tokenExpiresAt = Instant.EPOCH;
 
     private static final Map<String, SampleStock> SAMPLES = Map.of(
             "005930", new SampleStock("005930", "삼성전자", "반도체", "메모리 반도체와 모바일 기기를 중심으로 글로벌 사업을 운영합니다.", 72500, 1.24),
@@ -55,9 +46,9 @@ public class KisStockClient {
     }
 
     public MockInvestDto.StockResponse quote(String symbol) {
-        if (canUseKis()) {
+        if (canUseTwelveData()) {
             try {
-                return kisQuote(symbol);
+                return twelveDataQuote(symbol);
             } catch (Exception ignored) {
                 // fall through to sample data
             }
@@ -65,69 +56,48 @@ public class KisStockClient {
         return sampleQuote(symbol);
     }
 
-    private boolean canUseKis() {
-        return !mock && !appKey.isBlank() && !appSecret.isBlank();
+    private boolean canUseTwelveData() {
+        return !mock && apiKey != null && !apiKey.isBlank();
     }
 
-    private MockInvestDto.StockResponse kisQuote(String symbol) {
-        String token = token();
-        String url = baseUrl + "/uapi/domestic-stock/v1/quotations/inquire-price"
-                + "?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=" + symbol;
+    private MockInvestDto.StockResponse twelveDataQuote(String symbol) {
+        String normalizedSymbol = normalizeSymbol(symbol);
+        String providerSymbol = toProviderSymbol(normalizedSymbol);
+        Map<?, ?> quote = get("/quote?symbol=" + encode(providerSymbol));
+        if (quote == null || quote.get("status") != null && "error".equals(String.valueOf(quote.get("status")))) {
+            throw new IllegalStateException("Twelve Data quote response missing");
+        }
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.setBearerAuth(token);
-        headers.set("appkey", appKey);
-        headers.set("appsecret", appSecret);
-        headers.set("tr_id", accountNo != null && accountNo.startsWith("V") ? "FHKST01010100" : "FHKST01010100");
-        headers.setContentType(MediaType.APPLICATION_JSON);
+        BigDecimal price = firstNumber(quote.get("close"), quote.get("previous_close"));
+        if (price.compareTo(BigDecimal.ZERO) == 0) throw new IllegalStateException("Twelve Data quote price missing");
 
-        ResponseEntity<Map> res = restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), Map.class);
-        Map<?, ?> body = res.getBody();
-        if (body == null) throw new IllegalStateException("KIS quote response missing");
-        Map<?, ?> output = (Map<?, ?>) body.get("output");
-        if (output == null) throw new IllegalStateException("KIS quote output missing");
+        BigDecimal change = num(quote.get("change"));
+        BigDecimal changeRate = num(quote.get("percent_change"));
+        SampleStock sample = SAMPLES.getOrDefault(normalizedSymbol, new SampleStock(
+                normalizedSymbol,
+                text(quote.get("name"), normalizedSymbol),
+                text(quote.get("exchange"), "국내주식"),
+                "Twelve Data 실시간/지연 시세입니다.",
+                price.longValue(),
+                changeRate.doubleValue()
+        ));
 
-        BigDecimal price = num(output.get("stck_prpr"));
-        BigDecimal change = num(output.get("prdy_vrss"));
-        BigDecimal changeRate = num(output.get("prdy_ctrt"));
-        SampleStock sample = SAMPLES.getOrDefault(symbol, new SampleStock(symbol, symbol, "국내주식", "한국투자증권 Open API 시세입니다.", price.longValue(), 0));
-
+        List<BigDecimal> pointValues = twelveDataPoints(providerSymbol);
         return MockInvestDto.StockResponse.builder()
-                .symbol(symbol)
-                .name(sample.name())
+                .symbol(normalizedSymbol)
+                .name(text(quote.get("name"), sample.name()))
                 .price(price)
                 .change(change)
                 .changeRate(changeRate)
-                .volume(num(output.get("acml_vol")).longValue())
+                .volume(num(quote.get("volume")).longValue())
                 .marketCap(BigDecimal.ZERO)
                 .sector(sample.sector())
-                .high(num(output.get("stck_hgpr")))
-                .low(num(output.get("stck_lwpr")))
+                .high(firstNumber(quote.get("high"), price))
+                .low(firstNumber(quote.get("low"), price))
                 .description(sample.description())
-                .points(points(price))
+                .points(pointValues.isEmpty() ? points(price) : pointValues)
                 .realtime(true)
                 .build();
-    }
-
-    private String token() {
-        if (accessToken != null && Instant.now().isBefore(tokenExpiresAt.minusSeconds(60))) {
-            return accessToken;
-        }
-
-        String url = baseUrl + "/oauth2/tokenP";
-        Map<String, String> body = Map.of(
-                "grant_type", "client_credentials",
-                "appkey", appKey,
-                "appsecret", appSecret
-        );
-        ResponseEntity<Map> res = restTemplate.postForEntity(url, body, Map.class);
-        Map<?, ?> data = res.getBody();
-        if (data == null) throw new IllegalStateException("KIS token response missing");
-        accessToken = String.valueOf(data.get("access_token"));
-        Object expiresValue = data.get("expires_in");
-        long expires = Long.parseLong(String.valueOf(expiresValue != null ? expiresValue : "86400"));
-        tokenExpiresAt = Instant.now().plusSeconds(expires);
-        return accessToken;
     }
 
     private MockInvestDto.StockResponse sampleQuote(String symbol) {
@@ -155,6 +125,54 @@ public class KisStockClient {
     private List<BigDecimal> points(BigDecimal price) {
         return List.of("0.93", "0.95", "0.97", "0.96", "0.99", "1.01", "1.00")
                 .stream().map(v -> price.multiply(new BigDecimal(v))).toList();
+    }
+
+    private List<BigDecimal> twelveDataPoints(String providerSymbol) {
+        try {
+            Map<?, ?> data = get("/time_series?symbol=" + encode(providerSymbol) + "&interval=1day&outputsize=7");
+            Object values = data != null ? data.get("values") : null;
+            if (!(values instanceof List<?> rows)) return List.of();
+            List<BigDecimal> result = new ArrayList<>();
+            for (Object row : rows) {
+                if (row instanceof Map<?, ?> map) {
+                    BigDecimal close = num(map.get("close"));
+                    if (close.compareTo(BigDecimal.ZERO) > 0) result.add(close);
+                }
+            }
+            Collections.reverse(result);
+            return result;
+        } catch (Exception ignored) {
+            return List.of();
+        }
+    }
+
+    private Map<?, ?> get(String path) {
+        String separator = path.contains("?") ? "&" : "?";
+        return restTemplate.getForObject(baseUrl + path + separator + "apikey=" + encode(apiKey), Map.class);
+    }
+
+    private String normalizeSymbol(String symbol) {
+        String value = symbol == null ? "005930" : symbol.trim().toUpperCase(Locale.ROOT);
+        int suffixIndex = value.indexOf(":");
+        return suffixIndex > 0 ? value.substring(0, suffixIndex) : value;
+    }
+
+    private String toProviderSymbol(String symbol) {
+        return symbol.matches("\\d{6}") ? symbol + ":KRX" : symbol;
+    }
+
+    private String encode(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8);
+    }
+
+    private String text(Object value, String fallback) {
+        String text = value == null ? "" : String.valueOf(value).trim();
+        return text.isBlank() ? fallback : text;
+    }
+
+    private BigDecimal firstNumber(Object primary, Object fallback) {
+        BigDecimal first = num(primary);
+        return first.compareTo(BigDecimal.ZERO) != 0 ? first : num(fallback);
     }
 
     private BigDecimal num(Object value) {

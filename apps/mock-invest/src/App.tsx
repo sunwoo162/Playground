@@ -212,7 +212,7 @@ function App() {
         <a className="back-link" href="/">← 놀이터</a>
         <div>
           <h1>📈 모의 투자</h1>
-          <p>{current?.realtime ? '한국투자증권 Open API 시세 연동' : '샘플 시세 모드'} · 여러 유저가 DB에 저장해서 같이 사용</p>
+          <p>{current?.realtime ? 'Twelve Data 시세 연동' : '샘플 시세 모드'} · 여러 유저가 DB에 저장해서 같이 사용</p>
         </div>
         <button className="reward-btn" onClick={addActivityReward}>+ 활동 보상</button>
       </header>

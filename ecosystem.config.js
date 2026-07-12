@@ -13,6 +13,7 @@ module.exports = {
       interpreter_args: '-jar',
       args: '--app.jwt.secret=playground-jwt-secret-2024-secure-key',
       cwd: '/home/ubuntu/playground',
+      env_file: '/home/ubuntu/playground/.env.backend',
     },
   ],
 };

@@ -28,7 +28,7 @@ public class MockInvestService {
     private final MockInvestJournalRepository journalRepository;
     private final MockInvestRewardRepository rewardRepository;
     private final UserRepository userRepository;
-    private final KisStockClient stockClient;
+    private final TwelveDataStockClient stockClient;
 
     @Transactional
     public MockInvestDto.PortfolioResponse me(String userId) {
