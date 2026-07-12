@@ -23,7 +23,7 @@ public class TwelveDataStockClient {
     private String apiKey;
 
     @Value("${twelve-data.mock:false}")
-    private boolean mock;
+    private String mock;
 
     public List<MockInvestDto.StockResponse> search(String keyword) {
         String q = keyword == null ? "" : keyword.trim().toLowerCase();
@@ -37,7 +37,8 @@ public class TwelveDataStockClient {
     }
 
     private boolean canUseTwelveData() {
-        return !mock && apiKey != null && !apiKey.isBlank();
+        boolean mockEnabled = mock != null && "true".equalsIgnoreCase(mock.trim());
+        return !mockEnabled && apiKey != null && !apiKey.isBlank();
     }
 
     private void ensureTwelveDataEnabled() {
