@@ -386,15 +386,16 @@ label {
 
 .chart-price-axis {
   position: absolute;
-  top: 14px;
-  right: 12px;
-  bottom: 92px;
-  width: 54px;
+  top: 16px;
+  right: 10px;
+  bottom: 96px;
+  z-index: 4;
+  width: 60px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  color: #8f9bad;
-  font-size: 11px;
+  color: #d6deea;
+  font-size: 12px;
   font-weight: 800;
   text-align: right;
   pointer-events: none;
@@ -404,12 +405,13 @@ label {
   position: absolute;
   left: 16px;
   right: 72px;
-  bottom: 8px;
+  bottom: 9px;
+  z-index: 4;
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  color: #8f9bad;
-  font-size: 11px;
+  color: #d6deea;
+  font-size: 12px;
   font-weight: 800;
   pointer-events: none;
 }
@@ -417,6 +419,9 @@ label {
 .chart-time-axis span {
   min-width: 0;
   white-space: nowrap;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: rgba(12, 17, 24, 0.78);
 }
 
 .chart-line-svg {

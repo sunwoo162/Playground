@@ -153,7 +153,7 @@ function App() {
   const [quantity, setQuantity] = useState(1)
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
-  const [chartRange, setChartRange] = useState<ChartRange>('1M')
+  const [chartRange, setChartRange] = useState<ChartRange>('1D')
   const [journalTitle, setJournalTitle] = useState('')
   const [journalContent, setJournalContent] = useState('')
   const [journalResult, setJournalResult] = useState('')
