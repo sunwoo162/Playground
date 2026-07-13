@@ -64,7 +64,13 @@ public class TwelveDataStockClient {
 
     public MockInvestDto.StockResponse quote(String symbol) {
         ensureTwelveDataEnabled();
-        return twelveDataQuote(symbol);
+        try {
+            return twelveDataQuote(symbol);
+        } catch (StockProviderException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw new StockProviderException("Twelve Data quote request failed", e);
+        }
     }
 
     private boolean canUseTwelveData() {
@@ -200,7 +206,11 @@ public class TwelveDataStockClient {
         if (value == null) return BigDecimal.ZERO;
         String s = String.valueOf(value).replace(",", "").trim();
         if (s.isBlank()) return BigDecimal.ZERO;
-        return new BigDecimal(s);
+        try {
+            return new BigDecimal(s);
+        } catch (NumberFormatException e) {
+            return BigDecimal.ZERO;
+        }
     }
 
     private void failIfProviderError(Map<?, ?> body, String fallback) {
