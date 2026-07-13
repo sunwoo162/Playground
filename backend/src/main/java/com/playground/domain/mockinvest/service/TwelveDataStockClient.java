@@ -189,7 +189,13 @@ public class TwelveDataStockClient {
     }
 
     private String symbolQuery(String symbol) {
-        return "symbol=" + encode(symbol);
+        String exchange = POPULAR_STOCKS.stream()
+                .filter(stock -> stock.symbol().equals(symbol))
+                .map(StockSeed::exchange)
+                .findFirst()
+                .orElse("");
+        String query = "symbol=" + encode(symbol);
+        return exchange.isBlank() ? query : query + "&exchange=" + encode(exchange);
     }
 
     private MockInvestDto.StockResponse fallbackQuote(String symbol) {
