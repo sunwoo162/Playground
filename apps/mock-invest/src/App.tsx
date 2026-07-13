@@ -66,8 +66,17 @@ type Ranking = {
 }
 
 type Tab = 'dashboard' | 'stocks' | 'orders' | 'journal' | 'ranking'
+type ChartRange = '5Y' | '1Y' | '6M' | '1M' | '1W' | '1D'
 
 const API = '/api/mock-invest'
+const CHART_RANGES: Array<[ChartRange, string, number]> = [
+  ['5Y', '5년', 60],
+  ['1Y', '1년', 48],
+  ['6M', '6개월', 36],
+  ['1M', '1달', 24],
+  ['1W', '일주일', 12],
+  ['1D', '1일', 16],
+]
 
 const POPULAR_STOCKS: Stock[] = [
   { symbol: 'AAPL', name: '애플', sector: '기술', description: '주요 미국 종목입니다.', realtime: true },
@@ -144,6 +153,7 @@ function App() {
   const [quantity, setQuantity] = useState(1)
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
+  const [chartRange, setChartRange] = useState<ChartRange>('1M')
   const [journalTitle, setJournalTitle] = useState('')
   const [journalContent, setJournalContent] = useState('')
   const [journalResult, setJournalResult] = useState('')
@@ -286,17 +296,12 @@ function App() {
 
   const current = selectedStock || stocks[0]
   const hasQuote = Boolean(current?.price)
-  const chartPoints = current?.points || []
-  const chartMin = chartPoints.length ? Math.min(...chartPoints) : 0
-  const chartMax = chartPoints.length ? Math.max(...chartPoints) : 0
-  const chartRange = chartMax - chartMin || 1
-  const chartLine = chartPoints.map((point, index) => {
-    const x = chartPoints.length === 1 ? 50 : (index / (chartPoints.length - 1)) * 100
-    const y = 92 - ((point - chartMin) / chartRange) * 76
-    return `${x},${y}`
-  }).join(' ')
-  const chartArea = chartLine ? `0,100 ${chartLine} 100,100` : ''
-  const chartRising = chartPoints.length < 2 || chartPoints[chartPoints.length - 1] >= chartPoints[0]
+  const selectedRange = CHART_RANGES.find(([id]) => id === chartRange) || CHART_RANGES[3]
+  const chartCandles = buildCandles(current, selectedRange[2])
+  const chartMin = chartCandles.length ? Math.min(...chartCandles.map((c) => c.low)) : 0
+  const chartMax = chartCandles.length ? Math.max(...chartCandles.map((c) => c.high)) : 0
+  const chartValueRange = chartMax - chartMin || 1
+  const maxVolume = chartCandles.length ? Math.max(...chartCandles.map((c) => c.volume)) || 1 : 1
 
   return (
     <div className="app-shell">
@@ -385,43 +390,35 @@ function App() {
                 <div><span>고가/저가</span><strong>{hasQuote ? `${money(current.high || 0)} / ${money(current.low || 0)}` : '-'}</strong></div>
                 <div><span>거래량</span><strong>{Number(current.volume || 0).toLocaleString('ko-KR')}</strong></div>
               </div>
+              <div className="chart-range-tabs" aria-label="차트 기간">
+                {CHART_RANGES.map(([id, label]) => (
+                  <button key={id} className={chartRange === id ? 'active' : ''} onClick={() => setChartRange(id)}>
+                    {label}
+                  </button>
+                ))}
+              </div>
               <div className="stock-chart" aria-label="최근 가격 캔들 차트">
                 <div className="chart-grid" />
-                {chartPoints.length === 0 ? (
+                {chartCandles.length === 0 ? (
                   <p className="empty chart-empty">차트 데이터를 불러오지 못했습니다.</p>
-                ) : (
-                  <svg className={`chart-line-svg ${chartRising ? 'rise' : 'fall'}`} viewBox="0 0 100 100" preserveAspectRatio="none" role="img">
-                    <polygon className="chart-area" points={chartArea} />
-                    <polyline className="chart-line" points={chartLine} />
-                    {chartPoints.map((point, index) => {
-                      const x = chartPoints.length === 1 ? 50 : (index / (chartPoints.length - 1)) * 100
-                      const y = 92 - ((point - chartMin) / chartRange) * 76
-                      return <circle key={`${point}-${index}`} className="chart-dot" cx={x} cy={y} r="1.6" />
-                    })}
-                  </svg>
-                )}
+                ) : null}
                 <div className="chart-candles">
-                  {(current.points || []).length === 0 && <p className="empty chart-empty">차트 데이터를 불러오지 못했습니다.</p>}
-                  {(current.points || []).map((close, index, points) => {
-                    const open = index === 0 ? close * 0.992 : points[index - 1]
-                    const high = Math.max(open, close) * 1.006
-                    const low = Math.min(open, close) * 0.994
-                    const min = Math.min(...points.map((p) => p * 0.994))
-                    const max = Math.max(...points.map((p) => p * 1.006))
-                    const range = max - min || 1
-                    const top = ((max - high) / range) * 100
-                    const wickHeight = Math.max(8, ((high - low) / range) * 100)
-                    const bodyTop = ((max - Math.max(open, close)) / range) * 100
-                    const bodyHeight = Math.max(6, (Math.abs(close - open) / range) * 100)
-                    const rising = close >= open
+                  {chartCandles.map((candle, index) => {
+                    const top = ((chartMax - candle.high) / chartValueRange) * 100
+                    const wickHeight = Math.max(3, ((candle.high - candle.low) / chartValueRange) * 100)
+                    const bodyTop = ((chartMax - Math.max(candle.open, candle.close)) / chartValueRange) * 100
+                    const bodyHeight = Math.max(2, (Math.abs(candle.close - candle.open) / chartValueRange) * 100)
+                    const volumeHeight = Math.max(4, (candle.volume / maxVolume) * 100)
+                    const rising = candle.close >= candle.open
                     return (
                       <span
                         className={`candle ${rising ? 'rise' : 'fall'}`}
-                        key={`${close}-${index}`}
-                        title={`${rising ? '상승' : '하락'} ${money(open)} → ${money(close)}`}
+                        key={`${candle.close}-${index}`}
+                        title={`${rising ? '상승' : '하락'} ${money(candle.open)} → ${money(candle.close)}`}
                       >
                         <i className="wick" style={{ top: `${top}%`, height: `${wickHeight}%` }} />
                         <i className="body" style={{ top: `${bodyTop}%`, height: `${bodyHeight}%` }} />
+                        <i className="volume" style={{ height: `${volumeHeight}%` }} />
                       </span>
                     )
                   })}
@@ -473,6 +470,39 @@ function App() {
       </main>
     </div>
   )
+}
+
+function buildCandles(stock: Stock | null | undefined, count: number) {
+  if (!stock) return []
+  const basePoints = stock.points && stock.points.length > 0
+    ? stock.points
+    : stock.price
+      ? [stock.price * 0.985, stock.price * 0.998, stock.price * 1.006, stock.price]
+      : []
+  if (basePoints.length === 0) return []
+  const result: Array<{ open: number; high: number; low: number; close: number; volume: number }> = []
+  const baseVolume = Math.max(1000, Number(stock.volume || 5000000))
+  for (let index = 0; index < count; index += 1) {
+    const ratio = count === 1 ? 0 : index / (count - 1)
+    const sourcePosition = ratio * (basePoints.length - 1)
+    const left = Math.floor(sourcePosition)
+    const right = Math.min(basePoints.length - 1, left + 1)
+    const blend = sourcePosition - left
+    const close = basePoints[left] + (basePoints[right] - basePoints[left]) * blend
+    const previousClose = result[index - 1]?.close ?? close * (1 - wave(index, stock.symbol) * 0.012)
+    const open = previousClose
+    const spread = Math.max(close, open) * (0.006 + Math.abs(wave(index + 3, stock.symbol)) * 0.01)
+    const high = Math.max(open, close) + spread
+    const low = Math.max(0.01, Math.min(open, close) - spread)
+    const volume = Math.round(baseVolume * (0.28 + Math.abs(wave(index + 7, stock.symbol)) * 0.72))
+    result.push({ open, high, low, close, volume })
+  }
+  return result
+}
+
+function wave(index: number, symbol: string) {
+  const seed = symbol.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0)
+  return Math.sin(index * 1.73 + seed * 0.13)
 }
 
 export default App

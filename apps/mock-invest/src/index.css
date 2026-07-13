@@ -326,9 +326,32 @@ label {
   font-weight: 800;
 }
 
+.chart-range-tabs {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin: 0 0 10px;
+}
+
+.chart-range-tabs button {
+  border: 1px solid #273244;
+  background: #0f151d;
+  color: #aeb9ca;
+  border-radius: 999px;
+  min-height: 34px;
+  padding: 0 12px;
+  font-weight: 900;
+}
+
+.chart-range-tabs button.active {
+  background: #6fd17b;
+  border-color: #6fd17b;
+  color: #07110a;
+}
+
 .stock-chart {
   position: relative;
-  height: 220px;
+  height: 300px;
   border: 1px solid #242e3d;
   background:
     linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px),
@@ -354,10 +377,11 @@ label {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(14px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(4px, 1fr));
   align-items: stretch;
-  gap: 10px;
+  gap: 1px;
   height: 100%;
+  padding-bottom: 64px;
 }
 
 .chart-line-svg {
@@ -424,11 +448,12 @@ label {
 
 .candle {
   position: relative;
-  min-width: 14px;
+  min-width: 4px;
 }
 
 .candle .wick,
-.candle .body {
+.candle .body,
+.candle .volume {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
@@ -442,18 +467,28 @@ label {
 }
 
 .candle .body {
-  width: min(100%, 22px);
-  border-radius: 3px;
+  width: min(78%, 14px);
+  border-radius: 2px;
   box-shadow: 0 0 16px rgba(255, 255, 255, 0.08);
 }
 
+.candle .volume {
+  bottom: -58px;
+  width: min(82%, 16px);
+  max-height: 52px;
+  border-radius: 2px 2px 0 0;
+  opacity: 0.78;
+}
+
 .candle.rise .wick,
-.candle.rise .body {
+.candle.rise .body,
+.candle.rise .volume {
   background: #ff4d5e;
 }
 
 .candle.fall .wick,
-.candle.fall .body {
+.candle.fall .body,
+.candle.fall .volume {
   background: #4d8dff;
 }
 
