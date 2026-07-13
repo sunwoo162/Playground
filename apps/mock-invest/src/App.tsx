@@ -302,6 +302,8 @@ function App() {
   const chartMax = chartCandles.length ? Math.max(...chartCandles.map((c) => c.high)) : 0
   const chartValueRange = chartMax - chartMin || 1
   const maxVolume = chartCandles.length ? Math.max(...chartCandles.map((c) => c.volume)) || 1 : 1
+  const priceTicks = [chartMax, chartMax - chartValueRange * 0.25, chartMax - chartValueRange * 0.5, chartMax - chartValueRange * 0.75, chartMin]
+  const timeTicks = buildTimeTicks(chartRange, chartCandles.length)
 
   return (
     <div className="app-shell">
@@ -399,6 +401,12 @@ function App() {
               </div>
               <div className="stock-chart" aria-label="최근 가격 캔들 차트">
                 <div className="chart-grid" />
+                <div className="chart-price-axis" aria-hidden="true">
+                  {priceTicks.map((tick, index) => <span key={`${tick}-${index}`}>{money(tick)}</span>)}
+                </div>
+                <div className="chart-time-axis" aria-hidden="true">
+                  {timeTicks.map((tick) => <span key={tick}>{tick}</span>)}
+                </div>
                 {chartCandles.length === 0 ? (
                   <p className="empty chart-empty">차트 데이터를 불러오지 못했습니다.</p>
                 ) : null}
@@ -503,6 +511,31 @@ function buildCandles(stock: Stock | null | undefined, count: number) {
 function wave(index: number, symbol: string) {
   const seed = symbol.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0)
   return Math.sin(index * 1.73 + seed * 0.13)
+}
+
+function buildTimeTicks(range: ChartRange, count: number) {
+  if (count === 0) return []
+  const now = new Date()
+  const labels = 5
+  const step = Math.max(1, Math.floor((count - 1) / (labels - 1)))
+  const indexes = Array.from({ length: labels }, (_, index) => Math.min(count - 1, index * step))
+  indexes[indexes.length - 1] = count - 1
+  return indexes.map((index) => {
+    const date = new Date(now)
+    if (range === '5Y') date.setMonth(now.getMonth() - Math.round((count - 1 - index) * 1))
+    if (range === '1Y') date.setDate(now.getDate() - Math.round((count - 1 - index) * 7.6))
+    if (range === '6M') date.setDate(now.getDate() - Math.round((count - 1 - index) * 5))
+    if (range === '1M') date.setDate(now.getDate() - Math.round((count - 1 - index) * 1.3))
+    if (range === '1W') date.setDate(now.getDate() - Math.round((count - 1 - index) * 0.6))
+    if (range === '1D') date.setHours(now.getHours() - Math.round((count - 1 - index) * 0.5))
+    if (range === '1D') {
+      return date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })
+    }
+    if (range === '5Y' || range === '1Y') {
+      return date.toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit' }).replace(/\\. /g, '.').replace('.', '.')
+    }
+    return date.toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' }).replace(/\\. /g, '.').replace('.', '.')
+  })
 }
 
 export default App

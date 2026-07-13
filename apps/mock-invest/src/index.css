@@ -360,12 +360,12 @@ label {
   background-size: 64px 100%, 100% 44px, auto;
   border-radius: 8px;
   overflow: hidden;
-  padding: 18px 16px;
+  padding: 18px 72px 34px 16px;
 }
 
 .chart-grid {
   position: absolute;
-  inset: 18px 16px;
+  inset: 18px 72px 34px 16px;
   background:
     linear-gradient(180deg, transparent 24%, rgba(148, 163, 184, 0.08) 25%, transparent 26%),
     linear-gradient(180deg, transparent 49%, rgba(148, 163, 184, 0.08) 50%, transparent 51%),
@@ -382,6 +382,41 @@ label {
   gap: 1px;
   height: 100%;
   padding-bottom: 64px;
+}
+
+.chart-price-axis {
+  position: absolute;
+  top: 14px;
+  right: 12px;
+  bottom: 92px;
+  width: 54px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  color: #8f9bad;
+  font-size: 11px;
+  font-weight: 800;
+  text-align: right;
+  pointer-events: none;
+}
+
+.chart-time-axis {
+  position: absolute;
+  left: 16px;
+  right: 72px;
+  bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: #8f9bad;
+  font-size: 11px;
+  font-weight: 800;
+  pointer-events: none;
+}
+
+.chart-time-axis span {
+  min-width: 0;
+  white-space: nowrap;
 }
 
 .chart-line-svg {
