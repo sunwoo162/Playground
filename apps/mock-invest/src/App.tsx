@@ -193,6 +193,11 @@ function App() {
         || list[0]
       setSelectedSymbol(preferred.symbol)
       setSelectedStock(preferred)
+      try {
+        setSelectedStock(await api<Stock>(`/stocks/${encodeURIComponent(preferred.symbol)}`))
+      } catch {
+        setSelectedStock(preferred)
+      }
     }
   }
 
