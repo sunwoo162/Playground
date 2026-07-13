@@ -156,16 +156,10 @@ function App() {
 
   const loadStocks = async (keyword = '') => {
     const normalizedKeyword = keyword.trim().toLowerCase()
-    let list: Stock[]
-    try {
-      list = await api<Stock[]>(`/stocks${keyword ? `?keyword=${encodeURIComponent(keyword)}` : ''}`)
-    } catch (err) {
-      list = POPULAR_STOCKS.filter((stock) => !normalizedKeyword
-        || stock.symbol.toLowerCase().includes(normalizedKeyword)
-        || stock.name.toLowerCase().includes(normalizedKeyword)
-        || stock.sector.toLowerCase().includes(normalizedKeyword))
-      setMessage('종목 목록 API가 실패해서 주요 30개 종목을 표시합니다.')
-    }
+    const list = POPULAR_STOCKS.filter((stock) => !normalizedKeyword
+      || stock.symbol.toLowerCase().includes(normalizedKeyword)
+      || stock.name.toLowerCase().includes(normalizedKeyword)
+      || stock.sector.toLowerCase().includes(normalizedKeyword))
     setStocks(list)
     if (!selectedStock && list[0]) {
       const preferred = list.find((stock) => stock.symbol === selectedSymbol)
