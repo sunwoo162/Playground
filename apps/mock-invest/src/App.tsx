@@ -166,17 +166,13 @@ function App() {
         || list.find((stock) => stock.symbol === 'AAPL')
         || list[0]
       setSelectedSymbol(preferred.symbol)
-      try {
-        setSelectedStock(await api<Stock>(`/stocks/${preferred.symbol}`))
-      } catch {
-        setSelectedStock(preferred)
-      }
+      setSelectedStock(preferred)
     }
   }
 
   const loadSelectedStock = async (symbol: string) => {
     try {
-      const nextStock = await api<Stock>(`/stocks/${symbol}`)
+      const nextStock = await api<Stock>(`/stocks/${encodeURIComponent(symbol)}`)
       setSelectedSymbol(symbol)
       setSelectedStock(nextStock)
       setMessage('')
