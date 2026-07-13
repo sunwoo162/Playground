@@ -134,6 +134,10 @@ function money(value: number) {
   })
 }
 
+function signedMoney(value: number) {
+  return `${value >= 0 ? '+' : ''}${money(value)}`
+}
+
 function percent(value: number) {
   const n = Number(value || 0)
   return `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`
@@ -295,9 +299,18 @@ function App() {
   }
 
   const current = selectedStock || stocks[0]
-  const hasQuote = Boolean(current?.price)
   const selectedRange = CHART_RANGES.find(([id]) => id === chartRange) || CHART_RANGES[3]
   const chartCandles = buildCandles(current, selectedRange[2])
+  const firstCandle = chartCandles[0]
+  const lastCandle = chartCandles[chartCandles.length - 1]
+  const rangeOpen = firstCandle?.open || current?.price || 0
+  const rangeClose = lastCandle?.close || current?.price || 0
+  const rangeChange = rangeClose - rangeOpen
+  const rangeChangeRate = rangeOpen ? (rangeChange / rangeOpen) * 100 : 0
+  const rangeHigh = chartCandles.length ? Math.max(...chartCandles.map((c) => c.high)) : current?.high || 0
+  const rangeLow = chartCandles.length ? Math.min(...chartCandles.map((c) => c.low)) : current?.low || 0
+  const rangeVolume = chartCandles.reduce((sum, candle) => sum + candle.volume, 0)
+  const hasRangeData = chartCandles.length > 0
   const chartMin = chartCandles.length ? Math.min(...chartCandles.map((c) => c.low)) : 0
   const chartMax = chartCandles.length ? Math.max(...chartCandles.map((c) => c.high)) : 0
   const chartValueRange = chartMax - chartMin || 1
@@ -387,10 +400,14 @@ function App() {
                 <button className="ghost-btn" onClick={toggleWatch}>{watchSymbols.has(current.symbol) ? '★ 관심 해제' : '☆ 관심 등록'}</button>
               </div>
               <div className="quote-grid">
-                <div><span>현재가</span><strong>{hasQuote ? money(current.price || 0) : '시세 선택 필요'}</strong></div>
-                <div><span>등락률</span><strong className={(current.changeRate || 0) >= 0 ? 'positive' : 'negative'}>{hasQuote ? percent(current.changeRate || 0) : '-'}</strong></div>
-                <div><span>고가/저가</span><strong>{hasQuote ? `${money(current.high || 0)} / ${money(current.low || 0)}` : '-'}</strong></div>
-                <div><span>거래량</span><strong>{Number(current.volume || 0).toLocaleString('ko-KR')}</strong></div>
+                <div><span>현재가</span><strong>{hasRangeData ? money(rangeClose) : '시세 선택 필요'}</strong></div>
+                <div>
+                  <span>{selectedRange[1]} 등락률</span>
+                  <strong className={rangeChange >= 0 ? 'positive' : 'negative'}>{hasRangeData ? percent(rangeChangeRate) : '-'}</strong>
+                  {hasRangeData && <small className={rangeChange >= 0 ? 'positive' : 'negative'}>{signedMoney(rangeChange)}</small>}
+                </div>
+                <div><span>{selectedRange[1]} 고가/저가</span><strong>{hasRangeData ? `${money(rangeHigh)} / ${money(rangeLow)}` : '-'}</strong></div>
+                <div><span>{selectedRange[1]} 거래량</span><strong>{hasRangeData ? rangeVolume.toLocaleString('ko-KR') : '0'}</strong></div>
               </div>
               <div className="chart-range-tabs" aria-label="차트 기간">
                 {CHART_RANGES.map(([id, label]) => (
