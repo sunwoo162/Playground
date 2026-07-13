@@ -115,7 +115,7 @@ public class MockInvestService {
 
     public List<MockInvestDto.StockResponse> watchlist(String userId) {
         return watchlistRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
-                .map(w -> stockClient.quote(w.getSymbol())).toList();
+                .map(this::quoteWatchOrFallback).toList();
     }
 
     @Transactional
@@ -258,6 +258,28 @@ public class MockInvestService {
                     .low(h.getAveragePrice())
                     .description("현재 시세를 불러올 수 없어 평균 매입가로 평가합니다.")
                     .points(List.of(h.getAveragePrice()))
+                    .realtime(false)
+                    .build();
+        }
+    }
+
+    private MockInvestDto.StockResponse quoteWatchOrFallback(MockInvestWatchlist w) {
+        try {
+            return stockClient.quote(w.getSymbol());
+        } catch (RuntimeException e) {
+            return MockInvestDto.StockResponse.builder()
+                    .symbol(w.getSymbol())
+                    .name(w.getName())
+                    .price(BigDecimal.ZERO)
+                    .change(BigDecimal.ZERO)
+                    .changeRate(BigDecimal.ZERO)
+                    .volume(0L)
+                    .marketCap(BigDecimal.ZERO)
+                    .sector("UNAVAILABLE")
+                    .high(BigDecimal.ZERO)
+                    .low(BigDecimal.ZERO)
+                    .description("현재 시세를 불러올 수 없는 관심 종목입니다.")
+                    .points(List.of())
                     .realtime(false)
                     .build();
         }

@@ -59,7 +59,6 @@ public class TwelveDataStockClient {
 
     public List<MockInvestDto.StockResponse> search(String keyword) {
         String q = keyword == null ? "" : keyword.trim().toLowerCase();
-        ensureTwelveDataEnabled();
         return twelveDataStocks(q);
     }
 

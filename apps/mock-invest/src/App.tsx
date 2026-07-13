@@ -149,10 +149,22 @@ function App() {
   const [journalResult, setJournalResult] = useState('')
 
   const loadPortfolio = async () => setPortfolio(await api<Portfolio>('/portfolio'))
-  const loadWatchlist = async () => setWatchlist(await api<Stock[]>('/watchlist'))
+  const loadWatchlist = async () => {
+    try {
+      setWatchlist(await api<Stock[]>('/watchlist'))
+    } catch {
+      setWatchlist([])
+    }
+  }
   const loadOrders = async () => setOrders(await api<Order[]>('/orders'))
   const loadJournals = async () => setJournals(await api<Journal[]>('/journals'))
-  const loadRankings = async () => setRankings(await api<Ranking[]>('/rankings'))
+  const loadRankings = async () => {
+    try {
+      setRankings(await api<Ranking[]>('/rankings'))
+    } catch {
+      setRankings([])
+    }
+  }
 
   const loadStocks = async (keyword = '') => {
     const normalizedKeyword = keyword.trim().toLowerCase()
@@ -182,17 +194,26 @@ function App() {
   }
 
   const refreshAll = async () => {
-    await Promise.all([loadPortfolio(), loadWatchlist(), loadOrders(), loadJournals(), loadRankings()])
+    await Promise.all([loadPortfolio(), loadOrders(), loadJournals()])
   }
 
   useEffect(() => {
-    Promise.allSettled([loadPortfolio(), loadStocks(), loadWatchlist(), loadOrders(), loadJournals(), loadRankings()])
+    Promise.allSettled([loadPortfolio(), loadStocks(), loadOrders(), loadJournals()])
       .then((results) => {
         const failed = results.find((result) => result.status === 'rejected') as PromiseRejectedResult | undefined
         if (failed) setMessage(failed.reason?.message || 'Twelve Data API 정보를 불러오지 못했습니다.')
       })
       .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    if (tab === 'dashboard') {
+      loadWatchlist()
+    }
+    if (tab === 'ranking') {
+      loadRankings()
+    }
+  }, [tab])
 
   useEffect(() => {
     const id = window.setTimeout(() => {
