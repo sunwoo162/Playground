@@ -304,8 +304,8 @@ function App() {
   }
 
   const current = selectedStock || stocks[0]
-  const selectedRange = CHART_RANGES.find(([id]) => id === chartRange) || CHART_RANGES[3]
-  const chartCandles = buildCandles(current, selectedRange[2])
+  const selectedRange = CHART_RANGES.find(([id]) => id === chartRange) || CHART_RANGES[5]
+  const chartCandles = buildCandles(current, selectedRange[2], chartRange)
   const firstCandle = chartCandles[0]
   const lastCandle = chartCandles[chartCandles.length - 1]
   const rangeOpen = firstCandle?.open || current?.price || 0
@@ -502,24 +502,24 @@ function App() {
   )
 }
 
-function buildCandles(stock: Stock | null | undefined, count: number) {
+function buildCandles(stock: Stock | null | undefined, count: number, range: ChartRange) {
   if (!stock) return []
-  const basePoints = stock.points && stock.points.length > 0
-    ? stock.points
-    : stock.price
-      ? [stock.price * 0.985, stock.price * 0.998, stock.price * 1.006, stock.price]
-      : []
-  if (basePoints.length === 0) return []
+  const closePrice = stock.price || stock.points?.[stock.points.length - 1] || 0
+  if (!closePrice) return []
+  const periodRate = rangeTrendRate(stock, range)
+  const denominator = 1 + periodRate / 100
+  const startPrice = denominator > 0.05 ? closePrice / denominator : closePrice
+  const trendWidth = Math.abs(closePrice - startPrice)
   const result: Array<{ open: number; high: number; low: number; close: number; volume: number }> = []
   const baseVolume = Math.max(1000, Number(stock.volume || 5000000))
   for (let index = 0; index < count; index += 1) {
     const ratio = count === 1 ? 0 : index / (count - 1)
-    const sourcePosition = ratio * (basePoints.length - 1)
-    const left = Math.floor(sourcePosition)
-    const right = Math.min(basePoints.length - 1, left + 1)
-    const blend = sourcePosition - left
-    const close = basePoints[left] + (basePoints[right] - basePoints[left]) * blend
-    const previousClose = result[index - 1]?.close ?? close * (1 - wave(index, stock.symbol) * 0.012)
+    const trendClose = startPrice + (closePrice - startPrice) * ratio
+    const noise = index === 0 || index === count - 1
+      ? 0
+      : wave(index, stock.symbol) * (trendWidth * 0.18 + closePrice * 0.002)
+    const close = Math.max(0.01, trendClose + noise)
+    const previousClose = result[index - 1]?.close ?? startPrice
     const open = previousClose
     const spread = Math.max(close, open) * (0.006 + Math.abs(wave(index + 3, stock.symbol)) * 0.01)
     const high = Math.max(open, close) + spread
@@ -528,6 +528,20 @@ function buildCandles(stock: Stock | null | undefined, count: number) {
     result.push({ open, high, low, close, volume })
   }
   return result
+}
+
+function rangeTrendRate(stock: Stock, range: ChartRange) {
+  const dailyRate = Number(stock.changeRate || 0)
+  const multiplier: Record<ChartRange, number> = {
+    '1D': 1,
+    '1W': 3,
+    '1M': 8,
+    '6M': 18,
+    '1Y': 30,
+    '5Y': 60,
+  }
+  const rate = dailyRate * multiplier[range]
+  return Math.max(-85, Math.min(220, rate))
 }
 
 function wave(index: number, symbol: string) {
