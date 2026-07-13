@@ -433,10 +433,6 @@ label {
   overflow: visible;
 }
 
-.stock-chart > .chart-empty {
-  display: none;
-}
-
 .chart-line,
 .chart-area {
   vector-effect: non-scaling-stroke;

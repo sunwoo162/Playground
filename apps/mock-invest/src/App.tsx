@@ -4,6 +4,7 @@ type Stock = {
   symbol: string
   name: string
   price?: number
+  change?: number
   changeRate?: number
   volume?: number
   marketCap?: number
@@ -213,10 +214,12 @@ function App() {
   }
 
   const loadSelectedStock = async (symbol: string) => {
+    const localStock = stocks.find((stock) => stock.symbol === symbol)
+    setSelectedSymbol(symbol)
+    if (localStock) setSelectedStock(localStock)
+    setRemoteCandles([])
     try {
-      setRemoteCandles([])
       const nextStock = await api<Stock>(`/stocks/${encodeURIComponent(symbol)}`)
-      setSelectedSymbol(symbol)
       setSelectedStock(nextStock)
       setMessage('')
     } catch (err) {
@@ -336,14 +339,28 @@ function App() {
   const chartCandles = remoteCandles
   const firstCandle = chartCandles[0]
   const lastCandle = chartCandles[chartCandles.length - 1]
-  const rangeOpen = firstCandle?.open || current?.price || 0
-  const rangeClose = lastCandle?.close || current?.price || 0
+  const quotePrice = current?.price || 0
+  const quoteChange = current?.change || 0
+  const quoteChangeRate = current?.changeRate || 0
+  const quoteHigh = current?.high || 0
+  const quoteLow = current?.low || 0
+  const quoteVolume = current?.volume || 0
+  const hasQuoteData = quotePrice > 0
+  const hasChartData = chartCandles.length > 0
+  const rangeOpen = firstCandle?.open || quotePrice
+  const rangeClose = lastCandle?.close || quotePrice
   const rangeChange = rangeClose - rangeOpen
   const rangeChangeRate = rangeOpen ? (rangeChange / rangeOpen) * 100 : 0
-  const rangeHigh = chartCandles.length ? Math.max(...chartCandles.map((c) => c.high)) : current?.high || 0
-  const rangeLow = chartCandles.length ? Math.min(...chartCandles.map((c) => c.low)) : current?.low || 0
+  const rangeHigh = chartCandles.length ? Math.max(...chartCandles.map((c) => c.high)) : quoteHigh
+  const rangeLow = chartCandles.length ? Math.min(...chartCandles.map((c) => c.low)) : quoteLow
   const rangeVolume = chartCandles.reduce((sum, candle) => sum + candle.volume, 0)
-  const hasRangeData = chartCandles.length > 0
+  const displayPrice = hasChartData ? rangeClose : quotePrice
+  const displayChange = hasChartData ? rangeChange : quoteChange
+  const displayChangeRate = hasChartData ? rangeChangeRate : quoteChangeRate
+  const displayHigh = hasChartData ? rangeHigh : quoteHigh
+  const displayLow = hasChartData ? rangeLow : quoteLow
+  const displayVolume = hasChartData ? rangeVolume : quoteVolume
+  const hasDisplayData = hasChartData || hasQuoteData
   const chartMin = chartCandles.length ? Math.min(...chartCandles.map((c) => c.low)) : 0
   const chartMax = chartCandles.length ? Math.max(...chartCandles.map((c) => c.high)) : 0
   const chartValueRange = chartMax - chartMin || 1
@@ -433,14 +450,14 @@ function App() {
                 <button className="ghost-btn" onClick={toggleWatch}>{watchSymbols.has(current.symbol) ? '★ 관심 해제' : '☆ 관심 등록'}</button>
               </div>
               <div className="quote-grid">
-                <div><span>현재가</span><strong>{hasRangeData ? money(rangeClose) : '시세 선택 필요'}</strong></div>
+                <div><span>현재가</span><strong>{hasDisplayData ? money(displayPrice) : '시세 없음'}</strong></div>
                 <div>
-                  <span>{selectedRange[1]} 등락률</span>
-                  <strong className={rangeChange >= 0 ? 'positive' : 'negative'}>{hasRangeData ? percent(rangeChangeRate) : '-'}</strong>
-                  {hasRangeData && <small className={rangeChange >= 0 ? 'positive' : 'negative'}>{signedMoney(rangeChange)}</small>}
+                  <span>{hasChartData ? selectedRange[1] : '당일'} 등락률</span>
+                  <strong className={displayChange >= 0 ? 'positive' : 'negative'}>{hasDisplayData ? percent(displayChangeRate) : '-'}</strong>
+                  {hasDisplayData && <small className={displayChange >= 0 ? 'positive' : 'negative'}>{signedMoney(displayChange)}</small>}
                 </div>
-                <div><span>{selectedRange[1]} 고가/저가</span><strong>{hasRangeData ? `${money(rangeHigh)} / ${money(rangeLow)}` : '-'}</strong></div>
-                <div><span>{selectedRange[1]} 거래량</span><strong>{hasRangeData ? rangeVolume.toLocaleString('ko-KR') : '0'}</strong></div>
+                <div><span>{hasChartData ? selectedRange[1] : '당일'} 고가/저가</span><strong>{hasDisplayData ? `${money(displayHigh)} / ${money(displayLow)}` : '-'}</strong></div>
+                <div><span>{hasChartData ? selectedRange[1] : '당일'} 거래량</span><strong>{hasDisplayData ? displayVolume.toLocaleString('ko-KR') : '0'}</strong></div>
               </div>
               <div className="chart-range-tabs" aria-label="차트 기간">
                 {CHART_RANGES.map(([id, label]) => (
@@ -483,13 +500,17 @@ function App() {
                 </div>
               </div>
               <p className="description">
-                {hasRangeData ? 'Twelve Data에서 조회한 실제 시세입니다.' : '실제 시세를 불러오지 못했습니다. 임의 가격은 표시하지 않습니다.'}
+                {hasChartData
+                  ? 'Twelve Data에서 조회한 실제 기간 차트입니다.'
+                  : hasQuoteData
+                    ? '현재 시세는 조회됐지만 기간 차트는 불러오지 못했습니다.'
+                    : '실제 시세를 불러오지 못했습니다. 임의 가격은 표시하지 않습니다.'}
               </p>
               <div className="trade-box">
                 <label>주문 수량<input type="number" min={1} value={quantity} onChange={(event) => setQuantity(Number(event.target.value))} /></label>
-                <div><span>예상 금액</span><strong>{money((current.price || 0) * Math.max(1, quantity || 1))}</strong></div>
-                <button className="buy-btn" onClick={() => trade('buy')} disabled={!hasRangeData}>매수</button>
-                <button className="sell-btn" onClick={() => trade('sell')} disabled={!hasRangeData}>매도</button>
+                <div><span>예상 금액</span><strong>{money(quotePrice * Math.max(1, quantity || 1))}</strong></div>
+                <button className="buy-btn" onClick={() => trade('buy')} disabled={!hasQuoteData}>매수</button>
+                <button className="sell-btn" onClick={() => trade('sell')} disabled={!hasQuoteData}>매도</button>
               </div>
             </section>
           </div>
