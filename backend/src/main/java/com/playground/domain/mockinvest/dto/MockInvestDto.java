@@ -25,6 +25,17 @@ public class MockInvestDto {
     }
 
     @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+    public static class ChartCandleResponse {
+        private String datetime;
+        private BigDecimal open;
+        private BigDecimal high;
+        private BigDecimal low;
+        private BigDecimal close;
+        private Long volume;
+        private boolean realtime;
+    }
+
+    @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
     public static class HoldingResponse {
         private String symbol;
         private String name;

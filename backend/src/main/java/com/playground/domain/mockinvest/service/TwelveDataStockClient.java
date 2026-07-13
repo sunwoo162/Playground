@@ -76,6 +76,19 @@ public class TwelveDataStockClient {
         }
     }
 
+    public List<MockInvestDto.ChartCandleResponse> chart(String symbol, String range) {
+        String normalizedSymbol = normalizeSymbol(symbol);
+        ChartQuery chartQuery = chartQuery(range);
+        if (!canUseTwelveData()) {
+            return fallbackCandles(normalizedSymbol, chartQuery.outputSize(), chartQuery.range());
+        }
+        try {
+            return twelveDataChart(normalizedSymbol, chartQuery);
+        } catch (RuntimeException e) {
+            return fallbackCandles(normalizedSymbol, chartQuery.outputSize(), chartQuery.range());
+        }
+    }
+
     private boolean canUseTwelveData() {
         boolean mockEnabled = mock != null && "true".equalsIgnoreCase(mock.trim());
         return !mockEnabled && !configuredApiKey().isBlank();
@@ -170,6 +183,38 @@ public class TwelveDataStockClient {
         }
     }
 
+    private List<MockInvestDto.ChartCandleResponse> twelveDataChart(String symbol, ChartQuery chartQuery) {
+        Map<?, ?> data = get("/time_series?" + symbolQuery(symbol)
+                + "&interval=" + encode(chartQuery.interval())
+                + "&outputsize=" + chartQuery.outputSize());
+        failIfProviderError(data, "Twelve Data time series request failed");
+        Object values = data != null ? data.get("values") : null;
+        if (!(values instanceof List<?> rows) || rows.isEmpty()) {
+            throw new StockProviderException("Twelve Data chart response missing");
+        }
+        List<MockInvestDto.ChartCandleResponse> result = new ArrayList<>();
+        for (Object row : rows) {
+            if (row instanceof Map<?, ?> map) {
+                BigDecimal close = num(map.get("close"));
+                if (close.compareTo(BigDecimal.ZERO) <= 0) continue;
+                result.add(MockInvestDto.ChartCandleResponse.builder()
+                        .datetime(text(map.get("datetime"), ""))
+                        .open(firstNumber(map.get("open"), close))
+                        .high(firstNumber(map.get("high"), close))
+                        .low(firstNumber(map.get("low"), close))
+                        .close(close)
+                        .volume(num(map.get("volume")).longValue())
+                        .realtime(true)
+                        .build());
+            }
+        }
+        Collections.reverse(result);
+        if (result.isEmpty()) {
+            throw new StockProviderException("Twelve Data chart values missing");
+        }
+        return result;
+    }
+
     private Map<?, ?> get(String path) {
         String separator = path.contains("?") ? "&" : "?";
         return restTemplate.getForObject(baseUrl + path + separator + "apikey=" + encode(configuredApiKey()), Map.class);
@@ -198,6 +243,18 @@ public class TwelveDataStockClient {
         return exchange.isBlank() ? query : query + "&exchange=" + encode(exchange);
     }
 
+    private ChartQuery chartQuery(String range) {
+        String value = range == null ? "1D" : range.trim().toUpperCase(Locale.ROOT);
+        return switch (value) {
+            case "5Y" -> new ChartQuery("5Y", "1month", 60);
+            case "1Y" -> new ChartQuery("1Y", "1week", 52);
+            case "6M" -> new ChartQuery("6M", "1week", 26);
+            case "1M" -> new ChartQuery("1M", "1day", 30);
+            case "1W" -> new ChartQuery("1W", "1day", 7);
+            default -> new ChartQuery("1D", "5min", 78);
+        };
+    }
+
     private MockInvestDto.StockResponse fallbackQuote(String symbol) {
         BigDecimal price = fallbackPrice(symbol);
         BigDecimal change = fallbackChange(symbol);
@@ -219,6 +276,40 @@ public class TwelveDataStockClient {
                 .points(fallbackPoints(price))
                 .realtime(false)
                 .build();
+    }
+
+    private List<MockInvestDto.ChartCandleResponse> fallbackCandles(String symbol, int count, String range) {
+        BigDecimal closePrice = fallbackPrice(symbol);
+        BigDecimal changeRate = fallbackQuote(symbol).getChangeRate();
+        BigDecimal multiplier = switch (range) {
+            case "5Y" -> BigDecimal.valueOf(60);
+            case "1Y" -> BigDecimal.valueOf(30);
+            case "6M" -> BigDecimal.valueOf(18);
+            case "1M" -> BigDecimal.valueOf(8);
+            case "1W" -> BigDecimal.valueOf(3);
+            default -> BigDecimal.ONE;
+        };
+        BigDecimal periodRate = changeRate.multiply(multiplier).max(BigDecimal.valueOf(-85)).min(BigDecimal.valueOf(220));
+        BigDecimal startPrice = closePrice.divide(BigDecimal.ONE.add(periodRate.divide(BigDecimal.valueOf(100), 8, java.math.RoundingMode.HALF_UP)), 4, java.math.RoundingMode.HALF_UP);
+        BigDecimal previousClose = startPrice;
+        long baseVolume = fallbackVolume(symbol);
+        List<MockInvestDto.ChartCandleResponse> result = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            BigDecimal ratio = count <= 1 ? BigDecimal.ONE : BigDecimal.valueOf(i).divide(BigDecimal.valueOf(count - 1), 8, java.math.RoundingMode.HALF_UP);
+            BigDecimal close = i == count - 1 ? closePrice : startPrice.add(closePrice.subtract(startPrice).multiply(ratio));
+            BigDecimal spread = close.max(previousClose).multiply(BigDecimal.valueOf(0.01));
+            result.add(MockInvestDto.ChartCandleResponse.builder()
+                    .datetime("")
+                    .open(previousClose)
+                    .high(close.max(previousClose).add(spread))
+                    .low(close.min(previousClose).subtract(spread).max(BigDecimal.valueOf(0.01)))
+                    .close(close)
+                    .volume(Math.round(baseVolume * (0.35 + Math.abs(Math.sin(i * 1.7)) * 0.65)))
+                    .realtime(false)
+                    .build());
+            previousClose = close;
+        }
+        return result;
     }
 
     private BigDecimal fallbackPrice(String symbol) {
@@ -331,6 +422,9 @@ public class TwelveDataStockClient {
     }
 
     private record StockSeed(String symbol, String name, String exchange, String sector) {
+    }
+
+    private record ChartQuery(String range, String interval, int outputSize) {
     }
 
 }

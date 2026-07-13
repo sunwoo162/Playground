@@ -46,6 +46,13 @@ public class MockInvestController {
         return ResponseEntity.ok(service.stock(symbol));
     }
 
+    @GetMapping("/stocks/{symbol}/chart")
+    public ResponseEntity<List<MockInvestDto.ChartCandleResponse>> stockChart(
+            @PathVariable String symbol,
+            @RequestParam(defaultValue = "1D") String range) {
+        return ResponseEntity.ok(service.stockChart(symbol, range));
+    }
+
     @PostMapping("/trades/buy")
     public ResponseEntity<MockInvestDto.OrderResponse> buy(
             @AuthenticationPrincipal JwtAuthenticationToken auth,

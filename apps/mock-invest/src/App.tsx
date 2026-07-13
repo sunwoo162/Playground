@@ -15,6 +15,16 @@ type Stock = {
   realtime: boolean
 }
 
+type ChartCandle = {
+  datetime?: string
+  open: number
+  high: number
+  low: number
+  close: number
+  volume: number
+  realtime?: boolean
+}
+
 type Holding = {
   symbol: string
   name: string
@@ -158,6 +168,7 @@ function App() {
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
   const [chartRange, setChartRange] = useState<ChartRange>('1D')
+  const [remoteCandles, setRemoteCandles] = useState<ChartCandle[]>([])
   const [journalTitle, setJournalTitle] = useState('')
   const [journalContent, setJournalContent] = useState('')
   const [journalResult, setJournalResult] = useState('')
@@ -203,6 +214,7 @@ function App() {
 
   const loadSelectedStock = async (symbol: string) => {
     try {
+      setRemoteCandles([])
       const nextStock = await api<Stock>(`/stocks/${encodeURIComponent(symbol)}`)
       setSelectedSymbol(symbol)
       setSelectedStock(nextStock)
@@ -240,6 +252,22 @@ function App() {
     }, 250)
     return () => window.clearTimeout(id)
   }, [query])
+
+  useEffect(() => {
+    if (!selectedSymbol) return
+    let active = true
+    setRemoteCandles([])
+    api<ChartCandle[]>(`/stocks/${encodeURIComponent(selectedSymbol)}/chart?range=${chartRange}`)
+      .then((candles) => {
+        if (active) setRemoteCandles(candles)
+      })
+      .catch(() => {
+        if (active) setRemoteCandles([])
+      })
+    return () => {
+      active = false
+    }
+  }, [selectedSymbol, chartRange])
 
   const holdingSymbols = useMemo(() => new Set((portfolio?.holdings || []).map((h) => h.symbol)), [portfolio])
   const watchSymbols = useMemo(() => new Set(watchlist.map((stock) => stock.symbol)), [watchlist])
@@ -305,7 +333,7 @@ function App() {
 
   const current = selectedStock || stocks[0]
   const selectedRange = CHART_RANGES.find(([id]) => id === chartRange) || CHART_RANGES[5]
-  const chartCandles = buildCandles(current, selectedRange[2], chartRange)
+  const chartCandles = remoteCandles.length ? remoteCandles : buildCandles(current, selectedRange[2], chartRange)
   const firstCandle = chartCandles[0]
   const lastCandle = chartCandles[chartCandles.length - 1]
   const rangeOpen = firstCandle?.open || current?.price || 0

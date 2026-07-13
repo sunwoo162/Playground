@@ -64,6 +64,10 @@ public class MockInvestService {
         }
     }
 
+    public List<MockInvestDto.ChartCandleResponse> stockChart(String symbol, String range) {
+        return stockClient.chart(symbol, range);
+    }
+
     @Transactional
     public MockInvestDto.OrderResponse buy(String userId, MockInvestDto.TradeRequest req) {
         if (req.getQuantity() == null || req.getQuantity() < 1) throw new IllegalArgumentException("quantity must be greater than zero");
