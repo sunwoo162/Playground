@@ -333,7 +333,7 @@ function App() {
 
   const current = selectedStock || stocks[0]
   const selectedRange = CHART_RANGES.find(([id]) => id === chartRange) || CHART_RANGES[5]
-  const chartCandles = remoteCandles.length ? remoteCandles : buildCandles(current, selectedRange[2], chartRange)
+  const chartCandles = remoteCandles
   const firstCandle = chartCandles[0]
   const lastCandle = chartCandles[chartCandles.length - 1]
   const rangeOpen = firstCandle?.open || current?.price || 0
@@ -482,12 +482,14 @@ function App() {
                   })}
                 </div>
               </div>
-              <p className="description">{current.description}</p>
+              <p className="description">
+                {hasRangeData ? 'Twelve Data에서 조회한 실제 시세입니다.' : '실제 시세를 불러오지 못했습니다. 임의 가격은 표시하지 않습니다.'}
+              </p>
               <div className="trade-box">
                 <label>주문 수량<input type="number" min={1} value={quantity} onChange={(event) => setQuantity(Number(event.target.value))} /></label>
                 <div><span>예상 금액</span><strong>{money((current.price || 0) * Math.max(1, quantity || 1))}</strong></div>
-                <button className="buy-btn" onClick={() => trade('buy')}>매수</button>
-                <button className="sell-btn" onClick={() => trade('sell')}>매도</button>
+                <button className="buy-btn" onClick={() => trade('buy')} disabled={!hasRangeData}>매수</button>
+                <button className="sell-btn" onClick={() => trade('sell')} disabled={!hasRangeData}>매도</button>
               </div>
             </section>
           </div>
@@ -528,53 +530,6 @@ function App() {
       </main>
     </div>
   )
-}
-
-function buildCandles(stock: Stock | null | undefined, count: number, range: ChartRange) {
-  if (!stock) return []
-  const closePrice = stock.price || stock.points?.[stock.points.length - 1] || 0
-  if (!closePrice) return []
-  const periodRate = rangeTrendRate(stock, range)
-  const denominator = 1 + periodRate / 100
-  const startPrice = denominator > 0.05 ? closePrice / denominator : closePrice
-  const trendWidth = Math.abs(closePrice - startPrice)
-  const result: Array<{ open: number; high: number; low: number; close: number; volume: number }> = []
-  const baseVolume = Math.max(1000, Number(stock.volume || 5000000))
-  for (let index = 0; index < count; index += 1) {
-    const ratio = count === 1 ? 0 : index / (count - 1)
-    const trendClose = startPrice + (closePrice - startPrice) * ratio
-    const noise = index === 0 || index === count - 1
-      ? 0
-      : wave(index, stock.symbol) * (trendWidth * 0.18 + closePrice * 0.002)
-    const close = Math.max(0.01, trendClose + noise)
-    const previousClose = result[index - 1]?.close ?? startPrice
-    const open = previousClose
-    const spread = Math.max(close, open) * (0.006 + Math.abs(wave(index + 3, stock.symbol)) * 0.01)
-    const high = Math.max(open, close) + spread
-    const low = Math.max(0.01, Math.min(open, close) - spread)
-    const volume = Math.round(baseVolume * (0.28 + Math.abs(wave(index + 7, stock.symbol)) * 0.72))
-    result.push({ open, high, low, close, volume })
-  }
-  return result
-}
-
-function rangeTrendRate(stock: Stock, range: ChartRange) {
-  const dailyRate = Number(stock.changeRate || 0)
-  const multiplier: Record<ChartRange, number> = {
-    '1D': 1,
-    '1W': 3,
-    '1M': 8,
-    '6M': 18,
-    '1Y': 30,
-    '5Y': 60,
-  }
-  const rate = dailyRate * multiplier[range]
-  return Math.max(-85, Math.min(220, rate))
-}
-
-function wave(index: number, symbol: string) {
-  const seed = symbol.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0)
-  return Math.sin(index * 1.73 + seed * 0.13)
 }
 
 function buildTimeTicks(range: ChartRange, candles: ChartCandle[]) {

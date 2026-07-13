@@ -65,14 +65,14 @@ public class TwelveDataStockClient {
     public MockInvestDto.StockResponse quote(String symbol) {
         String normalizedSymbol = normalizeSymbol(symbol);
         if (!canUseTwelveData()) {
-            return fallbackQuote(normalizedSymbol);
+            throw new StockProviderException("Twelve Data API key is not configured");
         }
         try {
             return twelveDataQuote(normalizedSymbol);
         } catch (StockProviderException e) {
-            return fallbackQuote(normalizedSymbol);
+            throw e;
         } catch (RuntimeException e) {
-            return fallbackQuote(normalizedSymbol);
+            throw new StockProviderException("Twelve Data quote request failed", e);
         }
     }
 
@@ -80,12 +80,12 @@ public class TwelveDataStockClient {
         String normalizedSymbol = normalizeSymbol(symbol);
         ChartQuery chartQuery = chartQuery(range);
         if (!canUseTwelveData()) {
-            return fallbackCandles(normalizedSymbol, chartQuery.outputSize(), chartQuery.range());
+            return List.of();
         }
         try {
             return twelveDataChart(normalizedSymbol, chartQuery);
         } catch (RuntimeException e) {
-            return fallbackCandles(normalizedSymbol, chartQuery.outputSize(), chartQuery.range());
+            return List.of();
         }
     }
 
@@ -127,7 +127,6 @@ public class TwelveDataStockClient {
         BigDecimal change = num(quote.get("change"));
         BigDecimal changeRate = num(quote.get("percent_change"));
         List<BigDecimal> pointValues = twelveDataPoints(providerQuery);
-        if (pointValues.isEmpty()) pointValues = fallbackPoints(price);
         return MockInvestDto.StockResponse.builder()
                 .symbol(normalizedSymbol)
                 .name(koreanName(normalizedSymbol, text(quote.get("name"), normalizedSymbol)))
@@ -155,16 +154,16 @@ public class TwelveDataStockClient {
                     .map(stock -> MockInvestDto.StockResponse.builder()
                             .symbol(stock.symbol())
                             .name(stock.name())
-                            .price(fallbackPrice(stock.symbol()))
-                            .change(BigDecimal.ZERO)
-                            .changeRate(BigDecimal.ZERO)
+                            .price(null)
+                            .change(null)
+                            .changeRate(null)
                             .volume(0L)
                             .marketCap(BigDecimal.ZERO)
                             .sector(stock.sector())
                             .description("주요 미국 종목입니다. 선택하면 Twelve Data 현재가와 차트를 불러옵니다.")
-                            .high(fallbackPrice(stock.symbol()).multiply(BigDecimal.valueOf(1.01)))
-                            .low(fallbackPrice(stock.symbol()).multiply(BigDecimal.valueOf(0.99)))
-                            .points(fallbackPoints(fallbackPrice(stock.symbol())))
+                            .high(null)
+                            .low(null)
+                            .points(List.of())
                             .realtime(true)
                             .build())
                     .toList();
@@ -287,131 +286,12 @@ public class TwelveDataStockClient {
         };
     }
 
-    private MockInvestDto.StockResponse fallbackQuote(String symbol) {
-        BigDecimal price = fallbackPrice(symbol);
-        BigDecimal change = fallbackChange(symbol);
-        BigDecimal changeRate = price.compareTo(BigDecimal.ZERO) > 0
-                ? change.multiply(BigDecimal.valueOf(100)).divide(price.subtract(change), 2, java.math.RoundingMode.HALF_UP)
-                : BigDecimal.ZERO;
-        return MockInvestDto.StockResponse.builder()
-                .symbol(symbol)
-                .name(koreanName(symbol, symbol))
-                .price(price)
-                .change(change)
-                .changeRate(changeRate)
-                .volume(fallbackVolume(symbol))
-                .marketCap(BigDecimal.ZERO)
-                .sector(fallbackSector(symbol))
-                .high(price.multiply(BigDecimal.valueOf(1.01)))
-                .low(price.multiply(BigDecimal.valueOf(0.99)))
-                .description("Twelve Data 시세를 불러오지 못해 주요 종목 예비 시세로 표시합니다.")
-                .points(fallbackPoints(price))
-                .realtime(false)
-                .build();
-    }
-
-    private List<MockInvestDto.ChartCandleResponse> fallbackCandles(String symbol, int count, String range) {
-        BigDecimal closePrice = fallbackPrice(symbol);
-        BigDecimal changeRate = fallbackQuote(symbol).getChangeRate();
-        BigDecimal multiplier = switch (range) {
-            case "5Y" -> BigDecimal.valueOf(60);
-            case "1Y" -> BigDecimal.valueOf(30);
-            case "6M" -> BigDecimal.valueOf(18);
-            case "1M" -> BigDecimal.valueOf(8);
-            case "1W" -> BigDecimal.valueOf(3);
-            default -> BigDecimal.ONE;
-        };
-        BigDecimal periodRate = changeRate.multiply(multiplier).max(BigDecimal.valueOf(-85)).min(BigDecimal.valueOf(220));
-        BigDecimal startPrice = closePrice.divide(BigDecimal.ONE.add(periodRate.divide(BigDecimal.valueOf(100), 8, java.math.RoundingMode.HALF_UP)), 4, java.math.RoundingMode.HALF_UP);
-        BigDecimal previousClose = startPrice;
-        BigDecimal movementBase = closePrice.subtract(startPrice).abs().add(closePrice.multiply(BigDecimal.valueOf(0.015)));
-        long baseVolume = fallbackVolume(symbol);
-        List<MockInvestDto.ChartCandleResponse> result = new ArrayList<>();
-        for (int i = 0; i < count; i++) {
-            BigDecimal ratio = count <= 1 ? BigDecimal.ONE : BigDecimal.valueOf(i).divide(BigDecimal.valueOf(count - 1), 8, java.math.RoundingMode.HALF_UP);
-            BigDecimal trendClose = startPrice.add(closePrice.subtract(startPrice).multiply(ratio));
-            BigDecimal noise = i == 0 || i == count - 1
-                    ? BigDecimal.ZERO
-                    : movementBase.multiply(BigDecimal.valueOf(Math.sin((i + Math.abs(symbol.hashCode() % 13)) * 1.37) * 0.16));
-            BigDecimal close = i == count - 1 ? closePrice : trendClose.add(noise).max(BigDecimal.valueOf(0.01));
-            BigDecimal spread = close.max(previousClose).multiply(BigDecimal.valueOf(0.01));
-            result.add(MockInvestDto.ChartCandleResponse.builder()
-                    .datetime("")
-                    .open(previousClose)
-                    .high(close.max(previousClose).add(spread))
-                    .low(close.min(previousClose).subtract(spread).max(BigDecimal.valueOf(0.01)))
-                    .close(close)
-                    .volume(Math.round(baseVolume * (0.35 + Math.abs(Math.sin(i * 1.7)) * 0.65)))
-                    .realtime(false)
-                    .build());
-            previousClose = close;
-        }
-        return result;
-    }
-
-    private BigDecimal fallbackPrice(String symbol) {
-        return switch (symbol) {
-            case "AAPL" -> BigDecimal.valueOf(230.56);
-            case "MSFT" -> BigDecimal.valueOf(503.32);
-            case "NVDA" -> BigDecimal.valueOf(164.92);
-            case "GOOGL" -> BigDecimal.valueOf(181.42);
-            case "UBER" -> BigDecimal.valueOf(94.18);
-            case "AMZN" -> BigDecimal.valueOf(222.69);
-            case "META" -> BigDecimal.valueOf(717.51);
-            case "TSLA" -> BigDecimal.valueOf(313.51);
-            case "AVGO" -> BigDecimal.valueOf(275.12);
-            case "COST" -> BigDecimal.valueOf(982.35);
-            case "NFLX" -> BigDecimal.valueOf(1231.87);
-            case "AMD" -> BigDecimal.valueOf(146.41);
-            case "INTC" -> BigDecimal.valueOf(22.83);
-            case "QCOM" -> BigDecimal.valueOf(158.02);
-            case "PEP" -> BigDecimal.valueOf(132.44);
-            case "ADBE" -> BigDecimal.valueOf(374.91);
-            case "CSCO" -> BigDecimal.valueOf(68.35);
-            case "ORCL" -> BigDecimal.valueOf(241.28);
-            case "CRM" -> BigDecimal.valueOf(256.77);
-            case "IBM" -> BigDecimal.valueOf(283.04);
-            case "JPM" -> BigDecimal.valueOf(290.13);
-            case "V" -> BigDecimal.valueOf(349.19);
-            case "MA" -> BigDecimal.valueOf(565.73);
-            case "WMT" -> BigDecimal.valueOf(97.42);
-            case "MCD" -> BigDecimal.valueOf(295.31);
-            case "KO" -> BigDecimal.valueOf(69.16);
-            case "DIS" -> BigDecimal.valueOf(120.37);
-            case "NKE" -> BigDecimal.valueOf(72.84);
-            case "BA" -> BigDecimal.valueOf(229.67);
-            case "XOM" -> BigDecimal.valueOf(113.94);
-            default -> BigDecimal.valueOf(100);
-        };
-    }
-
-    private BigDecimal fallbackChange(String symbol) {
-        int bucket = Math.abs(symbol.hashCode() % 9) - 4;
-        return BigDecimal.valueOf(bucket).multiply(BigDecimal.valueOf(0.37));
-    }
-
-    private long fallbackVolume(String symbol) {
-        return 1_000_000L + Math.abs(symbol.hashCode() % 18_000_000);
-    }
-
     private String fallbackSector(String symbol) {
         return POPULAR_STOCKS.stream()
                 .filter(stock -> stock.symbol().equals(symbol))
                 .map(StockSeed::sector)
                 .findFirst()
                 .orElse("US");
-    }
-
-    private List<BigDecimal> fallbackPoints(BigDecimal price) {
-        return List.of(
-                price.multiply(BigDecimal.valueOf(0.972)),
-                price.multiply(BigDecimal.valueOf(0.986)),
-                price.multiply(BigDecimal.valueOf(0.981)),
-                price.multiply(BigDecimal.valueOf(1.004)),
-                price.multiply(BigDecimal.valueOf(0.997)),
-                price.multiply(BigDecimal.valueOf(1.012)),
-                price
-        );
     }
 
     private String koreanName(String symbol, String fallback) {
