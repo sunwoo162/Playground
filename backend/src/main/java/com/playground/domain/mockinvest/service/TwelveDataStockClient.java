@@ -102,10 +102,24 @@ public class TwelveDataStockClient {
 
     private MockInvestDto.StockResponse twelveDataQuote(String symbol) {
         String normalizedSymbol = normalizeSymbol(symbol);
-        String providerQuery = symbolQuery(normalizedSymbol);
-        Map<?, ?> quote = get("/quote?" + providerQuery);
-        failIfProviderError(quote, "Twelve Data quote request failed");
-        if (quote == null) throw new StockProviderException("Twelve Data quote response missing");
+        Map<?, ?> quote = null;
+        String providerQuery = "";
+        StockProviderException lastError = null;
+        for (String query : symbolQueries(normalizedSymbol)) {
+            try {
+                Map<?, ?> candidate = get("/quote?" + query);
+                failIfProviderError(candidate, "Twelve Data quote request failed");
+                quote = candidate;
+                providerQuery = query;
+                break;
+            } catch (StockProviderException e) {
+                lastError = e;
+            }
+        }
+        if (quote == null) {
+            if (lastError != null) throw lastError;
+            throw new StockProviderException("Twelve Data quote response missing");
+        }
 
         BigDecimal price = firstNumber(quote.get("close"), quote.get("previous_close"));
         if (price.compareTo(BigDecimal.ZERO) == 0) throw new StockProviderException("Twelve Data quote price missing");
@@ -184,10 +198,21 @@ public class TwelveDataStockClient {
     }
 
     private List<MockInvestDto.ChartCandleResponse> twelveDataChart(String symbol, ChartQuery chartQuery) {
-        Map<?, ?> data = get("/time_series?" + symbolQuery(symbol)
-                + "&interval=" + encode(chartQuery.interval())
-                + "&outputsize=" + chartQuery.outputSize());
-        failIfProviderError(data, "Twelve Data time series request failed");
+        Map<?, ?> data = null;
+        StockProviderException lastError = null;
+        for (String query : symbolQueries(symbol)) {
+            try {
+                Map<?, ?> candidate = get("/time_series?" + query
+                        + "&interval=" + encode(chartQuery.interval())
+                        + "&outputsize=" + chartQuery.outputSize());
+                failIfProviderError(candidate, "Twelve Data time series request failed");
+                data = candidate;
+                break;
+            } catch (StockProviderException e) {
+                lastError = e;
+            }
+        }
+        if (data == null && lastError != null) throw lastError;
         Object values = data != null ? data.get("values") : null;
         if (!(values instanceof List<?> rows) || rows.isEmpty()) {
             throw new StockProviderException("Twelve Data chart response missing");
@@ -243,6 +268,13 @@ public class TwelveDataStockClient {
         return exchange.isBlank() ? query : query + "&exchange=" + encode(exchange);
     }
 
+    private List<String> symbolQueries(String symbol) {
+        String exchangeQuery = symbolQuery(symbol);
+        String symbolOnlyQuery = "symbol=" + encode(symbol);
+        if (exchangeQuery.equals(symbolOnlyQuery)) return List.of(symbolOnlyQuery);
+        return List.of(exchangeQuery, symbolOnlyQuery);
+    }
+
     private ChartQuery chartQuery(String range) {
         String value = range == null ? "1D" : range.trim().toUpperCase(Locale.ROOT);
         return switch (value) {
@@ -292,11 +324,16 @@ public class TwelveDataStockClient {
         BigDecimal periodRate = changeRate.multiply(multiplier).max(BigDecimal.valueOf(-85)).min(BigDecimal.valueOf(220));
         BigDecimal startPrice = closePrice.divide(BigDecimal.ONE.add(periodRate.divide(BigDecimal.valueOf(100), 8, java.math.RoundingMode.HALF_UP)), 4, java.math.RoundingMode.HALF_UP);
         BigDecimal previousClose = startPrice;
+        BigDecimal movementBase = closePrice.subtract(startPrice).abs().add(closePrice.multiply(BigDecimal.valueOf(0.015)));
         long baseVolume = fallbackVolume(symbol);
         List<MockInvestDto.ChartCandleResponse> result = new ArrayList<>();
         for (int i = 0; i < count; i++) {
             BigDecimal ratio = count <= 1 ? BigDecimal.ONE : BigDecimal.valueOf(i).divide(BigDecimal.valueOf(count - 1), 8, java.math.RoundingMode.HALF_UP);
-            BigDecimal close = i == count - 1 ? closePrice : startPrice.add(closePrice.subtract(startPrice).multiply(ratio));
+            BigDecimal trendClose = startPrice.add(closePrice.subtract(startPrice).multiply(ratio));
+            BigDecimal noise = i == 0 || i == count - 1
+                    ? BigDecimal.ZERO
+                    : movementBase.multiply(BigDecimal.valueOf(Math.sin((i + Math.abs(symbol.hashCode() % 13)) * 1.37) * 0.16));
+            BigDecimal close = i == count - 1 ? closePrice : trendClose.add(noise).max(BigDecimal.valueOf(0.01));
             BigDecimal spread = close.max(previousClose).multiply(BigDecimal.valueOf(0.01));
             result.add(MockInvestDto.ChartCandleResponse.builder()
                     .datetime("")

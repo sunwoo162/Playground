@@ -349,7 +349,7 @@ function App() {
   const chartValueRange = chartMax - chartMin || 1
   const maxVolume = chartCandles.length ? Math.max(...chartCandles.map((c) => c.volume)) || 1 : 1
   const priceTicks = [chartMax, chartMax - chartValueRange * 0.25, chartMax - chartValueRange * 0.5, chartMax - chartValueRange * 0.75, chartMin]
-  const timeTicks = buildTimeTicks(chartRange, chartCandles.length)
+  const timeTicks = buildTimeTicks(chartRange, chartCandles)
 
   return (
     <div className="app-shell">
@@ -577,14 +577,17 @@ function wave(index: number, symbol: string) {
   return Math.sin(index * 1.73 + seed * 0.13)
 }
 
-function buildTimeTicks(range: ChartRange, count: number) {
+function buildTimeTicks(range: ChartRange, candles: ChartCandle[]) {
+  const count = candles.length
   if (count === 0) return []
-  const now = new Date()
   const labels = 5
   const step = Math.max(1, Math.floor((count - 1) / (labels - 1)))
   const indexes = Array.from({ length: labels }, (_, index) => Math.min(count - 1, index * step))
   indexes[indexes.length - 1] = count - 1
   return indexes.map((index) => {
+    const candleTime = formatCandleTime(candles[index]?.datetime, range)
+    if (candleTime) return candleTime
+    const now = new Date()
     const date = new Date(now)
     if (range === '5Y') date.setMonth(now.getMonth() - Math.round((count - 1 - index) * 1))
     if (range === '1Y') date.setDate(now.getDate() - Math.round((count - 1 - index) * 7.6))
@@ -600,6 +603,20 @@ function buildTimeTicks(range: ChartRange, count: number) {
     }
     return date.toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' }).replace(/\\. /g, '.').replace('.', '.')
   })
+}
+
+function formatCandleTime(value: string | undefined, range: ChartRange) {
+  if (!value) return ''
+  const normalized = value.trim()
+  if (!normalized) return ''
+  if (range === '1D') {
+    const time = normalized.includes(' ') ? normalized.split(' ')[1] : normalized.split('T')[1]
+    return time ? time.slice(0, 5) : normalized.slice(5, 10).replace('-', '.')
+  }
+  if (range === '5Y' || range === '1Y') {
+    return normalized.slice(2, 7).replace('-', '.')
+  }
+  return normalized.slice(5, 10).replace('-', '.')
 }
 
 export default App
