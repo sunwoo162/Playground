@@ -10,12 +10,20 @@ import org.springframework.web.client.RestTemplate;
 import java.math.BigDecimal;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 @Component
 @RequiredArgsConstructor
 public class TwelveDataStockClient {
     private final RestTemplate restTemplate = new RestTemplate();
+    private static final Duration QUOTE_CACHE_TTL = Duration.ofMinutes(1);
+    private static final Duration CHART_CACHE_TTL = Duration.ofMinutes(10);
+    private final ConcurrentMap<String, CacheEntry<MockInvestDto.StockResponse>> quoteCache = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, CacheEntry<List<MockInvestDto.ChartCandleResponse>>> chartCache = new ConcurrentHashMap<>();
     private static final List<StockSeed> POPULAR_STOCKS = List.of(
             new StockSeed("AAPL", "애플", "NASDAQ", "기술"),
             new StockSeed("MSFT", "마이크로소프트", "NASDAQ", "기술"),
@@ -68,8 +76,14 @@ public class TwelveDataStockClient {
         if (!canUseTwelveData()) {
             throw new StockProviderException("Twelve Data API key is not configured");
         }
+        MockInvestDto.StockResponse cached = freshCacheValue(quoteCache.get(normalizedSymbol), QUOTE_CACHE_TTL);
+        if (cached != null) {
+            return cached;
+        }
         try {
-            return twelveDataQuote(normalizedSymbol);
+            MockInvestDto.StockResponse response = twelveDataQuote(normalizedSymbol);
+            quoteCache.put(normalizedSymbol, new CacheEntry<>(response, Instant.now()));
+            return response;
         } catch (StockProviderException e) {
             throw e;
         } catch (RuntimeException e) {
@@ -80,11 +94,18 @@ public class TwelveDataStockClient {
     public List<MockInvestDto.ChartCandleResponse> chart(String symbol, String range) {
         String normalizedSymbol = normalizeSymbol(symbol);
         ChartQuery chartQuery = chartQuery(range);
+        String cacheKey = normalizedSymbol + ":" + chartQuery.range();
+        List<MockInvestDto.ChartCandleResponse> cached = freshCacheValue(chartCache.get(cacheKey), CHART_CACHE_TTL);
+        if (cached != null) {
+            return cached;
+        }
         if (!canUseTwelveData()) {
             return List.of();
         }
         try {
-            return twelveDataChart(normalizedSymbol, chartQuery);
+            List<MockInvestDto.ChartCandleResponse> response = twelveDataChart(normalizedSymbol, chartQuery);
+            chartCache.put(cacheKey, new CacheEntry<>(response, Instant.now()));
+            return response;
         } catch (RuntimeException e) {
             return List.of();
         }
@@ -104,14 +125,12 @@ public class TwelveDataStockClient {
     private MockInvestDto.StockResponse twelveDataQuote(String symbol) {
         String normalizedSymbol = normalizeSymbol(symbol);
         Map<?, ?> quote = null;
-        String providerQuery = "";
         StockProviderException lastError = null;
         for (String query : symbolQueries(normalizedSymbol)) {
             try {
                 Map<?, ?> candidate = get("/quote?" + query);
                 failIfProviderError(candidate, "Twelve Data quote request failed");
                 quote = candidate;
-                providerQuery = query;
                 break;
             } catch (StockProviderException e) {
                 lastError = e;
@@ -127,7 +146,6 @@ public class TwelveDataStockClient {
 
         BigDecimal change = num(quote.get("change"));
         BigDecimal changeRate = num(quote.get("percent_change"));
-        List<BigDecimal> pointValues = twelveDataPoints(providerQuery);
         return MockInvestDto.StockResponse.builder()
                 .symbol(normalizedSymbol)
                 .name(koreanName(normalizedSymbol, text(quote.get("name"), normalizedSymbol)))
@@ -140,7 +158,7 @@ public class TwelveDataStockClient {
                 .high(firstNumber(quote.get("high"), price))
                 .low(firstNumber(quote.get("low"), price))
                 .description("Twelve Data에서 조회한 시세입니다.")
-                .points(pointValues)
+                .points(List.of())
                 .realtime(true)
                 .build();
     }
@@ -172,28 +190,6 @@ public class TwelveDataStockClient {
             throw e;
         } catch (Exception e) {
             throw new StockProviderException("Twelve Data stock list request failed", e);
-        }
-    }
-
-    private List<BigDecimal> twelveDataPoints(String providerSymbol) {
-        try {
-            Map<?, ?> data = get("/time_series?" + providerSymbol + "&interval=1day&outputsize=7");
-            failIfProviderError(data, "Twelve Data time series request failed");
-            Object values = data != null ? data.get("values") : null;
-            if (!(values instanceof List<?> rows)) return List.of();
-            List<BigDecimal> result = new ArrayList<>();
-            for (Object row : rows) {
-                if (row instanceof Map<?, ?> map) {
-                    BigDecimal close = num(map.get("close"));
-                    if (close.compareTo(BigDecimal.ZERO) > 0) result.add(close);
-                }
-            }
-            Collections.reverse(result);
-            return result;
-        } catch (StockProviderException e) {
-            return List.of();
-        } catch (Exception e) {
-            return List.of();
         }
     }
 
@@ -273,10 +269,7 @@ public class TwelveDataStockClient {
     }
 
     private List<String> symbolQueries(String symbol) {
-        String exchangeQuery = symbolQuery(symbol);
-        String symbolOnlyQuery = "symbol=" + encode(symbol);
-        if (exchangeQuery.equals(symbolOnlyQuery)) return List.of(symbolOnlyQuery);
-        return List.of(symbolOnlyQuery, exchangeQuery);
+        return List.of(symbolQuery(symbol));
     }
 
     private ChartQuery chartQuery(String range) {
@@ -389,6 +382,16 @@ public class TwelveDataStockClient {
     }
 
     private record ChartQuery(String range, String interval, int outputSize) {
+    }
+
+    private <T> T freshCacheValue(CacheEntry<T> entry, Duration ttl) {
+        if (entry == null || entry.createdAt().plus(ttl).isBefore(Instant.now())) {
+            return null;
+        }
+        return entry.value();
+    }
+
+    private record CacheEntry<T>(T value, Instant createdAt) {
     }
 
 }
