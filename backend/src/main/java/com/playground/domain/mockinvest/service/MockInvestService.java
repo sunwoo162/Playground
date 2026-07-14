@@ -101,7 +101,7 @@ public class MockInvestService {
                 .stream().map(this::toHolding).toList();
         BigDecimal invested = holdings.stream().map(MockInvestDto.HoldingResponse::getInvested).reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal evaluated = holdings.stream().map(MockInvestDto.HoldingResponse::getEvaluated).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal totalAsset = account.getCash().add(evaluated);
+        BigDecimal totalAsset = account.getCash().add(invested);
         BigDecimal profit = totalAsset.subtract(account.getRewardedAmount());
         return MockInvestDto.PortfolioResponse.builder()
                 .cash(account.getCash())
