@@ -4,6 +4,7 @@ import com.playground.domain.mockinvest.dto.MockInvestDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
@@ -72,7 +73,7 @@ public class TwelveDataStockClient {
         } catch (StockProviderException e) {
             throw e;
         } catch (RuntimeException e) {
-            throw new StockProviderException("Twelve Data quote request failed", e);
+            throw new StockProviderException(providerFailureMessage("Twelve Data quote request failed", e), e);
         }
     }
 
@@ -241,7 +242,11 @@ public class TwelveDataStockClient {
 
     private Map<?, ?> get(String path) {
         String separator = path.contains("?") ? "&" : "?";
-        return restTemplate.getForObject(baseUrl + path + separator + "apikey=" + encode(configuredApiKey()), Map.class);
+        try {
+            return restTemplate.getForObject(baseUrl + path + separator + "apikey=" + encode(configuredApiKey()), Map.class);
+        } catch (RestClientResponseException e) {
+            throw new StockProviderException(providerFailureMessage("Twelve Data request failed", e), e);
+        }
     }
 
     private String configuredApiKey() {
@@ -271,7 +276,7 @@ public class TwelveDataStockClient {
         String exchangeQuery = symbolQuery(symbol);
         String symbolOnlyQuery = "symbol=" + encode(symbol);
         if (exchangeQuery.equals(symbolOnlyQuery)) return List.of(symbolOnlyQuery);
-        return List.of(exchangeQuery, symbolOnlyQuery);
+        return List.of(symbolOnlyQuery, exchangeQuery);
     }
 
     private ChartQuery chartQuery(String range) {
@@ -336,6 +341,48 @@ public class TwelveDataStockClient {
             String detail = message != null ? String.valueOf(message) : fallback;
             throw new StockProviderException(code != null ? "Twelve Data " + code + ": " + detail : detail);
         }
+    }
+
+    private String providerFailureMessage(String fallback, RuntimeException e) {
+        if (e instanceof RestClientResponseException responseException) {
+            String body = responseException.getResponseBodyAsString();
+            String message = extractJsonString(body, "message");
+            if (!message.isBlank()) return message;
+            if (body != null && !body.isBlank()) return body;
+            return fallback + " (" + responseException.getStatusCode() + ")";
+        }
+        Throwable cause = e.getCause();
+        if (cause != null && cause.getMessage() != null && !cause.getMessage().isBlank()) {
+            return fallback + ": " + cause.getMessage();
+        }
+        return e.getMessage() != null && !e.getMessage().isBlank() ? e.getMessage() : fallback;
+    }
+
+    private String extractJsonString(String body, String key) {
+        if (body == null || body.isBlank()) return "";
+        String needle = "\"" + key + "\"";
+        int keyIndex = body.indexOf(needle);
+        if (keyIndex < 0) return "";
+        int colonIndex = body.indexOf(':', keyIndex + needle.length());
+        if (colonIndex < 0) return "";
+        int startQuote = body.indexOf('"', colonIndex + 1);
+        if (startQuote < 0) return "";
+        StringBuilder value = new StringBuilder();
+        boolean escaped = false;
+        for (int i = startQuote + 1; i < body.length(); i++) {
+            char ch = body.charAt(i);
+            if (escaped) {
+                value.append(ch);
+                escaped = false;
+            } else if (ch == '\\') {
+                escaped = true;
+            } else if (ch == '"') {
+                return value.toString();
+            } else {
+                value.append(ch);
+            }
+        }
+        return "";
     }
 
     private record StockSeed(String symbol, String name, String exchange, String sector) {
