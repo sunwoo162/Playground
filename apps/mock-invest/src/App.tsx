@@ -202,7 +202,6 @@ function App() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [stockRequestOpen, setStockRequestOpen] = useState(false)
   const [requestCompany, setRequestCompany] = useState('')
-  const [requestSymbol, setRequestSymbol] = useState('')
   const [requestMemo, setRequestMemo] = useState('')
   const [myStockRequests, setMyStockRequests] = useState<StockRequest[]>([])
   const [adminAccounts, setAdminAccounts] = useState<AdminAccount[]>([])
@@ -364,12 +363,10 @@ function App() {
       method: 'POST',
       body: JSON.stringify({
         company: requestCompany.trim(),
-        symbol: requestSymbol.trim() || null,
         memo: requestMemo.trim() || null,
       }),
     })
     setRequestCompany('')
-    setRequestSymbol('')
     setRequestMemo('')
     setStockRequestOpen(false)
     setMessage('주식 추가 요청을 보냈습니다. 관리자가 확인할 수 있습니다.')
@@ -666,7 +663,7 @@ function App() {
                 {adminRequests.map((request) => (
                   <article key={request.id}>
                     <strong>{request.company}</strong>
-                    <span>{request.symbol || '티커 미입력'} · {request.status}</span>
+                    <span>{request.status}</span>
                     <small>{request.nickname} · {new Date(request.createdAt).toLocaleString('ko-KR')}</small>
                     {request.memo && <p>{request.memo}</p>}
                   </article>
@@ -712,9 +709,6 @@ function App() {
             </div>
             <label>기업명
               <input value={requestCompany} onChange={(event) => setRequestCompany(event.target.value)} placeholder="예: 팔란티어" />
-            </label>
-            <label>티커
-              <input value={requestSymbol} onChange={(event) => setRequestSymbol(event.target.value.toUpperCase())} placeholder="예: PLTR" />
             </label>
             <label>요청 메모
               <textarea value={requestMemo} onChange={(event) => setRequestMemo(event.target.value)} placeholder="추가하고 싶은 이유나 참고할 정보" />
