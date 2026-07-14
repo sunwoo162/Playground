@@ -34,7 +34,7 @@ jobs:
       - name: Clean npm cache and rebuild all apps
         run: |
           npm cache clean --force
-          for app in apps/life-tracker apps/dev-notes apps/study-planner apps/cornell-notes apps/coding-log apps/school-meal; do
+          for app in apps/life-tracker apps/dev-notes apps/study-planner apps/cornell-notes apps/coding-log apps/school-meal apps/mock-invest; do
             echo "Cleaning $app..."
             cd $app
             rm -rf node_modules package-lock.json

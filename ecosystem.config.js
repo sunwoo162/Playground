@@ -1,3 +1,24 @@
+const fs = require('fs');
+const path = require('path');
+
+function readEnvFile(filePath) {
+  if (!fs.existsSync(filePath)) return {};
+
+  return fs.readFileSync(filePath, 'utf8')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('#') && line.includes('='))
+    .reduce((env, line) => {
+      const index = line.indexOf('=');
+      const key = line.slice(0, index).trim();
+      const value = line.slice(index + 1).trim().replace(/^['"]|['"]$/g, '');
+      if (key) env[key] = value;
+      return env;
+    }, {});
+}
+
+const root = __dirname;
+
 module.exports = {
   apps: [
     {
@@ -5,6 +26,7 @@ module.exports = {
       script: './server/index.js',
       cwd: '/home/ubuntu/playground',
       env_file: '/home/ubuntu/playground/.env',
+      env: readEnvFile(path.join(root, '.env')),
     },
     {
       name: 'backend',
@@ -14,6 +36,7 @@ module.exports = {
       args: '--app.jwt.secret=playground-jwt-secret-2024-secure-key',
       cwd: '/home/ubuntu/playground',
       env_file: '/home/ubuntu/playground/.env.backend',
+      env: readEnvFile(path.join(root, '.env.backend')),
     },
   ],
 };
