@@ -20,8 +20,8 @@ import java.util.concurrent.ConcurrentMap;
 @RequiredArgsConstructor
 public class TwelveDataStockClient {
     private final RestTemplate restTemplate = new RestTemplate();
-    private static final Duration QUOTE_CACHE_TTL = Duration.ofMinutes(1);
-    private static final Duration CHART_CACHE_TTL = Duration.ofMinutes(10);
+    private static final Duration QUOTE_CACHE_TTL = Duration.ofMinutes(2);
+    private static final Duration CHART_CACHE_TTL = Duration.ofMinutes(30);
     private final ConcurrentMap<String, CacheEntry<MockInvestDto.StockResponse>> quoteCache = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, CacheEntry<List<MockInvestDto.ChartCandleResponse>>> chartCache = new ConcurrentHashMap<>();
     private static final List<StockSeed> POPULAR_STOCKS = List.of(
@@ -276,9 +276,9 @@ public class TwelveDataStockClient {
         String value = range == null ? "1D" : range.trim().toUpperCase(Locale.ROOT);
         return switch (value) {
             case "5Y" -> new ChartQuery("5Y", "1month", 60);
-            case "1Y" -> new ChartQuery("1Y", "1week", 52);
-            case "6M" -> new ChartQuery("6M", "1week", 26);
-            case "1M" -> new ChartQuery("1M", "1day", 30);
+            case "1Y" -> new ChartQuery("1Y", "1day", 252);
+            case "6M" -> new ChartQuery("6M", "1day", 126);
+            case "1M" -> new ChartQuery("1M", "1day", 22);
             case "1W" -> new ChartQuery("1W", "1day", 7);
             default -> new ChartQuery("1D", "5min", 78);
         };
