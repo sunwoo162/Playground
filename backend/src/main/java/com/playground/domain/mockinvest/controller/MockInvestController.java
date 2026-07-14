@@ -29,13 +29,6 @@ public class MockInvestController {
         return ResponseEntity.ok(service.me(auth.getUserId()));
     }
 
-    @PostMapping("/assets/reward")
-    public ResponseEntity<MockInvestDto.PortfolioResponse> reward(
-            @AuthenticationPrincipal JwtAuthenticationToken auth,
-            @RequestBody(required = false) MockInvestDto.RewardRequest req) {
-        return ResponseEntity.ok(service.reward(auth.getUserId(), req != null ? req : new MockInvestDto.RewardRequest()));
-    }
-
     @GetMapping("/stocks")
     public ResponseEntity<List<MockInvestDto.StockResponse>> stocks(@RequestParam(required = false) String keyword) {
         return ResponseEntity.ok(service.stocks(keyword));
@@ -129,6 +122,44 @@ public class MockInvestController {
             @PathVariable Long id) {
         service.deleteJournal(auth.getUserId(), id);
         return ResponseEntity.ok(Map.of("success", true));
+    }
+
+    @PostMapping("/stock-requests")
+    public ResponseEntity<MockInvestDto.StockRequestResponse> requestStock(
+            @AuthenticationPrincipal JwtAuthenticationToken auth,
+            @RequestBody MockInvestDto.StockRequestSubmitRequest req) {
+        return ResponseEntity.ok(service.requestStock(auth.getUserId(), req));
+    }
+
+    @GetMapping("/stock-requests/my")
+    public ResponseEntity<List<MockInvestDto.StockRequestResponse>> myStockRequests(
+            @AuthenticationPrincipal JwtAuthenticationToken auth) {
+        return ResponseEntity.ok(service.myStockRequests(auth.getUserId()));
+    }
+
+    @GetMapping("/admin/me")
+    public ResponseEntity<MockInvestDto.AdminStatusResponse> adminStatus(
+            @AuthenticationPrincipal JwtAuthenticationToken auth) {
+        return ResponseEntity.ok(service.adminStatus(auth.getUserId()));
+    }
+
+    @GetMapping("/admin/stock-requests")
+    public ResponseEntity<List<MockInvestDto.StockRequestResponse>> adminStockRequests(
+            @AuthenticationPrincipal JwtAuthenticationToken auth) {
+        return ResponseEntity.ok(service.adminStockRequests(auth.getUserId()));
+    }
+
+    @GetMapping("/admin/accounts")
+    public ResponseEntity<List<MockInvestDto.AdminAccountResponse>> adminAccounts(
+            @AuthenticationPrincipal JwtAuthenticationToken auth) {
+        return ResponseEntity.ok(service.adminAccounts(auth.getUserId()));
+    }
+
+    @PostMapping("/admin/accounts/cash")
+    public ResponseEntity<MockInvestDto.AdminAccountResponse> adminAddCash(
+            @AuthenticationPrincipal JwtAuthenticationToken auth,
+            @RequestBody MockInvestDto.AdminCashRequest req) {
+        return ResponseEntity.ok(service.adminAddCash(auth.getUserId(), req));
     }
 
     @ExceptionHandler(StockProviderException.class)

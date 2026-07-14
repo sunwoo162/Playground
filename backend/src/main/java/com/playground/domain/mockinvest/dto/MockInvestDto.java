@@ -112,8 +112,48 @@ public class MockInvestDto {
         private BigDecimal profitRate;
     }
 
+    @Getter @Setter
+    public static class StockRequestSubmitRequest {
+        private String company;
+        private String symbol;
+        private String memo;
+    }
+
     @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
-    public static class RewardRequest {
+    public static class StockRequestResponse {
+        private Long id;
+        private String userId;
+        private String nickname;
+        private String company;
+        private String symbol;
+        private String memo;
+        private String status;
+        private LocalDateTime createdAt;
+    }
+
+    @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+    public static class AdminStatusResponse {
+        private boolean admin;
+    }
+
+    @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+    public static class AdminAccountResponse {
+        private String userId;
+        private String login;
+        private String nickname;
+        private String avatarUrl;
+        private BigDecimal cash;
+        private BigDecimal rewardedAmount;
+        private BigDecimal invested;
+        private BigDecimal evaluated;
+        private BigDecimal totalAsset;
+        private BigDecimal profit;
+        private BigDecimal profitRate;
+    }
+
+    @Getter @Setter
+    public static class AdminCashRequest {
+        private String userId;
         private BigDecimal amount;
         private String reason;
     }

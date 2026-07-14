@@ -76,7 +76,32 @@ type Ranking = {
   profitRate: number
 }
 
-type Tab = 'dashboard' | 'stocks' | 'orders' | 'journal' | 'ranking'
+type StockRequest = {
+  id: number
+  userId: string
+  nickname: string
+  company: string
+  symbol?: string
+  memo?: string
+  status: string
+  createdAt: string
+}
+
+type AdminAccount = {
+  userId: string
+  login?: string
+  nickname: string
+  avatarUrl?: string
+  cash: number
+  rewardedAmount: number
+  invested: number
+  evaluated: number
+  totalAsset: number
+  profit: number
+  profitRate: number
+}
+
+type Tab = 'dashboard' | 'stocks' | 'orders' | 'journal' | 'ranking' | 'admin'
 type ChartRange = '5Y' | '1Y' | '6M' | '1M' | '1W' | '1D'
 
 const API = '/api/mock-invest'
@@ -174,6 +199,16 @@ function App() {
   const [journalTitle, setJournalTitle] = useState('')
   const [journalContent, setJournalContent] = useState('')
   const [journalResult, setJournalResult] = useState('')
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [stockRequestOpen, setStockRequestOpen] = useState(false)
+  const [requestCompany, setRequestCompany] = useState('')
+  const [requestSymbol, setRequestSymbol] = useState('')
+  const [requestMemo, setRequestMemo] = useState('')
+  const [myStockRequests, setMyStockRequests] = useState<StockRequest[]>([])
+  const [adminAccounts, setAdminAccounts] = useState<AdminAccount[]>([])
+  const [adminRequests, setAdminRequests] = useState<StockRequest[]>([])
+  const [cashTargetUserId, setCashTargetUserId] = useState('')
+  const [cashAmount, setCashAmount] = useState(10000)
 
   const loadPortfolio = async () => setPortfolio(await api<Portfolio>('/portfolio'))
   const loadWatchlist = async () => {
@@ -191,6 +226,34 @@ function App() {
     } catch {
       setRankings([])
     }
+  }
+  const loadAdminStatus = async () => {
+    try {
+      const result = await api<{ admin: boolean }>('/admin/me')
+      setIsAdmin(result.admin)
+      return result.admin
+    } catch {
+      setIsAdmin(false)
+      return false
+    }
+  }
+  const loadMyStockRequests = async () => {
+    try {
+      setMyStockRequests(await api<StockRequest[]>('/stock-requests/my'))
+    } catch {
+      setMyStockRequests([])
+    }
+  }
+  const loadAdminData = async () => {
+    const [accountsResult, requestsResult] = await Promise.allSettled([
+      api<AdminAccount[]>('/admin/accounts'),
+      api<StockRequest[]>('/admin/stock-requests'),
+    ])
+    if (accountsResult.status === 'fulfilled') {
+      setAdminAccounts(accountsResult.value)
+      if (!cashTargetUserId && accountsResult.value[0]) setCashTargetUserId(accountsResult.value[0].userId)
+    }
+    if (requestsResult.status === 'fulfilled') setAdminRequests(requestsResult.value)
   }
 
   const loadStocks = async (keyword = '') => {
@@ -236,7 +299,7 @@ function App() {
   }
 
   useEffect(() => {
-    Promise.allSettled([loadPortfolio(), loadStocks(), loadOrders(), loadJournals()])
+    Promise.allSettled([loadPortfolio(), loadStocks(), loadOrders(), loadJournals(), loadAdminStatus(), loadMyStockRequests()])
       .then((results) => {
         const failed = results.find((result) => result.status === 'rejected') as PromiseRejectedResult | undefined
         if (failed) setMessage(failed.reason?.message || 'Twelve Data API 정보를 불러오지 못했습니다.')
@@ -250,6 +313,9 @@ function App() {
     }
     if (tab === 'ranking') {
       loadRankings()
+    }
+    if (tab === 'admin' && isAdmin) {
+      loadAdminData().catch((err) => setMessage(err.message))
     }
   }, [tab])
 
@@ -279,14 +345,6 @@ function App() {
   const holdingSymbols = useMemo(() => new Set((portfolio?.holdings || []).map((h) => h.symbol)), [portfolio])
   const watchSymbols = useMemo(() => new Set(watchlist.map((stock) => stock.symbol)), [watchlist])
 
-  const addActivityReward = async () => {
-    setPortfolio(await api<Portfolio>('/assets/reward', {
-      method: 'POST',
-      body: JSON.stringify({ amount: 250000, reason: 'PLAYGROUND_ACTIVITY' }),
-    }))
-    setMessage(`놀이터 활동 보상 ${money(250000)}이 지급됐습니다.`)
-  }
-
   const trade = async (type: 'buy' | 'sell') => {
     if (!selectedStock) return
     await api<Order>(`/trades/${type}`, {
@@ -295,6 +353,42 @@ function App() {
     })
     setMessage(`${selectedStock.name} ${quantity}주 ${type === 'buy' ? '매수' : '매도'} 완료`)
     await refreshAll()
+  }
+
+  const submitStockRequest = async () => {
+    if (!requestCompany.trim()) {
+      setMessage('요청할 기업명을 입력해주세요.')
+      return
+    }
+    await api<StockRequest>('/stock-requests', {
+      method: 'POST',
+      body: JSON.stringify({
+        company: requestCompany.trim(),
+        symbol: requestSymbol.trim() || null,
+        memo: requestMemo.trim() || null,
+      }),
+    })
+    setRequestCompany('')
+    setRequestSymbol('')
+    setRequestMemo('')
+    setStockRequestOpen(false)
+    setMessage('주식 추가 요청을 보냈습니다. 관리자가 확인할 수 있습니다.')
+    await loadMyStockRequests()
+    if (isAdmin) await loadAdminData()
+  }
+
+  const addAdminCash = async () => {
+    if (!cashTargetUserId || cashAmount <= 0) {
+      setMessage('입금할 사용자와 금액을 확인해주세요.')
+      return
+    }
+    await api<AdminAccount>('/admin/accounts/cash', {
+      method: 'POST',
+      body: JSON.stringify({ userId: cashTargetUserId, amount: cashAmount, reason: 'ADMIN_GRANT' }),
+    })
+    setMessage(`${money(cashAmount)}을 지급했습니다.`)
+    await loadAdminData()
+    await loadPortfolio()
   }
 
   const toggleWatch = async () => {
@@ -382,19 +476,19 @@ function App() {
           <h1>📈 모의 투자</h1>
           <p>Twelve Data 시세 연동 · 주요 미국 종목 30개와 선택 종목 실시간 시세</p>
         </div>
-        <button className="reward-btn" onClick={addActivityReward}>+ 활동 보상</button>
       </header>
 
       <main className="layout">
         <section className="hero-panel">
           <div><span className="eyebrow">총자산</span><strong>{money(portfolio.totalAsset)}</strong><p className={portfolio.profit >= 0 ? 'positive' : 'negative'}>{money(portfolio.profit)} · {percent(portfolio.profitRate)}</p></div>
-          <div><span className="eyebrow">보유 현금</span><strong>{money(portfolio.cash)}</strong><p>지급 누적 {money(portfolio.rewardedAmount)}</p></div>
+          <div><span className="eyebrow">보유 현금</span><strong>{money(portfolio.cash)}</strong><p>기준 원금 {money(portfolio.rewardedAmount)}</p></div>
           <div><span className="eyebrow">투자 금액</span><strong>{money(portfolio.invested)}</strong><p>평가 금액 {money(portfolio.evaluated)}</p></div>
         </section>
 
         <nav className="tabs" aria-label="모의 투자 메뉴">
           {[
             ['dashboard', '대시보드'], ['stocks', '종목'], ['orders', '거래내역'], ['journal', '투자일지'], ['ranking', '랭킹'],
+            ...(isAdmin ? [['admin', '관리자']] : []),
           ].map(([id, label]) => <button key={id} className={tab === id ? 'active' : ''} onClick={() => setTab(id as Tab)}>{label}</button>)}
         </nav>
 
@@ -431,11 +525,20 @@ function App() {
         {tab === 'stocks' && current && (
           <div className="content-grid">
             <section className="panel stock-list-panel">
+              <button className="primary-btn request-stock-btn" onClick={() => setStockRequestOpen(true)}>+ 주식 추가 요청하기</button>
               <input className="search-input" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="종목명, 티커, 업종 검색" />
               <div className="stock-list-meta">
                 <strong>전체 종목</strong>
                 <span>{stocks.length.toLocaleString('ko-KR')}개 표시</span>
               </div>
+              {myStockRequests.length > 0 && (
+                <div className="request-summary">
+                  <strong>내 요청</strong>
+                  {myStockRequests.slice(0, 3).map((request) => (
+                    <span key={request.id}>{request.company}{request.symbol ? ` · ${request.symbol}` : ''} · {request.status}</span>
+                  ))}
+                </div>
+              )}
               <div className="stock-list">
                 {stocks.length === 0 && <p className="empty">Twelve Data 종목을 불러오지 못했습니다. 서버 API 키 설정을 확인해주세요.</p>}
                 {stocks.map((stock) => (
@@ -554,7 +657,72 @@ function App() {
             <div className="ranking-list">{rankings.map((item) => <div key={`${item.rank}-${item.nickname}`}><strong>{item.rank}</strong><span>{item.nickname}</span><span>{money(item.totalAsset)}</span><span className={item.profitRate >= 0 ? 'positive' : 'negative'}>{percent(item.profitRate)}</span></div>)}</div>
           </section>
         )}
+
+        {tab === 'admin' && isAdmin && (
+          <div className="content-grid">
+            <section className="panel">
+              <div className="panel-header"><h2>주식 추가 요청</h2><span>{adminRequests.length}건</span></div>
+              <div className="admin-list">
+                {adminRequests.map((request) => (
+                  <article key={request.id}>
+                    <strong>{request.company}</strong>
+                    <span>{request.symbol || '티커 미입력'} · {request.status}</span>
+                    <small>{request.nickname} · {new Date(request.createdAt).toLocaleString('ko-KR')}</small>
+                    {request.memo && <p>{request.memo}</p>}
+                  </article>
+                ))}
+                {adminRequests.length === 0 && <p className="empty">아직 주식 추가 요청이 없습니다.</p>}
+              </div>
+            </section>
+            <section className="panel wide">
+              <div className="panel-header"><h2>사용자 자금 관리</h2><span>{adminAccounts.length}명</span></div>
+              <div className="admin-cash-form">
+                <label>사용자
+                  <select value={cashTargetUserId} onChange={(event) => setCashTargetUserId(event.target.value)}>
+                    {adminAccounts.map((account) => (
+                      <option key={account.userId} value={account.userId}>{account.nickname} {account.login ? `(${account.login})` : ''}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>추가 금액
+                  <input type="number" min={1} value={cashAmount} onChange={(event) => setCashAmount(Number(event.target.value))} />
+                </label>
+                <button className="primary-btn" onClick={addAdminCash}>돈 추가</button>
+              </div>
+              <div className="admin-account-list">
+                {adminAccounts.map((account) => (
+                  <div key={account.userId}>
+                    <span><strong>{account.nickname}</strong><small>{account.login || account.userId}</small></span>
+                    <span>현금 <strong>{money(account.cash)}</strong></span>
+                    <span>총자산 <strong>{money(account.totalAsset)}</strong></span>
+                    <span className={account.profit >= 0 ? 'positive' : 'negative'}>{percent(account.profitRate)}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
+        )}
       </main>
+      {stockRequestOpen && (
+        <div className="modal-backdrop" role="dialog" aria-modal="true">
+          <section className="modal-panel">
+            <div className="panel-header">
+              <h2>주식 추가 요청</h2>
+              <button className="ghost-btn" onClick={() => setStockRequestOpen(false)}>닫기</button>
+            </div>
+            <label>기업명
+              <input value={requestCompany} onChange={(event) => setRequestCompany(event.target.value)} placeholder="예: 팔란티어" />
+            </label>
+            <label>티커
+              <input value={requestSymbol} onChange={(event) => setRequestSymbol(event.target.value.toUpperCase())} placeholder="예: PLTR" />
+            </label>
+            <label>요청 메모
+              <textarea value={requestMemo} onChange={(event) => setRequestMemo(event.target.value)} placeholder="추가하고 싶은 이유나 참고할 정보" />
+            </label>
+            <button className="primary-btn full-width" onClick={submitStockRequest}>요청 보내기</button>
+          </section>
+        </div>
+      )}
     </div>
   )
 }

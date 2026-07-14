@@ -41,7 +41,7 @@ button {
   border-bottom: 1px solid #222b3a;
   background: rgba(13, 17, 24, 0.88);
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto 1fr;
   align-items: center;
   gap: 22px;
   position: sticky;
@@ -52,7 +52,6 @@ button {
 
 .back-link,
 .ghost-btn,
-.reward-btn,
 .primary-btn,
 .buy-btn,
 .sell-btn,
@@ -81,7 +80,6 @@ button {
   font-weight: 700;
 }
 
-.reward-btn,
 .primary-btn {
   background: #6fd17b;
   border-color: #6fd17b;
@@ -140,7 +138,7 @@ small {
 
 .tabs {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 10px;
   margin: 16px 0;
 }
@@ -261,6 +259,11 @@ textarea {
   margin-bottom: 12px;
 }
 
+.request-stock-btn {
+  width: 100%;
+  margin-bottom: 12px;
+}
+
 .stock-list-meta {
   display: flex;
   justify-content: space-between;
@@ -289,6 +292,23 @@ textarea {
   font-size: 13px;
   font-weight: 900;
   white-space: nowrap;
+}
+
+.request-summary {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid #27415f;
+  background: #0d1825;
+  border-radius: 8px;
+  color: #c8d2df;
+  font-weight: 800;
+}
+
+.request-summary span {
+  color: #95a1b4;
+  font-size: 13px;
 }
 
 textarea {
@@ -587,6 +607,76 @@ label {
   background: #122318;
 }
 
+.admin-list,
+.admin-account-list {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-list article,
+.admin-account-list > div {
+  border: 1px solid #242e3d;
+  background: #10161f;
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+
+.admin-list article {
+  display: grid;
+  gap: 6px;
+}
+
+.admin-list p {
+  margin: 4px 0 0;
+  color: #d6deea;
+  line-height: 1.5;
+}
+
+.admin-account-list > div {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) repeat(3, minmax(110px, auto));
+  gap: 12px;
+  align-items: center;
+}
+
+.admin-account-list span {
+  display: grid;
+  gap: 4px;
+}
+
+.admin-cash-form {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(160px, 0.7fr) auto;
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 16px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.62);
+}
+
+.modal-panel {
+  width: min(520px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  border: 1px solid #263142;
+  background: #121720;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 24px 72px rgba(0, 0, 0, 0.45);
+}
+
+.full-width {
+  width: 100%;
+}
+
 @media (max-width: 900px) {
   .topbar {
     grid-template-columns: 1fr;
@@ -596,7 +686,9 @@ label {
   .hero-panel,
   .content-grid,
   .quote-grid,
-  .trade-box {
+  .trade-box,
+  .admin-cash-form,
+  .admin-account-list > div {
     grid-template-columns: 1fr;
   }
 

@@ -6,8 +6,10 @@ import com.playground.domain.mockinvest.repository.*;
 import com.playground.domain.user.entity.User;
 import com.playground.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -18,15 +20,15 @@ import java.util.List;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class MockInvestService {
-    private static final BigDecimal INITIAL_CASH = BigDecimal.valueOf(10_000_000);
-    private static final BigDecimal DEFAULT_REWARD = BigDecimal.valueOf(250_000);
+    private static final BigDecimal INITIAL_CASH = BigDecimal.valueOf(100_000);
+    private static final String ADMIN_LOGIN = "sunwoo162";
 
     private final MockInvestAccountRepository accountRepository;
     private final MockInvestHoldingRepository holdingRepository;
     private final MockInvestOrderRepository orderRepository;
     private final MockInvestWatchlistRepository watchlistRepository;
     private final MockInvestJournalRepository journalRepository;
-    private final MockInvestRewardRepository rewardRepository;
+    private final MockInvestStockRequestRepository stockRequestRepository;
     private final UserRepository userRepository;
     private final TwelveDataStockClient stockClient;
 
@@ -172,20 +174,6 @@ public class MockInvestService {
     }
 
     @Transactional
-    public MockInvestDto.PortfolioResponse reward(String userId, MockInvestDto.RewardRequest req) {
-        MockInvestAccount account = ensureAccount(userId);
-        BigDecimal amount = req.getAmount() != null ? req.getAmount() : DEFAULT_REWARD;
-        account.setCash(account.getCash().add(amount));
-        account.setRewardedAmount(account.getRewardedAmount().add(amount));
-        rewardRepository.save(MockInvestReward.builder()
-                .userId(userId)
-                .amount(amount)
-                .reason(req.getReason() != null ? req.getReason() : "PLAYGROUND_ACTIVITY")
-                .build());
-        return portfolio(userId);
-    }
-
-    @Transactional
     public List<MockInvestDto.RankingResponse> rankings() {
         List<MockInvestDto.RankingResponse> rows = accountRepository.findAll().stream()
                 .map(a -> {
@@ -208,12 +196,81 @@ public class MockInvestService {
         return rows;
     }
 
+    @Transactional
+    public MockInvestDto.StockRequestResponse requestStock(String userId, MockInvestDto.StockRequestSubmitRequest req) {
+        if (req == null || req.getCompany() == null || req.getCompany().isBlank()) {
+            throw new IllegalArgumentException("company is required");
+        }
+        MockInvestStockRequest stockRequest = stockRequestRepository.save(MockInvestStockRequest.builder()
+                .userId(userId)
+                .company(req.getCompany().trim())
+                .symbol(normalizeNullable(req.getSymbol()))
+                .memo(normalizeNullable(req.getMemo()))
+                .status(MockInvestStockRequest.RequestStatus.PENDING)
+                .build());
+        return toStockRequest(stockRequest);
+    }
+
+    public List<MockInvestDto.StockRequestResponse> myStockRequests(String userId) {
+        return stockRequestRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
+                .map(this::toStockRequest)
+                .toList();
+    }
+
+    public MockInvestDto.AdminStatusResponse adminStatus(String userId) {
+        return MockInvestDto.AdminStatusResponse.builder().admin(isAdmin(userId)).build();
+    }
+
+    public List<MockInvestDto.StockRequestResponse> adminStockRequests(String adminUserId) {
+        requireAdmin(adminUserId);
+        return stockRequestRepository.findAllByOrderByCreatedAtDesc().stream()
+                .map(this::toStockRequest)
+                .toList();
+    }
+
+    @Transactional
+    public List<MockInvestDto.AdminAccountResponse> adminAccounts(String adminUserId) {
+        requireAdmin(adminUserId);
+        return accountRepository.findAll().stream()
+                .map(this::toAdminAccount)
+                .sorted(Comparator.comparing(MockInvestDto.AdminAccountResponse::getTotalAsset).reversed())
+                .toList();
+    }
+
+    @Transactional
+    public MockInvestDto.AdminAccountResponse adminAddCash(String adminUserId, MockInvestDto.AdminCashRequest req) {
+        requireAdmin(adminUserId);
+        if (req == null || req.getUserId() == null || req.getUserId().isBlank()) {
+            throw new IllegalArgumentException("userId is required");
+        }
+        if (req.getAmount() == null || req.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("amount must be greater than zero");
+        }
+        MockInvestAccount account = ensureAccount(req.getUserId().trim());
+        account.setCash(account.getCash().add(req.getAmount()));
+        account.setRewardedAmount(account.getRewardedAmount().add(req.getAmount()));
+        return toAdminAccount(account);
+    }
+
     private MockInvestAccount ensureAccount(String userId) {
         return accountRepository.findById(userId).orElseGet(() -> accountRepository.save(MockInvestAccount.builder()
                 .userId(userId)
                 .cash(INITIAL_CASH)
                 .rewardedAmount(INITIAL_CASH)
                 .build()));
+    }
+
+    private boolean isAdmin(String userId) {
+        return userRepository.findById(userId)
+                .map(User::getLogin)
+                .map(login -> ADMIN_LOGIN.equalsIgnoreCase(login))
+                .orElse(false);
+    }
+
+    private void requireAdmin(String userId) {
+        if (!isAdmin(userId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "admin only");
+        }
     }
 
     private MockInvestOrder saveOrder(String userId, MockInvestOrder.OrderType type, MockInvestDto.StockResponse stock, long quantity) {
@@ -312,6 +369,46 @@ public class MockInvestService {
                 .createdAt(j.getCreatedAt())
                 .updatedAt(j.getUpdatedAt())
                 .build();
+    }
+
+    private MockInvestDto.StockRequestResponse toStockRequest(MockInvestStockRequest request) {
+        User user = userRepository.findById(request.getUserId()).orElse(null);
+        return MockInvestDto.StockRequestResponse.builder()
+                .id(request.getId())
+                .userId(request.getUserId())
+                .nickname(user != null ? displayName(user) : request.getUserId())
+                .company(request.getCompany())
+                .symbol(request.getSymbol())
+                .memo(request.getMemo())
+                .status(request.getStatus().name())
+                .createdAt(request.getCreatedAt())
+                .build();
+    }
+
+    private MockInvestDto.AdminAccountResponse toAdminAccount(MockInvestAccount account) {
+        MockInvestDto.PortfolioResponse p = portfolio(account.getUserId());
+        User user = userRepository.findById(account.getUserId()).orElse(null);
+        return MockInvestDto.AdminAccountResponse.builder()
+                .userId(account.getUserId())
+                .login(user != null ? user.getLogin() : null)
+                .nickname(user != null ? displayName(user) : account.getUserId())
+                .avatarUrl(user != null ? user.getAvatarUrl() : null)
+                .cash(p.getCash())
+                .rewardedAmount(p.getRewardedAmount())
+                .invested(p.getInvested())
+                .evaluated(p.getEvaluated())
+                .totalAsset(p.getTotalAsset())
+                .profit(p.getProfit())
+                .profitRate(p.getProfitRate())
+                .build();
+    }
+
+    private String displayName(User user) {
+        return user.getName() != null && !user.getName().isBlank() ? user.getName() : user.getLogin();
+    }
+
+    private String normalizeNullable(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     private BigDecimal rate(BigDecimal profit, BigDecimal base) {
