@@ -103,6 +103,7 @@ type AdminAccount = {
 
 type Tab = 'dashboard' | 'stocks' | 'orders' | 'journal' | 'ranking' | 'admin'
 type ChartRange = '5Y' | '1Y' | '6M' | '1M' | '1W' | '1D'
+type RankingMode = 'totalAsset' | 'profitRate'
 
 const API = '/api/mock-invest'
 const CHART_RANGES: Array<[ChartRange, string, number]> = [
@@ -186,6 +187,7 @@ function App() {
   const [orders, setOrders] = useState<Order[]>([])
   const [journals, setJournals] = useState<Journal[]>([])
   const [rankings, setRankings] = useState<Ranking[]>([])
+  const [rankingMode, setRankingMode] = useState<RankingMode>('totalAsset')
   const [tab, setTab] = useState<Tab>('dashboard')
   const [query, setQuery] = useState('')
   const [selectedSymbol, setSelectedSymbol] = useState('AAPL')
@@ -464,6 +466,9 @@ function App() {
     ? [chartMax, chartMax - chartValueRange * 0.25, chartMax - chartValueRange * 0.5, chartMax - chartValueRange * 0.75, chartMin]
     : []
   const timeTicks = buildTimeTicks(chartRange, chartCandles)
+  const sortedRankings = [...rankings]
+    .sort((a, b) => rankingMode === 'totalAsset' ? b.totalAsset - a.totalAsset : b.profitRate - a.profitRate)
+    .map((item, index) => ({ ...item, rank: index + 1 }))
 
   return (
     <div className="app-shell">
@@ -650,8 +655,25 @@ function App() {
 
         {tab === 'ranking' && (
           <section className="panel wide full">
-            <div className="panel-header"><h2>수익률 랭킹</h2><span>DB 사용자 기준</span></div>
-            <div className="ranking-list">{rankings.map((item) => <div key={`${item.rank}-${item.nickname}`}><strong>{item.rank}</strong><span>{item.nickname}</span><span>{money(item.totalAsset)}</span><span className={item.profitRate >= 0 ? 'positive' : 'negative'}>{percent(item.profitRate)}</span></div>)}</div>
+            <div className="panel-header">
+              <h2>랭킹</h2>
+              <div className="ranking-mode-tabs" aria-label="랭킹 기준">
+                <button className={rankingMode === 'totalAsset' ? 'active' : ''} onClick={() => setRankingMode('totalAsset')}>총 금액</button>
+                <button className={rankingMode === 'profitRate' ? 'active' : ''} onClick={() => setRankingMode('profitRate')}>수익률</button>
+              </div>
+            </div>
+            <div className="ranking-list">
+              <div className="ranking-head"><strong>순위</strong><span>사용자</span><span>총 금액</span><span>수익률</span></div>
+              {sortedRankings.map((item) => (
+                <div key={`${rankingMode}-${item.rank}-${item.nickname}`}>
+                  <strong>{item.rank}</strong>
+                  <span>{item.nickname}</span>
+                  <span>{money(item.totalAsset)}</span>
+                  <span className={item.profitRate >= 0 ? 'positive' : 'negative'}>{percent(item.profitRate)}</span>
+                </div>
+              ))}
+              {sortedRankings.length === 0 && <p className="empty">아직 랭킹 데이터가 없습니다.</p>}
+            </div>
           </section>
         )}
 
