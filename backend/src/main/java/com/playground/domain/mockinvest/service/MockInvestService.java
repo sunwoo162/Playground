@@ -41,27 +41,7 @@ public class MockInvestService {
     }
 
     public MockInvestDto.StockResponse stock(String symbol) {
-        try {
-            return stockClient.quote(symbol);
-        } catch (RuntimeException e) {
-            return stockClient.search(symbol).stream()
-                    .findFirst()
-                    .orElseGet(() -> MockInvestDto.StockResponse.builder()
-                            .symbol(symbol)
-                            .name(symbol)
-                            .price(BigDecimal.ZERO)
-                            .change(BigDecimal.ZERO)
-                            .changeRate(BigDecimal.ZERO)
-                            .volume(0L)
-                            .marketCap(BigDecimal.ZERO)
-                            .sector("UNAVAILABLE")
-                            .high(BigDecimal.ZERO)
-                            .low(BigDecimal.ZERO)
-                            .description("현재 시세를 불러올 수 없는 종목입니다.")
-                            .points(List.of())
-                            .realtime(false)
-                            .build());
-        }
+        return stockClient.quote(symbol);
     }
 
     public List<MockInvestDto.ChartCandleResponse> stockChart(String symbol, String range) {

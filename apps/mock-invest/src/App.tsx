@@ -168,6 +168,7 @@ function App() {
   const [quantity, setQuantity] = useState(1)
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
+  const [quoteLoading, setQuoteLoading] = useState(false)
   const [chartRange, setChartRange] = useState<ChartRange>('1D')
   const [remoteCandles, setRemoteCandles] = useState<ChartCandle[]>([])
   const [journalTitle, setJournalTitle] = useState('')
@@ -218,12 +219,15 @@ function App() {
     setSelectedSymbol(symbol)
     if (localStock) setSelectedStock(localStock)
     setRemoteCandles([])
+    setQuoteLoading(true)
     try {
       const nextStock = await api<Stock>(`/stocks/${encodeURIComponent(symbol)}`)
       setSelectedStock(nextStock)
       setMessage('')
     } catch (err) {
       setMessage(err instanceof Error ? err.message : '시세를 불러오지 못했습니다.')
+    } finally {
+      setQuoteLoading(false)
     }
   }
 
@@ -365,7 +369,9 @@ function App() {
   const chartMax = chartCandles.length ? Math.max(...chartCandles.map((c) => c.high)) : 0
   const chartValueRange = chartMax - chartMin || 1
   const maxVolume = chartCandles.length ? Math.max(...chartCandles.map((c) => c.volume)) || 1 : 1
-  const priceTicks = [chartMax, chartMax - chartValueRange * 0.25, chartMax - chartValueRange * 0.5, chartMax - chartValueRange * 0.75, chartMin]
+  const priceTicks = hasChartData
+    ? [chartMax, chartMax - chartValueRange * 0.25, chartMax - chartValueRange * 0.5, chartMax - chartValueRange * 0.75, chartMin]
+    : []
   const timeTicks = buildTimeTicks(chartRange, chartCandles)
 
   return (
@@ -450,14 +456,14 @@ function App() {
                 <button className="ghost-btn" onClick={toggleWatch}>{watchSymbols.has(current.symbol) ? '★ 관심 해제' : '☆ 관심 등록'}</button>
               </div>
               <div className="quote-grid">
-                <div><span>현재가</span><strong>{hasDisplayData ? money(displayPrice) : '시세 없음'}</strong></div>
+                <div><span>현재가</span><strong>{hasDisplayData ? money(displayPrice) : quoteLoading ? '조회 중' : '시세 없음'}</strong></div>
                 <div>
                   <span>{hasChartData ? selectedRange[1] : '당일'} 등락률</span>
-                  <strong className={displayChange >= 0 ? 'positive' : 'negative'}>{hasDisplayData ? percent(displayChangeRate) : '-'}</strong>
+                  <strong className={displayChange >= 0 ? 'positive' : 'negative'}>{hasDisplayData ? percent(displayChangeRate) : quoteLoading ? '조회 중' : '-'}</strong>
                   {hasDisplayData && <small className={displayChange >= 0 ? 'positive' : 'negative'}>{signedMoney(displayChange)}</small>}
                 </div>
-                <div><span>{hasChartData ? selectedRange[1] : '당일'} 고가/저가</span><strong>{hasDisplayData ? `${money(displayHigh)} / ${money(displayLow)}` : '-'}</strong></div>
-                <div><span>{hasChartData ? selectedRange[1] : '당일'} 거래량</span><strong>{hasDisplayData ? displayVolume.toLocaleString('ko-KR') : '0'}</strong></div>
+                <div><span>{hasChartData ? selectedRange[1] : '당일'} 고가/저가</span><strong>{hasDisplayData ? `${money(displayHigh)} / ${money(displayLow)}` : quoteLoading ? '조회 중' : '-'}</strong></div>
+                <div><span>{hasChartData ? selectedRange[1] : '당일'} 거래량</span><strong>{hasDisplayData ? displayVolume.toLocaleString('ko-KR') : quoteLoading ? '조회 중' : '0'}</strong></div>
               </div>
               <div className="chart-range-tabs" aria-label="차트 기간">
                 {CHART_RANGES.map(([id, label]) => (
