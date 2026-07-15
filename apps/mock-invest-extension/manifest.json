@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "모의 투자 관심 종목",
+  "description": "확장 아이콘을 누르면 모의 투자 관심 종목 시세를 작은 팝업에서 확인합니다.",
+  "version": "1.0.0",
+  "permissions": ["storage"],
+  "action": {
+    "default_title": "관심 종목 보기",
+    "default_popup": "popup.html"
+  },
+  "options_page": "options.html",
+  "host_permissions": ["https://playground.https.gsmsv.site/*"]
+}

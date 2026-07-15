@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>모의 투자 관심 종목 설정</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main class="panel">
+      <h1>모의 투자 관심 종목</h1>
+      <p class="description">확장 팝업에서 관심 종목을 불러올 놀이터 주소를 설정하세요.</p>
+
+      <label class="field">
+        <span>서비스 주소</span>
+        <input id="mockInvestUrl" type="url" placeholder="https://playground.https.gsmsv.site/apps/mock-invest/" />
+      </label>
+
+      <div class="actions">
+        <button id="saveButton" type="button">저장</button>
+      </div>
+
+      <p id="status" class="status"></p>
+    </main>
+
+    <script src="options.js"></script>
+  </body>
+</html>
