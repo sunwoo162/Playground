@@ -5,6 +5,9 @@ const statusEl = document.querySelector('#status');
 const listEl = document.querySelector('#watchlist');
 const emptyEl = document.querySelector('#emptyState');
 const refreshButton = document.querySelector('#refreshButton');
+const openAppButton = document.querySelector('#openAppButton');
+let currentAppUrl = DEFAULT_MOCK_INVEST_URL;
+let currentOrigin = '';
 
 function normalizeBaseUrl(value) {
   try {
@@ -136,6 +139,11 @@ function render(stocks, warning = '') {
           <span>저가 ${hasLivePrice ? money(stock.low) : '-'}</span>
         `}
       </div>
+      <div class="trade-form" data-symbol="${escapeHtml(stock.symbol || '')}">
+        <input type="number" min="1" step="1" value="1" aria-label="주문 수량" />
+        <button class="buy-button" type="button" data-action="buy">매수</button>
+        <button class="sell-button" type="button" data-action="sell" ${stock.holding ? '' : 'disabled'}>매도</button>
+      </div>
     `;
     listEl.appendChild(card);
   }
@@ -164,8 +172,9 @@ async function loadWatchlist() {
   emptyEl.classList.add('hidden');
 
   const stored = await chrome.storage.sync.get(STORAGE_KEY);
-  const origin = normalizeBaseUrl(stored[STORAGE_KEY] || DEFAULT_MOCK_INVEST_URL);
-  if (!origin) {
+  currentAppUrl = stored[STORAGE_KEY] || DEFAULT_MOCK_INVEST_URL;
+  currentOrigin = normalizeBaseUrl(currentAppUrl);
+  if (!currentOrigin) {
     setStatus('옵션에서 올바른 모의 투자 주소를 설정해주세요.');
     return;
   }
@@ -176,8 +185,8 @@ async function loadWatchlist() {
 
   try {
     const [watchlistResult, portfolioResult] = await Promise.all([
-      fetchJson(`${origin}/api/mock-invest/watchlist`),
-      fetchJson(`${origin}/api/mock-invest/portfolio`),
+      fetchJson(`${currentOrigin}/api/mock-invest/watchlist`),
+      fetchJson(`${currentOrigin}/api/mock-invest/portfolio`),
     ]);
 
     if (watchlistResult.status === 401 || portfolioResult.status === 401) {
@@ -195,6 +204,31 @@ async function loadWatchlist() {
   }
 }
 
+async function submitTrade(symbol, action, quantity) {
+  if (!currentOrigin) {
+    setStatus('옵션에서 올바른 모의 투자 주소를 설정해주세요.');
+    return;
+  }
+
+  setStatus(`${symbol} ${quantity}주 ${action === 'buy' ? '매수' : '매도'} 요청 중...`);
+  const result = await postJson(`${currentOrigin}/api/mock-invest/trades/${action}`, {
+    symbol,
+    quantity,
+  });
+
+  if (result.status === 401) {
+    setStatus('로그인이 필요합니다. 놀이터에 로그인한 뒤 다시 시도해주세요.');
+    return;
+  }
+  if (!result.ok) {
+    setStatus(result.message || `${action === 'buy' ? '매수' : '매도'}에 실패했습니다. (${result.status || 'network'})`);
+    return;
+  }
+
+  setStatus(`${symbol} ${quantity}주 ${action === 'buy' ? '매수' : '매도'} 완료`);
+  await loadWatchlist();
+}
+
 async function fetchJson(url) {
   try {
     const response = await fetch(url, {
@@ -210,5 +244,60 @@ async function fetchJson(url) {
   }
 }
 
+async function postJson(url, body) {
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      credentials: 'include',
+      cache: 'no-store',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+    let data = null;
+    try {
+      data = await response.json();
+    } catch {
+      data = null;
+    }
+    return {
+      ok: response.ok,
+      status: response.status,
+      data,
+      message: data?.message || data?.error,
+    };
+  } catch {
+    return { ok: false, status: 0, data: null };
+  }
+}
+
+function openMockInvestApp() {
+  const target = currentAppUrl || DEFAULT_MOCK_INVEST_URL;
+  chrome.tabs.create({ url: target });
+}
+
+listEl.addEventListener('click', async (event) => {
+  const button = event.target.closest('button[data-action]');
+  if (!button || button.disabled) return;
+  const form = button.closest('.trade-form');
+  const symbol = form?.dataset.symbol;
+  const input = form?.querySelector('input');
+  const quantity = Number(input?.value);
+  if (!symbol || !Number.isInteger(quantity) || quantity < 1) {
+    setStatus('주문 수량은 1 이상의 정수로 입력해주세요.');
+    return;
+  }
+
+  const action = button.dataset.action;
+  button.disabled = true;
+  try {
+    await submitTrade(symbol, action, quantity);
+  } finally {
+    button.disabled = false;
+  }
+});
+
 refreshButton.addEventListener('click', loadWatchlist);
+openAppButton.addEventListener('click', openMockInvestApp);
 loadWatchlist();

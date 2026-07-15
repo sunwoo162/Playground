@@ -61,6 +61,11 @@ body {
   font-weight: 700;
 }
 
+.header-actions {
+  display: flex;
+  gap: 6px;
+}
+
 button {
   flex: 0 0 auto;
   border: 1px solid var(--border);
@@ -203,6 +208,49 @@ button:hover {
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid rgba(41, 51, 67, 0.75);
+}
+
+.trade-form {
+  display: grid;
+  grid-template-columns: minmax(72px, 1fr) 64px 64px;
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.trade-form input {
+  width: 100%;
+  height: 36px;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #0b1018;
+  color: var(--text);
+  padding: 0 10px;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.trade-form button {
+  height: 36px;
+  padding: 0;
+  color: var(--text);
+}
+
+.trade-form .buy-button {
+  border-color: rgba(239, 119, 115, 0.45);
+  background: rgba(239, 119, 115, 0.17);
+}
+
+.trade-form .sell-button {
+  border-color: rgba(111, 140, 255, 0.45);
+  background: rgba(111, 140, 255, 0.17);
+}
+
+.trade-form button:disabled,
+.trade-form input:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
 }
 
 .hidden {
