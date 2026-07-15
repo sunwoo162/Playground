@@ -301,6 +301,74 @@ html[data-compact="true"][data-compact-view="settings"] #root {
   color: var(--text);
 }
 
+.schedule-list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.schedule-item {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 14px;
+  padding: 16px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.schedule-date-badge {
+  align-self: flex-start;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(112,161,255,0.12);
+  color: #70a1ff;
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-align: center;
+}
+.schedule-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.schedule-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.schedule-title-row strong {
+  color: var(--text);
+  font-size: 1rem;
+}
+.schedule-type {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(46,213,115,0.12);
+  color: var(--accent);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+.schedule-body p {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+.schedule-grades {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.schedule-grades span {
+  padding: 3px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
 .compact-app {
   height: 100%;
   min-height: 0;
@@ -397,8 +465,21 @@ html[data-compact="true"][data-compact-view="settings"] .compact-app {
   padding: 8px 10px;
 }
 .compact-app .meal-list,
-.compact-app .timetable-list {
+.compact-app .timetable-list,
+.compact-app .schedule-list {
   gap: 10px;
+}
+.compact-app .schedule-item {
+  grid-template-columns: 58px 1fr;
+  padding: 12px;
+  gap: 10px;
+}
+.compact-app .schedule-date-badge {
+  padding: 5px 8px;
+  font-size: 0.74rem;
+}
+.compact-app .schedule-title-row strong {
+  font-size: 0.86rem;
 }
 .compact-app .meal-card {
   padding: 14px;
@@ -426,4 +507,6 @@ html[data-compact="true"][data-compact-view="settings"] .compact-app {
   .date-nav { grid-template-columns: 52px 1fr 52px; }
   .date-label { grid-column: 1 / -1; grid-row: 1; }
   .calendar-picker { grid-column: 2; grid-row: 2; }
+  .schedule-item { grid-template-columns: 1fr; }
+  .schedule-date-badge { width: fit-content; }
 }

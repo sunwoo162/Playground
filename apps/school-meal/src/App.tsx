@@ -21,6 +21,14 @@ interface TimetableItem {
   date: string;
 }
 
+interface AcademicSchedule {
+  date: string;
+  name: string;
+  content: string;
+  type: string;
+  grades: string[];
+}
+
 interface MealAlert {
   id: string;
   mealType: string;
@@ -47,7 +55,7 @@ interface SavedSchool {
 
 const STORAGE_KEY = 'school-meal-settings';
 type Theme = 'dark' | 'light';
-type MainTab = 'meal' | 'timetable';
+type MainTab = 'meal' | 'timetable' | 'schedule';
 const THEME_KEY = 'playground-theme';
 const ELEMENTARY_GRADES = ['1', '2', '3', '4', '5', '6'];
 const SECONDARY_GRADES = ['1', '2', '3'];
@@ -60,6 +68,7 @@ const MEAL_TYPES = [
 const MAIN_TABS: { value: MainTab; label: string }[] = [
   { value: 'meal', label: '🍱 급식' },
   { value: 'timetable', label: '📚 시간표' },
+  { value: 'schedule', label: '🗓️ 학사일정' },
 ];
 const MEAL_TYPE_COLORS: Record<string, string> = {
   '조식': '#ffa502',
@@ -212,8 +221,10 @@ export default function App() {
   const [searching, setSearching] = useState(false);
   const [meals, setMeals] = useState<Meal[]>([]);
   const [timetable, setTimetable] = useState<TimetableItem[]>([]);
+  const [schedule, setSchedule] = useState<AcademicSchedule[]>([]);
   const [mealLoading, setMealLoading] = useState(false);
   const [timetableLoading, setTimetableLoading] = useState(false);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
   const [view, setView] = useState<'main' | 'search' | 'settings'>(initialView);
   const [activeTab, setActiveTab] = useState<MainTab>('meal');
   const [notifPermission, setNotifPermission] = useState(Notification.permission);
@@ -224,6 +235,9 @@ export default function App() {
   const alertTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const gradeOptions = saved ? getGradeOptions(saved.schoolType) : SECONDARY_GRADES;
   const extensionUrl = `${window.location.origin}/apps/school-meal/`;
+  const visibleSchedule = saved
+    ? schedule.filter(item => item.grades.length === 0 || item.grades.includes(saved.grade))
+    : [];
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -267,6 +281,7 @@ export default function App() {
       setSaved(s);
       fetchMeals(s.orgCode, s.schoolCode, defaultMealTarget.date);
       fetchTimetable(s, defaultMealTarget.date);
+      fetchSchedule(s, defaultMealTarget.date);
       scheduleAlerts(s);
     }
     return () => clearAlertTimers();
@@ -308,11 +323,28 @@ export default function App() {
     }
   };
 
+  const fetchSchedule = async (settings: SavedSchool, date: Date) => {
+    setScheduleLoading(true);
+    try {
+      const params = new URLSearchParams({
+        orgCode: settings.orgCode,
+        schoolCode: settings.schoolCode,
+        date: dateToApi(date),
+      });
+      const res = await fetch(`/neis/schedule?${params.toString()}`);
+      const data = await res.json();
+      setSchedule(Array.isArray(data) ? data : []);
+    } finally {
+      setScheduleLoading(false);
+    }
+  };
+
   const loadDate = (newDate: Date) => {
     setSelectedDate(newDate);
     if (saved) {
       fetchMeals(saved.orgCode, saved.schoolCode, newDate);
       fetchTimetable(saved, newDate);
+      fetchSchedule(saved, newDate);
     }
   };
 
@@ -354,6 +386,7 @@ export default function App() {
     saveSettings(settings);
     fetchMeals(school.orgCode, school.schoolCode, selectedDate);
     fetchTimetable(settings, selectedDate);
+    fetchSchedule(settings, selectedDate);
     setView('main');
     setSearchResults([]);
     setSearchQuery('');
@@ -761,20 +794,50 @@ export default function App() {
                   </div>
                 )}
               </>
-            ) : timetableLoading ? (
+            ) : activeTab === 'timetable' ? (
+              timetableLoading ? (
               <div className="empty-state"><div className="spinner" /></div>
-            ) : timetable.length === 0 ? (
+              ) : timetable.length === 0 ? (
               <div className="empty-state">
                 <p className="empty-icon">📚</p>
                 <p>{saved.grade}학년 {saved.className}반 시간표 정보가 없어요.</p>
                 <p className="empty-sub">{dateToDisplay(selectedDate)}</p>
               </div>
-            ) : (
+              ) : (
               <div className="timetable-list">
                 {timetable.map(item => (
                   <div key={`${item.period}-${item.subject}`} className="timetable-item">
                     <span className="period-badge">{item.period}교시</span>
                     <span className="subject-name">{item.subject}</span>
+                  </div>
+                ))}
+              </div>
+              )
+            ) : scheduleLoading ? (
+              <div className="empty-state"><div className="spinner" /></div>
+            ) : visibleSchedule.length === 0 ? (
+              <div className="empty-state">
+                <p className="empty-icon">🗓️</p>
+                <p>이 날은 학사일정이 없어요.</p>
+                <p className="empty-sub">{dateToDisplay(selectedDate)}</p>
+              </div>
+            ) : (
+              <div className="schedule-list">
+                {visibleSchedule.map((item, index) => (
+                  <div key={`${item.date}-${item.name}-${index}`} className="schedule-item">
+                    <div className="schedule-date-badge">{item.date?.replace(/(\d{4})(\d{2})(\d{2})/, '$2.$3')}</div>
+                    <div className="schedule-body">
+                      <div className="schedule-title-row">
+                        <strong>{item.name || item.content}</strong>
+                        {item.type && <span className="schedule-type">{item.type}</span>}
+                      </div>
+                      {item.content && item.content !== item.name && <p>{item.content}</p>}
+                      {item.grades.length > 0 && (
+                        <div className="schedule-grades">
+                          {item.grades.map(grade => <span key={grade}>{grade}학년</span>)}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

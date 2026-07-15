@@ -238,6 +238,42 @@ app.get('/neis/timetable', async (req, res) => {
   }
 });
 
+/** GET /neis/schedule?orgCode=&schoolCode=&date=YYYYMMDD - 학사일정 조회 */
+app.get('/neis/schedule', async (req, res) => {
+  const { orgCode, schoolCode, date } = req.query;
+  if (!orgCode || !schoolCode) {
+    return res.status(400).json({ error: 'orgCode, schoolCode required' });
+  }
+
+  const targetDate = date || new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  try {
+    const url = `${NEIS_BASE}/SchoolSchedule?KEY=${process.env.NEIS_API_KEY}&Type=json&ATPT_OFCDC_SC_CODE=${orgCode}&SD_SCHUL_CODE=${schoolCode}&AA_YMD=${targetDate}`;
+    const r = await fetch(url);
+    const data = await r.json();
+    const rows = data?.SchoolSchedule?.[1]?.row || [];
+    const gradeFields = [
+      ['1', 'ONE_GRADE_EVENT_YN'],
+      ['2', 'TW_GRADE_EVENT_YN'],
+      ['3', 'THREE_GRADE_EVENT_YN'],
+      ['4', 'FR_GRADE_EVENT_YN'],
+      ['5', 'FIV_GRADE_EVENT_YN'],
+      ['6', 'SIX_GRADE_EVENT_YN'],
+    ];
+
+    res.json(rows.map(item => ({
+      date: item.AA_YMD,
+      name: item.EVENT_NM || '',
+      content: item.EVENT_CNTNT || '',
+      type: item.SBTR_DD_SC_NM || '',
+      grades: gradeFields
+        .filter(([, field]) => item[field] === 'Y')
+        .map(([grade]) => grade),
+    })).filter(item => item.name || item.content));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ============================================
 // Web Push
 // ============================================
