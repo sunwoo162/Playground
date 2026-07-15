@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import type { CornellNote, GitRepoSettings, Subject } from './types';
 import { getNotes, saveNote, deleteNote, getSubjects, saveSubjects, getGitRepoSettings, saveGitRepoSettings, generateId, getTodayStr } from './storage';
@@ -7,10 +7,31 @@ import { useAuth } from './useAuth';
 
 type View = 'list' | 'edit' | 'view' | 'subjects' | 'repo' | 'detailOnly';
 type Theme = 'dark' | 'light';
+type MarkdownAction = {
+  label: string;
+  title: string;
+  snippet: string;
+  cursorOffset?: number;
+  block?: boolean;
+  wrap?: [string, string];
+};
 const THEME_KEY = 'playground-theme';
 const getTheme = (): Theme => localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark';
 const SHARE_HASH_PREFIX = '#share=';
 const DETAIL_HASH_PREFIX = '#detail=';
+
+const MARKDOWN_ACTIONS: MarkdownAction[] = [
+  { label: 'H2', title: '제목', snippet: '## 제목', cursorOffset: 3, block: true },
+  { label: 'B', title: '굵게', snippet: '**굵게**', cursorOffset: 2, wrap: ['**', '**'] },
+  { label: 'I', title: '기울임', snippet: '*기울임*', cursorOffset: 1, wrap: ['*', '*'] },
+  { label: '•', title: '목록', snippet: '- 항목', cursorOffset: 2, block: true },
+  { label: '1.', title: '번호 목록', snippet: '1. 항목', cursorOffset: 3, block: true },
+  { label: '[]', title: '체크박스', snippet: '- [ ] 할 일', cursorOffset: 6, block: true },
+  { label: '`', title: '인라인 코드', snippet: '`코드`', cursorOffset: 1, wrap: ['`', '`'] },
+  { label: '```', title: '코드 블록', snippet: '```\n코드\n```', cursorOffset: 4, block: true },
+  { label: '>', title: '인용', snippet: '> 인용문', cursorOffset: 2, block: true },
+  { label: '---', title: '구분선', snippet: '---', block: true },
+];
 
 const EMPTY_NOTE = (subjectId: string): CornellNote => ({
   id: generateId(),
@@ -125,6 +146,7 @@ const importSharedNoteFromHash = (currentSubjects: Subject[]): { note: CornellNo
 
 export default function App() {
   const authed = useAuth();
+  const notesTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [notes, setNotes] = useState<CornellNote[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [view, setView] = useState<View>('list');
@@ -216,6 +238,50 @@ export default function App() {
     const url = `${window.location.origin}${window.location.pathname}${window.location.search}${DETAIL_HASH_PREFIX}${updated.id}`;
     window.open(url, '_blank', 'noopener,noreferrer');
   };
+
+  const applyMarkdownAction = (action: MarkdownAction) => {
+    if (!selected) return;
+
+    const textarea = notesTextareaRef.current;
+    const value = selected.notes;
+    const start = textarea?.selectionStart ?? value.length;
+    const end = textarea?.selectionEnd ?? value.length;
+    const selectedText = value.slice(start, end);
+    const before = value.slice(0, start);
+    const after = value.slice(end);
+    const leadingBreak = action.block && before.length > 0 && !before.endsWith('\n') ? '\n' : '';
+    const insert = selectedText && action.wrap
+      ? `${action.wrap[0]}${selectedText}${action.wrap[1]}`
+      : selectedText && action.label === '>'
+        ? selectedText.split('\n').map(line => `> ${line}`).join('\n')
+        : selectedText && action.label === '```'
+          ? `\`\`\`\n${selectedText}\n\`\`\``
+          : action.snippet;
+    const nextNotes = `${before}${leadingBreak}${insert}${after}`;
+    const cursor = before.length + leadingBreak.length + (selectedText ? insert.length : action.cursorOffset ?? insert.length);
+
+    setSelected({ ...selected, notes: nextNotes });
+    requestAnimationFrame(() => {
+      notesTextareaRef.current?.focus();
+      notesTextareaRef.current?.setSelectionRange(cursor, cursor);
+    });
+  };
+
+  const markdownToolbar = (
+    <div className="markdown-toolbar" aria-label="마크다운 도구">
+      {MARKDOWN_ACTIONS.map(action => (
+        <button
+          key={action.label}
+          type="button"
+          className="markdown-tool-btn"
+          title={action.title}
+          onClick={() => applyMarkdownAction(action)}
+        >
+          {action.label}
+        </button>
+      ))}
+    </div>
+  );
 
   const handleDelete = (id: string) => {
     deleteNote(id);
@@ -355,7 +421,9 @@ export default function App() {
               <button type="button" className="btn-ghost" onClick={() => window.close()}>닫기</button>
             </div>
           </div>
+          {markdownToolbar}
           <textarea
+            ref={notesTextareaRef}
             className="detail-only-textarea"
             placeholder={'강의 내용, 개념 설명,\n예시 등을 자세히 적어보세요'}
             value={selected.notes}
@@ -461,7 +529,9 @@ export default function App() {
               </div>
               <div className="cornell-notes-panel">
                 <div className="cornell-label">📖 세부 내용</div>
+                {markdownToolbar}
                 <textarea
+                  ref={notesTextareaRef}
                   className="cornell-textarea"
                   placeholder={'강의 내용, 개념 설명,\n예시 등을 자세히 적어보세요'}
                   value={selected.notes}

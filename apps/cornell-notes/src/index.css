@@ -94,6 +94,41 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .cornell-notes-panel { flex: 1; display: flex; flex-direction: column; background: var(--surface); }
 .cornell-summary-panel { border-top: 2px solid var(--border); min-height: 100px; display: flex; flex-direction: column; background: color-mix(in srgb, #ffd32a 5%, var(--surface)); }
 .cornell-label { padding: 8px 14px; font-size: 0.75rem; font-weight: 700; color: var(--text-muted); border-bottom: 1px solid var(--border); background: var(--surface-2); letter-spacing: 0.04em; }
+.markdown-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-2) 70%, var(--surface));
+}
+.markdown-tool-btn {
+  min-width: 34px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 9px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+}
+.markdown-tool-btn:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  transform: translateY(-1px);
+}
+.detail-only-page > .markdown-toolbar {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
 .cornell-textarea { flex: 1; padding: 12px 14px; background: transparent; border: none; color: var(--text); font-size: 0.88rem; line-height: 1.8; resize: none; font-family: inherit; }
 .cornell-textarea:focus { outline: none; }
 .summary-textarea { min-height: 80px; max-height: 140px; }
