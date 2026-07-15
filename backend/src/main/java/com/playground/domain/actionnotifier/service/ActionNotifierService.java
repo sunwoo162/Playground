@@ -47,7 +47,11 @@ public class ActionNotifierService {
                         .userId(userId)
                         .owner(repoName.owner())
                         .repo(repoName.repo())
+                        .enabled(true)
                         .build());
+        if (watch.getEnabled() == null) {
+            watch.setEnabled(true);
+        }
 
         refreshWatch(watch, false);
         return toResponse(watchRepository.save(watch));
@@ -68,6 +72,14 @@ public class ActionNotifierService {
         watchRepository.delete(watch);
     }
 
+    @Transactional
+    public ActionNotifierDto.WatchResponse updateNotification(String userId, Long watchId, Boolean enabled) {
+        ActionRepositoryWatch watch = watchRepository.findByIdAndUserId(watchId, userId)
+                .orElseThrow(() -> new IllegalArgumentException("연결된 레포를 찾을 수 없습니다."));
+        watch.setEnabled(enabled == null || enabled);
+        return toResponse(watchRepository.save(watch));
+    }
+
     @Scheduled(
             fixedDelayString = "${action-notifier.poll.fixed-delay-ms:120000}",
             initialDelayString = "${action-notifier.poll.initial-delay-ms:30000}"
@@ -76,6 +88,9 @@ public class ActionNotifierService {
     public void pollCompletedActions() {
         watchRepository.findAll().forEach(watch -> {
             try {
+                if (Boolean.FALSE.equals(watch.getEnabled())) {
+                    return;
+                }
                 refreshWatch(watch, true);
             } catch (Exception e) {
                 log.debug("GitHub action watch failed for {}/{}: {}", watch.getOwner(), watch.getRepo(), e.getMessage());
@@ -132,6 +147,8 @@ public class ActionNotifierService {
                 .owner(watch.getOwner())
                 .repo(watch.getRepo())
                 .fullName(watch.getOwner() + "/" + watch.getRepo())
+                .actionsUrl("https://github.com/" + watch.getOwner() + "/" + watch.getRepo() + "/actions")
+                .enabled(!Boolean.FALSE.equals(watch.getEnabled()))
                 .lastRunId(watch.getLastRunId())
                 .lastRunName(watch.getLastRunName())
                 .lastRunStatus(watch.getLastRunStatus())

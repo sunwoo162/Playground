@@ -15,12 +15,20 @@ public class ActionNotifierDto {
 
     @Getter
     @Setter
+    public static class NotificationRequest {
+        private Boolean enabled;
+    }
+
+    @Getter
+    @Setter
     @Builder
     public static class WatchResponse {
         private Long id;
         private String owner;
         private String repo;
         private String fullName;
+        private String actionsUrl;
+        private Boolean enabled;
         private Long lastRunId;
         private String lastRunName;
         private String lastRunStatus;

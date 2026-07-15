@@ -7,6 +7,8 @@ type Watch = {
   owner: string
   repo: string
   fullName: string
+  actionsUrl: string
+  enabled: boolean
   lastRunId?: number
   lastRunName?: string
   lastRunStatus?: string
@@ -109,6 +111,19 @@ function App() {
     await loadWatches()
   }
 
+  async function toggleRepoNotification(id: number, enabled: boolean) {
+    try {
+      const updated = await request<Watch>(`/api/action-notifier/repos/${id}/notification`, {
+        method: 'PATCH',
+        body: JSON.stringify({ enabled }),
+      })
+      setWatches((items) => items.map((item) => (item.id === id ? updated : item)))
+      setStatus(`${updated.fullName} 알림을 ${updated.enabled ? '켰어요.' : '껐어요.'}`)
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : '알림 설정을 바꾸지 못했어요.')
+    }
+  }
+
   async function registerServiceWorker() {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
       setStatus('이 브라우저는 백그라운드 알림을 지원하지 않아요.')
@@ -150,6 +165,24 @@ function App() {
     }
   }
 
+  async function disablePush() {
+    try {
+      const registration = await navigator.serviceWorker.ready
+      const subscription = await registration.pushManager.getSubscription()
+      if (subscription) {
+        await request('/api/push/unsubscribe', {
+          method: 'DELETE',
+          body: JSON.stringify({ endpoint: subscription.endpoint }),
+        })
+        await subscription.unsubscribe()
+      }
+      setPushEnabled(false)
+      setStatus('이 브라우저의 알림을 껐어요.')
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : '알림 끄기에 실패했어요.')
+    }
+  }
+
   function handleWorkerMessage(event: MessageEvent) {
     if (event.data?.type === 'ACTION_PUSH') {
       playBeep()
@@ -181,8 +214,8 @@ function App() {
           <h1>⚙️ Action 알리미</h1>
           <p>레포지토리를 연결하면 GitHub Actions 완료 시 알림을 보냅니다.</p>
         </div>
-        <button className={pushEnabled ? 'btn muted' : 'btn primary'} onClick={enablePush}>
-          {pushEnabled ? '알림 켜짐' : '알림 켜기'}
+        <button className={pushEnabled ? 'btn muted' : 'btn primary'} onClick={pushEnabled ? disablePush : enablePush}>
+          {pushEnabled ? '알림 끄기' : '알림 켜기'}
         </button>
       </header>
 
@@ -211,7 +244,7 @@ function App() {
                 onClick={() => setSelectedId(watch.id)}
               >
                 <span>{watch.fullName}</span>
-                <small>{statusLabel(watch.lastRunStatus, watch.lastRunConclusion)}</small>
+                <small>{watch.enabled ? statusLabel(watch.lastRunStatus, watch.lastRunConclusion) : '알림 꺼짐'}</small>
               </button>
             ))}
           </div>
@@ -226,7 +259,13 @@ function App() {
                   <p>{selected.lastRunName || '최근 workflow 확인 중'}</p>
                 </div>
                 <div className="actions">
-                  {selected.lastRunUrl && <a className="btn muted" href={selected.lastRunUrl} target="_blank">GitHub</a>}
+                  <button
+                    className={selected.enabled ? 'btn muted' : 'btn primary'}
+                    onClick={() => toggleRepoNotification(selected.id, !selected.enabled)}
+                  >
+                    {selected.enabled ? '레포 알림 끄기' : '레포 알림 켜기'}
+                  </button>
+                  <a className="btn muted" href={selected.actionsUrl} target="_blank">Actions</a>
                   <button className="btn danger" onClick={() => deleteRepo(selected.id)}>삭제</button>
                 </div>
               </div>

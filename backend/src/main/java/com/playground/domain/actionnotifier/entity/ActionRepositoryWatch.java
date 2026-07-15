@@ -32,6 +32,10 @@ public class ActionRepositoryWatch {
     @Column(name = "repo_name", nullable = false)
     private String repo;
 
+    @Builder.Default
+    @Column(name = "enabled")
+    private Boolean enabled = true;
+
     @Column(name = "last_run_id")
     private Long lastRunId;
 
