@@ -42,18 +42,60 @@ function setStatus(message, visible = true) {
   statusEl.classList.toggle('hidden', !visible);
 }
 
-function render(stocks) {
+function mergeStocks(watchlist, holdings) {
+  const items = new Map();
+
+  for (const stock of watchlist) {
+    if (!stock.symbol) continue;
+    items.set(stock.symbol, {
+      ...stock,
+      watchlisted: true,
+      holding: false,
+    });
+  }
+
+  for (const holding of holdings) {
+    if (!holding.symbol) continue;
+    const current = items.get(holding.symbol) || {};
+    items.set(holding.symbol, {
+      ...current,
+      symbol: holding.symbol,
+      name: current.name || holding.name,
+      sector: current.sector || '보유 종목',
+      price: current.price || holding.currentPrice,
+      change: current.change,
+      changeRate: current.changeRate,
+      high: current.high,
+      low: current.low,
+      realtime: current.realtime,
+      holding: true,
+      watchlisted: Boolean(current.watchlisted),
+      quantity: holding.quantity,
+      averagePrice: holding.averagePrice,
+      evaluated: holding.evaluated,
+      profit: holding.profit,
+      profitRate: holding.profitRate,
+    });
+  }
+
+  return Array.from(items.values()).sort((a, b) => {
+    if (a.holding !== b.holding) return a.holding ? -1 : 1;
+    return String(a.name || a.symbol).localeCompare(String(b.name || b.symbol), 'ko');
+  });
+}
+
+function render(stocks, warning = '') {
   listEl.innerHTML = '';
   if (!stocks.length) {
     listEl.classList.add('hidden');
     emptyEl.classList.remove('hidden');
-    setStatus('', false);
+    setStatus(warning, Boolean(warning));
     return;
   }
 
   emptyEl.classList.add('hidden');
   listEl.classList.remove('hidden');
-  setStatus('', false);
+  setStatus(warning, Boolean(warning));
 
   for (const stock of stocks) {
     const card = document.createElement('article');
@@ -62,23 +104,37 @@ function render(stocks) {
     const change = hasLivePrice ? Number(stock.change) : Number.NaN;
     const changeRate = hasLivePrice ? Number(stock.changeRate) : Number.NaN;
     const tone = hasLivePrice ? changeClass(changeRate) : 'neutral';
-    const changeText = hasLivePrice && Number.isFinite(change)
+    const quoteChangeText = hasLivePrice && Number.isFinite(change)
       ? `${signedMoney(change)} · ${percent(stock.changeRate)}`
       : '시세 없음';
+    const holdingProfit = Number(stock.profit);
+    const holdingProfitText = stock.holding && Number.isFinite(holdingProfit)
+      ? `${signedMoney(holdingProfit)} · ${percent(stock.profitRate)}`
+      : '';
+    const badges = [
+      stock.holding ? '<span class="badge owned">보유</span>' : '',
+      stock.watchlisted ? '<span class="badge">관심</span>' : '',
+    ].join('');
     card.innerHTML = `
       <div class="stock-top">
         <div class="stock-name">
+          <div class="badges">${badges}</div>
           <strong>${escapeHtml(stock.name || stock.symbol)}</strong>
           <span>${escapeHtml(stock.symbol || '-')} · ${escapeHtml(stock.sector || 'US')}</span>
         </div>
         <div>
           <div class="price">${money(stock.price)}</div>
-          <div class="change ${tone}">${changeText}</div>
+          <div class="change ${tone}">${quoteChangeText}</div>
         </div>
       </div>
       <div class="stock-meta">
-        <span>고가 ${hasLivePrice ? money(stock.high) : '-'}</span>
-        <span>저가 ${hasLivePrice ? money(stock.low) : '-'}</span>
+        ${stock.holding ? `
+          <span>${Number(stock.quantity).toLocaleString('en-US')}주 보유</span>
+          <span class="${changeClass(stock.profitRate)}">${holdingProfitText}</span>
+        ` : `
+          <span>고가 ${hasLivePrice ? money(stock.high) : '-'}</span>
+          <span>저가 ${hasLivePrice ? money(stock.low) : '-'}</span>
+        `}
       </div>
     `;
     listEl.appendChild(card);
@@ -103,7 +159,7 @@ function escapeHtml(value) {
 }
 
 async function loadWatchlist() {
-  setStatus('관심 종목을 불러오는 중...');
+  setStatus('보유 종목과 관심 종목을 불러오는 중...');
   listEl.classList.add('hidden');
   emptyEl.classList.add('hidden');
 
@@ -119,21 +175,38 @@ async function loadWatchlist() {
   }
 
   try {
-    const response = await fetch(`${origin}/api/mock-invest/watchlist`, {
-      credentials: 'include',
-      cache: 'no-store',
-    });
-    if (response.status === 401) {
+    const [watchlistResult, portfolioResult] = await Promise.all([
+      fetchJson(`${origin}/api/mock-invest/watchlist`),
+      fetchJson(`${origin}/api/mock-invest/portfolio`),
+    ]);
+
+    if (watchlistResult.status === 401 || portfolioResult.status === 401) {
       setStatus('로그인이 필요합니다. 놀이터에 로그인한 뒤 다시 열어주세요.');
       return;
     }
-    if (!response.ok) {
-      setStatus(`관심 종목을 불러오지 못했습니다. (${response.status})`);
-      return;
-    }
-    render(await response.json());
+
+    const watchlist = Array.isArray(watchlistResult.data) ? watchlistResult.data : [];
+    const holdings = Array.isArray(portfolioResult.data?.holdings) ? portfolioResult.data.holdings : [];
+    const failed = [watchlistResult, portfolioResult].filter((result) => !result.ok);
+    const warning = failed.length > 0 ? '일부 정보를 불러오지 못했습니다. 새로고침을 눌러 다시 시도하세요.' : '';
+    render(mergeStocks(watchlist, holdings), warning);
   } catch {
     setStatus('서버에 연결할 수 없습니다.');
+  }
+}
+
+async function fetchJson(url) {
+  try {
+    const response = await fetch(url, {
+      credentials: 'include',
+      cache: 'no-store',
+    });
+    if (!response.ok) {
+      return { ok: false, status: response.status, data: null };
+    }
+    return { ok: true, status: response.status, data: await response.json() };
+  } catch {
+    return { ok: false, status: 0, data: null };
   }
 }
 

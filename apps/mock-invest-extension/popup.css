@@ -131,6 +131,32 @@ button:hover {
   min-width: 0;
 }
 
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 7px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 7px;
+  border: 1px solid rgba(111, 140, 255, 0.45);
+  border-radius: 999px;
+  color: #b9c8ff;
+  background: rgba(111, 140, 255, 0.12);
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+.badge.owned {
+  border-color: rgba(143, 209, 127, 0.5);
+  color: var(--accent);
+  background: rgba(143, 209, 127, 0.13);
+}
+
 .stock-name strong {
   display: block;
   overflow: hidden;
