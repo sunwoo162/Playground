@@ -123,14 +123,14 @@ public class ActionNotifierService {
 
     private void sendActionDonePush(ActionRepositoryWatch watch, GitHubActionsClient.WorkflowRun run) {
         String conclusion = run.getConclusion() == null || run.getConclusion().isBlank() ? "completed" : run.getConclusion();
-        String body = "%s/%s - %s 작업이 %s 상태로 끝났어요."
-                .formatted(watch.getOwner(), watch.getRepo(), run.getName(), conclusion);
+        String title = actionNotificationTitle(conclusion);
+        String body = actionNotificationBody(watch, run, conclusion);
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             Map<String, Object> payload = Map.of(
                     "userId", watch.getUserId(),
-                    "title", "GitHub Action 완료",
+                    "title", title,
                     "body", body,
                     "url", "/apps/action-notifier/",
                     "sound", true
@@ -139,6 +139,30 @@ public class ActionNotifierService {
         } catch (Exception e) {
             log.warn("Action notifier push failed for {} {}/{}: {}", watch.getUserId(), watch.getOwner(), watch.getRepo(), e.getMessage());
         }
+    }
+
+    private String actionNotificationTitle(String conclusion) {
+        return switch (conclusion.toLowerCase()) {
+            case "success" -> "GitHub Action 성공";
+            case "failure", "timed_out", "action_required" -> "GitHub Action 실패";
+            case "cancelled" -> "GitHub Action 취소";
+            case "skipped" -> "GitHub Action 건너뜀";
+            default -> "GitHub Action 완료";
+        };
+    }
+
+    private String actionNotificationBody(ActionRepositoryWatch watch, GitHubActionsClient.WorkflowRun run, String conclusion) {
+        String repo = watch.getOwner() + "/" + watch.getRepo();
+        String workflow = run.getName() == null || run.getName().isBlank() ? "workflow" : run.getName();
+        return switch (conclusion.toLowerCase()) {
+            case "success" -> "%s - %s 작업이 성공했어요.".formatted(repo, workflow);
+            case "failure" -> "%s - %s 작업이 실패했어요. Actions에서 로그를 확인해주세요.".formatted(repo, workflow);
+            case "timed_out" -> "%s - %s 작업이 시간 초과로 실패했어요.".formatted(repo, workflow);
+            case "action_required" -> "%s - %s 작업에 추가 조치가 필요해요.".formatted(repo, workflow);
+            case "cancelled" -> "%s - %s 작업이 취소됐어요.".formatted(repo, workflow);
+            case "skipped" -> "%s - %s 작업이 건너뛰어졌어요.".formatted(repo, workflow);
+            default -> "%s - %s 작업이 %s 상태로 끝났어요.".formatted(repo, workflow, conclusion);
+        };
     }
 
     private ActionNotifierDto.WatchResponse toResponse(ActionRepositoryWatch watch) {
