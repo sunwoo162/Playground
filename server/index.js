@@ -282,9 +282,9 @@ async function sendPushNotification(userId, payload) {
  * { userId, title, body, url }
  */
 app.post('/internal/push/send', async (req, res) => {
-  const { userId, title, body, url } = req.body;
+  const { userId, title, body, url, ...data } = req.body;
   if (!userId) return res.status(400).json({ error: 'userId required' });
-  await sendPushNotification(userId, { title, body, url });
+  await sendPushNotification(userId, { title, body, url, ...data });
   res.json({ success: true });
 });
 
@@ -604,6 +604,12 @@ app.get('/apps/school-meal/*', (req, res) => {
 app.use('/apps/mock-invest', express.static(path.join(__dirname, '..', 'apps', 'mock-invest', 'dist')));
 app.get('/apps/mock-invest/*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'apps', 'mock-invest', 'dist', 'index.html'));
+});
+
+// Action Notifier 앱
+app.use('/apps/action-notifier', express.static(path.join(__dirname, '..', 'apps', 'action-notifier', 'dist')));
+app.get('/apps/action-notifier/*', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'apps', 'action-notifier', 'dist', 'index.html'));
 });
 
 app.get('*', (req, res) => {
