@@ -31,6 +31,14 @@ interface User {
   avatar_url: string;
 }
 
+interface Notice {
+  id: number;
+  title: string;
+  content: string;
+  authorLogin: string;
+  createdAt: string;
+}
+
 interface AppItem {
   id: string;
   title: string;
@@ -151,6 +159,14 @@ function App() {
   const [featureRequestText, setFeatureRequestText] = useState('');
   const [featureRequestStatus, setFeatureRequestStatus] = useState('');
   const [featureRequestSubmitting, setFeatureRequestSubmitting] = useState(false);
+  const [notices, setNotices] = useState<Notice[]>([]);
+  const [selectedNoticeId, setSelectedNoticeId] = useState<number | null>(null);
+  const [showNoticeArchive, setShowNoticeArchive] = useState(false);
+  const [showNoticeEditor, setShowNoticeEditor] = useState(false);
+  const [noticeTitle, setNoticeTitle] = useState('');
+  const [noticeContent, setNoticeContent] = useState('');
+  const [noticeStatus, setNoticeStatus] = useState('');
+  const [noticeSubmitting, setNoticeSubmitting] = useState(false);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -170,6 +186,14 @@ function App() {
       })
       .catch(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setNotices([]);
+      return;
+    }
+    fetchNotices();
+  }, [user]);
 
   // 1초마다 남은 시간 갱신 + 만료 5분 전 자동 갱신
   useEffect(() => {
@@ -247,6 +271,70 @@ function App() {
       setFeatureRequestStatus(error instanceof Error ? error.message : '요청 전송에 실패했어요.');
     } finally {
       setFeatureRequestSubmitting(false);
+    }
+  };
+
+  const fetchNotices = async () => {
+    try {
+      const res = await fetch('/api/notices', { credentials: 'include' });
+      if (!res.ok) return;
+      const data = await res.json();
+      setNotices(Array.isArray(data) ? data : []);
+    } catch {
+      setNotices([]);
+    }
+  };
+
+  const isAdmin = user?.login?.toLowerCase() === 'sunwoo162';
+  const latestNotice = notices[0] ?? null;
+  const selectedNotice = notices.find((notice) => notice.id === selectedNoticeId) ?? latestNotice;
+
+  const formatNoticeDate = (value: string) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value.slice(0, 10);
+    return date.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' });
+  };
+
+  const openNoticeArchive = (notice?: Notice) => {
+    setSelectedNoticeId(notice?.id ?? latestNotice?.id ?? null);
+    setShowNoticeArchive(true);
+  };
+
+  const submitNotice = async (e: FormEvent) => {
+    e.preventDefault();
+    const title = noticeTitle.trim();
+    const content = noticeContent.trim();
+    if (!title || !content) {
+      setNoticeStatus('제목과 내용을 모두 입력해주세요.');
+      return;
+    }
+
+    setNoticeSubmitting(true);
+    setNoticeStatus('');
+    try {
+      const res = await fetch('/api/notices', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, content }),
+      });
+      if (!res.ok) {
+        const error = await res.text();
+        throw new Error(error || '공지 등록에 실패했어요.');
+      }
+      const created = await res.json();
+      setNotices((prev) => [created, ...prev.filter((notice) => notice.id !== created.id)]);
+      setSelectedNoticeId(created.id);
+      setNoticeTitle('');
+      setNoticeContent('');
+      setNoticeStatus('공지사항을 등록했어요.');
+      setShowNoticeEditor(false);
+      setShowNoticeArchive(true);
+    } catch (error) {
+      setNoticeStatus(error instanceof Error ? error.message : '공지 등록에 실패했어요.');
+    } finally {
+      setNoticeSubmitting(false);
     }
   };
 
@@ -354,6 +442,42 @@ function App() {
           </div>
         )}
 
+        {user && (
+          <section className="notice-section">
+            <div className="notice-section-header">
+              <div>
+                <span className="notice-eyebrow">공지사항</span>
+                <h2>놀이터 업데이트와 안내</h2>
+              </div>
+              <div className="notice-header-actions">
+                {isAdmin && (
+                  <button className="btn-ghost" onClick={() => {
+                    setNoticeStatus('');
+                    setShowNoticeEditor(true);
+                  }}>
+                    공지 작성
+                  </button>
+                )}
+                <button className="btn-ghost" onClick={() => openNoticeArchive()}>
+                  이전 공지
+                </button>
+              </div>
+            </div>
+
+            {latestNotice ? (
+              <button className="notice-featured" onClick={() => openNoticeArchive(latestNotice)}>
+                <span className="notice-date">{formatNoticeDate(latestNotice.createdAt)}</span>
+                <span className="notice-title">{latestNotice.title}</span>
+                <span className="notice-preview">{latestNotice.content}</span>
+              </button>
+            ) : (
+              <div className="notice-empty">
+                {isAdmin ? '아직 공지가 없어요. 첫 공지를 작성해보세요.' : '아직 등록된 공지가 없어요.'}
+              </div>
+            )}
+          </section>
+        )}
+
         {/* 필터 바 */}
         <div className="filter-bar">
           <button
@@ -449,6 +573,102 @@ function App() {
               </div>
             </div>
             {featureRequestStatus && <p className="request-status">{featureRequestStatus}</p>}
+          </form>
+        </div>
+      )}
+
+      {showNoticeArchive && (
+        <div className="modal-backdrop" onClick={() => setShowNoticeArchive(false)}>
+          <div className="notice-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="feature-request-header">
+              <div>
+                <h2>공지사항</h2>
+                <p>최신 공지와 이전 공지를 한 번에 확인할 수 있어요.</p>
+              </div>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setShowNoticeArchive(false)}
+                aria-label="닫기"
+              >
+                ×
+              </button>
+            </div>
+            <div className="notice-modal-layout">
+              <aside className="notice-history">
+                {notices.length > 0 ? notices.map((notice) => (
+                  <button
+                    key={notice.id}
+                    className={`notice-history-item ${selectedNotice?.id === notice.id ? 'active' : ''}`}
+                    onClick={() => setSelectedNoticeId(notice.id)}
+                  >
+                    <span>{formatNoticeDate(notice.createdAt)}</span>
+                    <strong>{notice.title}</strong>
+                  </button>
+                )) : (
+                  <p className="notice-history-empty">등록된 공지가 없습니다.</p>
+                )}
+              </aside>
+              <article className="notice-detail">
+                {selectedNotice ? (
+                  <>
+                    <span className="notice-detail-date">{formatNoticeDate(selectedNotice.createdAt)}</span>
+                    <h3>{selectedNotice.title}</h3>
+                    <p>{selectedNotice.content}</p>
+                  </>
+                ) : (
+                  <p className="notice-history-empty">확인할 공지가 없습니다.</p>
+                )}
+              </article>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showNoticeEditor && (
+        <div className="modal-backdrop" onClick={() => setShowNoticeEditor(false)}>
+          <form className="feature-request-modal notice-editor-modal" onSubmit={submitNotice} onClick={(e) => e.stopPropagation()}>
+            <div className="feature-request-header">
+              <div>
+                <h2>공지 작성</h2>
+                <p>sunwoo162 관리자 계정으로 전체 사용자에게 보여줄 공지를 작성합니다.</p>
+              </div>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setShowNoticeEditor(false)}
+                aria-label="닫기"
+              >
+                ×
+              </button>
+            </div>
+            <input
+              className="notice-title-input"
+              value={noticeTitle}
+              onChange={(e) => setNoticeTitle(e.target.value)}
+              placeholder="공지 제목"
+              maxLength={160}
+              autoFocus
+            />
+            <textarea
+              className="feature-request-textarea"
+              value={noticeContent}
+              onChange={(e) => setNoticeContent(e.target.value)}
+              placeholder="공지 내용을 입력해주세요."
+              maxLength={4000}
+            />
+            <div className="feature-request-footer">
+              <span className="request-count">{noticeContent.length}/4000</span>
+              <div className="feature-request-actions">
+                <button type="button" className="btn-ghost" onClick={() => setShowNoticeEditor(false)}>
+                  취소
+                </button>
+                <button type="submit" className="btn-primary" disabled={noticeSubmitting}>
+                  {noticeSubmitting ? '등록 중...' : '등록'}
+                </button>
+              </div>
+            </div>
+            {noticeStatus && <p className="request-status">{noticeStatus}</p>}
           </form>
         </div>
       )}
