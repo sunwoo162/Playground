@@ -758,6 +758,117 @@ body {
   color: var(--accent-blue);
 }
 
+.btn-feature-request {
+  padding: 8px 14px;
+  background: color-mix(in srgb, var(--accent-blue) 14%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--accent-blue) 52%, var(--border));
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.2s, border-color 0.2s, background 0.2s;
+  white-space: nowrap;
+}
+
+.btn-feature-request:hover {
+  transform: translateY(-1px);
+  border-color: var(--accent-blue);
+  background: color-mix(in srgb, var(--accent-blue) 22%, var(--surface));
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(3, 6, 12, 0.68);
+  backdrop-filter: blur(8px);
+}
+
+.feature-request-modal {
+  width: min(520px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 22px;
+}
+
+.feature-request-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.feature-request-header h2 {
+  font-size: 1.15rem;
+  margin-bottom: 5px;
+}
+
+.feature-request-header p,
+.request-count,
+.request-status {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.modal-close {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.modal-close:hover {
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+
+.feature-request-textarea {
+  width: 100%;
+  min-height: 170px;
+  resize: vertical;
+  padding: 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font: inherit;
+  line-height: 1.55;
+}
+
+.feature-request-textarea:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+}
+
+.feature-request-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.feature-request-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.request-status {
+  margin-top: 12px;
+}
+
 /* ========== Primary Button (마이페이지 공통) ========== */
 .btn-primary {
   padding: 8px 16px;

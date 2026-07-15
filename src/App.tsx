@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { MyPage } from './pages/MyPage'
 import { getAccessTokenExpiry, formatTimeLeft } from './api/auth'
 import { registerPushSubscription } from './api/push'
@@ -147,6 +147,10 @@ function App() {
   const [timeLeft, setTimeLeft] = useState<string>('');
   const [studyElapsed, setStudyElapsed] = useState<number | null>(null);
   const [theme, setTheme] = useState<Theme>(getTheme);
+  const [showFeatureRequest, setShowFeatureRequest] = useState(false);
+  const [featureRequestText, setFeatureRequestText] = useState('');
+  const [featureRequestStatus, setFeatureRequestStatus] = useState('');
+  const [featureRequestSubmitting, setFeatureRequestSubmitting] = useState(false);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -202,6 +206,50 @@ function App() {
     setUser(null);
     setPage('home');
   };
+
+  const openFeatureRequest = () => {
+    if (!user) {
+      handleLogin();
+      return;
+    }
+    setFeatureRequestStatus('');
+    setShowFeatureRequest(true);
+  };
+
+  const submitFeatureRequest = async (e: FormEvent) => {
+    e.preventDefault();
+    const message = featureRequestText.trim();
+    if (!message) {
+      setFeatureRequestStatus('요청 내용을 입력해주세요.');
+      return;
+    }
+
+    setFeatureRequestSubmitting(true);
+    setFeatureRequestStatus('');
+    try {
+      const res = await fetch('/api/feature-requests', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message }),
+      });
+      if (!res.ok) {
+        const error = await res.text();
+        throw new Error(error || '요청 전송에 실패했어요.');
+      }
+      setFeatureRequestText('');
+      setFeatureRequestStatus('요청을 보냈어요. sunwoo162 계정으로 알림이 전송됩니다.');
+      setTimeout(() => {
+        setShowFeatureRequest(false);
+        setFeatureRequestStatus('');
+      }, 1200);
+    } catch (error) {
+      setFeatureRequestStatus(error instanceof Error ? error.message : '요청 전송에 실패했어요.');
+    } finally {
+      setFeatureRequestSubmitting(false);
+    }
+  };
+
   const toggleFavorite = (id: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -261,6 +309,9 @@ function App() {
             title={theme === 'dark' ? '화이트 모드로 전환' : '다크 모드로 전환'}
           >
             {theme === 'dark' ? '☀️' : '🌙'}
+          </button>
+          <button className="btn-feature-request" onClick={openFeatureRequest}>
+            기능추가 요청
           </button>
           {user ? (
             <div className="user-info">
@@ -360,6 +411,47 @@ function App() {
       <footer className="footer">
         <p>놀이터 © 2024</p>
       </footer>
+
+      {showFeatureRequest && (
+        <div className="modal-backdrop" onClick={() => setShowFeatureRequest(false)}>
+          <form className="feature-request-modal" onSubmit={submitFeatureRequest} onClick={(e) => e.stopPropagation()}>
+            <div className="feature-request-header">
+              <div>
+                <h2>기능추가 요청</h2>
+                <p>필요한 기능을 적으면 관리자에게 알림이 전송됩니다.</p>
+              </div>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setShowFeatureRequest(false)}
+                aria-label="닫기"
+              >
+                ×
+              </button>
+            </div>
+            <textarea
+              className="feature-request-textarea"
+              value={featureRequestText}
+              onChange={(e) => setFeatureRequestText(e.target.value)}
+              placeholder="추가했으면 하는 기능을 적어주세요."
+              maxLength={1000}
+              autoFocus
+            />
+            <div className="feature-request-footer">
+              <span className="request-count">{featureRequestText.length}/1000</span>
+              <div className="feature-request-actions">
+                <button type="button" className="btn-ghost" onClick={() => setShowFeatureRequest(false)}>
+                  취소
+                </button>
+                <button type="submit" className="btn-primary" disabled={featureRequestSubmitting}>
+                  {featureRequestSubmitting ? '전송 중...' : '보내기'}
+                </button>
+              </div>
+            </div>
+            {featureRequestStatus && <p className="request-status">{featureRequestStatus}</p>}
+          </form>
+        </div>
+      )}
     </div>
   );
 }
