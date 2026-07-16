@@ -1,8 +1,9 @@
-import type { CornellNote, GitRepoSettings, Subject } from './types';
+import type { CornellNote, GitRepoSettings, Subject, VelogSettings } from './types';
 
 const NOTES_KEY = 'cornell-notes';
 const SUBJECTS_KEY = 'cornell-subjects';
 const GIT_REPO_KEY = 'cornell-git-repo-settings';
+const VELOG_SETTINGS_KEY = 'cornell-velog-settings';
 
 // ── Notes ──────────────────────────────────────────
 export function getNotes(): CornellNote[] {
@@ -47,6 +48,21 @@ export function getGitRepoSettings(): GitRepoSettings {
 
 export function saveGitRepoSettings(settings: GitRepoSettings): void {
   localStorage.setItem(GIT_REPO_KEY, JSON.stringify(settings));
+}
+
+export function getVelogSettings(): VelogSettings {
+  const raw = localStorage.getItem(VELOG_SETTINGS_KEY);
+  return raw ? JSON.parse(raw) : {
+    enabled: false,
+    username: '',
+    accessToken: '',
+    tags: '코넬노트',
+    isPrivate: false,
+  };
+}
+
+export function saveVelogSettings(settings: VelogSettings): void {
+  localStorage.setItem(VELOG_SETTINGS_KEY, JSON.stringify(settings));
 }
 
 export function generateId(): string {

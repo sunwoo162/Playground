@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
-import type { CornellNote, GitRepoSettings, Subject } from './types';
-import { getNotes, saveNote, deleteNote, getSubjects, saveSubjects, getGitRepoSettings, saveGitRepoSettings, generateId, getTodayStr } from './storage';
+import type { CornellNote, GitRepoSettings, Subject, VelogSettings } from './types';
+import { getNotes, saveNote, deleteNote, getSubjects, saveSubjects, getGitRepoSettings, saveGitRepoSettings, getVelogSettings, saveVelogSettings, generateId, getTodayStr } from './storage';
 import { StudyTimerBadge } from './StudyTimerBadge';
 import { useAuth } from './useAuth';
 
@@ -158,6 +158,8 @@ export default function App() {
   const [theme, setTheme] = useState<Theme>(getTheme);
   const [repoSettings, setRepoSettings] = useState<GitRepoSettings>(() => getGitRepoSettings());
   const [repoDraft, setRepoDraft] = useState<GitRepoSettings>(() => getGitRepoSettings());
+  const [velogSettings, setVelogSettings] = useState<VelogSettings>(() => getVelogSettings());
+  const [velogDraft, setVelogDraft] = useState<VelogSettings>(() => getVelogSettings());
   const [commitStatus, setCommitStatus] = useState('');
   const [committing, setCommitting] = useState(false);
   const [shareStatus, setShareStatus] = useState('');
@@ -309,17 +311,54 @@ export default function App() {
       repo: repoDraft.repo.trim(),
       basePath: normalizeBasePath(repoDraft.basePath) || 'cornell-notes',
     };
+    const updatedVelog = {
+      ...velogDraft,
+      username: velogDraft.username.trim(),
+      accessToken: velogDraft.accessToken.trim(),
+      tags: velogDraft.tags.trim() || '코넬노트',
+    };
     setRepoSettings(updated);
     setRepoDraft(updated);
     saveGitRepoSettings(updated);
-    setCommitStatus('레포 설정을 저장했어요.');
+    setVelogSettings(updatedVelog);
+    setVelogDraft(updatedVelog);
+    saveVelogSettings(updatedVelog);
+    setCommitStatus('연동 설정을 저장했어요.');
+  };
+
+  const openRepoSettings = () => {
+    setRepoDraft(repoSettings);
+    setVelogDraft(velogSettings);
+    setView('repo');
+  };
+
+  const publishNoteToVelog = async (note: CornellNote) => {
+    if (!velogSettings.enabled) return undefined;
+    if (!velogSettings.accessToken.trim()) {
+      throw new Error('Velog access_token을 먼저 설정해주세요.');
+    }
+
+    const res = await fetch('/velog/publish', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        accessToken: velogSettings.accessToken.trim(),
+        username: velogSettings.username.trim(),
+        title: note.title || note.date,
+        body: noteToMarkdown(note, subjectName(note.subjectId)),
+        tags: velogSettings.tags,
+        isPrivate: velogSettings.isPrivate,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Velog 발행에 실패했어요.');
+    return data.url as string | undefined;
   };
 
   const handleCommitNote = async () => {
     if (!selected || committing) return;
     if (!repoSettings.repo.trim()) {
-      setRepoDraft(repoSettings);
-      setView('repo');
+      openRepoSettings();
       setCommitStatus('먼저 GitHub 레포를 owner/repo 형식으로 설정해주세요.');
       return;
     }
@@ -344,8 +383,14 @@ export default function App() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '커밋에 실패했어요.');
-      setCommitStatus(`커밋 완료: ${filePath}`);
+      let velogUrl: string | undefined;
+      if (velogSettings.enabled) {
+        setCommitStatus(`커밋 완료: ${filePath}. Velog에 발행하는 중...`);
+        velogUrl = await publishNoteToVelog(selected);
+      }
+      setCommitStatus(velogSettings.enabled ? `커밋 및 Velog 발행 완료: ${filePath}` : `커밋 완료: ${filePath}`);
       if (data.url) window.open(data.url, '_blank', 'noopener,noreferrer');
+      if (velogUrl) window.open(velogUrl, '_blank', 'noopener,noreferrer');
     } catch (e) {
       setCommitStatus(e instanceof Error ? e.message : '커밋에 실패했어요.');
     } finally {
@@ -400,7 +445,7 @@ export default function App() {
         <nav className="header-nav">
           <button className={`nav-btn ${view !== 'subjects' && view !== 'repo' && view !== 'detailOnly' ? 'active' : ''}`} onClick={() => setView('list')}>📋 노트</button>
           <button className={`nav-btn ${view === 'subjects' ? 'active' : ''}`} onClick={() => setView('subjects')}>📚 과목</button>
-          <button className={`nav-btn ${view === 'repo' ? 'active' : ''}`} onClick={() => { setRepoDraft(repoSettings); setView('repo'); }}>GitHub</button>
+          <button className={`nav-btn ${view === 'repo' ? 'active' : ''}`} onClick={openRepoSettings}>GitHub</button>
         </nav>
         <StudyTimerBadge />
         <button className="theme-toggle" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} aria-label="테마 전환">
@@ -452,6 +497,55 @@ export default function App() {
                 onChange={e => setRepoDraft({ ...repoDraft, basePath: e.target.value })}
               />
             </label>
+            <div className="repo-divider" />
+            <h3 className="repo-subtitle">Velog 자동 발행</h3>
+            <label className="repo-check-field">
+              <input
+                type="checkbox"
+                checked={velogDraft.enabled}
+                onChange={e => setVelogDraft({ ...velogDraft, enabled: e.target.checked })}
+              />
+              <span>GitHub 커밋 후 Velog에도 자동 발행</span>
+            </label>
+            <label className="repo-field">
+              <span>Velog 사용자명</span>
+              <input
+                className="subject-input"
+                placeholder="velog 아이디"
+                value={velogDraft.username}
+                onChange={e => setVelogDraft({ ...velogDraft, username: e.target.value })}
+              />
+            </label>
+            <label className="repo-field">
+              <span>Velog access_token</span>
+              <input
+                type="password"
+                className="subject-input"
+                placeholder="Velog 로그인 쿠키의 access_token"
+                value={velogDraft.accessToken}
+                onChange={e => setVelogDraft({ ...velogDraft, accessToken: e.target.value })}
+              />
+            </label>
+            <label className="repo-field">
+              <span>태그</span>
+              <input
+                className="subject-input"
+                placeholder="코넬노트, 공부"
+                value={velogDraft.tags}
+                onChange={e => setVelogDraft({ ...velogDraft, tags: e.target.value })}
+              />
+            </label>
+            <label className="repo-check-field">
+              <input
+                type="checkbox"
+                checked={velogDraft.isPrivate}
+                onChange={e => setVelogDraft({ ...velogDraft, isPrivate: e.target.checked })}
+              />
+              <span>비공개 글로 발행</span>
+            </label>
+            <p className="repo-help">
+              Velog 로그인 후 브라우저 쿠키의 access_token을 넣으면 커밋 성공 뒤 같은 마크다운으로 글을 발행합니다.
+            </p>
             <div className="repo-actions">
               <button className="btn-primary" onClick={handleSaveRepoSettings}>설정 저장</button>
               <button className="btn-ghost" onClick={() => setView(selected ? 'view' : 'list')}>돌아가기</button>
@@ -509,7 +603,7 @@ export default function App() {
               </select>
               <input type="date" className="select-field" value={selected.date} disabled aria-label="노트 날짜" />
               <div className="toolbar-actions">
-                <button className="btn-ghost" onClick={() => { setRepoDraft(repoSettings); setView('repo'); }}>GitHub 설정</button>
+                <button className="btn-ghost" onClick={openRepoSettings}>GitHub 설정</button>
                 <button className="btn-ghost" onClick={openDetailOnlyWindow}>세부 내용 웹 보기</button>
                 <button className="btn-primary" onClick={handleSave}>저장</button>
                 <button className="btn-ghost" onClick={() => setView(notes.find(n => n.id === selected.id) ? 'view' : 'list')}>취소</button>
@@ -609,7 +703,7 @@ export default function App() {
               <option value="all">전체 과목</option>
               {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
-            <button className="btn-ghost" onClick={() => { setRepoDraft(repoSettings); setView('repo'); }}>GitHub 설정</button>
+            <button className="btn-ghost" onClick={openRepoSettings}>GitHub 설정</button>
             <button className="btn-primary" onClick={handleNew}>+ 새 노트</button>
           </div>
 

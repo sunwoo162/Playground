@@ -20,3 +20,11 @@ export interface GitRepoSettings {
   repo: string;
   basePath: string;
 }
+
+export interface VelogSettings {
+  enabled: boolean;
+  username: string;
+  accessToken: string;
+  tags: string;
+  isPrivate: boolean;
+}

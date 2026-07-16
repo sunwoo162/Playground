@@ -374,6 +374,114 @@ app.post('/github/commit-file', async (req, res) => {
   }
 });
 
+// ============================================
+// Velog publish API
+// ============================================
+
+const createVelogSlug = (title = '') =>
+  title
+    .trim()
+    .toLowerCase()
+    .replace(/[^\w가-힣\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 80) || `cornell-note-${Date.now()}`;
+
+app.post('/velog/publish', async (req, res) => {
+  const { accessToken, username, title, body, tags, isPrivate } = req.body;
+  if (!accessToken || !title || !body) {
+    return res.status(400).json({ error: 'accessToken, title, and body are required.' });
+  }
+
+  const tagList = Array.isArray(tags)
+    ? tags
+    : String(tags || '')
+      .split(',')
+      .map(tag => tag.trim())
+      .filter(Boolean);
+  const urlSlug = createVelogSlug(title);
+  const shortDescription = body.replace(/[#>*_`[\]-]/g, '').replace(/\s+/g, ' ').trim().slice(0, 140);
+
+  const query = `
+    mutation WritePost(
+      $title: String,
+      $body: String,
+      $tags: [String],
+      $is_markdown: Boolean,
+      $is_private: Boolean,
+      $url_slug: String,
+      $thumbnail: String,
+      $short_description: String
+    ) {
+      writePost(
+        title: $title,
+        body: $body,
+        tags: $tags,
+        is_markdown: $is_markdown,
+        is_private: $is_private,
+        url_slug: $url_slug,
+        thumbnail: $thumbnail,
+        short_description: $short_description
+      ) {
+        id
+        url_slug
+        user {
+          username
+        }
+      }
+    }
+  `;
+
+  try {
+    const publishRes = await fetch('https://v2.velog.io/graphql', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Cookie': `access_token=${accessToken}`,
+        'Authorization': `Bearer ${accessToken}`,
+        'User-Agent': 'playground-app',
+      },
+      body: JSON.stringify({
+        operationName: 'WritePost',
+        query,
+        variables: {
+          title,
+          body,
+          tags: tagList,
+          is_markdown: true,
+          is_private: Boolean(isPrivate),
+          url_slug: urlSlug,
+          thumbnail: null,
+          short_description: shortDescription,
+        },
+      }),
+    });
+
+    const text = await publishRes.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { raw: text };
+    }
+
+    if (!publishRes.ok || data.errors?.length) {
+      const message = data.errors?.[0]?.message || data.error || data.raw || 'Velog publish failed.';
+      return res.status(publishRes.status || 500).json({ error: message });
+    }
+
+    const post = data.data?.writePost;
+    const postUsername = post?.user?.username || username;
+    const postSlug = post?.url_slug || urlSlug;
+    const url = postUsername && postSlug ? `https://velog.io/@${postUsername}/${postSlug}` : undefined;
+    res.json({ success: true, id: post?.id, url });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 /**
  * POST /github/commit
  * 코테 일지 풀이를 GitHub 레포에 커밋
