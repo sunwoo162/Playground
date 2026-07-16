@@ -630,11 +630,11 @@ app.get('/auth/github/callback', async (req, res) => {
       avatar_url: userData.avatar_url,
     };
 
-    // 액세스 토큰 (1시간)
+    // 액세스 토큰 (5시간)
     const accessToken = jwt.sign(
       { ...userPayload, type: 'access' },
       JWT_SECRET,
-      { expiresIn: '1h' }
+      { expiresIn: '5h' }
     );
 
     // 리프레시 토큰 (7일)
@@ -644,10 +644,10 @@ app.get('/auth/github/callback', async (req, res) => {
       { expiresIn: '7d' }
     );
 
-    // 액세스 토큰 쿠키 (1시간)
+    // 액세스 토큰 쿠키 (5시간)
     res.cookie('playground_token', accessToken, {
       httpOnly: false, // 프론트에서 읽을 수 있게
-      maxAge: 60 * 60 * 1000, // 1시간
+      maxAge: 5 * 60 * 60 * 1000, // 5시간
       sameSite: 'lax',
     });
 

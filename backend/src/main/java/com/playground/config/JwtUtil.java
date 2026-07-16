@@ -17,8 +17,8 @@ public class JwtUtil {
     @Value("${app.jwt.secret}")
     private String jwtSecret;
 
-    // 액세스 토큰: 1시간
-    private static final long ACCESS_TOKEN_EXPIRY_MS = 60 * 60 * 1000L;
+    // 액세스 토큰: 5시간
+    private static final long ACCESS_TOKEN_EXPIRY_MS = 5 * 60 * 60 * 1000L;
 
     // 리프레시 토큰: 7일
     private static final long REFRESH_TOKEN_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000L;
