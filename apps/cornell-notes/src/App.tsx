@@ -467,7 +467,7 @@ export default function App() {
         <nav className="header-nav">
           <button className={`nav-btn ${view !== 'subjects' && view !== 'repo' && view !== 'detailOnly' ? 'active' : ''}`} onClick={() => setView('list')}>📋 노트</button>
           <button className={`nav-btn ${view === 'subjects' ? 'active' : ''}`} onClick={() => setView('subjects')}>📚 과목</button>
-          <button className={`nav-btn ${view === 'repo' ? 'active' : ''}`} onClick={openRepoSettings}>GitHub</button>
+          <button className={`nav-btn ${view === 'repo' ? 'active' : ''}`} onClick={openRepoSettings}>GitHub / Velog</button>
         </nav>
         <StudyTimerBadge />
         <button className="theme-toggle" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} aria-label="테마 전환">
@@ -625,7 +625,7 @@ export default function App() {
               </select>
               <input type="date" className="select-field" value={selected.date} disabled aria-label="노트 날짜" />
               <div className="toolbar-actions">
-                <button className="btn-ghost" onClick={openRepoSettings}>GitHub 설정</button>
+                <button className="btn-ghost" onClick={openRepoSettings}>GitHub / Velog 설정</button>
                 <button className="btn-ghost" onClick={openDetailOnlyWindow}>세부 내용 웹 보기</button>
                 <button className="btn-primary" onClick={handleSave}>저장</button>
                 <button className="btn-ghost" onClick={() => setView(notes.find(n => n.id === selected.id) ? 'view' : 'list')}>취소</button>
@@ -726,7 +726,7 @@ export default function App() {
               <option value="all">전체 과목</option>
               {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
-            <button className="btn-ghost" onClick={openRepoSettings}>GitHub 설정</button>
+            <button className="btn-ghost" onClick={openRepoSettings}>GitHub / Velog 설정</button>
             <button className="btn-primary" onClick={handleNew}>+ 새 노트</button>
           </div>
 
