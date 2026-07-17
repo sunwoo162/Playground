@@ -31,6 +31,15 @@ const LANGUAGES: { value: Language; label: string }[] = [
   { value: 'go', label: 'Go' }, { value: 'rust', label: 'Rust' },
 ];
 
+const copyMarkdownToClipboard = async (markdown: string): Promise<boolean> => {
+  try {
+    await navigator.clipboard.writeText(markdown);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 function emptyLog(): CodingLog {
   const params = parseUrlParams();
   return {
@@ -69,7 +78,7 @@ export default function App() {
   const [commentInput, setCommentInput] = useState('');
   const [repoInput, setRepoInput] = useState(() => parseUrlParams().repo || 'sunwoo162/Coding-Test');
   const [committing, setCommitting] = useState(false);
-  const [commitResult, setCommitResult] = useState<{ url?: string; error?: string } | null>(null);
+  const [commitResult, setCommitResult] = useState<{ url?: string; error?: string; message?: string } | null>(null);
   const [fetchingCode, setFetchingCode] = useState(false);
   const [theme, setTheme] = useState<Theme>(getTheme);
   const [velogSettings, setVelogSettings] = useState<VelogSettings>(() => getVelogSettings());
@@ -159,6 +168,7 @@ export default function App() {
     if (!selected?.code) return;
     setCommitting(true); setCommitResult(null);
     try {
+      const copied = await copyMarkdownToClipboard(buildVelogMarkdown(selected));
       const res = await fetch('/github/commit', {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -166,7 +176,10 @@ export default function App() {
       });
       const data = await res.json();
       if (data.success) {
-        setCommitResult({ url: data.url });
+        setCommitResult({
+          url: data.url,
+          message: copied ? '마크다운도 복사됨' : '마크다운 복사는 브라우저 권한 때문에 실패',
+        });
         if (velogSettings.enabled) await handlePublishVelog();
       } else {
         setCommitResult({ error: data.error });
@@ -584,7 +597,12 @@ export default function App() {
                   <input className="repo-input" placeholder="username/repo" value={repoInput} onChange={e => setRepoInput(e.target.value)} />
                   <button className="btn-commit" onClick={handleCommit} disabled={committing}>{committing ? '커밋 중...' : '커밋하기'}</button>
                 </div>
-                {commitResult?.url && <p className="commit-success">✅ 커밋 완료! <a href={commitResult.url} target="_blank" rel="noopener">파일 보기 →</a></p>}
+                {commitResult?.url && (
+                  <p className="commit-success">
+                    ✅ 커밋 완료! {commitResult.message && <span>{commitResult.message}. </span>}
+                    <a href={commitResult.url} target="_blank" rel="noopener">파일 보기 →</a>
+                  </p>
+                )}
                 {commitResult?.error && <p className="commit-error">❌ {commitResult.error}</p>}
               </div>
             )}

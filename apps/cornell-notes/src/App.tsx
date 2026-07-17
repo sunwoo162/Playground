@@ -95,6 +95,15 @@ const noteToMarkdown = (note: CornellNote, subject: string): string => {
   return lines.join('\n');
 };
 
+const copyMarkdownToClipboard = async (markdown: string): Promise<boolean> => {
+  try {
+    await navigator.clipboard.writeText(markdown);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 interface SharedNotePayload {
   note: Omit<CornellNote, 'id' | 'createdAt' | 'updatedAt'>;
   subjectName: string;
@@ -409,8 +418,10 @@ export default function App() {
     const fileName = `${selected.date}-${sanitizePathPart(selected.title)}.md`;
     const basePath = normalizeBasePath(repoSettings.basePath);
     const filePath = basePath ? `${basePath}/${fileName}` : fileName;
+    const markdown = noteToMarkdown(selected, subjectName(selected.subjectId));
 
     try {
+      const copied = await copyMarkdownToClipboard(markdown);
       const res = await fetch('/github/commit-file', {
         method: 'POST',
         credentials: 'include',
@@ -418,7 +429,7 @@ export default function App() {
         body: JSON.stringify({
           repo: repoSettings.repo.trim(),
           filePath,
-          content: noteToMarkdown(selected, subjectName(selected.subjectId)),
+          content: markdown,
           message: `Add Cornell note: ${selected.title || selected.date}`,
         }),
       });
@@ -429,7 +440,8 @@ export default function App() {
         setCommitStatus(`커밋 완료: ${filePath}. Velog에 발행하는 중...`);
         velogResult = await publishNoteToVelog(selected);
       }
-      setCommitStatus(velogSettings.enabled ? `커밋 완료: ${filePath}. ${formatVelogPublishStatus(velogResult)}` : `커밋 완료: ${filePath}`);
+      const copyStatus = copied ? '마크다운도 복사됨' : '마크다운 복사는 브라우저 권한 때문에 실패';
+      setCommitStatus(velogSettings.enabled ? `커밋 완료: ${filePath}. ${copyStatus}. ${formatVelogPublishStatus(velogResult)}` : `커밋 완료: ${filePath}. ${copyStatus}.`);
       if (data.url) window.open(data.url, '_blank', 'noopener,noreferrer');
       if (velogResult?.url) window.open(velogResult.url, '_blank', 'noopener,noreferrer');
     } catch (e) {
