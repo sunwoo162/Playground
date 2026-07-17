@@ -450,8 +450,6 @@ app.post('/velog/publish', async (req, res) => {
       .map(tag => tag.trim())
       .filter(Boolean);
   const urlSlug = createVelogSlug(title);
-  const shortDescription = body.replace(/[#>*_`[\]-]/g, '').replace(/\s+/g, ' ').trim().slice(0, 140);
-
   const query = `
     mutation WritePost(
       $title: String,
@@ -460,8 +458,7 @@ app.post('/velog/publish', async (req, res) => {
       $is_markdown: Boolean,
       $is_private: Boolean,
       $url_slug: String,
-      $thumbnail: String,
-      $short_description: String
+      $thumbnail: String
     ) {
       writePost(
         title: $title,
@@ -470,8 +467,7 @@ app.post('/velog/publish', async (req, res) => {
         is_markdown: $is_markdown,
         is_private: $is_private,
         url_slug: $url_slug,
-        thumbnail: $thumbnail,
-        short_description: $short_description
+        thumbnail: $thumbnail
       ) {
         id
         url_slug
@@ -503,7 +499,6 @@ app.post('/velog/publish', async (req, res) => {
           is_private: Boolean(isPrivate),
           url_slug: urlSlug,
           thumbnail: null,
-          short_description: shortDescription,
         },
       }),
     });
