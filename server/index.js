@@ -509,6 +509,7 @@ app.post('/velog/publish', async (req, res) => {
       $tags: [String],
       $is_markdown: Boolean,
       $is_private: Boolean,
+      $is_temp: Boolean,
       $url_slug: String,
       $thumbnail: String
     ) {
@@ -518,6 +519,7 @@ app.post('/velog/publish', async (req, res) => {
         tags: $tags,
         is_markdown: $is_markdown,
         is_private: $is_private,
+        is_temp: $is_temp,
         url_slug: $url_slug,
         thumbnail: $thumbnail
       ) {
@@ -545,6 +547,7 @@ app.post('/velog/publish', async (req, res) => {
           tags: tagList,
           is_markdown: true,
           is_private: Boolean(isPrivate),
+          is_temp: false,
           url_slug: urlSlug,
           thumbnail: null,
         },
