@@ -18,6 +18,8 @@ type MarkdownAction = {
 type VelogPublishResult = {
   url?: string;
   message?: string;
+  username?: string;
+  slug?: string;
 };
 const THEME_KEY = 'playground-theme';
 const getTheme = (): Theme => localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark';
@@ -60,6 +62,14 @@ const sanitizePathPart = (value: string): string =>
 
 const normalizeBasePath = (value: string): string =>
   value.trim().replace(/^\/+|\/+$/g, '');
+
+const formatVelogPublishStatus = (result?: VelogPublishResult): string => {
+  if (!result) return 'Velog 발행 완료';
+  if (result.message) return result.message;
+  if (result.url) return `Velog 발행 완료: ${result.url}`;
+  if (result.username && result.slug) return `Velog 발행 완료: @${result.username}/${result.slug}`;
+  return 'Velog 발행 완료';
+};
 
 const noteToMarkdown = (note: CornellNote, subject: string): string => {
   const lines = [
@@ -360,6 +370,8 @@ export default function App() {
     return {
       url: data.url as string | undefined,
       message: data.message as string | undefined,
+      username: data.username as string | undefined,
+      slug: data.slug as string | undefined,
     };
   };
 
@@ -375,7 +387,7 @@ export default function App() {
     setCommitStatus('Velog에 발행하는 중...');
     try {
       const result = await publishNoteToVelog(selected, true);
-      setCommitStatus(result?.message || 'Velog 발행 완료');
+      setCommitStatus(formatVelogPublishStatus(result));
       if (result?.url) window.open(result.url, '_blank', 'noopener,noreferrer');
     } catch (e) {
       setCommitStatus(e instanceof Error ? e.message : 'Velog 발행에 실패했어요.');
@@ -417,7 +429,7 @@ export default function App() {
         setCommitStatus(`커밋 완료: ${filePath}. Velog에 발행하는 중...`);
         velogResult = await publishNoteToVelog(selected);
       }
-      setCommitStatus(velogSettings.enabled ? (velogResult?.message || `커밋 및 Velog 발행 완료: ${filePath}`) : `커밋 완료: ${filePath}`);
+      setCommitStatus(velogSettings.enabled ? `커밋 완료: ${filePath}. ${formatVelogPublishStatus(velogResult)}` : `커밋 완료: ${filePath}`);
       if (data.url) window.open(data.url, '_blank', 'noopener,noreferrer');
       if (velogResult?.url) window.open(velogResult.url, '_blank', 'noopener,noreferrer');
     } catch (e) {
