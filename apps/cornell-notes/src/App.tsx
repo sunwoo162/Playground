@@ -15,6 +15,10 @@ type MarkdownAction = {
   block?: boolean;
   wrap?: [string, string];
 };
+type VelogPublishResult = {
+  url?: string;
+  message?: string;
+};
 const THEME_KEY = 'playground-theme';
 const getTheme = (): Theme => localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark';
 const SHARE_HASH_PREFIX = '#share=';
@@ -333,7 +337,7 @@ export default function App() {
     setView('repo');
   };
 
-  const publishNoteToVelog = async (note: CornellNote, force = false) => {
+  const publishNoteToVelog = async (note: CornellNote, force = false): Promise<VelogPublishResult | undefined> => {
     if (!force && !velogSettings.enabled) return undefined;
     if (!velogSettings.accessToken.trim()) {
       throw new Error('Velog access_token을 먼저 설정해주세요.');
@@ -353,7 +357,10 @@ export default function App() {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Velog 발행에 실패했어요.');
-    return data.url as string | undefined;
+    return {
+      url: data.url as string | undefined,
+      message: data.message as string | undefined,
+    };
   };
 
   const handlePublishVelog = async () => {
@@ -367,9 +374,9 @@ export default function App() {
     setPublishingVelog(true);
     setCommitStatus('Velog에 발행하는 중...');
     try {
-      const url = await publishNoteToVelog(selected, true);
-      setCommitStatus('Velog 발행 완료');
-      if (url) window.open(url, '_blank', 'noopener,noreferrer');
+      const result = await publishNoteToVelog(selected, true);
+      setCommitStatus(result?.message || 'Velog 발행 완료');
+      if (result?.url) window.open(result.url, '_blank', 'noopener,noreferrer');
     } catch (e) {
       setCommitStatus(e instanceof Error ? e.message : 'Velog 발행에 실패했어요.');
     } finally {
@@ -405,14 +412,14 @@ export default function App() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '커밋에 실패했어요.');
-      let velogUrl: string | undefined;
+      let velogResult: VelogPublishResult | undefined;
       if (velogSettings.enabled) {
         setCommitStatus(`커밋 완료: ${filePath}. Velog에 발행하는 중...`);
-        velogUrl = await publishNoteToVelog(selected);
+        velogResult = await publishNoteToVelog(selected);
       }
-      setCommitStatus(velogSettings.enabled ? `커밋 및 Velog 발행 완료: ${filePath}` : `커밋 완료: ${filePath}`);
+      setCommitStatus(velogSettings.enabled ? (velogResult?.message || `커밋 및 Velog 발행 완료: ${filePath}`) : `커밋 완료: ${filePath}`);
       if (data.url) window.open(data.url, '_blank', 'noopener,noreferrer');
-      if (velogUrl) window.open(velogUrl, '_blank', 'noopener,noreferrer');
+      if (velogResult?.url) window.open(velogResult.url, '_blank', 'noopener,noreferrer');
     } catch (e) {
       setCommitStatus(e instanceof Error ? e.message : '커밋에 실패했어요.');
     } finally {
