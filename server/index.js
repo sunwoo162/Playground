@@ -445,6 +445,50 @@ const normalizeVelogUsername = (username = '') =>
     .split(/[/?#]/)[0]
     .trim();
 
+const createVelogHeaders = accessToken => ({
+  'Content-Type': 'application/json',
+  'Accept': 'application/json',
+  'Cookie': `access_token=${accessToken}`,
+  'Authorization': `Bearer ${accessToken}`,
+  'User-Agent': 'playground-app',
+});
+
+const parseVelogResponse = async response => {
+  const text = await response.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { raw: text };
+  }
+};
+
+const fetchVelogCurrentUsername = async accessToken => {
+  const query = `
+    query CurrentUser {
+      currentUser {
+        username
+      }
+    }
+  `;
+
+  try {
+    const response = await fetch('https://v2.velog.io/graphql', {
+      method: 'POST',
+      headers: createVelogHeaders(accessToken),
+      body: JSON.stringify({
+        operationName: 'CurrentUser',
+        query,
+        variables: {},
+      }),
+    });
+    const data = await parseVelogResponse(response);
+    if (!response.ok || data.errors?.length) return '';
+    return normalizeVelogUsername(data.data?.currentUser?.username);
+  } catch {
+    return '';
+  }
+};
+
 app.post('/velog/publish', async (req, res) => {
   const { accessToken, username, title, body, tags, isPrivate } = req.body;
   if (!accessToken || !title || !body) {
@@ -487,15 +531,11 @@ app.post('/velog/publish', async (req, res) => {
   `;
 
   try {
+    const requestedUsername = normalizeVelogUsername(username);
+    const tokenUsername = await fetchVelogCurrentUsername(accessToken);
     const publishRes = await fetch('https://v2.velog.io/graphql', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'Cookie': `access_token=${accessToken}`,
-        'Authorization': `Bearer ${accessToken}`,
-        'User-Agent': 'playground-app',
-      },
+      headers: createVelogHeaders(accessToken),
       body: JSON.stringify({
         operationName: 'WritePost',
         query,
@@ -511,13 +551,7 @@ app.post('/velog/publish', async (req, res) => {
       }),
     });
 
-    const text = await publishRes.text();
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { raw: text };
-    }
+    const data = await parseVelogResponse(publishRes);
 
     if (!publishRes.ok || data.errors?.length) {
       const message = data.errors?.[0]?.message || data.error || data.raw || 'Velog publish failed.';
@@ -525,14 +559,20 @@ app.post('/velog/publish', async (req, res) => {
     }
 
     const post = data.data?.writePost;
-    const postUsername = normalizeVelogUsername(post?.user?.username || username);
+    const postUsername = normalizeVelogUsername(post?.user?.username || tokenUsername || requestedUsername);
     const postSlug = post?.url_slug || urlSlug;
     const url = !isPrivate && postUsername && postSlug ? `https://velog.io/@${postUsername}/${postSlug}` : undefined;
     res.json({
       success: true,
       id: post?.id,
       url,
-      message: isPrivate ? 'Velog private post was published. Private posts may show 404 from the public URL.' : undefined,
+      username: postUsername,
+      slug: postSlug,
+      message: isPrivate
+        ? 'Velog private post was published. Private posts may show 404 from the public URL.'
+        : !postUsername
+          ? 'Velog post was published, but the Velog username could not be verified.'
+          : undefined,
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
