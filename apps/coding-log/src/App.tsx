@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import type { CodingLog, Platform, Status, Language, Comment } from './types';
-import { getMyLogs, getPublicLogs, createLog, updateLog, deleteLog, generateId, getTodayStr, parseUrlParams, getLike, toggleLike, getComments, addComment, deleteComment, fetchCodeFromCommit } from './storage';
+import type { CodingLog, Platform, Status, Language, Comment, VelogSettings } from './types';
+import { getMyLogs, getPublicLogs, createLog, updateLog, deleteLog, generateId, getTodayStr, parseUrlParams, getLike, toggleLike, getComments, addComment, deleteComment, fetchCodeFromCommit, getVelogSettings, saveVelogSettings } from './storage';
 import { useAuth } from './useAuth';
 
 type View = 'list' | 'edit' | 'view' | 'settings';
@@ -72,6 +72,10 @@ export default function App() {
   const [commitResult, setCommitResult] = useState<{ url?: string; error?: string } | null>(null);
   const [fetchingCode, setFetchingCode] = useState(false);
   const [theme, setTheme] = useState<Theme>(getTheme);
+  const [velogSettings, setVelogSettings] = useState<VelogSettings>(() => getVelogSettings());
+  const [velogDraft, setVelogDraft] = useState<VelogSettings>(() => getVelogSettings());
+  const [publishingVelog, setPublishingVelog] = useState(false);
+  const [velogResult, setVelogResult] = useState<{ url?: string; error?: string } | null>(null);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -117,6 +121,7 @@ export default function App() {
     getLike(log.id).then(setLikeData).catch(() => {});
     getComments(log.id).then((c) => setComments(c as Comment[])).catch(() => {});
     setCommitResult(null);
+    setVelogResult(null);
   };
 
   const handleSave = async () => {
@@ -160,8 +165,91 @@ export default function App() {
         body: JSON.stringify({ repo: repoInput, problemTitle: selected.problemTitle, platform: selected.platform, language: selected.language || 'python', code: selected.code }),
       });
       const data = await res.json();
-      setCommitResult(data.success ? { url: data.url } : { error: data.error });
+      if (data.success) {
+        setCommitResult({ url: data.url });
+        if (velogSettings.enabled) await handlePublishVelog();
+      } else {
+        setCommitResult({ error: data.error });
+      }
     } finally { setCommitting(false); }
+  };
+
+  const buildVelogMarkdown = (log: CodingLog) => {
+    const languageLabel = log.language ? LANGUAGES.find(l => l.value === log.language)?.label || log.language : '';
+    const lines = [
+      `# ${log.problemTitle}`,
+      '',
+      `- 플랫폼: ${platformLabel(log.platform)}`,
+      log.problemNumber ? `- 문제 번호: ${log.problemNumber}` : '',
+      log.level ? `- 난이도: ${log.level}` : '',
+      `- 풀이 상태: ${statusOf(log.status).label}`,
+      languageLabel ? `- 언어: ${languageLabel}` : '',
+      log.timeComplexity ? `- 시간 복잡도: ${log.timeComplexity}` : '',
+      `- 날짜: ${log.date}`,
+      '',
+      log.tags.length ? '## 태그' : '',
+      log.tags.length ? log.tags.map(tag => `#${tag}`).join(' ') : '',
+      log.tags.length ? '' : '',
+      log.approach.trim() ? '## 접근 방법' : '',
+      log.approach.trim(),
+      log.approach.trim() ? '' : '',
+      log.code.trim() ? '## 코드' : '',
+      log.code.trim() ? `\`\`\`${log.language || ''}` : '',
+      log.code.trim(),
+      log.code.trim() ? '```' : '',
+    ];
+    return lines.filter((line, index, arr) => line !== '' || arr[index - 1] !== '').join('\n').trim();
+  };
+
+  const handleSaveVelogSettings = () => {
+    const updated = {
+      ...velogDraft,
+      username: velogDraft.username.trim(),
+      accessToken: velogDraft.accessToken.trim(),
+      tags: velogDraft.tags.trim() || '코딩테스트,알고리즘',
+    };
+    setVelogSettings(updated);
+    setVelogDraft(updated);
+    saveVelogSettings(updated);
+    setVelogResult(null);
+  };
+
+  const handlePublishVelog = async () => {
+    if (!selected || publishingVelog) return;
+    if (!velogSettings.accessToken.trim()) {
+      setVelogResult({ error: 'Velog access_token을 먼저 설정해주세요.' });
+      setVelogDraft(velogSettings);
+      setView('settings');
+      return;
+    }
+
+    setPublishingVelog(true);
+    setVelogResult(null);
+    try {
+      const settingTags = velogSettings.tags.split(',').map(t => t.trim()).filter(Boolean);
+      const tags = Array.from(new Set([...selected.tags, ...settingTags]));
+      const res = await fetch('/velog/publish', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accessToken: velogSettings.accessToken.trim(),
+          username: velogSettings.username.trim(),
+          title: selected.problemTitle,
+          body: buildVelogMarkdown(selected),
+          tags,
+          isPrivate: velogSettings.isPrivate,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Velog 발행에 실패했어요.');
+      setVelogResult({ url: data.url });
+      if (data.url) window.open(data.url, '_blank', 'noopener,noreferrer');
+    } catch (e) {
+      setVelogResult({ error: e instanceof Error ? e.message : 'Velog 발행에 실패했어요.' });
+    } finally {
+      setPublishingVelog(false);
+    }
   };
 
   const handleToggleLike = async () => {
@@ -304,6 +392,53 @@ export default function App() {
             <div className="settings-note">
               <strong>적용 순서</strong>
               <p>백준허브 설치 → 풀이 저장 레포 연결 → ctbot 파일을 해당 레포에 복사 → Actions Summary 링크로 코테 일지 작성</p>
+            </div>
+            <div className="settings-note velog-settings-card">
+              <strong>Velog 발행 설정</strong>
+              <label className="settings-check">
+                <input
+                  type="checkbox"
+                  checked={velogDraft.enabled}
+                  onChange={e => setVelogDraft({ ...velogDraft, enabled: e.target.checked })}
+                />
+                <span>GitHub 커밋 후 Velog에도 자동 발행</span>
+              </label>
+              <label className="settings-field">
+                <span>Velog 사용자명</span>
+                <input
+                  placeholder="velog 아이디"
+                  value={velogDraft.username}
+                  onChange={e => setVelogDraft({ ...velogDraft, username: e.target.value })}
+                />
+              </label>
+              <label className="settings-field">
+                <span>Velog access_token</span>
+                <input
+                  type="password"
+                  placeholder="Velog 로그인 쿠키의 access_token"
+                  value={velogDraft.accessToken}
+                  onChange={e => setVelogDraft({ ...velogDraft, accessToken: e.target.value })}
+                />
+              </label>
+              <label className="settings-field">
+                <span>기본 태그</span>
+                <input
+                  placeholder="코딩테스트, 알고리즘"
+                  value={velogDraft.tags}
+                  onChange={e => setVelogDraft({ ...velogDraft, tags: e.target.value })}
+                />
+              </label>
+              <label className="settings-check">
+                <input
+                  type="checkbox"
+                  checked={velogDraft.isPrivate}
+                  onChange={e => setVelogDraft({ ...velogDraft, isPrivate: e.target.checked })}
+                />
+                <span>비공개 글로 발행</span>
+              </label>
+              <p className="settings-help">Velog 로그인 후 브라우저 쿠키의 access_token을 넣으면 현재 노트 내용을 Velog 글로 발행합니다.</p>
+              <button className="btn-primary" type="button" onClick={handleSaveVelogSettings}>Velog 설정 저장</button>
+              {velogResult?.error && <p className="commit-error">{velogResult.error}</p>}
             </div>
           </section>
         </main>
@@ -455,6 +590,22 @@ export default function App() {
             )}
 
             {/* 좋아요/댓글 - 커뮤니티 탭만 */}
+            {tab === 'my' && (
+              <div className="section-gap commit-section">
+                <div className="section-label">Velog 발행</div>
+                <div className="commit-row">
+                  <button className="btn-commit" type="button" onClick={handlePublishVelog} disabled={publishingVelog}>
+                    {publishingVelog ? '발행 중...' : 'Velog에 글 올리기'}
+                  </button>
+                  <button className="btn-ghost" type="button" onClick={() => { setVelogDraft(velogSettings); setView('settings'); }}>
+                    Velog 설정
+                  </button>
+                </div>
+                {velogResult?.url && <p className="commit-success">Velog 발행 완료! <a href={velogResult.url} target="_blank" rel="noopener">글 보기</a></p>}
+                {velogResult?.error && <p className="commit-error">{velogResult.error}</p>}
+              </div>
+            )}
+
             {tab === 'community' && (
               <>
                 <div className="like-row">

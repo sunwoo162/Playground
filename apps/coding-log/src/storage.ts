@@ -1,6 +1,14 @@
-import type { CodingLog } from './types';
+import type { CodingLog, VelogSettings } from './types';
 
 const BASE = '/api/coding-log';
+const VELOG_SETTINGS_KEY = 'coding-log-velog-settings';
+const DEFAULT_VELOG_SETTINGS: VelogSettings = {
+  enabled: false,
+  username: '',
+  accessToken: '',
+  tags: '코딩테스트,알고리즘',
+  isPrivate: false,
+};
 
 async function req<T>(url: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(url, {
@@ -40,6 +48,20 @@ export async function updateLog(log: CodingLog): Promise<CodingLog> {
 
 export async function deleteLog(id: string): Promise<void> {
   await req(`${BASE}/${id}`, { method: 'DELETE' });
+}
+
+export function getVelogSettings(): VelogSettings {
+  try {
+    const raw = localStorage.getItem(VELOG_SETTINGS_KEY);
+    if (!raw) return DEFAULT_VELOG_SETTINGS;
+    return { ...DEFAULT_VELOG_SETTINGS, ...JSON.parse(raw) };
+  } catch {
+    return DEFAULT_VELOG_SETTINGS;
+  }
+}
+
+export function saveVelogSettings(settings: VelogSettings): void {
+  localStorage.setItem(VELOG_SETTINGS_KEY, JSON.stringify(settings));
 }
 
 // ── 타입 변환 ──────────────────────────────────────────────

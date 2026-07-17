@@ -162,6 +162,7 @@ export default function App() {
   const [velogDraft, setVelogDraft] = useState<VelogSettings>(() => getVelogSettings());
   const [commitStatus, setCommitStatus] = useState('');
   const [committing, setCommitting] = useState(false);
+  const [publishingVelog, setPublishingVelog] = useState(false);
   const [shareStatus, setShareStatus] = useState('');
 
   useEffect(() => {
@@ -332,8 +333,8 @@ export default function App() {
     setView('repo');
   };
 
-  const publishNoteToVelog = async (note: CornellNote) => {
-    if (!velogSettings.enabled) return undefined;
+  const publishNoteToVelog = async (note: CornellNote, force = false) => {
+    if (!force && !velogSettings.enabled) return undefined;
     if (!velogSettings.accessToken.trim()) {
       throw new Error('Velog access_token을 먼저 설정해주세요.');
     }
@@ -353,6 +354,27 @@ export default function App() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Velog 발행에 실패했어요.');
     return data.url as string | undefined;
+  };
+
+  const handlePublishVelog = async () => {
+    if (!selected || publishingVelog) return;
+    if (!velogSettings.accessToken.trim()) {
+      openRepoSettings();
+      setCommitStatus('Velog access_token을 먼저 설정해주세요.');
+      return;
+    }
+
+    setPublishingVelog(true);
+    setCommitStatus('Velog에 발행하는 중...');
+    try {
+      const url = await publishNoteToVelog(selected, true);
+      setCommitStatus('Velog 발행 완료');
+      if (url) window.open(url, '_blank', 'noopener,noreferrer');
+    } catch (e) {
+      setCommitStatus(e instanceof Error ? e.message : 'Velog 발행에 실패했어요.');
+    } finally {
+      setPublishingVelog(false);
+    }
   };
 
   const handleCommitNote = async () => {
@@ -661,6 +683,7 @@ export default function App() {
               <button className="btn-ghost" onClick={openDetailOnlyWindow}>세부 내용 웹 보기</button>
               <button className="btn-ghost" onClick={handleShareNote}>공유 링크</button>
               <button className="btn-ghost" onClick={handleCommitNote} disabled={committing}>{committing ? '커밋 중...' : 'GitHub 커밋'}</button>
+              <button className="btn-ghost" onClick={handlePublishVelog} disabled={publishingVelog}>{publishingVelog ? '발행 중...' : 'Velog 발행'}</button>
               <button className="btn-ghost" onClick={() => setView('edit')}>✏️ 수정</button>
               <button className="btn-danger" onClick={() => handleDelete(selected.id)}>🗑️ 삭제</button>
             </div>

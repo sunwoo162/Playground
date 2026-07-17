@@ -31,3 +31,11 @@ export interface Comment {
   content: string;
   createdAt: string;
 }
+
+export interface VelogSettings {
+  enabled: boolean;
+  username: string;
+  accessToken: string;
+  tags: string;
+  isPrivate: boolean;
+}
