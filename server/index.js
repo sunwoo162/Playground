@@ -437,6 +437,14 @@ const createVelogSlug = (title = '') =>
     .replace(/^-|-$/g, '')
     .slice(0, 80) || `cornell-note-${Date.now()}`;
 
+const normalizeVelogUsername = (username = '') =>
+  String(username)
+    .trim()
+    .replace(/^https?:\/\/velog\.io\/@?/i, '')
+    .replace(/^@/, '')
+    .split(/[/?#]/)[0]
+    .trim();
+
 app.post('/velog/publish', async (req, res) => {
   const { accessToken, username, title, body, tags, isPrivate } = req.body;
   if (!accessToken || !title || !body) {
@@ -517,10 +525,15 @@ app.post('/velog/publish', async (req, res) => {
     }
 
     const post = data.data?.writePost;
-    const postUsername = post?.user?.username || username;
+    const postUsername = normalizeVelogUsername(post?.user?.username || username);
     const postSlug = post?.url_slug || urlSlug;
-    const url = postUsername && postSlug ? `https://velog.io/@${postUsername}/${postSlug}` : undefined;
-    res.json({ success: true, id: post?.id, url });
+    const url = !isPrivate && postUsername && postSlug ? `https://velog.io/@${postUsername}/${postSlug}` : undefined;
+    res.json({
+      success: true,
+      id: post?.id,
+      url,
+      message: isPrivate ? 'Velog private post was published. Private posts may show 404 from the public URL.' : undefined,
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
