@@ -48,13 +48,62 @@ app.use(session({
   secret: process.env.SESSION_SECRET || 'fallback-secret',
   resave: false,
   saveUninitialized: false,
+  rolling: true,
   cookie: {
     secure: false, // HTTPS 사용 시 true로 변경
-    maxAge: 24 * 60 * 60 * 1000, // 24시간
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7일
   },
 }));
 
 app.use(express.json());
+
+function parseCookies(cookieHeader = '') {
+  return cookieHeader
+    .split(';')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .reduce((acc, part) => {
+      const index = part.indexOf('=');
+      if (index === -1) return acc;
+      const key = part.slice(0, index);
+      const value = part.slice(index + 1);
+      acc[key] = decodeURIComponent(value);
+      return acc;
+    }, {});
+}
+
+function userFromJwtPayload(payload) {
+  if (!payload || payload.type === 'refresh' || !payload.id || !payload.login) {
+    return null;
+  }
+  return {
+    id: payload.id,
+    login: payload.login,
+    name: payload.name || payload.login,
+    avatar_url: payload.avatar_url || '',
+  };
+}
+
+function issueAccessTokenCookie(res, user) {
+  const accessToken = jwt.sign(
+    {
+      id: String(user.id),
+      login: user.login,
+      name: user.name || user.login,
+      avatar_url: user.avatar_url || '',
+      type: 'access',
+    },
+    JWT_SECRET,
+    { expiresIn: '5h' }
+  );
+
+  res.cookie('playground_token', accessToken, {
+    httpOnly: false,
+    maxAge: 5 * 60 * 60 * 1000, // 5시간
+    sameSite: 'lax',
+    path: '/',
+  });
+}
 
 function proxyToBackend(req, res) {
   const targetUrl = new URL(req.originalUrl, BACKEND_URL);
@@ -639,7 +688,7 @@ app.get('/auth/github/callback', async (req, res) => {
 
     // 리프레시 토큰 (7일)
     const refreshToken = jwt.sign(
-      { id: userPayload.id, type: 'refresh' },
+      { ...userPayload, type: 'refresh' },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -649,6 +698,7 @@ app.get('/auth/github/callback', async (req, res) => {
       httpOnly: false, // 프론트에서 읽을 수 있게
       maxAge: 5 * 60 * 60 * 1000, // 5시간
       sameSite: 'lax',
+      path: '/',
     });
 
     // 리프레시 토큰 쿠키 (7일, HttpOnly로 보안 강화)
@@ -656,6 +706,7 @@ app.get('/auth/github/callback', async (req, res) => {
       httpOnly: true,
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7일
       sameSite: 'lax',
+      path: '/',
     });
 
     // 로그인 성공 → returnTo가 있으면 거기로, 없으면 메인
@@ -678,9 +729,50 @@ app.get('/auth/github/callback', async (req, res) => {
 app.get('/auth/me', (req, res) => {
   if (req.session.user) {
     res.json({ user: req.session.user });
-  } else {
-    res.json({ user: null });
+    return;
   }
+
+  const cookies = parseCookies(req.headers.cookie || '');
+  const accessToken = cookies.playground_token;
+  const refreshToken = cookies.playground_refresh;
+
+  if (accessToken) {
+    try {
+      const user = userFromJwtPayload(jwt.verify(accessToken, JWT_SECRET));
+      if (user) {
+        req.session.user = user;
+        res.json({ user });
+        return;
+      }
+    } catch {
+      // Try refresh token below.
+    }
+  }
+
+  if (refreshToken) {
+    try {
+      const payload = jwt.verify(refreshToken, JWT_SECRET);
+      if (payload?.type === 'refresh') {
+        const user = {
+          id: payload.id,
+          login: payload.login,
+          name: payload.name || payload.login,
+          avatar_url: payload.avatar_url || '',
+        };
+        if (user.id && user.login) {
+          req.session.user = user;
+          issueAccessTokenCookie(res, user);
+          res.json({ user });
+          return;
+        }
+      }
+    } catch {
+      res.clearCookie('playground_token', { path: '/' });
+      res.clearCookie('playground_refresh', { path: '/' });
+    }
+  }
+
+  res.json({ user: null });
 });
 
 /**
@@ -689,8 +781,8 @@ app.get('/auth/me', (req, res) => {
  */
 app.post('/auth/logout', (req, res) => {
   req.session.destroy(() => {
-    res.clearCookie('playground_token');
-    res.clearCookie('playground_refresh');
+    res.clearCookie('playground_token', { path: '/' });
+    res.clearCookie('playground_refresh', { path: '/' });
     res.json({ success: true });
   });
 });
