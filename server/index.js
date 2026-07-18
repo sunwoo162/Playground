@@ -857,6 +857,12 @@ app.get('/apps/dev-notes/*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'apps', 'dev-notes', 'dist', 'index.html'));
 });
 
+// Dev Action Hub 앱
+app.use('/apps/dev-action-hub', express.static(path.join(__dirname, '..', 'apps', 'dev-action-hub', 'dist')));
+app.get('/apps/dev-action-hub/*', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'apps', 'dev-action-hub', 'dist', 'index.html'));
+});
+
 // Study Planner 앱
 app.use('/apps/study-planner', express.static(path.join(__dirname, '..', 'apps', 'study-planner', 'dist')));
 app.get('/apps/study-planner/*', (req, res) => {

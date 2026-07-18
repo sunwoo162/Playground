@@ -67,6 +67,14 @@ const APPS: AppItem[] = [
     color: '#2ed573',
   },
   {
+    id: 'dev-action-hub',
+    title: '개발 액션 허브',
+    description: '개발자 노트, GitHub Actions, Discord 알림을 한 화면에서 관리',
+    emoji: '🧩',
+    url: '/apps/dev-action-hub/',
+    color: '#69d2bd',
+  },
+  {
     id: 'life-tracker',
     title: 'Life Tracker',
     description: '실패, 버린 시간, 작은 성취를 기록하는 자기 이해 플랫폼',
