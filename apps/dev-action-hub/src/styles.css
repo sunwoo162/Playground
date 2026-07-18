@@ -82,6 +82,11 @@ input, textarea, select {
 textarea { min-height: 92px; resize: vertical; }
 .connect-form { display: grid; grid-template-columns: 1fr 76px; gap: 8px; margin-bottom: 14px; }
 .connect-form button { border-radius: 8px; font-weight: 900; }
+.server-form {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+}
 .list, .run-list, .editor-stack { display: grid; gap: 10px; }
 .list-item, .run-item {
   width: 100%;
@@ -121,9 +126,85 @@ textarea { min-height: 92px; resize: vertical; }
 }
 .empty.small { min-height: 90px; }
 
+.org-card {
+  display: grid;
+  gap: 16px;
+  border: 1px solid #263044;
+  background: linear-gradient(135deg, rgba(105, 210, 189, .1), rgba(17, 22, 32, .94));
+  border-radius: 10px;
+  padding: 18px;
+  margin-bottom: 18px;
+}
+.org-card h2 {
+  margin: 6px 0 8px;
+}
+.org-card p {
+  margin: 0;
+  color: #a8b4cc;
+  font-weight: 700;
+  line-height: 1.55;
+}
+.eyebrow {
+  color: #69d2bd;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: .02em;
+}
+.org-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+}
+.chat-box {
+  display: grid;
+  gap: 12px;
+  margin-top: 22px;
+}
+.chat-list {
+  display: grid;
+  gap: 10px;
+  max-height: 300px;
+  overflow: auto;
+  padding-right: 2px;
+}
+.chat-message {
+  display: grid;
+  gap: 6px;
+  border: 1px solid #293246;
+  border-radius: 8px;
+  background: #0e131d;
+  padding: 10px 12px;
+}
+.chat-message div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: #94a1b9;
+  font-size: 13px;
+  font-weight: 800;
+}
+.chat-message p {
+  margin: 0;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+.chat-form {
+  display: grid;
+  grid-template-columns: 1fr 74px;
+  gap: 8px;
+}
+.hint {
+  margin: 0;
+  color: #8794ad;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 @media (max-width: 1180px) {
   .grid { grid-template-columns: 1fr; }
   .topbar { grid-template-columns: 1fr; }
+  .org-row { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 720px) {
