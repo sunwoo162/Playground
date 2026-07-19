@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
 
@@ -6,8 +6,6 @@ const APP_PATH = '/apps/dev-action-hub/'
 const DISCORD_KEY = 'dev-action-hub-discord'
 const SENT_RUN_KEY = 'dev-action-hub-sent-runs'
 const TROUBLE_KEY = 'dev-action-hub-trouble'
-const SERVER_KEY = 'dev-action-hub-servers'
-const CHAT_KEY = 'dev-action-hub-chat'
 
 type Watch = {
   id: number
@@ -62,19 +60,20 @@ type DiscordSettings = {
 }
 
 type DevServer = {
-  id: string
+  id: number
   name: string
   slug: string
   githubOrg: string
   description: string
+  ownerLogin: string
   createdAt: string
 }
 
 type ChatMessage = {
-  id: string
-  serverId: string
-  author: string
-  text: string
+  id: number
+  serverId: number
+  authorLogin: string
+  content: string
   createdAt: string
 }
 
@@ -91,21 +90,6 @@ function readJson<T>(key: string, fallback: T): T {
   }
 }
 
-function makeId() {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-}
-
-function slugifyOrgName(value: string) {
-  const slug = value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 39)
-    .replace(/^-+|-+$/g, '')
-  return slug || 'playground-team'
-}
-
 function formatTime(value: string) {
   return new Intl.DateTimeFormat('ko-KR', {
     month: '2-digit',
@@ -116,6 +100,7 @@ function formatTime(value: string) {
 }
 
 function App() {
+  const chatEndRef = useRef<HTMLDivElement | null>(null)
   const [status, setStatus] = useState('개발 문서와 액션 상태를 불러오는 중...')
   const [repoInput, setRepoInput] = useState('')
   const [watches, setWatches] = useState<Watch[]>([])
@@ -127,12 +112,15 @@ function App() {
   const [troubleshooting, setTroubleshooting] = useState('')
   const [discord, setDiscord] = useState<DiscordSettings>(() => readJson(DISCORD_KEY, defaultDiscord))
   const [sentRuns, setSentRuns] = useState<Record<string, boolean>>(() => readJson(SENT_RUN_KEY, {}))
-  const [servers, setServers] = useState<DevServer[]>(() => readJson(SERVER_KEY, []))
-  const [selectedServerId, setSelectedServerId] = useState<string | null>(() => readJson<DevServer[]>(SERVER_KEY, [])[0]?.id || null)
+  const [servers, setServers] = useState<DevServer[]>([])
+  const [selectedServerId, setSelectedServerId] = useState<number | null>(null)
   const [serverName, setServerName] = useState('')
   const [serverDescription, setServerDescription] = useState('')
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => readJson(CHAT_KEY, []))
+  const [serverOrgInput, setServerOrgInput] = useState('')
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [chatText, setChatText] = useState('')
+  const [chatLoading, setChatLoading] = useState(false)
+  const [chatSending, setChatSending] = useState(false)
 
   const selectedWatch = useMemo(
     () => watches.find((watch) => watch.id === selectedWatchId) || watches[0],
@@ -142,11 +130,6 @@ function App() {
     () => servers.find((server) => server.id === selectedServerId) || servers[0],
     [servers, selectedServerId],
   )
-  const selectedMessages = useMemo(
-    () => chatMessages.filter((message) => message.serverId === selectedServer?.id),
-    [chatMessages, selectedServer?.id],
-  )
-
   useEffect(() => {
     loadAll()
   }, [])
@@ -170,13 +153,22 @@ function App() {
   }, [sentRuns])
 
   useEffect(() => {
-    localStorage.setItem(SERVER_KEY, JSON.stringify(servers))
-    if (!selectedServerId && servers[0]) setSelectedServerId(servers[0].id)
-  }, [servers, selectedServerId])
+    setServerOrgInput(selectedServer?.githubOrg || selectedServer?.slug || '')
+  }, [selectedServer?.id, selectedServer?.githubOrg, selectedServer?.slug])
 
   useEffect(() => {
-    localStorage.setItem(CHAT_KEY, JSON.stringify(chatMessages))
-  }, [chatMessages])
+    if (!selectedServer?.id) {
+      setChatMessages([])
+      return
+    }
+    loadMessages(selectedServer.id)
+    const timer = window.setInterval(() => loadMessages(selectedServer.id, true), 3000)
+    return () => window.clearInterval(timer)
+  }, [selectedServer?.id])
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+  }, [chatMessages.length, selectedServer?.id])
 
   useEffect(() => {
     const latest = runs.find((run) => run.status === 'completed')
@@ -206,7 +198,7 @@ function App() {
   }
 
   async function loadAll() {
-    await Promise.all([loadWatches(), loadProjects()])
+    await Promise.all([loadWatches(), loadProjects(), loadServers()])
   }
 
   async function loadWatches() {
@@ -236,6 +228,29 @@ function App() {
       if (!selectedProjectId && data.length > 0) setSelectedProjectId(data[0].id)
     } catch (error) {
       setStatus(error instanceof Error ? error.message : '개발자 노트를 불러오지 못했어요.')
+    }
+  }
+
+  async function loadServers() {
+    try {
+      const data = await request<DevServer[]>('/api/dev-hub/servers')
+      setServers(data)
+      setSelectedServerId((current) => (current && data.some((server) => server.id === current) ? current : data[0]?.id || null))
+      if (data.length === 0) setChatMessages([])
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : '개발 서버를 불러오지 못했어요.')
+    }
+  }
+
+  async function loadMessages(serverId: number, silent = false) {
+    if (!silent) setChatLoading(true)
+    try {
+      const data = await request<ChatMessage[]>(`/api/dev-hub/servers/${serverId}/messages`)
+      setChatMessages(data)
+    } catch (error) {
+      if (!silent) setStatus(error instanceof Error ? error.message : '채팅을 불러오지 못했어요.')
+    } finally {
+      if (!silent) setChatLoading(false)
     }
   }
 
@@ -324,19 +339,14 @@ function App() {
     setStatus('Discord 테스트 메시지를 보냈어요.')
   }
 
-  function createDevServer(event: React.FormEvent) {
+  async function createDevServer(event: React.FormEvent) {
     event.preventDefault()
     const name = serverName.trim()
     if (!name) return
-    const slug = slugifyOrgName(name)
-    const server: DevServer = {
-      id: makeId(),
-      name,
-      slug,
-      githubOrg: slug,
-      description: serverDescription.trim(),
-      createdAt: new Date().toISOString(),
-    }
+    const server = await request<DevServer>('/api/dev-hub/servers', {
+      method: 'POST',
+      body: JSON.stringify({ name, description: serverDescription.trim() }),
+    })
     setServers((items) => [server, ...items])
     setSelectedServerId(server.id)
     setServerName('')
@@ -344,27 +354,33 @@ function App() {
     setStatus('서버를 만들었어요. GitHub Organization은 GitHub에서 직접 생성한 뒤 연결해야 합니다.')
   }
 
-  function updateServerOrg(value: string) {
+  async function saveServerOrg() {
     if (!selectedServer) return
-    setServers((items) => items.map((server) => (
-      server.id === selectedServer.id ? { ...server, githubOrg: slugifyOrgName(value) } : server
-    )))
+    const updated = await request<DevServer>(`/api/dev-hub/servers/${selectedServer.id}/github-org`, {
+      method: 'PATCH',
+      body: JSON.stringify({ githubOrg: serverOrgInput.trim() }),
+    })
+    setServers((items) => items.map((server) => (server.id === updated.id ? updated : server)))
+    setStatus('GitHub Organization 연결 이름을 저장했어요.')
   }
 
-  function sendChat(event: React.FormEvent) {
+  async function sendChat(event: React.FormEvent) {
     event.preventDefault()
-    if (!selectedServer || !chatText.trim()) return
-    setChatMessages((items) => [
-      ...items,
-      {
-        id: makeId(),
-        serverId: selectedServer.id,
-        author: '나',
-        text: chatText.trim(),
-        createdAt: new Date().toISOString(),
-      },
-    ])
-    setChatText('')
+    if (!selectedServer || !chatText.trim() || chatSending) return
+    const content = chatText.trim()
+    setChatSending(true)
+    try {
+      const message = await request<ChatMessage>(`/api/dev-hub/servers/${selectedServer.id}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({ content }),
+      })
+      setChatMessages((items) => [...items.filter((item) => item.id !== message.id), message])
+      setChatText('')
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : '메시지 전송에 실패했어요.')
+    } finally {
+      setChatSending(false)
+    }
   }
 
   function updateDraft<K extends keyof Project>(key: K, value: Project[K]) {
@@ -477,9 +493,10 @@ function App() {
                   </p>
                 </div>
                 <div className="org-row">
-                  <input value={selectedServer.githubOrg} onChange={(event) => updateServerOrg(event.target.value)} placeholder="github-org-name" />
+                  <input value={serverOrgInput} onChange={(event) => setServerOrgInput(event.target.value)} placeholder="github-org-name" />
+                  <button className="ghost-btn" type="button" onClick={saveServerOrg}>연결 저장</button>
                   <a className="ghost-btn" href="https://github.com/organizations/plan" target="_blank" rel="noreferrer">Organization 만들기</a>
-                  <a className="ghost-btn" href={`https://github.com/${selectedServer.githubOrg || selectedServer.slug}`} target="_blank" rel="noreferrer">연결 확인</a>
+                  <a className="ghost-btn" href={`https://github.com/${serverOrgInput || selectedServer.githubOrg || selectedServer.slug}`} target="_blank" rel="noreferrer">연결 확인</a>
                 </div>
               </div>
             )}
@@ -583,16 +600,17 @@ function App() {
                 <span>{selectedServer?.name || '서버 없음'}</span>
               </div>
               <div className="chat-list">
-                {selectedMessages.map((message) => (
+                {chatMessages.map((message) => (
                   <div className="chat-message" key={message.id}>
                     <div>
-                      <strong>{message.author}</strong>
+                      <strong>{message.authorLogin}</strong>
                       <span>{formatTime(message.createdAt)}</span>
                     </div>
-                    <p>{message.text}</p>
+                    <p>{message.content}</p>
                   </div>
                 ))}
-                {selectedMessages.length === 0 && <div className="empty small">아직 메시지가 없습니다.</div>}
+                {chatMessages.length === 0 && <div className="empty small">{chatLoading ? '메시지를 불러오는 중...' : '아직 메시지가 없습니다.'}</div>}
+                <div ref={chatEndRef} />
               </div>
               <form className="chat-form" onSubmit={sendChat}>
                 <input
@@ -601,9 +619,11 @@ function App() {
                   placeholder={selectedServer ? '메시지 입력' : '서버를 먼저 만드세요'}
                   disabled={!selectedServer}
                 />
-                <button className="small-btn" disabled={!selectedServer}>전송</button>
+                <button className="small-btn" disabled={!selectedServer || !chatText.trim() || chatSending}>
+                  {chatSending ? '전송 중' : '전송'}
+                </button>
               </form>
-              <p className="hint">현재 채팅은 이 브라우저에 저장되는 초안입니다. 여러 유저 실시간 채팅은 백엔드 저장소와 WebSocket/SSE가 필요합니다.</p>
+              <p className="hint">메시지는 서버 DB에 저장되어 같은 개발 서버 구성원이 함께 볼 수 있습니다. 초대/권한과 WebSocket 실시간 동기화는 다음 단계에서 붙이면 됩니다.</p>
             </div>
           </aside>
         </section>

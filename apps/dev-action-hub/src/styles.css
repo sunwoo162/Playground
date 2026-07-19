@@ -152,9 +152,14 @@ textarea { min-height: 92px; resize: vertical; }
 }
 .org-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) auto auto;
+  grid-template-columns: minmax(180px, 1fr) auto auto auto;
   gap: 10px;
   align-items: center;
+}
+.org-row .ghost-btn,
+.org-row button {
+  white-space: nowrap;
+  text-align: center;
 }
 .chat-box {
   display: grid;
@@ -167,6 +172,7 @@ textarea { min-height: 92px; resize: vertical; }
   max-height: 300px;
   overflow: auto;
   padding-right: 2px;
+  scroll-behavior: smooth;
 }
 .chat-message {
   display: grid;
@@ -193,6 +199,10 @@ textarea { min-height: 92px; resize: vertical; }
   display: grid;
   grid-template-columns: 1fr 74px;
   gap: 8px;
+}
+.chat-form button:disabled {
+  cursor: not-allowed;
+  opacity: .6;
 }
 .hint {
   margin: 0;
