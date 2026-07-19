@@ -1,17 +1,20 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
 
 const LOCAL_SERVERS_KEY = 'dev-action-hub-local-servers'
 const LOCAL_MESSAGES_KEY = 'dev-action-hub-local-messages'
+const LOCAL_DM_KEY = 'dev-action-hub-local-dms'
 const WATCHES_KEY = 'dev-action-hub-watches'
 const DOCS_KEY = 'dev-action-hub-docs'
 const DISCORD_KEY = 'dev-action-hub-discord'
 
 type RoomTab = 'chat' | 'work' | 'docs' | 'alerts'
+type ViewMode = 'dm' | 'server'
+type Presence = 'online' | 'idle' | 'offline'
 
 type DevServer = {
-  id: number
+  id: string
   name: string
   slug: string
   githubOrg: string
@@ -22,8 +25,8 @@ type DevServer = {
 }
 
 type ChatMessage = {
-  id: number
-  serverId: number
+  id: string
+  serverId: string
   authorLogin: string
   content: string
   createdAt: string
@@ -31,18 +34,18 @@ type ChatMessage = {
 }
 
 type Watch = {
-  id: number
-  serverId: number
+  id: string
+  serverId: string
   fullName: string
   actionsUrl: string
   enabled: boolean
 }
 
 type Run = {
-  id: number
+  id: string
   name: string
   status: string
-  conclusion: string
+  conclusion: string | null
   branch: string
   htmlUrl: string
   createdAt: string
@@ -50,8 +53,8 @@ type Run = {
 }
 
 type DevDoc = {
-  id: number
-  serverId: number
+  id: string
+  serverId: string
   title: string
   content: string
   updatedAt: string
@@ -64,24 +67,37 @@ type DiscordSettings = {
   failure: boolean
 }
 
-const defaultDiscord: DiscordSettings = {
-  webhookUrl: '',
-  enabled: false,
-  success: true,
-  failure: true,
+type DirectRoom = {
+  id: string
+  name: string
+  subtitle: string
+  avatar: string
+  status: Presence
 }
 
-const tabs: Array<{ id: RoomTab; label: string }> = [
-  { id: 'chat', label: '채팅' },
-  { id: 'work', label: 'GitHub 작업' },
-  { id: 'docs', label: '개발 문서' },
-  { id: 'alerts', label: '알림' },
+const directRooms: DirectRoom[] = [
+  { id: 'leadership', name: '리더십 향상을 위한 끄적 방', subtitle: '멤버 3명', avatar: '리', status: 'online' },
+  { id: 'review', name: '코드 리뷰 메모', subtitle: '작업 메모', avatar: '리', status: 'idle' },
+  { id: 'deploy', name: '배포 확인', subtitle: 'GitHub Actions', avatar: '깃', status: 'online' },
+  { id: 'docs', name: '문서 정리', subtitle: '기능/API/트러블슈팅', avatar: '문', status: 'offline' },
 ]
+
+const defaultDmMessages: Record<string, ChatMessage[]> = {
+  leadership: [
+    {
+      id: 'dm-1',
+      serverId: 'leadership',
+      authorLogin: 'sunwoo162',
+      content: '작업 서버를 만들면 그 안에서 채팅하고 깃 액션을 확인하는 식으로 정리합니다.',
+      createdAt: new Date().toISOString(),
+    },
+  ],
+}
 
 function readJson<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key)
-    return raw ? JSON.parse(raw) : fallback
+    return raw ? (JSON.parse(raw) as T) : fallback
   } catch {
     return fallback
   }
@@ -91,22 +107,19 @@ function writeJson<T>(key: string, value: T) {
   localStorage.setItem(key, JSON.stringify(value))
 }
 
-async function apiJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, {
+async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(path, {
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) },
     ...init,
   })
-  const text = await response.text()
-  const body = text ? JSON.parse(text) : null
-  if (!response.ok) {
-    throw new Error(body?.error || body?.message || `${response.status} ${response.statusText}`)
-  }
-  return body as T
+  const body = await response.text()
+  if (!response.ok) throw new Error(body || response.statusText)
+  return body ? (JSON.parse(body) as T) : ({} as T)
 }
 
-function nowId() {
-  return Date.now() + Math.floor(Math.random() * 1000)
+function nowId(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
 function slugify(value: string) {
@@ -114,7 +127,12 @@ function slugify(value: string) {
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9가-힣]+/g, '-')
-    .replace(/^-+|-+$/g, '') || 'server'
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48)
+}
+
+function initials(value: string) {
+  return value.trim().slice(0, 2).toUpperCase() || '서'
 }
 
 function formatDateTime(value: string) {
@@ -127,595 +145,521 @@ function formatDateTime(value: string) {
 }
 
 function repoActionsUrl(repo: string) {
-  return `https://github.com/${repo}/actions`
+  return `https://github.com/${repo.replace(/^https:\/\/github.com\//, '').replace(/\.git$/, '')}/actions`
 }
 
-function normalizeServer(server: Partial<DevServer>): DevServer {
-  const name = server.name || '이름 없는 서버'
-  return {
-    id: Number(server.id || nowId()),
-    name,
-    slug: server.slug || slugify(name),
-    githubOrg: server.githubOrg || '',
-    description: server.description || '',
-    ownerLogin: server.ownerLogin || 'me',
-    createdAt: server.createdAt || new Date().toISOString(),
-    localOnly: server.localOnly,
-  }
-}
-
-function normalizeMessage(message: Partial<ChatMessage>): ChatMessage {
-  return {
-    id: Number(message.id || nowId()),
-    serverId: Number(message.serverId || 0),
-    authorLogin: message.authorLogin || '나',
-    content: message.content || '',
-    createdAt: message.createdAt || new Date().toISOString(),
-    localOnly: message.localOnly,
-  }
+function tabLabel(tab: RoomTab) {
+  if (tab === 'chat') return '일반'
+  if (tab === 'work') return 'github-actions'
+  if (tab === 'docs') return '개발-문서'
+  return '알림-설정'
 }
 
 function App() {
-  const chatEndRef = useRef<HTMLDivElement | null>(null)
-  const [status, setStatus] = useState('서버 목록을 불러오는 중...')
-  const [servers, setServers] = useState<DevServer[]>([])
-  const [selectedServerId, setSelectedServerId] = useState<number | null>(null)
-  const [serverName, setServerName] = useState('')
-  const [serverDescription, setServerDescription] = useState('')
-  const [serverOrgInput, setServerOrgInput] = useState('')
+  const [servers, setServers] = useState<DevServer[]>(() => readJson<DevServer[]>(LOCAL_SERVERS_KEY, []))
+  const [selectedServerId, setSelectedServerId] = useState<string>(() => readJson<DevServer[]>(LOCAL_SERVERS_KEY, [])[0]?.id || '')
+  const [viewMode, setViewMode] = useState<ViewMode>(() => (selectedServerId ? 'server' : 'dm'))
   const [activeTab, setActiveTab] = useState<RoomTab>('chat')
   const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [chatText, setChatText] = useState('')
-  const [chatLoading, setChatLoading] = useState(false)
-  const [chatSending, setChatSending] = useState(false)
+  const [messageText, setMessageText] = useState('')
+  const [dmSearch, setDmSearch] = useState('')
+  const [selectedDmId, setSelectedDmId] = useState(directRooms[0].id)
+  const [dmMessages, setDmMessages] = useState<Record<string, ChatMessage[]>>(() =>
+    readJson(LOCAL_DM_KEY, defaultDmMessages),
+  )
+  const [dmText, setDmText] = useState('')
   const [watches, setWatches] = useState<Watch[]>(() => readJson(WATCHES_KEY, []))
-  const [selectedWatchId, setSelectedWatchId] = useState<number | null>(null)
-  const [repoInput, setRepoInput] = useState('')
   const [runs, setRuns] = useState<Run[]>([])
   const [docs, setDocs] = useState<DevDoc[]>(() => readJson(DOCS_KEY, []))
-  const [selectedDocId, setSelectedDocId] = useState<number | null>(null)
-  const [docTitle, setDocTitle] = useState('')
-  const [docContent, setDocContent] = useState('')
-  const [discord, setDiscord] = useState<DiscordSettings>(() => readJson(DISCORD_KEY, defaultDiscord))
+  const [discord, setDiscord] = useState<DiscordSettings>(() =>
+    readJson(DISCORD_KEY, { webhookUrl: '', enabled: true, success: true, failure: true }),
+  )
+  const [status, setStatus] = useState('')
+  const [createOpen, setCreateOpen] = useState(false)
+  const [newServer, setNewServer] = useState({ name: '', description: '', githubOrg: '' })
+  const [repoInput, setRepoInput] = useState('')
+  const [docDraft, setDocDraft] = useState({ title: '', content: '' })
+  const feedRef = useRef<HTMLDivElement>(null)
 
-  const selectedServer = useMemo(
-    () => servers.find((server) => server.id === selectedServerId) || null,
-    [servers, selectedServerId],
-  )
-  const serverWatches = useMemo(
-    () => watches.filter((watch) => watch.serverId === selectedServerId),
-    [watches, selectedServerId],
-  )
-  const selectedWatch = useMemo(
-    () => serverWatches.find((watch) => watch.id === selectedWatchId) || serverWatches[0] || null,
-    [serverWatches, selectedWatchId],
-  )
-  const serverDocs = useMemo(
-    () => docs.filter((doc) => doc.serverId === selectedServerId),
-    [docs, selectedServerId],
-  )
+  const selectedServer = servers.find(server => server.id === selectedServerId) || null
+  const serverMessages = messages.filter(message => message.serverId === selectedServerId)
+  const serverWatches = watches.filter(watch => watch.serverId === selectedServerId)
+  const serverDocs = docs.filter(doc => doc.serverId === selectedServerId)
+  const selectedDm = directRooms.find(room => room.id === selectedDmId) || directRooms[0]
+  const selectedDmMessages = dmMessages[selectedDm.id] || []
+  const filteredDms = directRooms.filter(room => room.name.includes(dmSearch) || room.subtitle.includes(dmSearch))
+
+  const members = useMemo(() => {
+    const names = new Set<string>()
+    if (selectedServer?.ownerLogin) names.add(selectedServer.ownerLogin)
+    serverMessages.forEach(message => names.add(message.authorLogin))
+    names.add('GitHub Actions')
+    names.add('Discord Bot')
+    return Array.from(names)
+  }, [selectedServer, serverMessages])
 
   useEffect(() => {
-    loadServers()
+    apiJson<DevServer[]>('/api/dev-hub/servers')
+      .then(remote => {
+        if (remote.length > 0) {
+          setServers(remote)
+          writeJson(LOCAL_SERVERS_KEY, remote)
+          if (!selectedServerId) {
+            setSelectedServerId(remote[0].id)
+          }
+        }
+      })
+      .catch(() => undefined)
   }, [])
 
   useEffect(() => {
-    writeJson(WATCHES_KEY, watches)
-  }, [watches])
+    if (!selectedServerId) return
+    apiJson<ChatMessage[]>(`/api/dev-hub/servers/${selectedServerId}/messages`)
+      .then(setMessages)
+      .catch(() => setMessages(readJson(LOCAL_MESSAGES_KEY, [])))
+  }, [selectedServerId])
 
   useEffect(() => {
-    writeJson(DOCS_KEY, docs)
-  }, [docs])
+    feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight })
+  }, [serverMessages.length, selectedDmMessages.length, viewMode])
 
-  useEffect(() => {
-    writeJson(DISCORD_KEY, discord)
-  }, [discord])
-
-  useEffect(() => {
-    setServerOrgInput(selectedServer?.githubOrg || '')
-    setSelectedWatchId(null)
-    setSelectedDocId(null)
-    setRuns([])
-  }, [selectedServer?.id])
-
-  useEffect(() => {
-    if (!selectedServer) {
-      setMessages([])
-      return
-    }
-    loadMessages(selectedServer.id)
-    const timer = window.setInterval(() => loadMessages(selectedServer.id, true), 3000)
-    return () => window.clearInterval(timer)
-  }, [selectedServer?.id])
-
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages.length])
-
-  useEffect(() => {
-    if (!selectedWatch) {
-      setRuns([])
-      return
-    }
-    loadRuns(selectedWatch)
-  }, [selectedWatch?.id])
-
-  useEffect(() => {
-    const doc = docs.find((item) => item.id === selectedDocId)
-    setDocTitle(doc?.title || '')
-    setDocContent(doc?.content || '')
-  }, [selectedDocId, docs])
-
-  async function loadServers() {
-    const localServers = readJson<DevServer[]>(LOCAL_SERVERS_KEY, []).map(normalizeServer)
-    try {
-      const remoteServers = (await apiJson<DevServer[]>('/api/dev-hub/servers')).map(normalizeServer)
-      const merged = [...remoteServers, ...localServers.filter((local) => !remoteServers.some((server) => server.id === local.id))]
-      setServers(merged)
-      setStatus(merged.length ? '서버를 선택하거나 새 서버를 만드세요.' : '새 서버를 만들면 채팅방이 열립니다.')
-    } catch (error) {
-      setServers(localServers)
-      setStatus(`백엔드 연결 전까지 로컬 서버로 사용할 수 있습니다. ${error instanceof Error ? error.message : ''}`.trim())
-    }
-  }
-
-  async function createServer(event: React.FormEvent) {
+  async function createServer(event: FormEvent) {
     event.preventDefault()
-    const name = serverName.trim()
-    if (!name) {
-      setStatus('서버 이름을 입력하세요.')
-      return
+    const name = newServer.name.trim()
+    if (!name) return
+
+    const payload = {
+      name,
+      slug: slugify(name),
+      githubOrg: newServer.githubOrg.trim() || slugify(name),
+      description: newServer.description.trim(),
     }
 
     try {
-      const created = normalizeServer(await apiJson<DevServer>('/api/dev-hub/servers', {
+      const created = await apiJson<DevServer>('/api/dev-hub/servers', {
         method: 'POST',
-        body: JSON.stringify({ name, description: serverDescription.trim() }),
-      }))
-      setServers((prev) => [created, ...prev.filter((server) => server.id !== created.id)])
-      setSelectedServerId(created.id)
-      setActiveTab('chat')
-      setStatus(`${created.name} 서버를 만들었습니다.`)
-    } catch (error) {
-      const localServer = normalizeServer({
-        id: nowId(),
-        name,
-        slug: slugify(name),
-        description: serverDescription.trim(),
-        localOnly: true,
+        body: JSON.stringify(payload),
       })
-      const next = [localServer, ...readJson<DevServer[]>(LOCAL_SERVERS_KEY, [])]
-      writeJson(LOCAL_SERVERS_KEY, next)
-      setServers((prev) => [localServer, ...prev])
-      setSelectedServerId(localServer.id)
-      setActiveTab('chat')
-      setStatus(`로컬 서버로 만들었습니다. ${error instanceof Error ? error.message : ''}`.trim())
-    }
-    setServerName('')
-    setServerDescription('')
-  }
-
-  async function loadMessages(serverId: number, silent = false) {
-    if (!silent) setChatLoading(true)
-    const localMessages = readJson<ChatMessage[]>(LOCAL_MESSAGES_KEY, [])
-      .map(normalizeMessage)
-      .filter((message) => message.serverId === serverId)
-    try {
-      const remoteMessages = (await apiJson<ChatMessage[]>(`/api/dev-hub/servers/${serverId}/messages`)).map(normalizeMessage)
-      const merged = [...remoteMessages, ...localMessages.filter((local) => !remoteMessages.some((remote) => remote.id === local.id))]
-        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
-      setMessages(merged)
-      if (!silent) setStatus('채팅을 불러왔습니다.')
-    } catch (error) {
-      setMessages(localMessages)
-      if (!silent) setStatus(`채팅 API 연결 전까지 로컬 메시지를 사용합니다. ${error instanceof Error ? error.message : ''}`.trim())
-    } finally {
-      if (!silent) setChatLoading(false)
-    }
-  }
-
-  async function sendMessage(event: React.FormEvent) {
-    event.preventDefault()
-    if (!selectedServer || !chatText.trim()) return
-    setChatSending(true)
-    const content = chatText.trim()
-    setChatText('')
-    try {
-      const sent = normalizeMessage(await apiJson<ChatMessage>(`/api/dev-hub/servers/${selectedServer.id}/messages`, {
-        method: 'POST',
-        body: JSON.stringify({ content }),
-      }))
-      setMessages((prev) => [...prev, sent])
-      setStatus('메시지를 보냈습니다.')
-    } catch (error) {
-      const localMessage = normalizeMessage({
-        id: nowId(),
-        serverId: selectedServer.id,
-        authorLogin: '나',
-        content,
-        localOnly: true,
-      })
-      const next = [...readJson<ChatMessage[]>(LOCAL_MESSAGES_KEY, []), localMessage]
-      writeJson(LOCAL_MESSAGES_KEY, next)
-      setMessages((prev) => [...prev, localMessage])
-      setStatus(`로컬 메시지로 저장했습니다. ${error instanceof Error ? error.message : ''}`.trim())
-    } finally {
-      setChatSending(false)
-    }
-  }
-
-  async function saveGithubOrg(event: React.FormEvent) {
-    event.preventDefault()
-    if (!selectedServer) return
-    const githubOrg = serverOrgInput.trim()
-    try {
-      const updated = normalizeServer(await apiJson<DevServer>(`/api/dev-hub/servers/${selectedServer.id}/github-org`, {
-        method: 'PATCH',
-        body: JSON.stringify({ githubOrg }),
-      }))
-      setServers((prev) => prev.map((server) => (server.id === updated.id ? updated : server)))
-      setStatus('GitHub Organization 연결 정보를 저장했습니다.')
-    } catch (error) {
-      setServers((prev) => {
-        const next = prev.map((server) => (server.id === selectedServer.id ? { ...server, githubOrg } : server))
-        writeJson(LOCAL_SERVERS_KEY, next.filter((server) => server.localOnly || server.id === selectedServer.id))
+      setServers(prev => {
+        const next = [created, ...prev.filter(server => server.id !== created.id)]
+        writeJson(LOCAL_SERVERS_KEY, next)
         return next
       })
-      setStatus(`로컬에 GitHub Organization을 저장했습니다. ${error instanceof Error ? error.message : ''}`.trim())
+      setSelectedServerId(created.id)
+    } catch {
+      const created: DevServer = {
+        ...payload,
+        id: nowId('server'),
+        ownerLogin: 'sunwoo162',
+        createdAt: new Date().toISOString(),
+        localOnly: true,
+      }
+      setServers(prev => {
+        const next = [created, ...prev]
+        writeJson(LOCAL_SERVERS_KEY, next)
+        return next
+      })
+      setSelectedServerId(created.id)
+    }
+
+    setNewServer({ name: '', description: '', githubOrg: '' })
+    setViewMode('server')
+    setActiveTab('chat')
+    setCreateOpen(false)
+  }
+
+  async function sendMessage(event: FormEvent) {
+    event.preventDefault()
+    if (!selectedServer || !messageText.trim()) return
+
+    const payload = { content: messageText.trim() }
+    setMessageText('')
+
+    try {
+      const created = await apiJson<ChatMessage>(`/api/dev-hub/servers/${selectedServer.id}/messages`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      })
+      setMessages(prev => [...prev, created])
+    } catch {
+      const created: ChatMessage = {
+        id: nowId('message'),
+        serverId: selectedServer.id,
+        authorLogin: 'sunwoo162',
+        content: payload.content,
+        createdAt: new Date().toISOString(),
+        localOnly: true,
+      }
+      setMessages(prev => {
+        const next = [...prev, created]
+        writeJson(LOCAL_MESSAGES_KEY, next)
+        return next
+      })
     }
   }
 
-  function connectRepo(event: React.FormEvent) {
+  function sendDirectMessage(event: FormEvent) {
     event.preventDefault()
-    if (!selectedServer) return
-    const fullName = repoInput.trim().replace(/^https:\/\/github\.com\//, '').replace(/\/$/, '')
-    if (!/^[^/\s]+\/[^/\s]+$/.test(fullName)) {
-      setStatus('레포는 owner/repo 형식으로 입력하세요.')
-      return
+    if (!dmText.trim()) return
+    const created: ChatMessage = {
+      id: nowId('dm'),
+      serverId: selectedDm.id,
+      authorLogin: 'sunwoo162',
+      content: dmText.trim(),
+      createdAt: new Date().toISOString(),
+      localOnly: true,
     }
+    setDmText('')
+    setDmMessages(prev => {
+      const next = { ...prev, [selectedDm.id]: [...(prev[selectedDm.id] || []), created] }
+      writeJson(LOCAL_DM_KEY, next)
+      return next
+    })
+  }
+
+  async function connectRepo(event: FormEvent) {
+    event.preventDefault()
+    if (!selectedServer || !repoInput.trim()) return
+    const fullName = repoInput.trim().replace(/^https:\/\/github.com\//, '').replace(/\.git$/, '')
     const watch: Watch = {
-      id: nowId(),
+      id: nowId('watch'),
       serverId: selectedServer.id,
       fullName,
       actionsUrl: repoActionsUrl(fullName),
       enabled: true,
     }
-    setWatches((prev) => [watch, ...prev.filter((item) => item.fullName !== fullName || item.serverId !== selectedServer.id)])
-    setSelectedWatchId(watch.id)
+    setWatches(prev => {
+      const next = [watch, ...prev.filter(item => item.fullName !== fullName)]
+      writeJson(WATCHES_KEY, next)
+      return next
+    })
     setRepoInput('')
-    setStatus(`${fullName} 레포를 서버에 연결했습니다.`)
+    setStatus(`${fullName} 저장소를 연결했습니다.`)
   }
 
-  function toggleWatch(watch: Watch) {
-    setWatches((prev) => prev.map((item) => (item.id === watch.id ? { ...item, enabled: !item.enabled } : item)))
+  async function loadRuns(watch: Watch) {
+    setStatus('GitHub Actions 실행 기록을 불러오는 중입니다.')
+    try {
+      const data = await apiJson<Run[]>(`/api/dev-hub/github/runs?repo=${encodeURIComponent(watch.fullName)}`)
+      setRuns(data)
+      setStatus('')
+    } catch (error) {
+      setRuns([])
+      setStatus(error instanceof Error ? error.message : '실행 기록을 불러오지 못했습니다.')
+    }
   }
 
-  function loadRuns(watch: Watch) {
-    setRuns([
-      {
-        id: nowId(),
-        name: `${watch.fullName} build-and-deploy`,
-        status: 'completed',
-        conclusion: 'success',
-        branch: 'main',
-        htmlUrl: watch.actionsUrl,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      },
-    ])
+  function toggleWatch(id: string) {
+    setWatches(prev => {
+      const next = prev.map(watch => (watch.id === id ? { ...watch, enabled: !watch.enabled } : watch))
+      writeJson(WATCHES_KEY, next)
+      return next
+    })
   }
 
-  function createDoc() {
-    if (!selectedServer) return
+  function saveDiscordSettings(event: FormEvent) {
+    event.preventDefault()
+    writeJson(DISCORD_KEY, discord)
+    setStatus('알림 설정을 저장했습니다.')
+  }
+
+  function createDoc(event: FormEvent) {
+    event.preventDefault()
+    if (!selectedServer || !docDraft.title.trim()) return
     const doc: DevDoc = {
-      id: nowId(),
+      id: nowId('doc'),
       serverId: selectedServer.id,
-      title: '새 개발 문서',
-      content: '# 기능 명세서\n\n## API 명세서\n\n## 트러블 슈팅\n',
+      title: docDraft.title.trim(),
+      content: docDraft.content.trim(),
       updatedAt: new Date().toISOString(),
     }
-    setDocs((prev) => [doc, ...prev])
-    setSelectedDocId(doc.id)
-    setStatus('서버 문서를 만들었습니다.')
+    setDocs(prev => {
+      const next = [doc, ...prev]
+      writeJson(DOCS_KEY, next)
+      return next
+    })
+    setDocDraft({ title: '', content: '' })
   }
 
-  function saveDoc() {
-    if (!selectedServer) return
-    const title = docTitle.trim() || '제목 없는 문서'
-    if (selectedDocId) {
-      setDocs((prev) => prev.map((doc) => (
-        doc.id === selectedDocId ? { ...doc, title, content: docContent, updatedAt: new Date().toISOString() } : doc
-      )))
-    } else {
-      const doc: DevDoc = {
-        id: nowId(),
-        serverId: selectedServer.id,
-        title,
-        content: docContent,
-        updatedAt: new Date().toISOString(),
-      }
-      setDocs((prev) => [doc, ...prev])
-      setSelectedDocId(doc.id)
-    }
-    setStatus('개발 문서를 저장했습니다.')
+  function openServer(serverId: string) {
+    setSelectedServerId(serverId)
+    setViewMode('server')
+    setActiveTab('chat')
   }
 
-  function saveDiscordSettings() {
-    writeJson(DISCORD_KEY, discord)
-    setStatus(discord.enabled ? 'Discord 알림 설정을 저장했습니다.' : 'Discord 알림을 껐습니다.')
-  }
+  const messageList = viewMode === 'dm' ? selectedDmMessages : serverMessages
 
   return (
-    <div className="app-shell">
-      <header className="topbar">
-        <a className="back-link" href="/">← 놀이터</a>
-        <div className="title-block">
-          <h1>개발 서버</h1>
-          <p>
-            {selectedServer
-              ? `${selectedServer.name} 안에서 채팅, GitHub 작업, 개발 문서를 처리합니다.`
-              : '서버를 만들고 그 안에서 채팅과 작업을 진행하세요.'}
-          </p>
-        </div>
-        {selectedServer ? (
-          <button className="ghost-btn" type="button" onClick={() => setSelectedServerId(null)}>
-            서버 목록
+    <div className="discord-shell">
+      <aside className="server-rail">
+        <a className="rail-home" href="/" title="놀이터로 이동">
+          ←
+        </a>
+        <button className={`rail-button ${viewMode === 'dm' ? 'active' : ''}`} onClick={() => setViewMode('dm')} title="다이렉트 메시지">
+          💬
+        </button>
+        <button className="rail-button rail-add" onClick={() => setCreateOpen(true)} title="서버 만들기">
+          +
+        </button>
+        <div className="rail-divider" />
+        {servers.map(server => (
+          <button
+            key={server.id}
+            className={`rail-button ${viewMode === 'server' && selectedServerId === server.id ? 'active' : ''}`}
+            onClick={() => openServer(server.id)}
+            title={server.name}
+          >
+            {initials(server.name)}
           </button>
-        ) : (
-          <a className="ghost-btn" href="https://github.com" target="_blank" rel="noreferrer">
-            GitHub Actions
-          </a>
-        )}
-      </header>
+        ))}
+      </aside>
 
-      <main className="main">
-        <section className="status-bar">{status}</section>
-
-        {!selectedServer ? (
-          <section className="server-home">
-            <form className="create-server-card" onSubmit={createServer}>
-              <span className="eyebrow">새 서버</span>
-              <h2>작업 서버 만들기</h2>
-              <p>디스코드 서버처럼 프로젝트별 공간을 만들고, 그 안에서 채팅부터 시작합니다.</p>
-              <input value={serverName} onChange={(event) => setServerName(event.target.value)} placeholder="서버 이름" />
-              <input value={serverDescription} onChange={(event) => setServerDescription(event.target.value)} placeholder="서버 설명" />
-              <button className="primary-btn" type="submit">서버 만들기</button>
-            </form>
-
-            <div className="server-list-panel">
-              <div className="panel-head">
-                <h2>내 서버</h2>
-                <span>{servers.length}개</span>
-              </div>
-              <div className="server-card-grid">
-                {servers.map((server) => (
-                  <button
-                    className="server-card"
-                    type="button"
-                    key={server.id}
-                    onClick={() => {
-                      setSelectedServerId(server.id)
-                      setActiveTab('chat')
-                    }}
-                  >
-                    <strong>{server.name}</strong>
-                    <span>{server.description || '서버 설명 없음'}</span>
-                    <em>{server.githubOrg ? `GitHub Org: ${server.githubOrg}` : 'GitHub Organization 미연동'}</em>
-                  </button>
-                ))}
-                {servers.length === 0 && (
-                  <div className="empty-state">
-                    <strong>아직 서버가 없습니다.</strong>
-                    <span>서버를 만들면 채팅방과 작업 탭이 함께 생성됩니다.</span>
-                  </div>
-                )}
-              </div>
+      <aside className="discord-sidebar">
+        {viewMode === 'dm' ? (
+          <>
+            <div className="sidebar-search">
+              <input value={dmSearch} onChange={event => setDmSearch(event.target.value)} placeholder="대화 찾기 또는 시작하기" />
             </div>
-          </section>
+            <nav className="dm-nav">
+              <button>👥 친구</button>
+              <button>⚙️ GitHub Actions</button>
+              <button>📚 개발 문서</button>
+              <button>🔔 알림</button>
+            </nav>
+            <div className="sidebar-section">
+              <div className="section-title">
+                <span>다이렉트 메시지</span>
+                <button onClick={() => setCreateOpen(true)}>+</button>
+              </div>
+              {filteredDms.map(room => (
+                <button
+                  key={room.id}
+                  className={`dm-row ${selectedDmId === room.id ? 'active' : ''}`}
+                  onClick={() => {
+                    setSelectedDmId(room.id)
+                    setViewMode('dm')
+                  }}
+                >
+                  <span className={`avatar sm ${room.status}`}>{room.avatar}</span>
+                  <span>
+                    <strong>{room.name}</strong>
+                    <small>{room.subtitle}</small>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </>
         ) : (
-          <section className="server-layout">
-            <aside className="server-sidebar">
-              <div className="server-profile">
-                <span className="server-mark">#</span>
-                <h2>{selectedServer.name}</h2>
-                <p>{selectedServer.description || '서버 설명이 없습니다.'}</p>
-                <small>{selectedServer.githubOrg ? `GitHub Organization: ${selectedServer.githubOrg}` : 'GitHub Organization 미연동'}</small>
-              </div>
-              <div className="server-switcher">
-                {servers.map((server) => (
-                  <button
-                    className={server.id === selectedServer.id ? 'server-switch active' : 'server-switch'}
-                    type="button"
-                    key={server.id}
-                    onClick={() => {
-                      setSelectedServerId(server.id)
-                      setActiveTab('chat')
-                    }}
-                  >
-                    {server.name}
-                  </button>
-                ))}
-              </div>
-              <button className="ghost-btn full" type="button" onClick={() => setSelectedServerId(null)}>
-                + 서버 추가/선택
+          <>
+            <div className="server-title">
+              <button>{selectedServer?.name || '서버 선택'}⌄</button>
+              <button onClick={() => setCreateOpen(true)} title="서버 만들기">
+                +
               </button>
-            </aside>
+            </div>
+            <div className="sidebar-section">
+              <button className="event-row">📅 이벤트</button>
+            </div>
+            <div className="sidebar-section">
+              <div className="section-title">채팅 채널</div>
+              {(['chat', 'work', 'docs', 'alerts'] as RoomTab[]).map(tab => (
+                <button key={tab} className={`channel-row ${activeTab === tab ? 'active' : ''}`} onClick={() => setActiveTab(tab)}>
+                  # {tabLabel(tab)}
+                </button>
+              ))}
+            </div>
+            <div className="sidebar-section">
+              <div className="section-title">음성 채널</div>
+              <button className="channel-row">🔊 일반</button>
+            </div>
+          </>
+        )}
+      </aside>
 
-            <section className="server-room">
-              <div className="room-header">
-                <div>
-                  <span className="eyebrow">서버 작업 공간</span>
-                  <h2>{selectedServer.name}</h2>
-                </div>
-                <div className="room-tabs">
-                  {tabs.map((tab) => (
-                    <button
-                      className={activeTab === tab.id ? 'room-tab active' : 'room-tab'}
-                      type="button"
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id)}
-                    >
-                      {tab.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
+      <main className="discord-main">
+        <header className="channel-header">
+          <div>
+            <strong>{viewMode === 'dm' ? selectedDm.name : `# ${tabLabel(activeTab)}`}</strong>
+            <span>{viewMode === 'dm' ? '다이렉트 메시지' : selectedServer?.description || selectedServer?.githubOrg || '서버 작업 공간'}</span>
+          </div>
+          <div className="header-actions">
+            <button>☎</button>
+            <button>📌</button>
+            <button>👥</button>
+            <input placeholder={`${viewMode === 'dm' ? selectedDm.name : selectedServer?.name || '서버'} 검색`} />
+          </div>
+        </header>
 
-              {activeTab === 'chat' && (
-                <div className="chat-room">
-                  <div className="chat-list">
-                    {chatLoading && <div className="chat-system">메시지를 불러오는 중...</div>}
-                    {messages.map((message) => (
-                      <div className="chat-message" key={message.id}>
-                        <div className="chat-meta">
-                          <strong>{message.authorLogin}</strong>
-                          <span>{formatDateTime(message.createdAt)}{message.localOnly ? ' · 로컬' : ''}</span>
-                        </div>
-                        <p>{message.content}</p>
-                      </div>
-                    ))}
-                    {!chatLoading && messages.length === 0 && (
-                      <div className="chat-system">아직 메시지가 없습니다. 이 서버의 첫 메시지를 남기세요.</div>
-                    )}
-                    <div ref={chatEndRef} />
+        {viewMode === 'dm' || activeTab === 'chat' ? (
+          <>
+            <div className="message-feed" ref={feedRef}>
+              {messageList.map(message => (
+                <article key={message.id} className="message-row">
+                  <span className="avatar">{initials(message.authorLogin)}</span>
+                  <div>
+                    <div className="message-meta">
+                      <strong>{message.authorLogin}</strong>
+                      <span>{formatDateTime(message.createdAt)}</span>
+                    </div>
+                    <p>{message.content}</p>
                   </div>
-                  <form className="chat-form" onSubmit={sendMessage}>
-                    <input value={chatText} onChange={(event) => setChatText(event.target.value)} placeholder={`${selectedServer.name}에 메시지 보내기`} />
-                    <button className="primary-btn" type="submit" disabled={chatSending}>
-                      {chatSending ? '전송 중' : '전송'}
-                    </button>
+                </article>
+              ))}
+              {messageList.length === 0 && (
+                <div className="empty-chat">
+                  <h2>{viewMode === 'dm' ? selectedDm.name : selectedServer?.name}</h2>
+                  <p>여기에서 대화를 시작하세요.</p>
+                </div>
+              )}
+            </div>
+            <form className="composer" onSubmit={viewMode === 'dm' ? sendDirectMessage : sendMessage}>
+              <button type="button">＋</button>
+              <input
+                value={viewMode === 'dm' ? dmText : messageText}
+                onChange={event => (viewMode === 'dm' ? setDmText(event.target.value) : setMessageText(event.target.value))}
+                placeholder={`${viewMode === 'dm' ? selectedDm.name : `#${tabLabel(activeTab)}`}에 메시지 보내기`}
+              />
+              <button type="submit">전송</button>
+            </form>
+          </>
+        ) : (
+          <div className="workspace-panel">
+            {status && <p className="status-banner">{status}</p>}
+            {activeTab === 'work' && (
+              <>
+                <section className="panel-card">
+                  <h2>GitHub 작업 연결</h2>
+                  <form className="inline-form" onSubmit={connectRepo}>
+                    <input value={repoInput} onChange={event => setRepoInput(event.target.value)} placeholder="owner/repo" />
+                    <button type="submit">연결</button>
                   </form>
-                </div>
-              )}
-
-              {activeTab === 'work' && (
-                <div className="work-grid">
-                  <div className="room-card">
-                    <div className="panel-head">
-                      <h3>GitHub Organization</h3>
-                      <span>{selectedServer.githubOrg ? '연동됨' : '미연동'}</span>
-                    </div>
-                    <form className="connect-form" onSubmit={saveGithubOrg}>
-                      <input value={serverOrgInput} onChange={(event) => setServerOrgInput(event.target.value)} placeholder="Organization 이름" />
-                      <button type="submit">저장</button>
-                    </form>
-                    <p className="hint">Organization 자동 생성은 GitHub 앱 권한이 추가로 필요합니다. 지금은 서버별 연결 정보를 저장합니다.</p>
-                  </div>
-
-                  <div className="room-card">
-                    <div className="panel-head">
-                      <h3>레포 연결</h3>
-                      <span>{serverWatches.length}개</span>
-                    </div>
-                    <form className="connect-form" onSubmit={connectRepo}>
-                      <input value={repoInput} onChange={(event) => setRepoInput(event.target.value)} placeholder="owner/repo" />
-                      <button type="submit">연결</button>
-                    </form>
-                    <div className="list">
-                      {serverWatches.map((watch) => (
-                        <button
-                          className={watch.id === selectedWatch?.id ? 'list-item active' : 'list-item'}
-                          type="button"
-                          key={watch.id}
-                          onClick={() => setSelectedWatchId(watch.id)}
-                        >
-                          <strong>{watch.fullName}</strong>
-                          <span>{watch.enabled ? '알림 ON' : '알림 OFF'}</span>
-                        </button>
-                      ))}
-                      {serverWatches.length === 0 && <div className="chat-system">연결된 레포가 없습니다.</div>}
-                    </div>
-                  </div>
-
-                  <div className="room-card wide">
-                    <div className="panel-head">
-                      <h3>GitHub Actions</h3>
-                      {selectedWatch && <a href={selectedWatch.actionsUrl} target="_blank" rel="noreferrer">Actions 열기</a>}
-                    </div>
-                    {selectedWatch && (
-                      <button className="ghost-btn" type="button" onClick={() => toggleWatch(selectedWatch)}>
-                        {selectedWatch.enabled ? '알림 끄기' : '알림 켜기'}
-                      </button>
-                    )}
-                    <div className="run-list">
-                      {runs.map((run) => (
-                        <div className={run.conclusion === 'failure' ? 'run-card fail' : 'run-card'} key={run.id}>
-                          <strong>{run.name}</strong>
-                          <span>{run.status} · {run.conclusion || '진행 중'} · {run.branch}</span>
-                          <a href={run.htmlUrl} target="_blank" rel="noreferrer">보기</a>
-                        </div>
-                      ))}
-                      {runs.length === 0 && <div className="chat-system">레포를 선택하면 작업 상태가 표시됩니다.</div>}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {activeTab === 'docs' && (
-                <div className="docs-grid">
-                  <div className="room-card">
-                    <div className="panel-head">
-                      <h3>개발 문서</h3>
-                      <button type="button" onClick={createDoc}>새 문서</button>
-                    </div>
-                    <div className="list">
-                      {serverDocs.map((doc) => (
-                        <button
-                          className={doc.id === selectedDocId ? 'list-item active' : 'list-item'}
-                          type="button"
-                          key={doc.id}
-                          onClick={() => setSelectedDocId(doc.id)}
-                        >
-                          <strong>{doc.title}</strong>
-                          <span>{formatDateTime(doc.updatedAt)}</span>
-                        </button>
-                      ))}
-                      {serverDocs.length === 0 && <div className="chat-system">서버에 저장된 문서가 없습니다.</div>}
-                    </div>
-                  </div>
-
-                  <div className="room-card doc-editor">
-                    <input value={docTitle} onChange={(event) => setDocTitle(event.target.value)} placeholder="문서 제목" />
-                    <textarea value={docContent} onChange={(event) => setDocContent(event.target.value)} placeholder="기능 명세서, API 명세서, 트러블 슈팅을 적어보세요." />
-                    <button className="primary-btn" type="button" onClick={saveDoc}>문서 저장</button>
-                  </div>
-                </div>
-              )}
-
-              {activeTab === 'alerts' && (
-                <div className="alert-grid">
-                  <div className="room-card">
-                    <div className="panel-head">
-                      <h3>Discord 알림</h3>
-                      <span>{discord.enabled ? 'ON' : 'OFF'}</span>
-                    </div>
-                    <label className="toggle-row">
-                      <input type="checkbox" checked={discord.enabled} onChange={(event) => setDiscord({ ...discord, enabled: event.target.checked })} />
-                      GitHub Action 완료 알림 받기
-                    </label>
-                    <label className="toggle-row">
-                      <input type="checkbox" checked={discord.success} onChange={(event) => setDiscord({ ...discord, success: event.target.checked })} />
-                      성공 알림
-                    </label>
-                    <label className="toggle-row">
-                      <input type="checkbox" checked={discord.failure} onChange={(event) => setDiscord({ ...discord, failure: event.target.checked })} />
-                      실패 알림
-                    </label>
-                    <input value={discord.webhookUrl} onChange={(event) => setDiscord({ ...discord, webhookUrl: event.target.value })} placeholder="Discord Webhook URL" />
-                    <button className="primary-btn" type="button" onClick={saveDiscordSettings}>알림 설정 저장</button>
-                  </div>
-                  <div className="room-card">
-                    <h3>알림 기준</h3>
-                    <p className="hint">서버별 레포 알림을 켜면 Action 성공/실패를 구분해서 Discord로 보낼 수 있게 구성했습니다.</p>
-                  </div>
-                </div>
-              )}
-            </section>
-          </section>
+                </section>
+                <section className="panel-grid">
+                  {serverWatches.map(watch => (
+                    <article className="panel-card" key={watch.id}>
+                      <div className="card-row">
+                        <h3>{watch.fullName}</h3>
+                        <button onClick={() => toggleWatch(watch.id)}>{watch.enabled ? '알림 ON' : '알림 OFF'}</button>
+                      </div>
+                      <div className="button-row">
+                        <button onClick={() => loadRuns(watch)}>실행 기록</button>
+                        <a href={watch.actionsUrl} target="_blank" rel="noreferrer">
+                          Actions 열기
+                        </a>
+                      </div>
+                    </article>
+                  ))}
+                </section>
+                {runs.length > 0 && (
+                  <section className="panel-card">
+                    <h2>최근 실행</h2>
+                    {runs.map(run => (
+                      <a key={run.id} className="run-row" href={run.htmlUrl} target="_blank" rel="noreferrer">
+                        <span>{run.name}</span>
+                        <strong>{run.conclusion || run.status}</strong>
+                      </a>
+                    ))}
+                  </section>
+                )}
+              </>
+            )}
+            {activeTab === 'docs' && (
+              <>
+                <section className="panel-card">
+                  <h2>개발 문서 작성</h2>
+                  <form className="doc-form" onSubmit={createDoc}>
+                    <input value={docDraft.title} onChange={event => setDocDraft({ ...docDraft, title: event.target.value })} placeholder="문서 제목" />
+                    <textarea
+                      value={docDraft.content}
+                      onChange={event => setDocDraft({ ...docDraft, content: event.target.value })}
+                      placeholder="기능명세서, API 명세서, 트러블슈팅 내용을 적으세요"
+                    />
+                    <button type="submit">문서 추가</button>
+                  </form>
+                </section>
+                <section className="panel-grid">
+                  {serverDocs.map(doc => (
+                    <article className="panel-card" key={doc.id}>
+                      <h3>{doc.title}</h3>
+                      <p>{doc.content || '내용 없음'}</p>
+                      <small>{formatDateTime(doc.updatedAt)}</small>
+                    </article>
+                  ))}
+                </section>
+              </>
+            )}
+            {activeTab === 'alerts' && (
+              <section className="panel-card">
+                <h2>Discord 알림 설정</h2>
+                <form className="doc-form" onSubmit={saveDiscordSettings}>
+                  <input
+                    value={discord.webhookUrl}
+                    onChange={event => setDiscord({ ...discord, webhookUrl: event.target.value })}
+                    placeholder="Discord Webhook URL"
+                  />
+                  <label>
+                    <input type="checkbox" checked={discord.enabled} onChange={event => setDiscord({ ...discord, enabled: event.target.checked })} /> 알림 사용
+                  </label>
+                  <label>
+                    <input type="checkbox" checked={discord.success} onChange={event => setDiscord({ ...discord, success: event.target.checked })} /> 성공 알림
+                  </label>
+                  <label>
+                    <input type="checkbox" checked={discord.failure} onChange={event => setDiscord({ ...discord, failure: event.target.checked })} /> 실패 알림
+                  </label>
+                  <button type="submit">저장</button>
+                </form>
+              </section>
+            )}
+          </div>
         )}
       </main>
+
+      <aside className="member-pane">
+        <h3>{viewMode === 'dm' ? '멤버 - 3' : `온라인 - ${members.length}`}</h3>
+        {(viewMode === 'dm' ? ['sunwoo162', 'GitHub Actions', selectedDm.name] : members).map((name, index) => (
+          <div className="member-row" key={name}>
+            <span className={`avatar sm ${index % 3 === 0 ? 'online' : index % 3 === 1 ? 'idle' : 'offline'}`}>{initials(name)}</span>
+            <span>{name}</span>
+          </div>
+        ))}
+      </aside>
+
+      {createOpen && (
+        <div className="modal-backdrop" onMouseDown={() => setCreateOpen(false)}>
+          <form className="create-modal" onSubmit={createServer} onMouseDown={event => event.stopPropagation()}>
+            <h2>서버 만들기</h2>
+            <p>서버 이름을 기준으로 작업 공간을 만들고, 이후 GitHub Organization 연동을 붙일 수 있습니다.</p>
+            <label>
+              서버 이름
+              <input value={newServer.name} onChange={event => setNewServer({ ...newServer, name: event.target.value })} placeholder="예: xs" autoFocus />
+            </label>
+            <label>
+              설명
+              <input value={newServer.description} onChange={event => setNewServer({ ...newServer, description: event.target.value })} placeholder="서버 목적" />
+            </label>
+            <label>
+              GitHub Organization 이름
+              <input
+                value={newServer.githubOrg}
+                onChange={event => setNewServer({ ...newServer, githubOrg: event.target.value })}
+                placeholder="비워두면 서버 이름으로 생성"
+              />
+            </label>
+            <div className="modal-actions">
+              <button type="button" onClick={() => setCreateOpen(false)}>
+                취소
+              </button>
+              <button type="submit">만들기</button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   )
 }
 
-createRoot(document.getElementById('root')!).render(<App />)
+createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+)
