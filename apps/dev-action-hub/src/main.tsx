@@ -187,6 +187,9 @@ function App() {
   const [status, setStatus] = useState('')
   const [friends, setFriends] = useState<FriendUser[]>([])
   const [friendsLoading, setFriendsLoading] = useState(false)
+  const [friendSearch, setFriendSearch] = useState('')
+  const [friendSearchResults, setFriendSearchResults] = useState<FriendUser[]>([])
+  const [friendSearching, setFriendSearching] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [newServer, setNewServer] = useState({ name: '', description: '', githubOrg: '' })
   const [repoInput, setRepoInput] = useState('')
@@ -419,6 +422,40 @@ function App() {
     void loadFriends()
   }
 
+  function friendStatusLabel(status: string | null) {
+    if (!status) return '친구 추가'
+    if (status === 'PENDING_SENT') return '요청 중'
+    if (status === 'PENDING_RECEIVED') return '요청 받음'
+    if (status === 'ACCEPTED') return '친구'
+    return '친구 추가'
+  }
+
+  async function searchFriends(event: FormEvent) {
+    event.preventDefault()
+    const query = friendSearch.trim()
+    if (!query) return
+    setFriendSearching(true)
+    try {
+      setFriendSearchResults(await apiJson<FriendUser[]>(`/api/friends/search?q=${encodeURIComponent(query)}`))
+    } catch {
+      setFriendSearchResults([])
+    } finally {
+      setFriendSearching(false)
+    }
+  }
+
+  async function sendFriendRequest(githubId: string) {
+    try {
+      await apiJson(`/api/friends/request/${githubId}`, { method: 'POST' })
+      setFriendSearchResults(prev =>
+        prev.map(user => (user.githubId === githubId ? { ...user, friendStatus: 'PENDING_SENT' } : user)),
+      )
+      setStatus('친구 요청을 보냈습니다.')
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : '친구 요청을 보내지 못했습니다.')
+    }
+  }
+
   return (
     <div className="discord-shell">
       <aside className="server-rail">
@@ -535,10 +572,42 @@ function App() {
               <div className="card-row">
                 <div>
                   <h2>친구</h2>
-                  <p>놀이터에서 추가한 친구를 개발 액션 허브에서도 바로 확인합니다.</p>
+                  <p>GitHub 아이디로 친구를 찾고 개발 액션 허브에서 바로 추가합니다.</p>
                 </div>
                 <button onClick={loadFriends}>새로고침</button>
               </div>
+            </section>
+            {status && <p className="status-banner">{status}</p>}
+            <section className="panel-card friends-card">
+              <h2>친구 추가</h2>
+              <form className="inline-form" onSubmit={searchFriends}>
+                <input value={friendSearch} onChange={event => setFriendSearch(event.target.value)} placeholder="GitHub 아이디로 검색" />
+                <button type="submit" disabled={friendSearching}>
+                  {friendSearching ? '검색 중' : '검색'}
+                </button>
+              </form>
+              {friendSearchResults.length > 0 && (
+                <div className="friend-search-results">
+                  {friendSearchResults.map(user => {
+                    const canRequest = !user.friendStatus
+                    return (
+                      <article className="friend-card" key={user.githubId}>
+                        <img src={user.avatarUrl} alt={user.login} />
+                        <div>
+                          <strong>{user.name || user.login}</strong>
+                          <span>@{user.login}</span>
+                        </div>
+                        <button onClick={() => canRequest && sendFriendRequest(user.githubId)} disabled={!canRequest}>
+                          {friendStatusLabel(user.friendStatus)}
+                        </button>
+                      </article>
+                    )
+                  })}
+                </div>
+              )}
+              {friendSearchResults.length === 0 && friendSearch.trim() && !friendSearching && (
+                <p className="friend-empty search-empty">검색 결과가 없습니다.</p>
+              )}
             </section>
             {friendsLoading ? (
               <p className="friend-empty">친구를 불러오는 중입니다.</p>

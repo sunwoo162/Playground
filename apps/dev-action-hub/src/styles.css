@@ -524,6 +524,12 @@ a {
   gap: 14px;
 }
 
+.friend-search-results {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
 .friend-card {
   display: flex;
   align-items: center;
@@ -533,6 +539,11 @@ a {
   border: 1px solid #424650;
   border-radius: 12px;
   background: #2b2d31;
+}
+
+.friend-card > div {
+  min-width: 0;
+  flex: 1;
 }
 
 .friend-card img {
@@ -562,12 +573,32 @@ a {
   font-weight: 700;
 }
 
+.friend-card button {
+  flex: 0 0 auto;
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: 10px;
+  background: #5865f2;
+  color: white;
+  font-weight: 900;
+}
+
+.friend-card button:disabled {
+  cursor: default;
+  background: #404249;
+  color: #b5bac1;
+}
+
 .friend-empty {
   margin: 0;
   padding: 18px;
   border: 1px dashed #424650;
   border-radius: 12px;
   background: #2b2d31;
+}
+
+.friend-empty.search-empty {
+  margin-top: 14px;
 }
 
 .member-pane {
