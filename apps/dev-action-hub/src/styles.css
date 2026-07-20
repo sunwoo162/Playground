@@ -34,7 +34,7 @@ a {
 
 .discord-shell {
   display: grid;
-  grid-template-columns: 84px 280px minmax(0, 1fr) 300px;
+  grid-template-columns: 84px 280px minmax(0, 1fr);
   height: 100vh;
   overflow: hidden;
   background: #313338;
@@ -365,6 +365,32 @@ a {
   color: #f2f3f5;
 }
 
+.empty-chat.empty-center {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  height: 100%;
+  margin: 0;
+  text-align: center;
+}
+
+.empty-chat.empty-center button {
+  min-height: 42px;
+  padding: 0 14px;
+  border-radius: 10px;
+  background: #5865f2;
+  color: white;
+  font-weight: 900;
+}
+
+.sidebar-empty {
+  margin: 10px 0 0;
+  color: #949ba4;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
 .composer {
   display: grid;
   grid-template-columns: 44px minmax(0, 1fr) 72px;
@@ -601,29 +627,6 @@ a {
   margin-top: 14px;
 }
 
-.member-pane {
-  overflow-y: auto;
-  padding: 22px 16px;
-  background: #2b2d31;
-  border-left: 1px solid #26272d;
-}
-
-.member-pane h3 {
-  margin: 0 0 16px;
-  color: #949ba4;
-  font-size: 14px;
-  font-weight: 900;
-}
-
-.member-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 12px;
-  color: #b5bac1;
-  font-weight: 800;
-}
-
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -678,10 +681,6 @@ a {
 @media (max-width: 1120px) {
   .discord-shell {
     grid-template-columns: 76px 260px minmax(0, 1fr);
-  }
-
-  .member-pane {
-    display: none;
   }
 
   .header-actions input {

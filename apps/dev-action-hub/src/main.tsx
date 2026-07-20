@@ -1,4 +1,4 @@
-import React, { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
+import React, { FormEvent, useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
 
@@ -84,24 +84,7 @@ type FriendUser = {
   friendStatus: string | null
 }
 
-const directRooms: DirectRoom[] = [
-  { id: 'leadership', name: '리더십 향상을 위한 끄적 방', subtitle: '멤버 3명', avatar: '리', status: 'online' },
-  { id: 'review', name: '코드 리뷰 메모', subtitle: '작업 메모', avatar: '리', status: 'idle' },
-  { id: 'deploy', name: '배포 확인', subtitle: 'GitHub Actions', avatar: '깃', status: 'online' },
-  { id: 'docs', name: '문서 정리', subtitle: '기능/API/트러블슈팅', avatar: '문', status: 'offline' },
-]
-
-const defaultDmMessages: Record<string, ChatMessage[]> = {
-  leadership: [
-    {
-      id: 'dm-1',
-      serverId: 'leadership',
-      authorLogin: 'sunwoo162',
-      content: '작업 서버를 만들면 그 안에서 채팅하고 깃 액션을 확인하는 식으로 정리합니다.',
-      createdAt: new Date().toISOString(),
-    },
-  ],
-}
+const defaultDmMessages: Record<string, ChatMessage[]> = {}
 
 function readJson<T>(key: string, fallback: T): T {
   try {
@@ -172,7 +155,7 @@ function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [messageText, setMessageText] = useState('')
   const [dmSearch, setDmSearch] = useState('')
-  const [selectedDmId, setSelectedDmId] = useState(directRooms[0].id)
+  const [selectedDmId, setSelectedDmId] = useState('')
   const [dmSection, setDmSection] = useState<DmSection>('messages')
   const [dmMessages, setDmMessages] = useState<Record<string, ChatMessage[]>>(() =>
     readJson(LOCAL_DM_KEY, defaultDmMessages),
@@ -200,18 +183,16 @@ function App() {
   const serverMessages = messages.filter(message => message.serverId === selectedServerId)
   const serverWatches = watches.filter(watch => watch.serverId === selectedServerId)
   const serverDocs = docs.filter(doc => doc.serverId === selectedServerId)
-  const selectedDm = directRooms.find(room => room.id === selectedDmId) || directRooms[0]
-  const selectedDmMessages = dmMessages[selectedDm.id] || []
+  const directRooms: DirectRoom[] = friends.map(friend => ({
+    id: friend.githubId,
+    name: friend.name || friend.login,
+    subtitle: `@${friend.login}`,
+    avatar: initials(friend.name || friend.login),
+    status: 'online',
+  }))
+  const selectedDm = directRooms.find(room => room.id === selectedDmId) || directRooms[0] || null
+  const selectedDmMessages = selectedDm ? dmMessages[selectedDm.id] || [] : []
   const filteredDms = directRooms.filter(room => room.name.includes(dmSearch) || room.subtitle.includes(dmSearch))
-
-  const members = useMemo(() => {
-    const names = new Set<string>()
-    if (selectedServer?.ownerLogin) names.add(selectedServer.ownerLogin)
-    serverMessages.forEach(message => names.add(message.authorLogin))
-    names.add('GitHub Actions')
-    names.add('Discord Bot')
-    return Array.from(names)
-  }, [selectedServer, serverMessages])
 
   useEffect(() => {
     apiJson<DevServer[]>('/api/dev-hub/servers')
@@ -228,6 +209,10 @@ function App() {
   }, [])
 
   useEffect(() => {
+    void loadFriends()
+  }, [])
+
+  useEffect(() => {
     if (!selectedServerId) return
     apiJson<ChatMessage[]>(`/api/dev-hub/servers/${selectedServerId}/messages`)
       .then(setMessages)
@@ -237,6 +222,11 @@ function App() {
   useEffect(() => {
     feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight })
   }, [serverMessages.length, selectedDmMessages.length, viewMode])
+
+  useEffect(() => {
+    if (viewMode !== 'dm' || selectedDmId || friends.length === 0) return
+    setSelectedDmId(friends[0].githubId)
+  }, [friends, selectedDmId, viewMode])
 
   async function createServer(event: FormEvent) {
     event.preventDefault()
@@ -315,7 +305,7 @@ function App() {
 
   function sendDirectMessage(event: FormEvent) {
     event.preventDefault()
-    if (!dmText.trim()) return
+    if (!selectedDm || !dmText.trim()) return
     const created: ChatMessage = {
       id: nowId('dm'),
       serverId: selectedDm.id,
@@ -517,6 +507,7 @@ function App() {
                   </span>
                 </button>
               ))}
+              {filteredDms.length === 0 && <p className="sidebar-empty">친구를 추가하면 DM을 보낼 수 있습니다.</p>}
             </div>
           </>
         ) : (
@@ -549,12 +540,12 @@ function App() {
       <main className="discord-main">
         <header className="channel-header">
           <div>
-            <strong>{viewMode === 'dm' ? selectedDm.name : `# ${tabLabel(activeTab)}`}</strong>
+            <strong>{viewMode === 'dm' ? selectedDm?.name || '다이렉트 메시지' : `# ${tabLabel(activeTab)}`}</strong>
             <span>
               {viewingFriends
                 ? `${friends.length}명의 친구`
                 : viewMode === 'dm'
-                  ? '다이렉트 메시지'
+                  ? selectedDm?.subtitle || '친구를 선택하세요'
                   : selectedServer?.description || selectedServer?.githubOrg || '서버 작업 공간'}
             </span>
           </div>
@@ -562,7 +553,7 @@ function App() {
             <button>☎</button>
             <button>📌</button>
             <button onClick={openFriends}>👥</button>
-            <input placeholder={`${viewMode === 'dm' ? selectedDm.name : selectedServer?.name || '서버'} 검색`} />
+            <input placeholder={`${viewMode === 'dm' ? selectedDm?.name || 'DM' : selectedServer?.name || '서버'} 검색`} />
           </div>
         </header>
 
@@ -628,6 +619,7 @@ function App() {
             )}
           </div>
         ) : viewMode === 'dm' || activeTab === 'chat' ? (
+          viewMode !== 'dm' || selectedDm ? (
           <>
             <div className="message-feed" ref={feedRef}>
               {messageList.map(message => (
@@ -654,11 +646,18 @@ function App() {
               <input
                 value={viewMode === 'dm' ? dmText : messageText}
                 onChange={event => (viewMode === 'dm' ? setDmText(event.target.value) : setMessageText(event.target.value))}
-                placeholder={`${viewMode === 'dm' ? selectedDm.name : `#${tabLabel(activeTab)}`}에 메시지 보내기`}
+                placeholder={`${viewMode === 'dm' ? selectedDm?.name : `#${tabLabel(activeTab)}`}에 메시지 보내기`}
               />
               <button type="submit">전송</button>
             </form>
           </>
+          ) : (
+            <div className="empty-chat empty-center">
+              <h2>친구를 선택하세요</h2>
+              <p>친구를 추가하면 다이렉트 메시지를 보낼 수 있습니다.</p>
+              <button onClick={openFriends}>친구 추가</button>
+            </div>
+          )
         ) : (
           <div className="workspace-panel">
             {status && <p className="status-banner">{status}</p>}
@@ -750,23 +749,6 @@ function App() {
           </div>
         )}
       </main>
-
-      <aside className="member-pane">
-        <h3>{viewingFriends ? `친구 - ${friends.length}` : viewMode === 'dm' ? '멤버 - 3' : `온라인 - ${members.length}`}</h3>
-        {viewingFriends
-          ? friends.map(friend => (
-              <div className="member-row" key={friend.githubId}>
-                <img className="avatar-image sm" src={friend.avatarUrl} alt={friend.login} />
-                <span>{friend.name || friend.login}</span>
-              </div>
-            ))
-          : (viewMode === 'dm' ? ['sunwoo162', 'GitHub Actions', selectedDm.name] : members).map((name, index) => (
-              <div className="member-row" key={name}>
-                <span className={`avatar sm ${index % 3 === 0 ? 'online' : index % 3 === 1 ? 'idle' : 'offline'}`}>{initials(name)}</span>
-                <span>{name}</span>
-              </div>
-            ))}
-      </aside>
 
       {createOpen && (
         <div className="modal-backdrop" onMouseDown={() => setCreateOpen(false)}>
