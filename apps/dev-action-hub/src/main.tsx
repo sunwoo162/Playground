@@ -11,6 +11,7 @@ const DISCORD_KEY = 'dev-action-hub-discord'
 
 type RoomTab = 'chat' | 'work' | 'docs' | 'alerts'
 type ViewMode = 'dm' | 'server'
+type DmSection = 'messages' | 'friends'
 type Presence = 'online' | 'idle' | 'offline'
 
 type DevServer = {
@@ -73,6 +74,14 @@ type DirectRoom = {
   subtitle: string
   avatar: string
   status: Presence
+}
+
+type FriendUser = {
+  githubId: string
+  login: string
+  name: string | null
+  avatarUrl: string
+  friendStatus: string | null
 }
 
 const directRooms: DirectRoom[] = [
@@ -164,6 +173,7 @@ function App() {
   const [messageText, setMessageText] = useState('')
   const [dmSearch, setDmSearch] = useState('')
   const [selectedDmId, setSelectedDmId] = useState(directRooms[0].id)
+  const [dmSection, setDmSection] = useState<DmSection>('messages')
   const [dmMessages, setDmMessages] = useState<Record<string, ChatMessage[]>>(() =>
     readJson(LOCAL_DM_KEY, defaultDmMessages),
   )
@@ -175,6 +185,8 @@ function App() {
     readJson(DISCORD_KEY, { webhookUrl: '', enabled: true, success: true, failure: true }),
   )
   const [status, setStatus] = useState('')
+  const [friends, setFriends] = useState<FriendUser[]>([])
+  const [friendsLoading, setFriendsLoading] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [newServer, setNewServer] = useState({ name: '', description: '', githubOrg: '' })
   const [repoInput, setRepoInput] = useState('')
@@ -388,6 +400,24 @@ function App() {
   }
 
   const messageList = viewMode === 'dm' ? selectedDmMessages : serverMessages
+  const viewingFriends = viewMode === 'dm' && dmSection === 'friends'
+
+  async function loadFriends() {
+    setFriendsLoading(true)
+    try {
+      setFriends(await apiJson<FriendUser[]>('/api/friends'))
+    } catch {
+      setFriends([])
+    } finally {
+      setFriendsLoading(false)
+    }
+  }
+
+  function openFriends() {
+    setViewMode('dm')
+    setDmSection('friends')
+    void loadFriends()
+  }
 
   return (
     <div className="discord-shell">
@@ -421,10 +451,12 @@ function App() {
               <input value={dmSearch} onChange={event => setDmSearch(event.target.value)} placeholder="대화 찾기 또는 시작하기" />
             </div>
             <nav className="dm-nav">
-              <button>👥 친구</button>
-              <button>⚙️ GitHub Actions</button>
-              <button>📚 개발 문서</button>
-              <button>🔔 알림</button>
+              <button className={dmSection === 'friends' ? 'active' : ''} onClick={openFriends}>
+                👥 친구
+              </button>
+              <button onClick={() => setDmSection('messages')}>⚙️ GitHub Actions</button>
+              <button onClick={() => setDmSection('messages')}>📚 개발 문서</button>
+              <button onClick={() => setDmSection('messages')}>🔔 알림</button>
             </nav>
             <div className="sidebar-section">
               <div className="section-title">
@@ -438,6 +470,7 @@ function App() {
                   onClick={() => {
                     setSelectedDmId(room.id)
                     setViewMode('dm')
+                    setDmSection('messages')
                   }}
                 >
                   <span className={`avatar sm ${room.status}`}>{room.avatar}</span>
@@ -480,17 +513,52 @@ function App() {
         <header className="channel-header">
           <div>
             <strong>{viewMode === 'dm' ? selectedDm.name : `# ${tabLabel(activeTab)}`}</strong>
-            <span>{viewMode === 'dm' ? '다이렉트 메시지' : selectedServer?.description || selectedServer?.githubOrg || '서버 작업 공간'}</span>
+            <span>
+              {viewingFriends
+                ? `${friends.length}명의 친구`
+                : viewMode === 'dm'
+                  ? '다이렉트 메시지'
+                  : selectedServer?.description || selectedServer?.githubOrg || '서버 작업 공간'}
+            </span>
           </div>
           <div className="header-actions">
             <button>☎</button>
             <button>📌</button>
-            <button>👥</button>
+            <button onClick={openFriends}>👥</button>
             <input placeholder={`${viewMode === 'dm' ? selectedDm.name : selectedServer?.name || '서버'} 검색`} />
           </div>
         </header>
 
-        {viewMode === 'dm' || activeTab === 'chat' ? (
+        {viewingFriends ? (
+          <div className="workspace-panel">
+            <section className="panel-card friends-card">
+              <div className="card-row">
+                <div>
+                  <h2>친구</h2>
+                  <p>놀이터에서 추가한 친구를 개발 액션 허브에서도 바로 확인합니다.</p>
+                </div>
+                <button onClick={loadFriends}>새로고침</button>
+              </div>
+            </section>
+            {friendsLoading ? (
+              <p className="friend-empty">친구를 불러오는 중입니다.</p>
+            ) : friends.length === 0 ? (
+              <p className="friend-empty">아직 친구가 없습니다. 메인 놀이터에서 친구를 추가해보세요.</p>
+            ) : (
+              <section className="friend-grid">
+                {friends.map(friend => (
+                  <article className="friend-card" key={friend.githubId}>
+                    <img src={friend.avatarUrl} alt={friend.login} />
+                    <div>
+                      <strong>{friend.name || friend.login}</strong>
+                      <span>@{friend.login}</span>
+                    </div>
+                  </article>
+                ))}
+              </section>
+            )}
+          </div>
+        ) : viewMode === 'dm' || activeTab === 'chat' ? (
           <>
             <div className="message-feed" ref={feedRef}>
               {messageList.map(message => (
@@ -615,13 +683,20 @@ function App() {
       </main>
 
       <aside className="member-pane">
-        <h3>{viewMode === 'dm' ? '멤버 - 3' : `온라인 - ${members.length}`}</h3>
-        {(viewMode === 'dm' ? ['sunwoo162', 'GitHub Actions', selectedDm.name] : members).map((name, index) => (
-          <div className="member-row" key={name}>
-            <span className={`avatar sm ${index % 3 === 0 ? 'online' : index % 3 === 1 ? 'idle' : 'offline'}`}>{initials(name)}</span>
-            <span>{name}</span>
-          </div>
-        ))}
+        <h3>{viewingFriends ? `친구 - ${friends.length}` : viewMode === 'dm' ? '멤버 - 3' : `온라인 - ${members.length}`}</h3>
+        {viewingFriends
+          ? friends.map(friend => (
+              <div className="member-row" key={friend.githubId}>
+                <img className="avatar-image sm" src={friend.avatarUrl} alt={friend.login} />
+                <span>{friend.name || friend.login}</span>
+              </div>
+            ))
+          : (viewMode === 'dm' ? ['sunwoo162', 'GitHub Actions', selectedDm.name] : members).map((name, index) => (
+              <div className="member-row" key={name}>
+                <span className={`avatar sm ${index % 3 === 0 ? 'online' : index % 3 === 1 ? 'idle' : 'offline'}`}>{initials(name)}</span>
+                <span>{name}</span>
+              </div>
+            ))}
       </aside>
 
       {createOpen && (

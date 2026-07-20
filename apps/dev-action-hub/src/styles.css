@@ -153,6 +153,7 @@ a {
 }
 
 .dm-nav button:hover,
+.dm-nav button.active,
 .event-row:hover,
 .channel-row:hover,
 .dm-row:hover,
@@ -317,6 +318,19 @@ a {
 
 .avatar.offline {
   opacity: 0.55;
+}
+
+.avatar-image {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #5865f2;
+}
+
+.avatar-image.sm {
+  width: 36px;
+  height: 36px;
 }
 
 .message-meta {
@@ -494,6 +508,66 @@ a {
 .run-row {
   padding: 12px 0;
   border-top: 1px solid #424650;
+}
+
+.friends-card h2 {
+  margin-bottom: 6px;
+}
+
+.friends-card p {
+  margin-bottom: 0;
+}
+
+.friend-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.friend-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #424650;
+  border-radius: 12px;
+  background: #2b2d31;
+}
+
+.friend-card img {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.friend-card strong,
+.friend-card span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.friend-card strong {
+  color: #f2f3f5;
+  font-weight: 900;
+}
+
+.friend-card span,
+.friend-empty {
+  color: #949ba4;
+  font-weight: 700;
+}
+
+.friend-empty {
+  margin: 0;
+  padding: 18px;
+  border: 1px dashed #424650;
+  border-radius: 12px;
+  background: #2b2d31;
 }
 
 .member-pane {
