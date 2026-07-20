@@ -1,5 +1,6 @@
 import React, { FormEvent, useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
+import { registerPushSubscription } from './push'
 import './styles.css'
 
 const LOCAL_SERVERS_KEY = 'dev-action-hub-local-servers'
@@ -212,6 +213,7 @@ function App() {
 
   useEffect(() => {
     void loadFriends()
+    void registerPushSubscription()
   }, [])
 
   useEffect(() => {

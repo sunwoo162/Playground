@@ -9,5 +9,7 @@ import java.util.Optional;
 public interface DevHubServerMemberRepository extends JpaRepository<DevHubServerMember, Long> {
     List<DevHubServerMember> findByUserIdOrderByJoinedAtDesc(String userId);
 
+    List<DevHubServerMember> findByServer_Id(Long serverId);
+
     Optional<DevHubServerMember> findByServer_IdAndUserId(Long serverId, String userId);
 }

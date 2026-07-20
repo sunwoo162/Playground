@@ -18,13 +18,21 @@ import com.playground.domain.devhub.repository.DevHubServerRepository;
 import com.playground.domain.friend.entity.Friendship;
 import com.playground.domain.friend.repository.FriendshipRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
 
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -34,6 +42,10 @@ public class DevHubService {
     private final DevHubChatMessageRepository messageRepository;
     private final DevHubDirectMessageRepository directMessageRepository;
     private final FriendshipRepository friendshipRepository;
+    private final RestTemplate restTemplate = new RestTemplate();
+
+    @Value("${app.node-url:http://localhost:3000}")
+    private String nodeUrl;
 
     @Transactional(readOnly = true)
     public List<ServerResponse> servers(JwtAuthenticationToken auth) {
@@ -99,6 +111,7 @@ public class DevHubService {
                 .authorLogin(login(auth))
                 .content(content)
                 .build());
+        sendServerMessagePush(server, auth.getUserId(), login(auth), content);
         return toMessageResponse(saved);
     }
 
@@ -128,6 +141,7 @@ public class DevHubService {
                 .receiverId(friendId)
                 .content(content)
                 .build());
+        sendPush(friendId, login(auth) + "님의 메시지", preview(content), "/apps/dev-action-hub/");
         return toDirectMessageResponse(saved, auth.getUserId());
     }
 
@@ -146,6 +160,45 @@ public class DevHubService {
 
     private String dmRoomKey(String userId, String friendId) {
         return userId.compareTo(friendId) <= 0 ? userId + ":" + friendId : friendId + ":" + userId;
+    }
+
+    private void sendServerMessagePush(DevHubServer server, String senderId, String senderLogin, String content) {
+        try {
+            List<DevHubServerMember> recipients = memberRepository.findByServer_Id(server.getId()).stream()
+                    .filter(member -> !member.getUserId().equals(senderId))
+                    .toList();
+            for (DevHubServerMember recipient : recipients) {
+                sendPush(
+                        recipient.getUserId(),
+                        server.getName() + " - " + senderLogin,
+                        preview(content),
+                        "/apps/dev-action-hub/"
+                );
+            }
+        } catch (Exception e) {
+            log.warn("Dev hub server message push failed for server {}: {}", server.getId(), e.getMessage());
+        }
+    }
+
+    private void sendPush(String userId, String title, String body, String url) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            Map<String, String> payload = Map.of(
+                    "userId", userId,
+                    "title", title,
+                    "body", body,
+                    "url", url
+            );
+            restTemplate.postForEntity(nodeUrl + "/internal/push/send", new HttpEntity<>(payload, headers), String.class);
+        } catch (Exception e) {
+            log.warn("Dev hub message push failed for {}: {}", userId, e.getMessage());
+        }
+    }
+
+    private String preview(String content) {
+        String normalized = content.replaceAll("\\s+", " ").trim();
+        return normalized.length() <= 80 ? normalized : normalized.substring(0, 80) + "...";
     }
 
     private String uniqueSlug(String baseSlug) {
