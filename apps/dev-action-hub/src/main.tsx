@@ -73,6 +73,7 @@ type DirectRoom = {
   name: string
   subtitle: string
   avatar: string
+  avatarUrl: string
   status: Presence
 }
 
@@ -188,6 +189,7 @@ function App() {
     name: friend.name || friend.login,
     subtitle: `@${friend.login}`,
     avatar: initials(friend.name || friend.login),
+    avatarUrl: friend.avatarUrl,
     status: 'online',
   }))
   const selectedDm = directRooms.find(room => room.id === selectedDmId) || directRooms[0] || null
@@ -214,10 +216,17 @@ function App() {
 
   useEffect(() => {
     if (!selectedServerId) return
-    apiJson<ChatMessage[]>(`/api/dev-hub/servers/${selectedServerId}/messages`)
-      .then(setMessages)
-      .catch(() => setMessages(readJson(LOCAL_MESSAGES_KEY, [])))
+    loadServerMessages(selectedServerId)
+    const timer = window.setInterval(() => loadServerMessages(selectedServerId), 3000)
+    return () => window.clearInterval(timer)
   }, [selectedServerId])
+
+  useEffect(() => {
+    if (!selectedDmId) return
+    loadDirectMessages(selectedDmId)
+    const timer = window.setInterval(() => loadDirectMessages(selectedDmId), 3000)
+    return () => window.clearInterval(timer)
+  }, [selectedDmId])
 
   useEffect(() => {
     feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight })
@@ -303,23 +312,35 @@ function App() {
     }
   }
 
-  function sendDirectMessage(event: FormEvent) {
+  function loadServerMessages(serverId: string) {
+    apiJson<ChatMessage[]>(`/api/dev-hub/servers/${serverId}/messages`)
+      .then(setMessages)
+      .catch(() => setMessages(readJson(LOCAL_MESSAGES_KEY, [])))
+  }
+
+  function loadDirectMessages(friendId: string) {
+    apiJson<ChatMessage[]>(`/api/dev-hub/dm/${friendId}/messages`)
+      .then(remote => {
+        setDmMessages(prev => ({ ...prev, [friendId]: remote }))
+      })
+      .catch(() => undefined)
+  }
+
+  async function sendDirectMessage(event: FormEvent) {
     event.preventDefault()
     if (!selectedDm || !dmText.trim()) return
-    const created: ChatMessage = {
-      id: nowId('dm'),
-      serverId: selectedDm.id,
-      authorLogin: 'sunwoo162',
-      content: dmText.trim(),
-      createdAt: new Date().toISOString(),
-      localOnly: true,
-    }
+    const payload = { content: dmText.trim() }
     setDmText('')
-    setDmMessages(prev => {
-      const next = { ...prev, [selectedDm.id]: [...(prev[selectedDm.id] || []), created] }
-      writeJson(LOCAL_DM_KEY, next)
-      return next
-    })
+    try {
+      const created = await apiJson<ChatMessage>(`/api/dev-hub/dm/${selectedDm.id}/messages`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      })
+      setDmMessages(prev => ({ ...prev, [selectedDm.id]: [...(prev[selectedDm.id] || []), created] }))
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : '메시지를 보내지 못했습니다.')
+      setDmText(payload.content)
+    }
   }
 
   async function connectRepo(event: FormEvent) {
@@ -500,7 +521,7 @@ function App() {
                     setDmSection('messages')
                   }}
                 >
-                  <span className={`avatar sm ${room.status}`}>{room.avatar}</span>
+                  <img className="avatar-image sm" src={room.avatarUrl} alt={room.name} />
                   <span>
                     <strong>{room.name}</strong>
                     <small>{room.subtitle}</small>

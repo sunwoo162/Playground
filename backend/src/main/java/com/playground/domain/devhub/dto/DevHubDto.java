@@ -12,6 +12,15 @@ public class DevHubDto {
     public record SendMessageRequest(String content) {
     }
 
+    public record DirectMessageResponse(
+            Long id,
+            String friendId,
+            String authorLogin,
+            String content,
+            LocalDateTime createdAt
+    ) {
+    }
+
     public record ServerResponse(
             Long id,
             String name,

@@ -2,16 +2,21 @@ package com.playground.domain.devhub.service;
 
 import com.playground.config.JwtAuthenticationToken;
 import com.playground.domain.devhub.dto.DevHubDto.CreateServerRequest;
+import com.playground.domain.devhub.dto.DevHubDto.DirectMessageResponse;
 import com.playground.domain.devhub.dto.DevHubDto.MessageResponse;
 import com.playground.domain.devhub.dto.DevHubDto.SendMessageRequest;
 import com.playground.domain.devhub.dto.DevHubDto.ServerResponse;
 import com.playground.domain.devhub.dto.DevHubDto.UpdateGithubOrgRequest;
 import com.playground.domain.devhub.entity.DevHubChatMessage;
+import com.playground.domain.devhub.entity.DevHubDirectMessage;
 import com.playground.domain.devhub.entity.DevHubServer;
 import com.playground.domain.devhub.entity.DevHubServerMember;
 import com.playground.domain.devhub.repository.DevHubChatMessageRepository;
+import com.playground.domain.devhub.repository.DevHubDirectMessageRepository;
 import com.playground.domain.devhub.repository.DevHubServerMemberRepository;
 import com.playground.domain.devhub.repository.DevHubServerRepository;
+import com.playground.domain.friend.entity.Friendship;
+import com.playground.domain.friend.repository.FriendshipRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +32,8 @@ public class DevHubService {
     private final DevHubServerRepository serverRepository;
     private final DevHubServerMemberRepository memberRepository;
     private final DevHubChatMessageRepository messageRepository;
+    private final DevHubDirectMessageRepository directMessageRepository;
+    private final FriendshipRepository friendshipRepository;
 
     @Transactional(readOnly = true)
     public List<ServerResponse> servers(JwtAuthenticationToken auth) {
@@ -95,9 +102,50 @@ public class DevHubService {
         return toMessageResponse(saved);
     }
 
+    @Transactional(readOnly = true)
+    public List<DirectMessageResponse> directMessages(JwtAuthenticationToken auth, String friendId, Long afterId) {
+        requireFriend(auth.getUserId(), friendId);
+        String roomKey = dmRoomKey(auth.getUserId(), friendId);
+        List<DevHubDirectMessage> messages = afterId != null && afterId > 0
+                ? directMessageRepository.findByRoomKeyAndIdGreaterThanOrderByIdAsc(roomKey, afterId)
+                : directMessageRepository.findTop80ByRoomKeyOrderByCreatedAtDesc(roomKey).stream()
+                .sorted(Comparator.comparing(DevHubDirectMessage::getCreatedAt))
+                .toList();
+        return messages.stream().map(message -> toDirectMessageResponse(message, auth.getUserId())).toList();
+    }
+
+    public DirectMessageResponse sendDirectMessage(JwtAuthenticationToken auth, String friendId, SendMessageRequest request) {
+        requireFriend(auth.getUserId(), friendId);
+        String content = normalizeRequired(request.content(), "메시지를 입력해주세요.");
+        if (content.length() > 2000) {
+            throw new IllegalArgumentException("메시지는 2000자 이하로 입력해주세요.");
+        }
+
+        DevHubDirectMessage saved = directMessageRepository.save(DevHubDirectMessage.builder()
+                .roomKey(dmRoomKey(auth.getUserId(), friendId))
+                .senderId(auth.getUserId())
+                .senderLogin(login(auth))
+                .receiverId(friendId)
+                .content(content)
+                .build());
+        return toDirectMessageResponse(saved, auth.getUserId());
+    }
+
     private DevHubServerMember requireMember(JwtAuthenticationToken auth, Long serverId) {
         return memberRepository.findByServer_IdAndUserId(serverId, auth.getUserId())
                 .orElseThrow(() -> new IllegalArgumentException("서버에 접근할 수 없습니다."));
+    }
+
+    private void requireFriend(String userId, String friendId) {
+        Friendship friendship = friendshipRepository.findBetween(userId, friendId)
+                .orElseThrow(() -> new IllegalArgumentException("친구에게만 메시지를 보낼 수 있습니다."));
+        if (friendship.getStatus() != Friendship.Status.ACCEPTED) {
+            throw new IllegalArgumentException("친구 요청이 수락된 뒤 메시지를 보낼 수 있습니다.");
+        }
+    }
+
+    private String dmRoomKey(String userId, String friendId) {
+        return userId.compareTo(friendId) <= 0 ? userId + ":" + friendId : friendId + ":" + userId;
     }
 
     private String uniqueSlug(String baseSlug) {
@@ -151,6 +199,17 @@ public class DevHubService {
                 message.getId(),
                 message.getServer().getId(),
                 message.getAuthorLogin(),
+                message.getContent(),
+                message.getCreatedAt()
+        );
+    }
+
+    private DirectMessageResponse toDirectMessageResponse(DevHubDirectMessage message, String viewerId) {
+        String friendId = message.getSenderId().equals(viewerId) ? message.getReceiverId() : message.getSenderId();
+        return new DirectMessageResponse(
+                message.getId(),
+                friendId,
+                message.getSenderLogin(),
                 message.getContent(),
                 message.getCreatedAt()
         );

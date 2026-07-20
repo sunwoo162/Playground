@@ -2,6 +2,7 @@ package com.playground.domain.devhub.controller;
 
 import com.playground.config.JwtAuthenticationToken;
 import com.playground.domain.devhub.dto.DevHubDto.CreateServerRequest;
+import com.playground.domain.devhub.dto.DevHubDto.DirectMessageResponse;
 import com.playground.domain.devhub.dto.DevHubDto.MessageResponse;
 import com.playground.domain.devhub.dto.DevHubDto.SendMessageRequest;
 import com.playground.domain.devhub.dto.DevHubDto.ServerResponse;
@@ -67,6 +68,24 @@ public class DevHubController {
             @RequestBody SendMessageRequest request
     ) {
         return ResponseEntity.ok(devHubService.sendMessage(auth, serverId, request));
+    }
+
+    @GetMapping("/dm/{friendId}/messages")
+    public ResponseEntity<List<DirectMessageResponse>> directMessages(
+            @AuthenticationPrincipal JwtAuthenticationToken auth,
+            @PathVariable String friendId,
+            @RequestParam(required = false) Long afterId
+    ) {
+        return ResponseEntity.ok(devHubService.directMessages(auth, friendId, afterId));
+    }
+
+    @PostMapping("/dm/{friendId}/messages")
+    public ResponseEntity<DirectMessageResponse> sendDirectMessage(
+            @AuthenticationPrincipal JwtAuthenticationToken auth,
+            @PathVariable String friendId,
+            @RequestBody SendMessageRequest request
+    ) {
+        return ResponseEntity.ok(devHubService.sendDirectMessage(auth, friendId, request));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
