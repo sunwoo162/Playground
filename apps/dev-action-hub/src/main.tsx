@@ -142,8 +142,13 @@ function repoActionsUrl(repo: string) {
   return `https://github.com/${repo.replace(/^https:\/\/github.com\//, '').replace(/\.git$/, '')}/actions`
 }
 
-function githubOrgCreateUrl(orgName: string) {
+function githubOrgCreateUrl(orgName: string, email?: string) {
   const params = new URLSearchParams({ plan: 'free', organization_name: slugify(orgName) })
+  if (email) {
+    params.set('billing_email', email)
+    params.set('contact_email', email)
+    params.set('email', email)
+  }
   return `https://github.com/account/organizations/new?${params.toString()}`
 }
 
@@ -249,6 +254,7 @@ function App() {
     const name = newServer.name.trim()
     if (!name) return
     const githubOrg = newServer.githubOrg.trim() || slugify(name)
+    let githubEmail = ''
 
     const payload = {
       name,
@@ -284,11 +290,21 @@ function App() {
       setSelectedServerId(created.id)
     }
 
+    try {
+      const emailResponse = await apiJson<{ email: string }>('/github/primary-email')
+      githubEmail = emailResponse.email || ''
+      if (githubEmail && navigator.clipboard) {
+        await navigator.clipboard.writeText(githubEmail)
+      }
+    } catch {
+      githubEmail = ''
+    }
+
     setNewServer({ name: '', description: '', githubOrg: '' })
     setViewMode('server')
     setActiveTab('chat')
     setCreateOpen(false)
-    window.open(githubOrgCreateUrl(githubOrg), '_blank', 'noopener,noreferrer')
+    window.open(githubOrgCreateUrl(githubOrg, githubEmail), '_blank', 'noopener,noreferrer')
   }
 
   async function sendMessage(event: FormEvent) {
@@ -801,7 +817,7 @@ function App() {
                 placeholder="비워두면 서버 이름으로 입력"
               />
             </label>
-            <p className="modal-note">GitHub 정책상 조직 생성은 GitHub 화면에서 최종 확인해야 합니다. 만들기를 누르면 이 서버를 저장하고 조직 생성 페이지를 새 탭으로 엽니다.</p>
+            <p className="modal-note">GitHub 정책상 조직 생성은 GitHub 화면에서 최종 확인해야 합니다. 만들기를 누르면 계정 이메일을 함께 전달하고, GitHub가 자동 입력을 막는 경우를 대비해 클립보드에도 복사합니다.</p>
             <div className="modal-actions">
               <button type="button" onClick={() => setCreateOpen(false)}>
                 취소

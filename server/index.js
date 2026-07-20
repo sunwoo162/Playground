@@ -423,6 +423,37 @@ app.post('/github/commit-file', async (req, res) => {
   }
 });
 
+app.get('/github/primary-email', async (req, res) => {
+  const githubToken = req.session?.githubToken;
+  if (!githubToken) return res.status(401).json({ error: 'GitHub 토큰 없음. 다시 로그인해주세요.' });
+
+  try {
+    const headers = {
+      'Authorization': `Bearer ${githubToken}`,
+      'Accept': 'application/vnd.github+json',
+      'User-Agent': 'playground-app',
+    };
+
+    const emailsRes = await fetch('https://api.github.com/user/emails', { headers });
+    if (emailsRes.status === 403 || emailsRes.status === 404) {
+      return res.status(403).json({ error: 'email_scope_required' });
+    }
+    if (!emailsRes.ok) {
+      const error = await emailsRes.text();
+      return res.status(emailsRes.status).json({ error });
+    }
+
+    const emails = await emailsRes.json();
+    const primary = Array.isArray(emails)
+      ? emails.find(email => email.primary && email.verified) || emails.find(email => email.verified) || emails[0]
+      : null;
+
+    res.json({ email: primary?.email || '' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ============================================
 // Velog publish API
 // ============================================
@@ -655,7 +686,7 @@ app.get('/auth/github', (req, res) => {
     req.session.returnTo = req.query.returnTo;
   }
   
-  const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(callbackUrl)}&scope=read:user,repo`;
+  const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(callbackUrl)}&scope=read:user,user:email,repo`;
   res.redirect(githubAuthUrl);
 });
 
