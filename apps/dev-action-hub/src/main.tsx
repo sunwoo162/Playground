@@ -142,6 +142,11 @@ function repoActionsUrl(repo: string) {
   return `https://github.com/${repo.replace(/^https:\/\/github.com\//, '').replace(/\.git$/, '')}/actions`
 }
 
+function githubOrgCreateUrl(orgName: string) {
+  const params = new URLSearchParams({ plan: 'free', organization_name: slugify(orgName) })
+  return `https://github.com/account/organizations/new?${params.toString()}`
+}
+
 function tabLabel(tab: RoomTab) {
   if (tab === 'chat') return '일반'
   if (tab === 'work') return 'github-actions'
@@ -243,11 +248,12 @@ function App() {
     event.preventDefault()
     const name = newServer.name.trim()
     if (!name) return
+    const githubOrg = newServer.githubOrg.trim() || slugify(name)
 
     const payload = {
       name,
       slug: slugify(name),
-      githubOrg: newServer.githubOrg.trim() || slugify(name),
+      githubOrg,
       description: newServer.description.trim(),
     }
 
@@ -282,6 +288,7 @@ function App() {
     setViewMode('server')
     setActiveTab('chat')
     setCreateOpen(false)
+    window.open(githubOrgCreateUrl(githubOrg), '_blank', 'noopener,noreferrer')
   }
 
   async function sendMessage(event: FormEvent) {
@@ -791,9 +798,10 @@ function App() {
               <input
                 value={newServer.githubOrg}
                 onChange={event => setNewServer({ ...newServer, githubOrg: event.target.value })}
-                placeholder="비워두면 서버 이름으로 생성"
+                placeholder="비워두면 서버 이름으로 입력"
               />
             </label>
+            <p className="modal-note">GitHub 정책상 조직 생성은 GitHub 화면에서 최종 확인해야 합니다. 만들기를 누르면 이 서버를 저장하고 조직 생성 페이지를 새 탭으로 엽니다.</p>
             <div className="modal-actions">
               <button type="button" onClick={() => setCreateOpen(false)}>
                 취소

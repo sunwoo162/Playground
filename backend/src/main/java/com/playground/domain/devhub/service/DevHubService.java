@@ -60,12 +60,13 @@ public class DevHubService {
         String name = normalizeRequired(request.name(), "서버 이름을 입력해주세요.");
         String baseSlug = slugify(name);
         String slug = uniqueSlug(baseSlug);
+        String githubOrg = normalizeOptional(request.githubOrg());
         String login = login(auth);
 
         DevHubServer server = DevHubServer.builder()
                 .name(name)
                 .slug(slug)
-                .githubOrg(slug)
+                .githubOrg(githubOrg.isBlank() ? slug : slugify(githubOrg))
                 .description(normalizeOptional(request.description()))
                 .ownerId(auth.getUserId())
                 .ownerLogin(login)

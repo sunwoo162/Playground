@@ -3,7 +3,7 @@ package com.playground.domain.devhub.dto;
 import java.time.LocalDateTime;
 
 public class DevHubDto {
-    public record CreateServerRequest(String name, String description) {
+    public record CreateServerRequest(String name, String description, String githubOrg) {
     }
 
     public record UpdateGithubOrgRequest(String githubOrg) {

@@ -654,6 +654,13 @@ a {
   color: #b5bac1;
 }
 
+.create-modal .modal-note {
+  margin: 14px 0 0;
+  color: #949ba4;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .create-modal label {
   display: grid;
   gap: 8px;
