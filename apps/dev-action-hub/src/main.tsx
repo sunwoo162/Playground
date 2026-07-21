@@ -10,6 +10,7 @@ const WATCHES_KEY = 'dev-action-hub-watches'
 const DOCS_KEY = 'dev-action-hub-docs'
 const DISCORD_KEY = 'dev-action-hub-discord'
 const DM_ACTIVITY_KEY = 'dev-action-hub-dm-activity'
+const SELECTED_DM_KEY = 'dev-action-hub-selected-dm'
 
 type RoomTab = 'chat' | 'work' | 'docs' | 'alerts'
 type ViewMode = 'dm' | 'server'
@@ -169,7 +170,7 @@ function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [messageText, setMessageText] = useState('')
   const [dmSearch, setDmSearch] = useState('')
-  const [selectedDmId, setSelectedDmId] = useState('')
+  const [selectedDmId, setSelectedDmId] = useState(() => localStorage.getItem(SELECTED_DM_KEY) || '')
   const [dmSection, setDmSection] = useState<DmSection>('messages')
   const [dmMessages, setDmMessages] = useState<Record<string, ChatMessage[]>>(() =>
     readJson(LOCAL_DM_KEY, defaultDmMessages),
@@ -254,9 +255,15 @@ function App() {
   }, [serverMessages.length, selectedDmMessages.length, viewMode])
 
   useEffect(() => {
-    if (viewMode !== 'dm' || selectedDmId || friends.length === 0) return
-    setSelectedDmId(friends[0].githubId)
-  }, [friends, selectedDmId, viewMode])
+    if (viewMode !== 'dm' || friends.length === 0) return
+    if (selectedDmId && friends.some(friend => friend.githubId === selectedDmId)) return
+    const recentFriend = [...friends].sort((a, b) => {
+      const left = dmActivity[a.githubId] ? new Date(dmActivity[a.githubId]).getTime() : 0
+      const right = dmActivity[b.githubId] ? new Date(dmActivity[b.githubId]).getTime() : 0
+      return right - left
+    })[0]
+    if (recentFriend) selectDirectMessage(recentFriend.githubId)
+  }, [dmActivity, friends, selectedDmId, viewMode])
 
   async function createServer(event: FormEvent) {
     event.preventDefault()
@@ -459,6 +466,11 @@ function App() {
     setActiveTab('chat')
   }
 
+  function selectDirectMessage(friendId: string) {
+    setSelectedDmId(friendId)
+    localStorage.setItem(SELECTED_DM_KEY, friendId)
+  }
+
   const messageList = viewMode === 'dm' ? selectedDmMessages : serverMessages
   const viewingFriends = viewMode === 'dm' && dmSection === 'friends'
 
@@ -568,7 +580,7 @@ function App() {
                   key={room.id}
                   className={`dm-row ${selectedDmId === room.id ? 'active' : ''}`}
                   onClick={() => {
-                    setSelectedDmId(room.id)
+                    selectDirectMessage(room.id)
                     setViewMode('dm')
                     setDmSection('messages')
                   }}
