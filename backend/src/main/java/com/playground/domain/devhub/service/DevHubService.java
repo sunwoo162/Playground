@@ -17,6 +17,7 @@ import com.playground.domain.devhub.repository.DevHubServerMemberRepository;
 import com.playground.domain.devhub.repository.DevHubServerRepository;
 import com.playground.domain.friend.entity.Friendship;
 import com.playground.domain.friend.repository.FriendshipRepository;
+import com.playground.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -42,6 +43,7 @@ public class DevHubService {
     private final DevHubChatMessageRepository messageRepository;
     private final DevHubDirectMessageRepository directMessageRepository;
     private final FriendshipRepository friendshipRepository;
+    private final UserRepository userRepository;
     private final RestTemplate restTemplate = new RestTemplate();
 
     @Value("${app.node-url:http://localhost:3000}")
@@ -253,6 +255,7 @@ public class DevHubService {
                 message.getId(),
                 message.getServer().getId(),
                 message.getAuthorLogin(),
+                avatarUrl(message.getAuthorId()),
                 message.getContent(),
                 message.getCreatedAt()
         );
@@ -264,8 +267,15 @@ public class DevHubService {
                 message.getId(),
                 friendId,
                 message.getSenderLogin(),
+                avatarUrl(message.getSenderId()),
                 message.getContent(),
                 message.getCreatedAt()
         );
+    }
+
+    private String avatarUrl(String userId) {
+        return userRepository.findById(userId)
+                .map(user -> user.getAvatarUrl() == null ? "" : user.getAvatarUrl())
+                .orElse("");
     }
 }

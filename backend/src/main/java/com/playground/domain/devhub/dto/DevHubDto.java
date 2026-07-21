@@ -16,6 +16,7 @@ public class DevHubDto {
             Long id,
             String friendId,
             String authorLogin,
+            String authorAvatarUrl,
             String content,
             LocalDateTime createdAt
     ) {
@@ -36,6 +37,7 @@ public class DevHubDto {
             Long id,
             Long serverId,
             String authorLogin,
+            String authorAvatarUrl,
             String content,
             LocalDateTime createdAt
     ) {

@@ -30,6 +30,7 @@ type ChatMessage = {
   id: string
   serverId: string
   authorLogin: string
+  authorAvatarUrl?: string
   content: string
   createdAt: string
   localOnly?: boolean
@@ -670,7 +671,11 @@ function App() {
             <div className="message-feed" ref={feedRef}>
               {messageList.map(message => (
                 <article key={message.id} className="message-row">
-                  <span className="avatar">{initials(message.authorLogin)}</span>
+                  {message.authorAvatarUrl ? (
+                    <img className="avatar-image" src={message.authorAvatarUrl} alt={message.authorLogin} />
+                  ) : (
+                    <span className="avatar">{initials(message.authorLogin)}</span>
+                  )}
                   <div>
                     <div className="message-meta">
                       <strong>{message.authorLogin}</strong>
