@@ -9,6 +9,7 @@ const LOCAL_DM_KEY = 'dev-action-hub-local-dms'
 const WATCHES_KEY = 'dev-action-hub-watches'
 const DOCS_KEY = 'dev-action-hub-docs'
 const DISCORD_KEY = 'dev-action-hub-discord'
+const DM_ACTIVITY_KEY = 'dev-action-hub-dm-activity'
 
 type RoomTab = 'chat' | 'work' | 'docs' | 'alerts'
 type ViewMode = 'dm' | 'server'
@@ -173,6 +174,7 @@ function App() {
   const [dmMessages, setDmMessages] = useState<Record<string, ChatMessage[]>>(() =>
     readJson(LOCAL_DM_KEY, defaultDmMessages),
   )
+  const [dmActivity, setDmActivity] = useState<Record<string, string>>(() => readJson(DM_ACTIVITY_KEY, {}))
   const [dmText, setDmText] = useState('')
   const [watches, setWatches] = useState<Watch[]>(() => readJson(WATCHES_KEY, []))
   const [runs, setRuns] = useState<Run[]>([])
@@ -196,14 +198,20 @@ function App() {
   const serverMessages = messages.filter(message => message.serverId === selectedServerId)
   const serverWatches = watches.filter(watch => watch.serverId === selectedServerId)
   const serverDocs = docs.filter(doc => doc.serverId === selectedServerId)
-  const directRooms: DirectRoom[] = friends.map(friend => ({
-    id: friend.githubId,
-    name: friend.name || friend.login,
-    subtitle: `@${friend.login}`,
-    avatar: initials(friend.name || friend.login),
-    avatarUrl: friend.avatarUrl,
-    status: 'online',
-  }))
+  const directRooms: DirectRoom[] = friends
+    .map(friend => ({
+      id: friend.githubId,
+      name: friend.name || friend.login,
+      subtitle: `@${friend.login}`,
+      avatar: initials(friend.name || friend.login),
+      avatarUrl: friend.avatarUrl,
+      status: 'online' as Presence,
+    }))
+    .sort((a, b) => {
+      const left = dmActivity[a.id] ? new Date(dmActivity[a.id]).getTime() : 0
+      const right = dmActivity[b.id] ? new Date(dmActivity[b.id]).getTime() : 0
+      return right - left || a.name.localeCompare(b.name, 'ko-KR')
+    })
   const selectedDm = directRooms.find(room => room.id === selectedDmId) || directRooms[0] || null
   const selectedDmMessages = selectedDm ? dmMessages[selectedDm.id] || [] : []
   const filteredDms = directRooms.filter(room => room.name.includes(dmSearch) || room.subtitle.includes(dmSearch))
@@ -348,8 +356,19 @@ function App() {
     apiJson<ChatMessage[]>(`/api/dev-hub/dm/${friendId}/messages`)
       .then(remote => {
         setDmMessages(prev => ({ ...prev, [friendId]: remote }))
+        updateDmActivity(friendId, remote.at(-1)?.createdAt)
       })
       .catch(() => undefined)
+  }
+
+  function updateDmActivity(friendId: string, createdAt?: string) {
+    if (!createdAt) return
+    setDmActivity(prev => {
+      if (prev[friendId] === createdAt) return prev
+      const next = { ...prev, [friendId]: createdAt }
+      writeJson(DM_ACTIVITY_KEY, next)
+      return next
+    })
   }
 
   async function sendDirectMessage(event: FormEvent) {
@@ -363,6 +382,7 @@ function App() {
         body: JSON.stringify(payload),
       })
       setDmMessages(prev => ({ ...prev, [selectedDm.id]: [...(prev[selectedDm.id] || []), created] }))
+      updateDmActivity(selectedDm.id, created.createdAt)
     } catch (error) {
       setStatus(error instanceof Error ? error.message : '메시지를 보내지 못했습니다.')
       setDmText(payload.content)
@@ -445,12 +465,18 @@ function App() {
   async function loadFriends() {
     setFriendsLoading(true)
     try {
-      setFriends(await apiJson<FriendUser[]>('/api/friends'))
+      const friendList = await apiJson<FriendUser[]>('/api/friends')
+      setFriends(friendList)
+      void refreshDmActivity(friendList)
     } catch {
       setFriends([])
     } finally {
       setFriendsLoading(false)
     }
+  }
+
+  async function refreshDmActivity(friendList: FriendUser[]) {
+    await Promise.allSettled(friendList.map(friend => loadDirectMessages(friend.githubId)))
   }
 
   function openFriends() {
