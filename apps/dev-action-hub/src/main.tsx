@@ -208,6 +208,7 @@ function App() {
   const [friendSearchResults, setFriendSearchResults] = useState<FriendUser[]>([])
   const [friendSearching, setFriendSearching] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
+  const [forwardingMessage, setForwardingMessage] = useState<ChatMessage | null>(null)
   const [newServer, setNewServer] = useState({ name: '', description: '', githubOrg: '' })
   const [repoInput, setRepoInput] = useState('')
   const [docDraft, setDocDraft] = useState({ title: '', content: '' })
@@ -434,7 +435,7 @@ function App() {
     setMessages(prev => [...prev, created])
   }
 
-  async function runMessageAction(message: ChatMessage, action: 'delete' | 'pin' | 'forward', emoji?: string) {
+  async function runMessageAction(message: ChatMessage, action: 'delete' | 'pin') {
     if (message.deleted && action !== 'pin') return
     const base =
       viewMode === 'dm' && selectedDm
@@ -446,12 +447,34 @@ function App() {
     try {
       const updated = await apiJson<ChatMessage>(`${base}/${action === 'pin' ? 'pin' : action}`, {
         method: 'POST',
-        body: emoji ? JSON.stringify({ emoji }) : undefined,
       })
-      if (action === 'forward') appendMessage(updated)
-      else replaceMessage(updated)
+      replaceMessage(updated)
     } catch (error) {
       setStatus(error instanceof Error ? error.message : '메시지 작업을 처리하지 못했습니다.')
+    }
+  }
+
+  async function forwardMessage(targetType: 'server' | 'dm', targetId: string) {
+    if (!forwardingMessage || forwardingMessage.deleted) return
+    const base =
+      viewMode === 'dm' && selectedDm
+        ? `/api/dev-hub/dm/${selectedDm.id}/messages/${forwardingMessage.id}`
+        : selectedServer
+          ? `/api/dev-hub/servers/${selectedServer.id}/messages/${forwardingMessage.id}`
+          : ''
+    if (!base) return
+    try {
+      const created = await apiJson<ChatMessage>(`${base}/forward`, {
+        method: 'POST',
+        body: JSON.stringify({ targetType, targetId }),
+      })
+      if ((viewMode === 'dm' && targetType === 'dm' && selectedDm?.id === targetId) || (viewMode === 'server' && targetType === 'server' && selectedServer?.id === targetId)) {
+        appendMessage(created)
+      }
+      setForwardingMessage(null)
+      setStatus('메시지를 전달했습니다.')
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : '메시지를 전달하지 못했습니다.')
     }
   }
 
@@ -835,7 +858,7 @@ function App() {
                       <button type="button" onClick={() => runMessageAction(message, 'pin')}>
                         📌
                       </button>
-                      <button type="button" onClick={() => runMessageAction(message, 'forward')} disabled={message.deleted}>
+                      <button type="button" onClick={() => setForwardingMessage(message)} disabled={message.deleted}>
                         전달
                       </button>
                       <button type="button" onClick={() => runMessageAction(message, 'delete')} disabled={message.deleted}>
@@ -990,6 +1013,45 @@ function App() {
               <button type="submit">만들기</button>
             </div>
           </form>
+        </div>
+      )}
+
+      {forwardingMessage && (
+        <div className="modal-backdrop" onMouseDown={() => setForwardingMessage(null)}>
+          <div className="create-modal forward-modal" onMouseDown={event => event.stopPropagation()}>
+            <h2>메시지 전달</h2>
+            <p>{forwardingMessage.content}</p>
+            {viewMode === 'server' ? (
+              <>
+                <h3>서버 선택</h3>
+                <div className="forward-target-list">
+                  {servers.map(server => (
+                    <button key={server.id} type="button" onClick={() => forwardMessage('server', server.id)}>
+                      <span>{initials(server.name)}</span>
+                      <strong>{server.name}</strong>
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <h3>DM 선택</h3>
+                <div className="forward-target-list">
+                  {directRooms.map(room => (
+                    <button key={room.id} type="button" onClick={() => forwardMessage('dm', room.id)}>
+                      <img src={room.avatarUrl} alt={room.name} />
+                      <strong>{room.name}</strong>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+            <div className="modal-actions">
+              <button type="button" onClick={() => setForwardingMessage(null)}>
+                취소
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

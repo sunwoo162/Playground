@@ -15,6 +15,9 @@ public class DevHubDto {
     public record ReactionRequest(String emoji) {
     }
 
+    public record ForwardMessageRequest(String targetType, String targetId) {
+    }
+
     public record DirectMessageResponse(
             Long id,
             String friendId,

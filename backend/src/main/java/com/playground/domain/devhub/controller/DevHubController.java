@@ -3,6 +3,7 @@ package com.playground.domain.devhub.controller;
 import com.playground.config.JwtAuthenticationToken;
 import com.playground.domain.devhub.dto.DevHubDto.CreateServerRequest;
 import com.playground.domain.devhub.dto.DevHubDto.DirectMessageResponse;
+import com.playground.domain.devhub.dto.DevHubDto.ForwardMessageRequest;
 import com.playground.domain.devhub.dto.DevHubDto.MessageResponse;
 import com.playground.domain.devhub.dto.DevHubDto.ReactionRequest;
 import com.playground.domain.devhub.dto.DevHubDto.SendMessageRequest;
@@ -103,9 +104,10 @@ public class DevHubController {
     public ResponseEntity<MessageResponse> forwardMessage(
             @AuthenticationPrincipal JwtAuthenticationToken auth,
             @PathVariable Long serverId,
-            @PathVariable Long messageId
+            @PathVariable Long messageId,
+            @RequestBody ForwardMessageRequest request
     ) {
-        return ResponseEntity.ok(devHubService.forwardMessage(auth, serverId, messageId));
+        return ResponseEntity.ok(devHubService.forwardMessage(auth, serverId, messageId, request));
     }
 
     @GetMapping("/dm/{friendId}/messages")
@@ -158,9 +160,10 @@ public class DevHubController {
     public ResponseEntity<DirectMessageResponse> forwardDirectMessage(
             @AuthenticationPrincipal JwtAuthenticationToken auth,
             @PathVariable String friendId,
-            @PathVariable Long messageId
+            @PathVariable Long messageId,
+            @RequestBody ForwardMessageRequest request
     ) {
-        return ResponseEntity.ok(devHubService.forwardDirectMessage(auth, friendId, messageId));
+        return ResponseEntity.ok(devHubService.forwardDirectMessage(auth, friendId, messageId, request));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

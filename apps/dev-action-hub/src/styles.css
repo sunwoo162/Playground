@@ -798,6 +798,62 @@ a {
   background: #4e5058;
 }
 
+.forward-modal h3 {
+  margin: 16px 0 8px;
+  color: #dbdee1;
+  font-size: 14px;
+}
+
+.forward-modal > p {
+  max-height: 96px;
+  overflow: hidden;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #2b2d31;
+  color: #b5bac1;
+  line-height: 1.4;
+}
+
+.forward-target-list {
+  display: grid;
+  max-height: 260px;
+  overflow-y: auto;
+  gap: 8px;
+}
+
+.forward-target-list button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  background: #2b2d31;
+  color: #f2f3f5;
+  text-align: left;
+}
+
+.forward-target-list button:hover {
+  background: #404249;
+}
+
+.forward-target-list span,
+.forward-target-list img {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  background: #5865f2;
+  color: white;
+  font-weight: 900;
+}
+
+.forward-target-list img {
+  object-fit: cover;
+}
+
 @media (max-width: 1120px) {
   .discord-shell {
     grid-template-columns: 76px 260px minmax(0, 1fr);
