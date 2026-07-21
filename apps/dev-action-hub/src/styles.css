@@ -333,6 +333,7 @@ a {
   grid-template-columns: 52px minmax(0, 1fr);
   gap: 12px;
   margin-bottom: 22px;
+  position: relative;
 }
 
 .avatar {
@@ -418,6 +419,24 @@ a {
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 8px;
+}
+
+.message-actions {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition:
+    max-height 0.15s ease,
+    opacity 0.15s ease,
+    transform 0.15s ease;
+}
+
+.message-row:hover .message-actions,
+.message-row:focus-within .message-actions {
+  max-height: 80px;
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .reaction-row span,
