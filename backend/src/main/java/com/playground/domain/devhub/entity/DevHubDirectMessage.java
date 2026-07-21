@@ -46,6 +46,18 @@ public class DevHubDirectMessage {
     @Column(nullable = false, length = 2000)
     private String content;
 
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean deleted = false;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean pinned = false;
+
+    @Column(nullable = false, length = 1000)
+    @Builder.Default
+    private String reactions = "";
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;

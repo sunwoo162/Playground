@@ -12,12 +12,18 @@ public class DevHubDto {
     public record SendMessageRequest(String content) {
     }
 
+    public record ReactionRequest(String emoji) {
+    }
+
     public record DirectMessageResponse(
             Long id,
             String friendId,
             String authorLogin,
             String authorAvatarUrl,
             String content,
+            boolean deleted,
+            boolean pinned,
+            String reactions,
             LocalDateTime createdAt
     ) {
     }
@@ -39,6 +45,9 @@ public class DevHubDto {
             String authorLogin,
             String authorAvatarUrl,
             String content,
+            boolean deleted,
+            boolean pinned,
+            String reactions,
             LocalDateTime createdAt
     ) {
     }

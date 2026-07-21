@@ -34,6 +34,9 @@ type ChatMessage = {
   authorLogin: string
   authorAvatarUrl?: string
   content: string
+  deleted?: boolean
+  pinned?: boolean
+  reactions?: string
   createdAt: string
   localOnly?: boolean
 }
@@ -164,6 +167,17 @@ function tabLabel(tab: RoomTab) {
   if (tab === 'work') return 'github-actions'
   if (tab === 'docs') return '개발-문서'
   return '알림-설정'
+}
+
+function parseReactions(value?: string) {
+  if (!value) return []
+  return value
+    .split(',')
+    .map(item => {
+      const [emoji, count] = item.split('=')
+      return { emoji, count: Number(count || 0) }
+    })
+    .filter(item => item.emoji && item.count > 0)
 }
 
 function App() {
@@ -400,6 +414,68 @@ function App() {
     }
   }
 
+  function replaceMessage(updated: ChatMessage) {
+    if (viewMode === 'dm' && selectedDm) {
+      setDmMessages(prev => ({
+        ...prev,
+        [selectedDm.id]: (prev[selectedDm.id] || []).map(message => (message.id === updated.id ? updated : message)),
+      }))
+      return
+    }
+    setMessages(prev => prev.map(message => (message.id === updated.id ? updated : message)))
+  }
+
+  function appendMessage(created: ChatMessage) {
+    if (viewMode === 'dm' && selectedDm) {
+      setDmMessages(prev => ({ ...prev, [selectedDm.id]: [...(prev[selectedDm.id] || []), created] }))
+      updateDmActivity(selectedDm.id, created.createdAt)
+      return
+    }
+    setMessages(prev => [...prev, created])
+  }
+
+  async function runMessageAction(message: ChatMessage, action: 'delete' | 'pin' | 'forward', emoji?: string) {
+    if (message.deleted && action !== 'pin') return
+    const base =
+      viewMode === 'dm' && selectedDm
+        ? `/api/dev-hub/dm/${selectedDm.id}/messages/${message.id}`
+        : selectedServer
+          ? `/api/dev-hub/servers/${selectedServer.id}/messages/${message.id}`
+          : ''
+    if (!base) return
+    try {
+      const updated = await apiJson<ChatMessage>(`${base}/${action === 'pin' ? 'pin' : action}`, {
+        method: 'POST',
+        body: emoji ? JSON.stringify({ emoji }) : undefined,
+      })
+      if (action === 'forward') appendMessage(updated)
+      else replaceMessage(updated)
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : '메시지 작업을 처리하지 못했습니다.')
+    }
+  }
+
+  async function reactToMessage(message: ChatMessage, emoji: string) {
+    if (message.deleted) return
+    const base =
+      viewMode === 'dm' && selectedDm
+        ? `/api/dev-hub/dm/${selectedDm.id}/messages/${message.id}`
+        : selectedServer
+          ? `/api/dev-hub/servers/${selectedServer.id}/messages/${message.id}`
+          : ''
+    if (!base) return
+    try {
+      replaceMessage(
+        await apiJson<ChatMessage>(`${base}/reaction`, {
+          method: 'POST',
+          body: JSON.stringify({ emoji }),
+        }),
+      )
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : '이모티콘을 추가하지 못했습니다.')
+    }
+  }
+
   async function connectRepo(event: FormEvent) {
     event.preventDefault()
     if (!selectedServer || !repoInput.trim()) return
@@ -476,6 +552,7 @@ function App() {
   }
 
   const messageList = viewMode === 'dm' ? selectedDmMessages : serverMessages
+  const pinnedMessages = messageList.filter(message => message.pinned && !message.deleted)
   const viewingFriends = viewMode === 'dm' && dmSection === 'friends'
 
   async function loadFriends() {
@@ -711,6 +788,17 @@ function App() {
           viewMode !== 'dm' || selectedDm ? (
           <>
             <div className="message-feed" ref={feedRef}>
+              {pinnedMessages.length > 0 && (
+                <div className="pinned-panel">
+                  <strong>고정된 메시지</strong>
+                  {pinnedMessages.slice(-3).map(message => (
+                    <button key={message.id} type="button">
+                      <span>{message.authorLogin}</span>
+                      <small>{message.content}</small>
+                    </button>
+                  ))}
+                </div>
+              )}
               {messageList.map(message => (
                 <article key={message.id} className="message-row">
                   {message.authorAvatarUrl ? (
@@ -722,8 +810,38 @@ function App() {
                     <div className="message-meta">
                       <strong>{message.authorLogin}</strong>
                       <span>{formatDateTime(message.createdAt)}</span>
+                      {message.pinned && <em>고정됨</em>}
                     </div>
-                    <p>{message.content}</p>
+                    <p className={message.deleted ? 'deleted-message' : ''}>{message.content}</p>
+                    {parseReactions(message.reactions).length > 0 && (
+                      <div className="reaction-row">
+                        {parseReactions(message.reactions).map(reaction => (
+                          <span key={reaction.emoji}>
+                            {reaction.emoji} {reaction.count}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <div className="message-actions">
+                      <button type="button" onClick={() => reactToMessage(message, '👍')} disabled={message.deleted}>
+                        👍
+                      </button>
+                      <button type="button" onClick={() => reactToMessage(message, '❤️')} disabled={message.deleted}>
+                        ❤️
+                      </button>
+                      <button type="button" onClick={() => reactToMessage(message, '😂')} disabled={message.deleted}>
+                        😂
+                      </button>
+                      <button type="button" onClick={() => runMessageAction(message, 'pin')}>
+                        📌
+                      </button>
+                      <button type="button" onClick={() => runMessageAction(message, 'forward')} disabled={message.deleted}>
+                        전달
+                      </button>
+                      <button type="button" onClick={() => runMessageAction(message, 'delete')} disabled={message.deleted}>
+                        삭제
+                      </button>
+                    </div>
                   </div>
                 </article>
               ))}

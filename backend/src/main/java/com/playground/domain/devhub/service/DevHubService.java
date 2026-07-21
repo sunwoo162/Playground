@@ -4,6 +4,7 @@ import com.playground.config.JwtAuthenticationToken;
 import com.playground.domain.devhub.dto.DevHubDto.CreateServerRequest;
 import com.playground.domain.devhub.dto.DevHubDto.DirectMessageResponse;
 import com.playground.domain.devhub.dto.DevHubDto.MessageResponse;
+import com.playground.domain.devhub.dto.DevHubDto.ReactionRequest;
 import com.playground.domain.devhub.dto.DevHubDto.SendMessageRequest;
 import com.playground.domain.devhub.dto.DevHubDto.ServerResponse;
 import com.playground.domain.devhub.dto.DevHubDto.UpdateGithubOrgRequest;
@@ -118,6 +119,47 @@ public class DevHubService {
         return toMessageResponse(saved);
     }
 
+    public MessageResponse deleteMessage(JwtAuthenticationToken auth, Long serverId, Long messageId) {
+        requireMember(auth, serverId);
+        DevHubChatMessage message = requireServerMessage(serverId, messageId);
+        if (!message.getAuthorId().equals(auth.getUserId())) {
+            throw new IllegalArgumentException("내 메시지만 삭제할 수 있습니다.");
+        }
+        message.setDeleted(true);
+        message.setContent("");
+        return toMessageResponse(message);
+    }
+
+    public MessageResponse toggleMessagePin(JwtAuthenticationToken auth, Long serverId, Long messageId) {
+        requireMember(auth, serverId);
+        DevHubChatMessage message = requireServerMessage(serverId, messageId);
+        message.setPinned(!message.isPinned());
+        return toMessageResponse(message);
+    }
+
+    public MessageResponse reactToMessage(JwtAuthenticationToken auth, Long serverId, Long messageId, ReactionRequest request) {
+        requireMember(auth, serverId);
+        DevHubChatMessage message = requireServerMessage(serverId, messageId);
+        message.setReactions(addReaction(message.getReactions(), request.emoji()));
+        return toMessageResponse(message);
+    }
+
+    public MessageResponse forwardMessage(JwtAuthenticationToken auth, Long serverId, Long messageId) {
+        DevHubServer server = requireMember(auth, serverId).getServer();
+        DevHubChatMessage message = requireServerMessage(serverId, messageId);
+        if (message.isDeleted()) {
+            throw new IllegalArgumentException("삭제된 메시지는 전달할 수 없습니다.");
+        }
+        DevHubChatMessage saved = messageRepository.save(DevHubChatMessage.builder()
+                .server(server)
+                .authorId(auth.getUserId())
+                .authorLogin(login(auth))
+                .content("전달: " + message.getContent())
+                .build());
+        sendServerMessagePush(server, auth.getUserId(), login(auth), saved.getContent());
+        return toMessageResponse(saved);
+    }
+
     @Transactional(readOnly = true)
     public List<DirectMessageResponse> directMessages(JwtAuthenticationToken auth, String friendId, Long afterId) {
         requireFriend(auth.getUserId(), friendId);
@@ -148,9 +190,64 @@ public class DevHubService {
         return toDirectMessageResponse(saved, auth.getUserId());
     }
 
+    public DirectMessageResponse deleteDirectMessage(JwtAuthenticationToken auth, String friendId, Long messageId) {
+        requireFriend(auth.getUserId(), friendId);
+        DevHubDirectMessage message = requireDirectMessage(auth.getUserId(), friendId, messageId);
+        if (!message.getSenderId().equals(auth.getUserId())) {
+            throw new IllegalArgumentException("내 메시지만 삭제할 수 있습니다.");
+        }
+        message.setDeleted(true);
+        message.setContent("");
+        return toDirectMessageResponse(message, auth.getUserId());
+    }
+
+    public DirectMessageResponse toggleDirectMessagePin(JwtAuthenticationToken auth, String friendId, Long messageId) {
+        requireFriend(auth.getUserId(), friendId);
+        DevHubDirectMessage message = requireDirectMessage(auth.getUserId(), friendId, messageId);
+        message.setPinned(!message.isPinned());
+        return toDirectMessageResponse(message, auth.getUserId());
+    }
+
+    public DirectMessageResponse reactToDirectMessage(JwtAuthenticationToken auth, String friendId, Long messageId, ReactionRequest request) {
+        requireFriend(auth.getUserId(), friendId);
+        DevHubDirectMessage message = requireDirectMessage(auth.getUserId(), friendId, messageId);
+        message.setReactions(addReaction(message.getReactions(), request.emoji()));
+        return toDirectMessageResponse(message, auth.getUserId());
+    }
+
+    public DirectMessageResponse forwardDirectMessage(JwtAuthenticationToken auth, String friendId, Long messageId) {
+        requireFriend(auth.getUserId(), friendId);
+        DevHubDirectMessage message = requireDirectMessage(auth.getUserId(), friendId, messageId);
+        if (message.isDeleted()) {
+            throw new IllegalArgumentException("삭제된 메시지는 전달할 수 없습니다.");
+        }
+        DevHubDirectMessage saved = directMessageRepository.save(DevHubDirectMessage.builder()
+                .roomKey(dmRoomKey(auth.getUserId(), friendId))
+                .senderId(auth.getUserId())
+                .senderLogin(login(auth))
+                .receiverId(friendId)
+                .content("전달: " + message.getContent())
+                .build());
+        sendPush(friendId, login(auth) + "님의 메시지", preview(saved.getContent()), "/apps/dev-action-hub/");
+        return toDirectMessageResponse(saved, auth.getUserId());
+    }
+
     private DevHubServerMember requireMember(JwtAuthenticationToken auth, Long serverId) {
         return memberRepository.findByServer_IdAndUserId(serverId, auth.getUserId())
                 .orElseThrow(() -> new IllegalArgumentException("서버에 접근할 수 없습니다."));
+    }
+
+    private DevHubChatMessage requireServerMessage(Long serverId, Long messageId) {
+        return messageRepository.findById(messageId)
+                .filter(message -> message.getServer().getId().equals(serverId))
+                .orElseThrow(() -> new IllegalArgumentException("메시지를 찾을 수 없습니다."));
+    }
+
+    private DevHubDirectMessage requireDirectMessage(String userId, String friendId, Long messageId) {
+        String roomKey = dmRoomKey(userId, friendId);
+        return directMessageRepository.findById(messageId)
+                .filter(message -> message.getRoomKey().equals(roomKey))
+                .orElseThrow(() -> new IllegalArgumentException("메시지를 찾을 수 없습니다."));
     }
 
     private void requireFriend(String userId, String friendId) {
@@ -202,6 +299,29 @@ public class DevHubService {
     private String preview(String content) {
         String normalized = content.replaceAll("\\s+", " ").trim();
         return normalized.length() <= 80 ? normalized : normalized.substring(0, 80) + "...";
+    }
+
+    private String addReaction(String reactions, String emoji) {
+        String normalized = normalizeOptional(emoji);
+        if (!List.of("👍", "❤️", "😂").contains(normalized)) {
+            throw new IllegalArgumentException("지원하지 않는 이모티콘입니다.");
+        }
+        Map<String, Integer> counts = new java.util.LinkedHashMap<>();
+        if (reactions != null && !reactions.isBlank()) {
+            for (String item : reactions.split(",")) {
+                String[] parts = item.split("=", 2);
+                if (parts.length == 2) {
+                    try {
+                        counts.put(parts[0], Integer.parseInt(parts[1]));
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+            }
+        }
+        counts.put(normalized, counts.getOrDefault(normalized, 0) + 1);
+        return counts.entrySet().stream()
+                .map(entry -> entry.getKey() + "=" + entry.getValue())
+                .collect(java.util.stream.Collectors.joining(","));
     }
 
     private String uniqueSlug(String baseSlug) {
@@ -256,7 +376,10 @@ public class DevHubService {
                 message.getServer().getId(),
                 message.getAuthorLogin(),
                 avatarUrl(message.getAuthorId()),
-                message.getContent(),
+                message.isDeleted() ? "삭제된 메시지입니다." : message.getContent(),
+                message.isDeleted(),
+                message.isPinned(),
+                message.getReactions(),
                 message.getCreatedAt()
         );
     }
@@ -268,7 +391,10 @@ public class DevHubService {
                 friendId,
                 message.getSenderLogin(),
                 avatarUrl(message.getSenderId()),
-                message.getContent(),
+                message.isDeleted() ? "삭제된 메시지입니다." : message.getContent(),
+                message.isDeleted(),
+                message.isPinned(),
+                message.getReactions(),
                 message.getCreatedAt()
         );
     }

@@ -284,6 +284,50 @@ a {
   padding: 24px 20px 16px;
 }
 
+.pinned-panel {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 20px;
+  padding: 12px;
+  border: 1px solid #4f535f;
+  border-radius: 10px;
+  background: #2b2d31;
+}
+
+.pinned-panel > strong {
+  color: #f0b232;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.pinned-panel button {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #383a40;
+  text-align: left;
+}
+
+.pinned-panel span,
+.pinned-panel small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pinned-panel span {
+  color: #f2f3f5;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.pinned-panel small {
+  color: #b5bac1;
+  font-size: 12px;
+}
+
 .message-row {
   display: grid;
   grid-template-columns: 52px minmax(0, 1fr);
@@ -348,12 +392,62 @@ a {
   font-size: 12px;
 }
 
+.message-meta em {
+  color: #f0b232;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 900;
+}
+
 .message-row p {
   margin: 4px 0 0;
   color: #f2f3f5;
   font-size: 17px;
   line-height: 1.45;
   white-space: pre-wrap;
+}
+
+.message-row p.deleted-message {
+  color: #949ba4;
+  font-style: italic;
+}
+
+.reaction-row,
+.message-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.reaction-row span,
+.message-actions button {
+  min-height: 28px;
+  border-radius: 8px;
+  background: #383a40;
+  color: #dbdee1;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.reaction-row span {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+}
+
+.message-actions button {
+  padding: 0 8px;
+}
+
+.message-actions button:hover:not(:disabled) {
+  background: #4e5058;
+  color: white;
+}
+
+.message-actions button:disabled {
+  cursor: default;
+  opacity: 0.45;
 }
 
 .empty-chat {

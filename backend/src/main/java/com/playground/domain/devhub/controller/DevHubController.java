@@ -4,6 +4,7 @@ import com.playground.config.JwtAuthenticationToken;
 import com.playground.domain.devhub.dto.DevHubDto.CreateServerRequest;
 import com.playground.domain.devhub.dto.DevHubDto.DirectMessageResponse;
 import com.playground.domain.devhub.dto.DevHubDto.MessageResponse;
+import com.playground.domain.devhub.dto.DevHubDto.ReactionRequest;
 import com.playground.domain.devhub.dto.DevHubDto.SendMessageRequest;
 import com.playground.domain.devhub.dto.DevHubDto.ServerResponse;
 import com.playground.domain.devhub.dto.DevHubDto.UpdateGithubOrgRequest;
@@ -70,6 +71,43 @@ public class DevHubController {
         return ResponseEntity.ok(devHubService.sendMessage(auth, serverId, request));
     }
 
+    @PostMapping("/servers/{serverId}/messages/{messageId}/delete")
+    public ResponseEntity<MessageResponse> deleteMessage(
+            @AuthenticationPrincipal JwtAuthenticationToken auth,
+            @PathVariable Long serverId,
+            @PathVariable Long messageId
+    ) {
+        return ResponseEntity.ok(devHubService.deleteMessage(auth, serverId, messageId));
+    }
+
+    @PostMapping("/servers/{serverId}/messages/{messageId}/pin")
+    public ResponseEntity<MessageResponse> toggleMessagePin(
+            @AuthenticationPrincipal JwtAuthenticationToken auth,
+            @PathVariable Long serverId,
+            @PathVariable Long messageId
+    ) {
+        return ResponseEntity.ok(devHubService.toggleMessagePin(auth, serverId, messageId));
+    }
+
+    @PostMapping("/servers/{serverId}/messages/{messageId}/reaction")
+    public ResponseEntity<MessageResponse> reactToMessage(
+            @AuthenticationPrincipal JwtAuthenticationToken auth,
+            @PathVariable Long serverId,
+            @PathVariable Long messageId,
+            @RequestBody ReactionRequest request
+    ) {
+        return ResponseEntity.ok(devHubService.reactToMessage(auth, serverId, messageId, request));
+    }
+
+    @PostMapping("/servers/{serverId}/messages/{messageId}/forward")
+    public ResponseEntity<MessageResponse> forwardMessage(
+            @AuthenticationPrincipal JwtAuthenticationToken auth,
+            @PathVariable Long serverId,
+            @PathVariable Long messageId
+    ) {
+        return ResponseEntity.ok(devHubService.forwardMessage(auth, serverId, messageId));
+    }
+
     @GetMapping("/dm/{friendId}/messages")
     public ResponseEntity<List<DirectMessageResponse>> directMessages(
             @AuthenticationPrincipal JwtAuthenticationToken auth,
@@ -86,6 +124,43 @@ public class DevHubController {
             @RequestBody SendMessageRequest request
     ) {
         return ResponseEntity.ok(devHubService.sendDirectMessage(auth, friendId, request));
+    }
+
+    @PostMapping("/dm/{friendId}/messages/{messageId}/delete")
+    public ResponseEntity<DirectMessageResponse> deleteDirectMessage(
+            @AuthenticationPrincipal JwtAuthenticationToken auth,
+            @PathVariable String friendId,
+            @PathVariable Long messageId
+    ) {
+        return ResponseEntity.ok(devHubService.deleteDirectMessage(auth, friendId, messageId));
+    }
+
+    @PostMapping("/dm/{friendId}/messages/{messageId}/pin")
+    public ResponseEntity<DirectMessageResponse> toggleDirectMessagePin(
+            @AuthenticationPrincipal JwtAuthenticationToken auth,
+            @PathVariable String friendId,
+            @PathVariable Long messageId
+    ) {
+        return ResponseEntity.ok(devHubService.toggleDirectMessagePin(auth, friendId, messageId));
+    }
+
+    @PostMapping("/dm/{friendId}/messages/{messageId}/reaction")
+    public ResponseEntity<DirectMessageResponse> reactToDirectMessage(
+            @AuthenticationPrincipal JwtAuthenticationToken auth,
+            @PathVariable String friendId,
+            @PathVariable Long messageId,
+            @RequestBody ReactionRequest request
+    ) {
+        return ResponseEntity.ok(devHubService.reactToDirectMessage(auth, friendId, messageId, request));
+    }
+
+    @PostMapping("/dm/{friendId}/messages/{messageId}/forward")
+    public ResponseEntity<DirectMessageResponse> forwardDirectMessage(
+            @AuthenticationPrincipal JwtAuthenticationToken auth,
+            @PathVariable String friendId,
+            @PathVariable Long messageId
+    ) {
+        return ResponseEntity.ok(devHubService.forwardDirectMessage(auth, friendId, messageId));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
