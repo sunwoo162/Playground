@@ -145,6 +145,10 @@ function repoActionsUrl(repo: string) {
   return `https://github.com/${repo.replace(/^https:\/\/github.com\//, '').replace(/\.git$/, '')}/actions`
 }
 
+function hasStoredDirectMessage() {
+  return Boolean(localStorage.getItem(SELECTED_DM_KEY)) || Object.keys(readJson<Record<string, string>>(DM_ACTIVITY_KEY, {})).length > 0
+}
+
 function githubOrgCreateUrl(orgName: string, email?: string) {
   const params = new URLSearchParams({ plan: 'free', organization_name: slugify(orgName) })
   if (email) {
@@ -165,7 +169,7 @@ function tabLabel(tab: RoomTab) {
 function App() {
   const [servers, setServers] = useState<DevServer[]>(() => readJson<DevServer[]>(LOCAL_SERVERS_KEY, []))
   const [selectedServerId, setSelectedServerId] = useState<string>(() => readJson<DevServer[]>(LOCAL_SERVERS_KEY, [])[0]?.id || '')
-  const [viewMode, setViewMode] = useState<ViewMode>(() => (selectedServerId ? 'server' : 'dm'))
+  const [viewMode, setViewMode] = useState<ViewMode>(() => (hasStoredDirectMessage() || !selectedServerId ? 'dm' : 'server'))
   const [activeTab, setActiveTab] = useState<RoomTab>('chat')
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [messageText, setMessageText] = useState('')
