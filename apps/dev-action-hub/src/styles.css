@@ -513,6 +513,41 @@ a {
   opacity: 0.45;
 }
 
+.emoji-picker-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.emoji-picker {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  z-index: 8;
+  display: grid;
+  grid-template-columns: repeat(6, 32px);
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid #4f535f;
+  border-radius: 10px;
+  background: #1e1f22;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.42);
+}
+
+.emoji-picker button {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  padding: 0;
+  border-radius: 8px;
+  background: #383a40;
+  font-size: 17px;
+}
+
+.emoji-picker button:hover {
+  background: #5865f2;
+}
+
 .empty-chat {
   margin-top: 12vh;
   color: #b5bac1;

@@ -338,7 +338,7 @@ public class DevHubService {
 
     private String addReaction(String reactions, String emoji, String userLogin) {
         String normalized = normalizeOptional(emoji);
-        if (!List.of("👍", "❤️", "😂").contains(normalized)) {
+        if (!List.of("👍", "❤️", "😂", "🎉", "🔥", "👏", "😮", "😢", "🙏", "✅", "🚀", "👀").contains(normalized)) {
             throw new IllegalArgumentException("지원하지 않는 이모티콘입니다.");
         }
         Map<String, java.util.LinkedHashSet<String>> usersByEmoji = new java.util.LinkedHashMap<>();

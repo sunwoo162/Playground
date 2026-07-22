@@ -11,6 +11,7 @@ const DOCS_KEY = 'dev-action-hub-docs'
 const DISCORD_KEY = 'dev-action-hub-discord'
 const DM_ACTIVITY_KEY = 'dev-action-hub-dm-activity'
 const SELECTED_DM_KEY = 'dev-action-hub-selected-dm'
+const SUPPORTED_REACTIONS = ['👍', '❤️', '😂', '🎉', '🔥', '👏', '😮', '😢', '🙏', '✅', '🚀', '👀']
 
 type RoomTab = 'chat' | 'work' | 'docs' | 'alerts'
 type ViewMode = 'dm' | 'server'
@@ -216,6 +217,7 @@ function App() {
   const [friendSearching, setFriendSearching] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [forwardingMessage, setForwardingMessage] = useState<ChatMessage | null>(null)
+  const [reactionPickerMessageId, setReactionPickerMessageId] = useState<string | null>(null)
   const [newServer, setNewServer] = useState({ name: '', description: '', githubOrg: '' })
   const [repoInput, setRepoInput] = useState('')
   const [docDraft, setDocDraft] = useState({ title: '', content: '' })
@@ -854,15 +856,31 @@ function App() {
                       </div>
                     )}
                     <div className="message-actions">
-                      <button type="button" onClick={() => reactToMessage(message, '👍')} disabled={message.deleted}>
-                        👍
-                      </button>
-                      <button type="button" onClick={() => reactToMessage(message, '❤️')} disabled={message.deleted}>
-                        ❤️
-                      </button>
-                      <button type="button" onClick={() => reactToMessage(message, '😂')} disabled={message.deleted}>
-                        😂
-                      </button>
+                      <span className="emoji-picker-wrap">
+                        <button
+                          type="button"
+                          onClick={() => setReactionPickerMessageId(prev => (prev === message.id ? null : message.id))}
+                          disabled={message.deleted}
+                        >
+                          이모티콘
+                        </button>
+                        {reactionPickerMessageId === message.id && (
+                          <span className="emoji-picker">
+                            {SUPPORTED_REACTIONS.map(emoji => (
+                              <button
+                                key={emoji}
+                                type="button"
+                                onClick={() => {
+                                  void reactToMessage(message, emoji)
+                                  setReactionPickerMessageId(null)
+                                }}
+                              >
+                                {emoji}
+                              </button>
+                            ))}
+                          </span>
+                        )}
+                      </span>
                       <button type="button" onClick={() => runMessageAction(message, 'pin')}>
                         📌
                       </button>
