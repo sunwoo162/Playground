@@ -528,10 +528,10 @@ a {
   grid-template-columns: repeat(6, 32px);
   gap: 4px;
   padding: 8px;
-  border: 1px solid #4f535f;
+  border: 1px solid #686d7a;
   border-radius: 10px;
-  background: #1e1f22;
-  box-shadow: 0 12px 32px rgb(0 0 0 / 0.42);
+  background: #111214;
+  box-shadow: 0 12px 32px #000;
 }
 
 .emoji-picker button {
@@ -541,7 +541,7 @@ a {
   place-items: center;
   padding: 0;
   border-radius: 8px;
-  background: #383a40;
+  background: #2b2d31;
   font-size: 17px;
 }
 
