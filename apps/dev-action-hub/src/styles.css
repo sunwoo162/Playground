@@ -455,6 +455,46 @@ a {
   padding: 0 8px;
 }
 
+.reaction-pill {
+  position: relative;
+}
+
+.reaction-pill small {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  z-index: 5;
+  display: none;
+  max-width: 220px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  background: #111214;
+  color: #f2f3f5;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+  text-align: center;
+  transform: translateX(-50%);
+  white-space: normal;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.35);
+}
+
+.reaction-pill small::after {
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 8px;
+  height: 8px;
+  background: #111214;
+  content: "";
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.reaction-pill:hover small,
+.reaction-pill:focus-within small {
+  display: block;
+}
+
 .message-actions button {
   padding: 0 8px;
 }

@@ -141,7 +141,7 @@ public class DevHubService {
     public MessageResponse reactToMessage(JwtAuthenticationToken auth, Long serverId, Long messageId, ReactionRequest request) {
         requireMember(auth, serverId);
         DevHubChatMessage message = requireServerMessage(serverId, messageId);
-        message.setReactions(addReaction(message.getReactions(), request.emoji()));
+        message.setReactions(addReaction(message.getReactions(), request.emoji(), login(auth)));
         return toMessageResponse(message);
     }
 
@@ -205,7 +205,7 @@ public class DevHubService {
     public DirectMessageResponse reactToDirectMessage(JwtAuthenticationToken auth, String friendId, Long messageId, ReactionRequest request) {
         requireFriend(auth.getUserId(), friendId);
         DevHubDirectMessage message = requireDirectMessage(auth.getUserId(), friendId, messageId);
-        message.setReactions(addReaction(message.getReactions(), request.emoji()));
+        message.setReactions(addReaction(message.getReactions(), request.emoji(), login(auth)));
         return toDirectMessageResponse(message, auth.getUserId());
     }
 
@@ -336,26 +336,38 @@ public class DevHubService {
         return normalized.length() <= 80 ? normalized : normalized.substring(0, 80) + "...";
     }
 
-    private String addReaction(String reactions, String emoji) {
+    private String addReaction(String reactions, String emoji, String userLogin) {
         String normalized = normalizeOptional(emoji);
         if (!List.of("👍", "❤️", "😂").contains(normalized)) {
             throw new IllegalArgumentException("지원하지 않는 이모티콘입니다.");
         }
-        Map<String, Integer> counts = new java.util.LinkedHashMap<>();
+        Map<String, java.util.LinkedHashSet<String>> usersByEmoji = new java.util.LinkedHashMap<>();
         if (reactions != null && !reactions.isBlank()) {
             for (String item : reactions.split(",")) {
                 String[] parts = item.split("=", 2);
                 if (parts.length == 2) {
-                    try {
-                        counts.put(parts[0], Integer.parseInt(parts[1]));
-                    } catch (NumberFormatException ignored) {
+                    java.util.LinkedHashSet<String> users = new java.util.LinkedHashSet<>();
+                    if (parts[1].contains("|")) {
+                        for (String user : parts[1].split("\\|")) {
+                            String clean = normalizeOptional(user);
+                            if (!clean.isBlank()) users.add(clean);
+                        }
+                    } else {
+                        try {
+                            int count = Integer.parseInt(parts[1]);
+                            for (int index = 1; index <= count; index += 1) {
+                                users.add("사용자 " + index);
+                            }
+                        } catch (NumberFormatException ignored) {
+                        }
                     }
+                    usersByEmoji.put(parts[0], users);
                 }
             }
         }
-        counts.put(normalized, counts.getOrDefault(normalized, 0) + 1);
-        return counts.entrySet().stream()
-                .map(entry -> entry.getKey() + "=" + entry.getValue())
+        usersByEmoji.computeIfAbsent(normalized, key -> new java.util.LinkedHashSet<>()).add(userLogin);
+        return usersByEmoji.entrySet().stream()
+                .map(entry -> entry.getKey() + "=" + String.join("|", entry.getValue()))
                 .collect(java.util.stream.Collectors.joining(","));
     }
 

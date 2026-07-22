@@ -174,8 +174,12 @@ function parseReactions(value?: string) {
   return value
     .split(',')
     .map(item => {
-      const [emoji, count] = item.split('=')
-      return { emoji, count: Number(count || 0) }
+      const [emoji, rawUsers] = item.split('=')
+      const numericCount = Number(rawUsers || 0)
+      const users = Number.isFinite(numericCount) && String(numericCount) === rawUsers
+        ? Array.from({ length: numericCount }, (_, index) => `사용자 ${index + 1}`)
+        : (rawUsers || '').split('|').filter(Boolean)
+      return { emoji, count: users.length, users }
     })
     .filter(item => item.emoji && item.count > 0)
 }
@@ -839,8 +843,9 @@ function App() {
                     {parseReactions(message.reactions).length > 0 && (
                       <div className="reaction-row">
                         {parseReactions(message.reactions).map(reaction => (
-                          <span key={reaction.emoji}>
+                          <span key={reaction.emoji} className="reaction-pill">
                             {reaction.emoji} {reaction.count}
+                            <small>{reaction.users.join(', ')}</small>
                           </span>
                         ))}
                       </div>
