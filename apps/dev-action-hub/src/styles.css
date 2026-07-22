@@ -465,7 +465,9 @@ a {
   bottom: calc(100% + 8px);
   z-index: 5;
   display: none;
-  max-width: 220px;
+  width: max-content;
+  min-width: 92px;
+  max-width: 240px;
   padding: 7px 9px;
   border-radius: 8px;
   background: #111214;
@@ -475,8 +477,10 @@ a {
   line-height: 1.35;
   text-align: center;
   transform: translateX(-50%);
-  white-space: normal;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
   box-shadow: 0 8px 24px rgb(0 0 0 / 0.35);
+  pointer-events: none;
 }
 
 .reaction-pill small::after {

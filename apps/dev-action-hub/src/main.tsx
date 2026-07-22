@@ -174,11 +174,14 @@ function parseReactions(value?: string) {
   return value
     .split(',')
     .map(item => {
-      const [emoji, rawUsers] = item.split('=')
-      const numericCount = Number(rawUsers || 0)
-      const users = Number.isFinite(numericCount) && String(numericCount) === rawUsers
+      const separatorIndex = item.indexOf('=')
+      if (separatorIndex === -1) return { emoji: '', count: 0, users: [] }
+      const emoji = item.slice(0, separatorIndex)
+      const rawUsers = item.slice(separatorIndex + 1)
+      const numericCount = Number(rawUsers)
+      const users = rawUsers && Number.isFinite(numericCount) && String(numericCount) === rawUsers
         ? Array.from({ length: numericCount }, (_, index) => `사용자 ${index + 1}`)
-        : (rawUsers || '').split('|').filter(Boolean)
+        : rawUsers.split('|').map(user => user.trim()).filter(Boolean)
       return { emoji, count: users.length, users }
     })
     .filter(item => item.emoji && item.count > 0)
@@ -845,7 +848,7 @@ function App() {
                         {parseReactions(message.reactions).map(reaction => (
                           <span key={reaction.emoji} className="reaction-pill">
                             {reaction.emoji} {reaction.count}
-                            <small>{reaction.users.join(', ')}</small>
+                            <small>{reaction.users.length > 0 ? reaction.users.join('\n') : '반응 없음'}</small>
                           </span>
                         ))}
                       </div>

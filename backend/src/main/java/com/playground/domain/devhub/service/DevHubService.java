@@ -365,8 +365,14 @@ public class DevHubService {
                 }
             }
         }
-        usersByEmoji.computeIfAbsent(normalized, key -> new java.util.LinkedHashSet<>()).add(userLogin);
+        java.util.LinkedHashSet<String> currentUsers = usersByEmoji.computeIfAbsent(normalized, key -> new java.util.LinkedHashSet<>());
+        if (currentUsers.contains(userLogin)) {
+            currentUsers.remove(userLogin);
+        } else {
+            currentUsers.add(userLogin);
+        }
         return usersByEmoji.entrySet().stream()
+                .filter(entry -> !entry.getValue().isEmpty())
                 .map(entry -> entry.getKey() + "=" + String.join("|", entry.getValue()))
                 .collect(java.util.stream.Collectors.joining(","));
     }
