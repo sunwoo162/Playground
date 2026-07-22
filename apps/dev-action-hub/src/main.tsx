@@ -94,6 +94,13 @@ type FriendUser = {
   friendStatus: string | null
 }
 
+type ForwardToast = {
+  targetType: 'server' | 'dm'
+  targetId: string
+  targetName: string
+  createdAt: number
+}
+
 const defaultDmMessages: Record<string, ChatMessage[]> = {}
 
 function readJson<T>(key: string, fallback: T): T {
@@ -223,6 +230,7 @@ function App() {
   const [createOpen, setCreateOpen] = useState(false)
   const [forwardingMessage, setForwardingMessage] = useState<ChatMessage | null>(null)
   const [forwardedMessageIds, setForwardedMessageIds] = useState<string[]>(() => readJson(FORWARDED_MESSAGE_IDS_KEY, []))
+  const [forwardToast, setForwardToast] = useState<ForwardToast | null>(null)
   const [pinnedOpen, setPinnedOpen] = useState(false)
   const [reactionPickerMessageId, setReactionPickerMessageId] = useState<string | null>(null)
   const [newServer, setNewServer] = useState({ name: '', description: '', githubOrg: '' })
@@ -299,6 +307,12 @@ function App() {
     })[0]
     if (recentFriend) selectDirectMessage(recentFriend.githubId)
   }, [dmActivity, friends, selectedDmId, viewMode])
+
+  useEffect(() => {
+    if (!forwardToast) return
+    const timer = window.setTimeout(() => setForwardToast(null), 5000)
+    return () => window.clearTimeout(timer)
+  }, [forwardToast])
 
   async function createServer(event: FormEvent) {
     event.preventDefault()
@@ -494,7 +508,11 @@ function App() {
         return next
       })
       setForwardingMessage(null)
-      setStatus('메시지를 전달했습니다.')
+      const targetName =
+        targetType === 'server'
+          ? servers.find(server => server.id === targetId)?.name || '서버'
+          : directRooms.find(room => room.id === targetId)?.name || 'DM'
+      setForwardToast({ targetType, targetId, targetName, createdAt: Date.now() })
     } catch (error) {
       setStatus(error instanceof Error ? error.message : '메시지를 전달하지 못했습니다.')
     }
@@ -594,6 +612,17 @@ function App() {
   function selectDirectMessage(friendId: string) {
     setSelectedDmId(friendId)
     localStorage.setItem(SELECTED_DM_KEY, friendId)
+  }
+
+  function moveToForwardTarget(toast: ForwardToast) {
+    if (toast.targetType === 'server') {
+      openServer(toast.targetId)
+    } else {
+      selectDirectMessage(toast.targetId)
+      setViewMode('dm')
+      setDmSection('messages')
+    }
+    setForwardToast(null)
   }
 
   const messageList = viewMode === 'dm' ? selectedDmMessages : serverMessages
@@ -778,6 +807,18 @@ function App() {
       </aside>
 
       <main className="discord-main">
+        {forwardToast && (
+          <div className="forward-toast" key={forwardToast.createdAt}>
+            <div>
+              <strong>전달되었습니다</strong>
+              <span>{forwardToast.targetName} 채팅방으로 보냈습니다.</span>
+            </div>
+            <button type="button" onClick={() => moveToForwardTarget(forwardToast)}>
+              채팅방으로 이동하기
+            </button>
+            <span className="forward-toast-progress" />
+          </div>
+        )}
         <header className="channel-header">
           <div>
             <strong>{viewMode === 'dm' ? selectedDm?.name || '다이렉트 메시지' : `# ${tabLabel(activeTab)}`}</strong>

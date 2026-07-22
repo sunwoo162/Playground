@@ -226,8 +226,80 @@ a {
   display: flex;
   min-width: 0;
   flex-direction: column;
+  position: relative;
   overflow: hidden;
   background: #313338;
+}
+
+.forward-toast {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: min(520px, calc(100% - 32px));
+  max-width: calc(100% - 32px);
+  overflow: hidden;
+  padding: 12px 14px 15px;
+  border: 1px solid #4752c4;
+  border-radius: 10px;
+  background: #2b2d31;
+  box-shadow: 0 14px 40px rgb(0 0 0 / 0.35);
+  transform: translateX(-50%);
+}
+
+.forward-toast > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.forward-toast strong,
+.forward-toast span {
+  display: block;
+}
+
+.forward-toast strong {
+  color: #f2f3f5;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.forward-toast span {
+  overflow: hidden;
+  color: #b5bac1;
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.forward-toast button {
+  min-height: 34px;
+  flex: 0 0 auto;
+  padding: 0 12px;
+  border-radius: 8px;
+  background: #5865f2;
+  color: white;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.forward-toast-progress {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 3px;
+  background: #8ea1ff;
+  animation: toast-shrink 5s linear forwards;
+}
+
+@keyframes toast-shrink {
+  to {
+    width: 0;
+  }
 }
 
 .channel-header {
