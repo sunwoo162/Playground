@@ -854,6 +854,14 @@ a {
   object-fit: cover;
 }
 
+.forward-empty {
+  margin: 0;
+  padding: 10px;
+  color: #949ba4;
+  font-size: 13px;
+  font-weight: 700;
+}
+
 @media (max-width: 1120px) {
   .discord-shell {
     grid-template-columns: 76px 260px minmax(0, 1fr);

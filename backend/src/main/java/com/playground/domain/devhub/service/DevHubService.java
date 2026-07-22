@@ -145,21 +145,13 @@ public class DevHubService {
         return toMessageResponse(message);
     }
 
-    public MessageResponse forwardMessage(JwtAuthenticationToken auth, Long serverId, Long messageId, ForwardMessageRequest request) {
+    public Object forwardMessage(JwtAuthenticationToken auth, Long serverId, Long messageId, ForwardMessageRequest request) {
         requireMember(auth, serverId);
         DevHubChatMessage message = requireServerMessage(serverId, messageId);
         if (message.isDeleted()) {
             throw new IllegalArgumentException("삭제된 메시지는 전달할 수 없습니다.");
         }
-        DevHubServer targetServer = requireForwardTargetServer(auth, request);
-        DevHubChatMessage saved = messageRepository.save(DevHubChatMessage.builder()
-                .server(targetServer)
-                .authorId(auth.getUserId())
-                .authorLogin(login(auth))
-                .content("전달: " + message.getContent())
-                .build());
-        sendServerMessagePush(targetServer, auth.getUserId(), login(auth), saved.getContent());
-        return toMessageResponse(saved);
+        return forwardContent(auth, request, message.getContent());
     }
 
     @Transactional(readOnly = true)
@@ -217,12 +209,29 @@ public class DevHubService {
         return toDirectMessageResponse(message, auth.getUserId());
     }
 
-    public DirectMessageResponse forwardDirectMessage(JwtAuthenticationToken auth, String friendId, Long messageId, ForwardMessageRequest request) {
+    public Object forwardDirectMessage(JwtAuthenticationToken auth, String friendId, Long messageId, ForwardMessageRequest request) {
         requireFriend(auth.getUserId(), friendId);
         DevHubDirectMessage message = requireDirectMessage(auth.getUserId(), friendId, messageId);
         if (message.isDeleted()) {
             throw new IllegalArgumentException("삭제된 메시지는 전달할 수 없습니다.");
         }
+        return forwardContent(auth, request, message.getContent());
+    }
+
+    private Object forwardContent(JwtAuthenticationToken auth, ForwardMessageRequest request, String content) {
+        String targetType = normalizeOptional(request == null ? null : request.targetType());
+        if (targetType.equals("server")) {
+            DevHubServer targetServer = requireForwardTargetServer(auth, request);
+            DevHubChatMessage saved = messageRepository.save(DevHubChatMessage.builder()
+                    .server(targetServer)
+                    .authorId(auth.getUserId())
+                    .authorLogin(login(auth))
+                    .content("전달: " + content)
+                    .build());
+            sendServerMessagePush(targetServer, auth.getUserId(), login(auth), saved.getContent());
+            return toMessageResponse(saved);
+        }
+
         String targetFriendId = requireForwardTargetFriend(auth, request);
         DevHubDirectMessage saved = directMessageRepository.save(DevHubDirectMessage.builder()
                 .roomKey(dmRoomKey(auth.getUserId(), targetFriendId))
@@ -257,7 +266,7 @@ public class DevHubService {
         String targetType = normalizeOptional(request == null ? null : request.targetType());
         String targetId = normalizeOptional(request == null ? null : request.targetId());
         if (!targetType.equals("server")) {
-            throw new IllegalArgumentException("서버 채팅으로만 전달할 수 있습니다.");
+            throw new IllegalArgumentException("전달할 서버를 선택해주세요.");
         }
         try {
             return requireMember(auth, Long.parseLong(targetId)).getServer();

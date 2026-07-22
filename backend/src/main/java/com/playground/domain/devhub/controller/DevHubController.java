@@ -101,7 +101,7 @@ public class DevHubController {
     }
 
     @PostMapping("/servers/{serverId}/messages/{messageId}/forward")
-    public ResponseEntity<MessageResponse> forwardMessage(
+    public ResponseEntity<?> forwardMessage(
             @AuthenticationPrincipal JwtAuthenticationToken auth,
             @PathVariable Long serverId,
             @PathVariable Long messageId,
@@ -157,7 +157,7 @@ public class DevHubController {
     }
 
     @PostMapping("/dm/{friendId}/messages/{messageId}/forward")
-    public ResponseEntity<DirectMessageResponse> forwardDirectMessage(
+    public ResponseEntity<?> forwardDirectMessage(
             @AuthenticationPrincipal JwtAuthenticationToken auth,
             @PathVariable String friendId,
             @PathVariable Long messageId,

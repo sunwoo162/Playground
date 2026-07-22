@@ -1021,31 +1021,26 @@ function App() {
           <div className="create-modal forward-modal" onMouseDown={event => event.stopPropagation()}>
             <h2>메시지 전달</h2>
             <p>{forwardingMessage.content}</p>
-            {viewMode === 'server' ? (
-              <>
-                <h3>서버 선택</h3>
-                <div className="forward-target-list">
-                  {servers.map(server => (
-                    <button key={server.id} type="button" onClick={() => forwardMessage('server', server.id)}>
-                      <span>{initials(server.name)}</span>
-                      <strong>{server.name}</strong>
-                    </button>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <>
-                <h3>DM 선택</h3>
-                <div className="forward-target-list">
-                  {directRooms.map(room => (
-                    <button key={room.id} type="button" onClick={() => forwardMessage('dm', room.id)}>
-                      <img src={room.avatarUrl} alt={room.name} />
-                      <strong>{room.name}</strong>
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
+            <h3>서버 선택</h3>
+            <div className="forward-target-list">
+              {servers.map(server => (
+                <button key={server.id} type="button" onClick={() => forwardMessage('server', server.id)}>
+                  <span>{initials(server.name)}</span>
+                  <strong>{server.name}</strong>
+                </button>
+              ))}
+              {servers.length === 0 && <p className="forward-empty">전달할 서버가 없습니다.</p>}
+            </div>
+            <h3>DM 선택</h3>
+            <div className="forward-target-list">
+              {directRooms.map(room => (
+                <button key={room.id} type="button" onClick={() => forwardMessage('dm', room.id)}>
+                  <img src={room.avatarUrl} alt={room.name} />
+                  <strong>{room.name}</strong>
+                </button>
+              ))}
+              {directRooms.length === 0 && <p className="forward-empty">전달할 DM이 없습니다.</p>}
+            </div>
             <div className="modal-actions">
               <button type="button" onClick={() => setForwardingMessage(null)}>
                 취소
