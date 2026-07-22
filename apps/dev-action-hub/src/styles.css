@@ -434,7 +434,8 @@ a {
 
 .message-row:hover .message-actions,
 .message-row:focus-within .message-actions {
-  max-height: 80px;
+  max-height: 180px;
+  overflow: visible;
   opacity: 1;
   transform: translateY(0);
 }
@@ -521,7 +522,7 @@ a {
 .emoji-picker {
   position: absolute;
   left: 0;
-  bottom: calc(100% + 8px);
+  top: calc(100% + 8px);
   z-index: 8;
   display: grid;
   grid-template-columns: repeat(6, 32px);
