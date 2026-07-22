@@ -238,7 +238,7 @@ public class DevHubService {
                 .senderId(auth.getUserId())
                 .senderLogin(login(auth))
                 .receiverId(targetFriendId)
-                .content("전달: " + message.getContent())
+                .content("전달: " + content)
                 .build());
         sendPush(targetFriendId, login(auth) + "님의 메시지", preview(saved.getContent()), "/apps/dev-action-hub/");
         return toDirectMessageResponse(saved, auth.getUserId());
