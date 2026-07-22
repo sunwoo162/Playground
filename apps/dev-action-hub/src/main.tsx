@@ -14,7 +14,7 @@ const SELECTED_DM_KEY = 'dev-action-hub-selected-dm'
 const FORWARDED_MESSAGE_IDS_KEY = 'dev-action-hub-forwarded-message-ids'
 const SUPPORTED_REACTIONS = ['👍', '❤️', '😂', '🎉', '🔥', '👏', '😮', '😢', '🙏', '✅', '🚀', '👀']
 
-type RoomTab = 'chat' | 'work' | 'docs' | 'alerts'
+type RoomTab = 'chat' | 'frontlog' | 'backlog' | 'work' | 'docs' | 'alerts'
 type ViewMode = 'dm' | 'server'
 type DmSection = 'messages' | 'friends'
 type Presence = 'online' | 'idle' | 'offline'
@@ -101,6 +101,14 @@ type ForwardToast = {
   createdAt: number
 }
 
+type DevHubStructureResult = {
+  success: boolean
+  repos: {
+    frontend: { fullName: string; actionsUrl: string }
+    backend: { fullName: string; actionsUrl: string }
+  }
+}
+
 const defaultDmMessages: Record<string, ChatMessage[]> = {}
 
 function readJson<T>(key: string, fallback: T): T {
@@ -173,9 +181,17 @@ function githubOrgCreateUrl(orgName: string, email?: string) {
 
 function tabLabel(tab: RoomTab) {
   if (tab === 'chat') return '일반'
+  if (tab === 'frontlog') return 'frontlog'
+  if (tab === 'backlog') return 'backlog'
   if (tab === 'work') return 'github-actions'
   if (tab === 'docs') return '개발-문서'
   return '알림-설정'
+}
+
+function tabDescription(tab: RoomTab, server: DevServer | null) {
+  if (tab === 'frontlog') return 'frontend log'
+  if (tab === 'backlog') return 'backendlog'
+  return server?.description || server?.githubOrg || '서버 작업 공간'
 }
 
 function parseReactions(value?: string) {
@@ -240,6 +256,7 @@ function App() {
   const [newServer, setNewServer] = useState({ name: '', description: '', githubOrg: '' })
   const [serverEditOpen, setServerEditOpen] = useState(false)
   const [serverEdit, setServerEdit] = useState({ name: '', repoUrl: '' })
+  const [settingUpStructure, setSettingUpStructure] = useState(false)
   const [repoInput, setRepoInput] = useState('')
   const [docDraft, setDocDraft] = useState({ title: '', content: '' })
   const feedRef = useRef<HTMLDivElement>(null)
@@ -324,7 +341,11 @@ function App() {
     event.preventDefault()
     const name = newServer.name.trim()
     if (!name) return
-    const githubOrg = newServer.githubOrg.trim() || slugify(name)
+    const githubOrg = newServer.githubOrg.trim()
+    if (!githubOrg) {
+      setStatus('GitHub Organization 이름을 입력해주세요.')
+      return
+    }
     let githubEmail = ''
 
     const payload = {
@@ -591,6 +612,48 @@ function App() {
     setStatus('알림 설정을 저장했습니다.')
   }
 
+  async function setupDevHubStructure() {
+    if (!selectedServer?.githubOrg) {
+      setStatus('GitHub Organization 이름이 필요합니다.')
+      return
+    }
+    setSettingUpStructure(true)
+    setStatus('GitHub Organization 구조를 설정하는 중입니다.')
+    try {
+      const result = await apiJson<DevHubStructureResult>('/github/setup-dev-hub-structure', {
+        method: 'POST',
+        body: JSON.stringify({ org: selectedServer.githubOrg }),
+      })
+      const createdWatches: Watch[] = [
+        {
+          id: nowId('watch'),
+          serverId: selectedServer.id,
+          fullName: result.repos.frontend.fullName,
+          actionsUrl: result.repos.frontend.actionsUrl,
+          enabled: true,
+        },
+        {
+          id: nowId('watch'),
+          serverId: selectedServer.id,
+          fullName: result.repos.backend.fullName,
+          actionsUrl: result.repos.backend.actionsUrl,
+          enabled: true,
+        },
+      ]
+      setWatches(prev => {
+        const existingKeys = new Set(createdWatches.map(watch => `${watch.serverId}:${watch.fullName}`))
+        const next = [...createdWatches, ...prev.filter(watch => !existingKeys.has(`${watch.serverId}:${watch.fullName}`))]
+        writeJson(WATCHES_KEY, next)
+        return next
+      })
+      setStatus('frontend/backend 레포와 log workflow를 설정했습니다.')
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Organization 구조 설정에 실패했습니다.')
+    } finally {
+      setSettingUpStructure(false)
+    }
+  }
+
   function createDoc(event: FormEvent) {
     event.preventDefault()
     if (!selectedServer || !docDraft.title.trim()) return
@@ -848,6 +911,18 @@ function App() {
               <button className="event-row">📅 이벤트</button>
             </div>
             <div className="sidebar-section">
+              <div className="section-title">frontend</div>
+              <button className={`channel-row ${activeTab === 'frontlog' ? 'active' : ''}`} onClick={() => setActiveTab('frontlog')}>
+                # frontlog
+              </button>
+            </div>
+            <div className="sidebar-section">
+              <div className="section-title">backend</div>
+              <button className={`channel-row ${activeTab === 'backlog' ? 'active' : ''}`} onClick={() => setActiveTab('backlog')}>
+                # backlog
+              </button>
+            </div>
+            <div className="sidebar-section">
               <div className="section-title">채팅 채널</div>
               {(['chat', 'work', 'docs', 'alerts'] as RoomTab[]).map(tab => (
                 <button key={tab} className={`channel-row ${activeTab === tab ? 'active' : ''}`} onClick={() => setActiveTab(tab)}>
@@ -884,7 +959,7 @@ function App() {
                 ? `${friends.length}명의 친구`
                 : viewMode === 'dm'
                   ? selectedDm?.subtitle || '친구를 선택하세요'
-                  : selectedServer?.description || selectedServer?.githubOrg || '서버 작업 공간'}
+                  : tabDescription(activeTab, selectedServer)}
             </span>
           </div>
           <div className="header-actions">
@@ -1064,6 +1139,54 @@ function App() {
         ) : (
           <div className="workspace-panel">
             {status && <p className="status-banner">{status}</p>}
+            {(activeTab === 'frontlog' || activeTab === 'backlog') && (
+              <>
+                <section className="panel-card log-room-card">
+                  <div className="card-row">
+                    <div>
+                      <span>{activeTab === 'frontlog' ? 'frontend' : 'backend'}</span>
+                      <h2>{activeTab === 'frontlog' ? 'frontend log' : 'backendlog'}</h2>
+                      <p>
+                        {selectedServer?.githubOrg
+                          ? `${selectedServer.githubOrg} Organization 기준으로 작업 로그를 확인합니다.`
+                          : 'Organization을 연결하면 작업 로그를 확인할 수 있습니다.'}
+                      </p>
+                    </div>
+                    <button onClick={() => void setupDevHubStructure()} disabled={settingUpStructure || !selectedServer?.githubOrg}>
+                      {settingUpStructure ? '설정 중' : '구조 자동 설정'}
+                    </button>
+                  </div>
+                </section>
+                <section className="panel-grid">
+                  {serverWatches.map(watch => (
+                    <article className="panel-card" key={watch.id}>
+                      <div className="card-row">
+                        <h3>{watch.fullName}</h3>
+                        <button onClick={() => loadRuns(watch)}>로그 불러오기</button>
+                      </div>
+                      <small>{activeTab === 'frontlog' ? 'frontend log source' : 'backendlog source'}</small>
+                    </article>
+                  ))}
+                  {serverWatches.length === 0 && (
+                    <article className="panel-card">
+                      <h3>연결된 레포가 없습니다</h3>
+                      <p>서버 이름 옆 + 버튼에서 레포 주소를 연결하거나 github-actions 채널에서 레포를 연결하세요.</p>
+                    </article>
+                  )}
+                </section>
+                {runs.length > 0 && (
+                  <section className="panel-card">
+                    <h2>{activeTab === 'frontlog' ? 'frontend log' : 'backendlog'}</h2>
+                    {runs.map(run => (
+                      <a key={run.id} className="run-row" href={run.htmlUrl} target="_blank" rel="noreferrer">
+                        <span>{run.name}</span>
+                        <strong>{run.conclusion || run.status}</strong>
+                      </a>
+                    ))}
+                  </section>
+                )}
+              </>
+            )}
             {activeTab === 'work' && (
               <>
                 <section className="panel-card">
@@ -1171,10 +1294,11 @@ function App() {
               <input
                 value={newServer.githubOrg}
                 onChange={event => setNewServer({ ...newServer, githubOrg: event.target.value })}
-                placeholder="비워두면 서버 이름으로 입력"
+                placeholder="예: my-dev-org"
+                required
               />
             </label>
-            <p className="modal-note">GitHub 정책상 조직 생성은 GitHub 화면에서 최종 확인해야 합니다. 만들기를 누르면 계정 이메일을 함께 전달하고, GitHub가 자동 입력을 막는 경우를 대비해 클립보드에도 복사합니다.</p>
+            <p className="modal-note">GitHub Organization 이름은 필수입니다. 만들기를 누르면 같은 이름의 GitHub Organization 생성 화면이 열리고, 기본 채널은 frontend/frontlog와 backend/backlog로 구성됩니다.</p>
             <div className="modal-actions">
               <button type="button" onClick={() => setCreateOpen(false)}>
                 취소

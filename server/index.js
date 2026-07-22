@@ -454,6 +454,90 @@ app.get('/github/primary-email', async (req, res) => {
   }
 });
 
+app.post('/github/setup-dev-hub-structure', async (req, res) => {
+  const githubToken = req.session?.githubToken;
+  if (!githubToken) return res.status(401).json({ error: 'GitHub 토큰 없음. 다시 로그인해주세요.' });
+
+  const { org } = req.body;
+  const orgName = String(org || '').trim();
+  if (!orgName) return res.status(400).json({ error: 'org is required.' });
+
+  const headers = {
+    'Authorization': `Bearer ${githubToken}`,
+    'Accept': 'application/vnd.github+json',
+    'User-Agent': 'playground-app',
+    'Content-Type': 'application/json',
+    'X-GitHub-Api-Version': '2022-11-28',
+  };
+
+  const putFile = async (repo, filePath, content, message) => {
+    const encodedPath = filePath.split('/').map(part => encodeURIComponent(part)).join('/');
+    const getRes = await fetch(`https://api.github.com/repos/${repo}/contents/${encodedPath}`, { headers });
+    let sha;
+    if (getRes.ok) {
+      const data = await getRes.json();
+      sha = data.sha;
+    }
+    const putRes = await fetch(`https://api.github.com/repos/${repo}/contents/${encodedPath}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({
+        message,
+        content: Buffer.from(content, 'utf-8').toString('base64'),
+        ...(sha && { sha }),
+      }),
+    });
+    if (!putRes.ok) {
+      const error = await putRes.json().catch(() => ({}));
+      throw new Error(error.message || `Failed to write ${filePath}`);
+    }
+  };
+
+  const ensureRepo = async (suffix, label) => {
+    const repoName = `${orgName}-${suffix}`;
+    const fullName = `${orgName}/${repoName}`;
+    const existing = await fetch(`https://api.github.com/repos/${fullName}`, { headers });
+    if (!existing.ok) {
+      const created = await fetch(`https://api.github.com/orgs/${orgName}/repos`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          name: repoName,
+          description: `${label} workspace for ${orgName}`,
+          private: false,
+          auto_init: true,
+        }),
+      });
+      if (!created.ok) {
+        const error = await created.json().catch(() => ({}));
+        throw new Error(error.message || `Failed to create ${repoName}`);
+      }
+    }
+
+    await putFile(
+      fullName,
+      'README.md',
+      `# ${label}\n\n${orgName} ${label} workspace.\n`,
+      `Initialize ${label} README`,
+    );
+    await putFile(
+      fullName,
+      '.github/workflows/log.yml',
+      `name: ${label} log\n\non:\n  push:\n  workflow_dispatch:\n\njobs:\n  log:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo "${label} log for ${orgName}"\n`,
+      `Add ${label} log workflow`,
+    );
+    return { name: repoName, fullName, actionsUrl: `https://github.com/${fullName}/actions` };
+  };
+
+  try {
+    const frontend = await ensureRepo('frontend', 'frontend');
+    const backend = await ensureRepo('backend', 'backend');
+    res.json({ success: true, repos: { frontend, backend } });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ============================================
 // Velog publish API
 // ============================================

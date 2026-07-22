@@ -752,6 +752,19 @@ a {
   margin-top: 0;
 }
 
+.log-room-card {
+  border-color: #4752c4;
+}
+
+.log-room-card span {
+  display: inline-flex;
+  margin-bottom: 6px;
+  color: #8ea1ff;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
 .panel-card p,
 .panel-card small {
   color: #b5bac1;
@@ -786,6 +799,12 @@ a {
   background: #5865f2;
   color: white;
   font-weight: 900;
+}
+
+.panel-card button:disabled {
+  cursor: default;
+  background: #404249;
+  color: #949ba4;
 }
 
 .inline-form button,
