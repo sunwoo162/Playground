@@ -175,6 +175,7 @@ function App() {
   const [noticeContent, setNoticeContent] = useState('');
   const [noticeStatus, setNoticeStatus] = useState('');
   const [noticeSubmitting, setNoticeSubmitting] = useState(false);
+  const [loginRedirectApp, setLoginRedirectApp] = useState<AppItem | null>(null);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -225,9 +226,9 @@ function App() {
     return () => clearInterval(id);
   }, [tokenExpiry]);
 
-  const handleLogin = () => {
+  const handleLogin = (returnToOverride?: string) => {
     const params = new URLSearchParams(window.location.search);
-    const returnTo = params.get('returnTo');
+    const returnTo = returnToOverride || params.get('returnTo');
     window.location.href = returnTo
       ? `/auth/github?returnTo=${encodeURIComponent(returnTo)}`
       : '/auth/github';
@@ -354,6 +355,11 @@ function App() {
       : [...favorites, id];
     setFavorites(next);
     saveFavorites(next);
+  };
+
+  const requestAppLogin = (app: AppItem) => {
+    if (app.disabled) return;
+    setLoginRedirectApp(app);
   };
 
   const displayedApps = showFavOnly
@@ -517,7 +523,14 @@ function App() {
               className={`app-card ${app.disabled ? 'disabled' : ''} ${!user ? 'locked' : ''}`}
               style={{ '--accent': app.color } as React.CSSProperties}
               onClick={(e) => {
-                if (!user || app.disabled) e.preventDefault();
+                if (app.disabled) {
+                  e.preventDefault();
+                  return;
+                }
+                if (!user) {
+                  e.preventDefault();
+                  requestAppLogin(app);
+                }
               }}
             >
               {/* 즐겨찾기 버튼 */}
@@ -582,6 +595,31 @@ function App() {
             </div>
             {featureRequestStatus && <p className="request-status">{featureRequestStatus}</p>}
           </form>
+        </div>
+      )}
+
+      {loginRedirectApp && (
+        <div className="modal-backdrop" onClick={() => setLoginRedirectApp(null)}>
+          <div className="login-required-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="login-required-icon">🔒</div>
+            <h2>로그인이 필요해요</h2>
+            <p>
+              {loginRedirectApp.title} 앱은 로그인 후 사용할 수 있습니다.
+              로그인하면 바로 이 앱으로 돌아옵니다.
+            </p>
+            <div className="login-required-actions">
+              <button type="button" className="btn-ghost" onClick={() => setLoginRedirectApp(null)}>
+                취소
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => handleLogin(loginRedirectApp.url)}
+              >
+                로그인으로 이동
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
