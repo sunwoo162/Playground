@@ -413,6 +413,42 @@ a {
   font-style: italic;
 }
 
+.message-row.forwarded {
+  border-left: 3px solid #5865f2;
+  padding-left: 10px;
+}
+
+.message-meta em.forwarded-label {
+  color: #8ea1ff;
+}
+
+.forwarded-message {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+  max-width: 720px;
+  padding: 10px 12px;
+  border: 1px solid #4f535f;
+  border-radius: 10px;
+  background: #2b2d31;
+}
+
+.forwarded-message > span {
+  color: #8ea1ff;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.forwarded-message p {
+  margin: 0;
+  font-size: 16px;
+}
+
+.forwarded-message.deleted-message p {
+  color: #949ba4;
+  font-style: italic;
+}
+
 .reaction-row,
 .message-actions {
   display: flex;
@@ -940,6 +976,79 @@ a {
   color: #949ba4;
   font-size: 13px;
   font-weight: 700;
+}
+
+.pinned-modal {
+  width: min(680px, 100%);
+  max-height: min(780px, calc(100vh - 48px));
+  display: flex;
+  flex-direction: column;
+}
+
+.pinned-room-list {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.pinned-room {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #424650;
+  border-radius: 12px;
+  background: #2b2d31;
+}
+
+.pinned-room h3 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0;
+  color: #f2f3f5;
+  font-size: 15px;
+}
+
+.pinned-room h3 span {
+  color: #949ba4;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.pinned-message {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 10px;
+  padding: 10px;
+  border-radius: 8px;
+  background: #383a40;
+}
+
+.pinned-message strong {
+  overflow: hidden;
+  color: #f2f3f5;
+  font-size: 13px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pinned-message span {
+  color: #949ba4;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.pinned-message p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #dbdee1;
+  font-size: 14px;
+  line-height: 1.45;
+  white-space: pre-wrap;
 }
 
 @media (max-width: 1120px) {

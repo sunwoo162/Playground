@@ -11,6 +11,7 @@ const DOCS_KEY = 'dev-action-hub-docs'
 const DISCORD_KEY = 'dev-action-hub-discord'
 const DM_ACTIVITY_KEY = 'dev-action-hub-dm-activity'
 const SELECTED_DM_KEY = 'dev-action-hub-selected-dm'
+const FORWARDED_MESSAGE_IDS_KEY = 'dev-action-hub-forwarded-message-ids'
 const SUPPORTED_REACTIONS = ['👍', '❤️', '😂', '🎉', '🔥', '👏', '😮', '😢', '🙏', '✅', '🚀', '👀']
 
 type RoomTab = 'chat' | 'work' | 'docs' | 'alerts'
@@ -188,6 +189,10 @@ function parseReactions(value?: string) {
     .filter(item => item.emoji && item.count > 0)
 }
 
+function stripForwardPrefix(content: string) {
+  return content.replace(/^\s*전달\s*[:：]\s*/, '')
+}
+
 function App() {
   const [servers, setServers] = useState<DevServer[]>(() => readJson<DevServer[]>(LOCAL_SERVERS_KEY, []))
   const [selectedServerId, setSelectedServerId] = useState<string>(() => readJson<DevServer[]>(LOCAL_SERVERS_KEY, [])[0]?.id || '')
@@ -217,6 +222,8 @@ function App() {
   const [friendSearching, setFriendSearching] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [forwardingMessage, setForwardingMessage] = useState<ChatMessage | null>(null)
+  const [forwardedMessageIds, setForwardedMessageIds] = useState<string[]>(() => readJson(FORWARDED_MESSAGE_IDS_KEY, []))
+  const [pinnedOpen, setPinnedOpen] = useState(false)
   const [reactionPickerMessageId, setReactionPickerMessageId] = useState<string | null>(null)
   const [newServer, setNewServer] = useState({ name: '', description: '', githubOrg: '' })
   const [repoInput, setRepoInput] = useState('')
@@ -481,6 +488,11 @@ function App() {
       if ((viewMode === 'dm' && targetType === 'dm' && selectedDm?.id === targetId) || (viewMode === 'server' && targetType === 'server' && selectedServer?.id === targetId)) {
         appendMessage(created)
       }
+      setForwardedMessageIds(prev => {
+        const next = Array.from(new Set([...prev, String(created.id)]))
+        writeJson(FORWARDED_MESSAGE_IDS_KEY, next)
+        return next
+      })
       setForwardingMessage(null)
       setStatus('메시지를 전달했습니다.')
     } catch (error) {
@@ -585,7 +597,24 @@ function App() {
   }
 
   const messageList = viewMode === 'dm' ? selectedDmMessages : serverMessages
-  const pinnedMessages = messageList.filter(message => message.pinned && !message.deleted)
+  const pinnedRooms = [
+    ...servers
+      .map(server => ({
+        id: `server-${server.id}`,
+        title: server.name,
+        subtitle: '서버',
+        messages: messages.filter(message => message.serverId === server.id && message.pinned && !message.deleted),
+      }))
+      .filter(room => room.messages.length > 0),
+    ...directRooms
+      .map(room => ({
+        id: `dm-${room.id}`,
+        title: room.name,
+        subtitle: room.subtitle,
+        messages: (dmMessages[room.id] || []).filter(message => message.pinned && !message.deleted),
+      }))
+      .filter(room => room.messages.length > 0),
+  ]
   const viewingFriends = viewMode === 'dm' && dmSection === 'friends'
 
   async function loadFriends() {
@@ -603,6 +632,18 @@ function App() {
 
   async function refreshDmActivity(friendList: FriendUser[]) {
     await Promise.allSettled(friendList.map(friend => loadDirectMessages(friend.githubId)))
+  }
+
+  async function openPinnedMessages() {
+    setPinnedOpen(true)
+    await Promise.allSettled([
+      ...servers.map(server =>
+        apiJson<ChatMessage[]>(`/api/dev-hub/servers/${server.id}/messages`).then(remote => {
+          setMessages(prev => [...prev.filter(message => message.serverId !== server.id), ...remote])
+        }),
+      ),
+      ...directRooms.map(room => loadDirectMessages(room.id)),
+    ])
   }
 
   function openFriends() {
@@ -750,7 +791,9 @@ function App() {
           </div>
           <div className="header-actions">
             <button>☎</button>
-            <button>📌</button>
+            <button onClick={() => void openPinnedMessages()} title="고정된 메시지">
+              📌
+            </button>
             <button onClick={openFriends}>👥</button>
             <input placeholder={`${viewMode === 'dm' ? selectedDm?.name || 'DM' : selectedServer?.name || '서버'} 검색`} />
           </div>
@@ -822,19 +865,10 @@ function App() {
           <>
             <div className="message-feed" ref={feedRef}>
               {status && <p className="status-banner">{status}</p>}
-              {pinnedMessages.length > 0 && (
-                <div className="pinned-panel">
-                  <strong>고정된 메시지</strong>
-                  {pinnedMessages.slice(-3).map(message => (
-                    <button key={message.id} type="button">
-                      <span>{message.authorLogin}</span>
-                      <small>{message.content}</small>
-                    </button>
-                  ))}
-                </div>
-              )}
-              {messageList.map(message => (
-                <article key={message.id} className="message-row">
+              {messageList.map(message => {
+                const isForwarded = forwardedMessageIds.includes(String(message.id))
+                return (
+                <article key={message.id} className={`message-row ${isForwarded ? 'forwarded' : ''}`}>
                   {message.authorAvatarUrl ? (
                     <img className="avatar-image" src={message.authorAvatarUrl} alt={message.authorLogin} />
                   ) : (
@@ -844,9 +878,17 @@ function App() {
                     <div className="message-meta">
                       <strong>{message.authorLogin}</strong>
                       <span>{formatDateTime(message.createdAt)}</span>
+                      {isForwarded && <em className="forwarded-label">전달됨</em>}
                       {message.pinned && <em>고정됨</em>}
                     </div>
-                    <p className={message.deleted ? 'deleted-message' : ''}>{message.content}</p>
+                    {isForwarded ? (
+                      <div className={message.deleted ? 'forwarded-message deleted-message' : 'forwarded-message'}>
+                        <span>전달된 메시지</span>
+                        <p>{stripForwardPrefix(message.content)}</p>
+                      </div>
+                    ) : (
+                      <p className={message.deleted ? 'deleted-message' : ''}>{message.content}</p>
+                    )}
                     {parseReactions(message.reactions).length > 0 && (
                       <div className="reaction-row">
                         {parseReactions(message.reactions).map(reaction => (
@@ -895,7 +937,8 @@ function App() {
                     </div>
                   </div>
                 </article>
-              ))}
+                )
+              })}
               {messageList.length === 0 && (
                 <div className="empty-chat">
                   <h2>{viewMode === 'dm' ? selectedDm.name : selectedServer?.name}</h2>
@@ -1072,6 +1115,40 @@ function App() {
             <div className="modal-actions">
               <button type="button" onClick={() => setForwardingMessage(null)}>
                 취소
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pinnedOpen && (
+        <div className="modal-backdrop" onMouseDown={() => setPinnedOpen(false)}>
+          <div className="create-modal pinned-modal" onMouseDown={event => event.stopPropagation()}>
+            <h2>고정된 메시지</h2>
+            {pinnedRooms.length > 0 ? (
+              <div className="pinned-room-list">
+                {pinnedRooms.map(room => (
+                  <section className="pinned-room" key={room.id}>
+                    <h3>
+                      {room.title}
+                      <span>{room.subtitle}</span>
+                    </h3>
+                    {room.messages.map(message => (
+                      <article className="pinned-message" key={message.id}>
+                        <strong>{message.authorLogin}</strong>
+                        <span>{formatDateTime(message.createdAt)}</span>
+                        <p>{forwardedMessageIds.includes(String(message.id)) ? stripForwardPrefix(message.content) : message.content}</p>
+                      </article>
+                    ))}
+                  </section>
+                ))}
+              </div>
+            ) : (
+              <p className="forward-empty">아직 고정된 메시지가 없습니다.</p>
+            )}
+            <div className="modal-actions">
+              <button type="button" onClick={() => setPinnedOpen(false)}>
+                닫기
               </button>
             </div>
           </div>
