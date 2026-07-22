@@ -161,16 +161,6 @@ function hasStoredDirectMessage() {
   return Boolean(localStorage.getItem(SELECTED_DM_KEY)) || Object.keys(readJson<Record<string, string>>(DM_ACTIVITY_KEY, {})).length > 0
 }
 
-function githubOrgCreateUrl(orgName: string, email?: string) {
-  const params = new URLSearchParams({ plan: 'free', organization_name: slugify(orgName) })
-  if (email) {
-    params.set('billing_email', email)
-    params.set('contact_email', email)
-    params.set('email', email)
-  }
-  return `https://github.com/account/organizations/new?${params.toString()}`
-}
-
 function tabLabel(tab: RoomTab) {
   if (tab === 'chat') return '일반'
   if (tab === 'work') return 'github-actions'
@@ -198,6 +188,10 @@ function parseReactions(value?: string) {
 
 function stripForwardPrefix(content: string) {
   return content.replace(/^\s*전달\s*[:：]\s*/, '')
+}
+
+function normalizeRepo(value: string) {
+  return value.trim().replace(/^https:\/\/github.com\//, '').replace(/\.git$/, '').replace(/^\/+|\/+$/g, '')
 }
 
 function App() {
@@ -233,7 +227,7 @@ function App() {
   const [forwardToast, setForwardToast] = useState<ForwardToast | null>(null)
   const [pinnedOpen, setPinnedOpen] = useState(false)
   const [reactionPickerMessageId, setReactionPickerMessageId] = useState<string | null>(null)
-  const [newServer, setNewServer] = useState({ name: '', description: '', githubOrg: '' })
+  const [newServer, setNewServer] = useState({ name: '', repoUrl: '' })
   const [repoInput, setRepoInput] = useState('')
   const [docDraft, setDocDraft] = useState({ title: '', content: '' })
   const feedRef = useRef<HTMLDivElement>(null)
@@ -316,17 +310,20 @@ function App() {
 
   async function createServer(event: FormEvent) {
     event.preventDefault()
-    const name = newServer.name.trim()
+    const repoFullName = normalizeRepo(newServer.repoUrl)
+    const repoName = repoFullName.split('/').filter(Boolean).at(-1) || ''
+    const name = newServer.name.trim() || repoName
     if (!name) return
-    const githubOrg = newServer.githubOrg.trim() || slugify(name)
-    let githubEmail = ''
+    const githubOrg = repoFullName.split('/')[0] || slugify(name)
 
     const payload = {
       name,
       slug: slugify(name),
       githubOrg,
-      description: newServer.description.trim(),
+      description: repoFullName ? repoFullName : '서버 작업 공간',
     }
+
+    let createdServer: DevServer | null = null
 
     try {
       const created = await apiJson<DevServer>('/api/dev-hub/servers', {
@@ -339,6 +336,7 @@ function App() {
         return next
       })
       setSelectedServerId(created.id)
+      createdServer = created
     } catch {
       const created: DevServer = {
         ...payload,
@@ -353,23 +351,29 @@ function App() {
         return next
       })
       setSelectedServerId(created.id)
+      createdServer = created
     }
 
-    try {
-      const emailResponse = await apiJson<{ email: string }>('/github/primary-email')
-      githubEmail = emailResponse.email || ''
-      if (githubEmail && navigator.clipboard) {
-        await navigator.clipboard.writeText(githubEmail)
+    if (repoFullName && createdServer) {
+      const serverId = createdServer.id
+      const watch: Watch = {
+        id: nowId('watch'),
+        serverId,
+        fullName: repoFullName,
+        actionsUrl: repoActionsUrl(repoFullName),
+        enabled: true,
       }
-    } catch {
-      githubEmail = ''
+      setWatches(prev => {
+        const next = [watch, ...prev.filter(item => !(item.serverId === serverId && item.fullName === repoFullName))]
+        writeJson(WATCHES_KEY, next)
+        return next
+      })
     }
 
-    setNewServer({ name: '', description: '', githubOrg: '' })
+    setNewServer({ name: '', repoUrl: '' })
     setViewMode('server')
     setActiveTab('chat')
     setCreateOpen(false)
-    window.open(githubOrgCreateUrl(githubOrg, githubEmail), '_blank', 'noopener,noreferrer')
   }
 
   async function sendMessage(event: FormEvent) {
@@ -542,7 +546,7 @@ function App() {
   async function connectRepo(event: FormEvent) {
     event.preventDefault()
     if (!selectedServer || !repoInput.trim()) return
-    const fullName = repoInput.trim().replace(/^https:\/\/github.com\//, '').replace(/\.git$/, '')
+    const fullName = normalizeRepo(repoInput)
     const watch: Watch = {
       id: nowId('watch'),
       serverId: selectedServer.id,
@@ -1100,24 +1104,20 @@ function App() {
         <div className="modal-backdrop" onMouseDown={() => setCreateOpen(false)}>
           <form className="create-modal" onSubmit={createServer} onMouseDown={event => event.stopPropagation()}>
             <h2>서버 만들기</h2>
-            <p>서버 이름을 기준으로 작업 공간을 만들고, 이후 GitHub Organization 연동을 붙일 수 있습니다.</p>
+            <p>서버 이름만 입력하거나 GitHub 레포 주소를 넣어 작업 공간을 만듭니다.</p>
             <label>
-              서버 이름
-              <input value={newServer.name} onChange={event => setNewServer({ ...newServer, name: event.target.value })} placeholder="예: xs" autoFocus />
+              서버명
+              <input value={newServer.name} onChange={event => setNewServer({ ...newServer, name: event.target.value })} placeholder="예: 액션 알림 서버" autoFocus />
             </label>
             <label>
-              설명
-              <input value={newServer.description} onChange={event => setNewServer({ ...newServer, description: event.target.value })} placeholder="서버 목적" />
-            </label>
-            <label>
-              GitHub Organization 이름
+              레포 주소
               <input
-                value={newServer.githubOrg}
-                onChange={event => setNewServer({ ...newServer, githubOrg: event.target.value })}
-                placeholder="비워두면 서버 이름으로 입력"
+                value={newServer.repoUrl}
+                onChange={event => setNewServer({ ...newServer, repoUrl: event.target.value })}
+                placeholder="owner/repo 또는 https://github.com/owner/repo"
               />
             </label>
-            <p className="modal-note">GitHub 정책상 조직 생성은 GitHub 화면에서 최종 확인해야 합니다. 만들기를 누르면 계정 이메일을 함께 전달하고, GitHub가 자동 입력을 막는 경우를 대비해 클립보드에도 복사합니다.</p>
+            <p className="modal-note">서버명을 비워두면 레포 이름으로 서버가 만들어지고, 레포 주소가 있으면 GitHub Actions 연결에도 자동으로 추가됩니다.</p>
             <div className="modal-actions">
               <button type="button" onClick={() => setCreateOpen(false)}>
                 취소
