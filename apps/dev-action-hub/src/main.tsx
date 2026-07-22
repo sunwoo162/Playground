@@ -12,6 +12,7 @@ const DISCORD_KEY = 'dev-action-hub-discord'
 const DM_ACTIVITY_KEY = 'dev-action-hub-dm-activity'
 const SELECTED_DM_KEY = 'dev-action-hub-selected-dm'
 const FORWARDED_MESSAGE_IDS_KEY = 'dev-action-hub-forwarded-message-ids'
+const DATA_RESET_KEY = 'dev-action-hub-data-reset-2026-07-23'
 const SUPPORTED_REACTIONS = ['👍', '❤️', '😂', '🎉', '🔥', '👏', '😮', '😢', '🙏', '✅', '🚀', '👀']
 
 type RoomTab = 'chat' | 'frontlog' | 'backlog' | 'work' | 'docs' | 'alerts'
@@ -124,6 +125,18 @@ function writeJson<T>(key: string, value: T) {
   localStorage.setItem(key, JSON.stringify(value))
 }
 
+function resetLocalDevHubDataOnce() {
+  if (localStorage.getItem(DATA_RESET_KEY)) return
+  localStorage.removeItem(LOCAL_SERVERS_KEY)
+  localStorage.removeItem(LOCAL_MESSAGES_KEY)
+  localStorage.removeItem(LOCAL_DM_KEY)
+  localStorage.removeItem(WATCHES_KEY)
+  localStorage.removeItem(DOCS_KEY)
+  localStorage.removeItem(DM_ACTIVITY_KEY)
+  localStorage.removeItem(FORWARDED_MESSAGE_IDS_KEY)
+  localStorage.setItem(DATA_RESET_KEY, 'done')
+}
+
 async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     credentials: 'include',
@@ -221,6 +234,7 @@ function normalizeRepo(value: string) {
 }
 
 function App() {
+  resetLocalDevHubDataOnce()
   const [servers, setServers] = useState<DevServer[]>(() => readJson<DevServer[]>(LOCAL_SERVERS_KEY, []))
   const [selectedServerId, setSelectedServerId] = useState<string>(() => readJson<DevServer[]>(LOCAL_SERVERS_KEY, [])[0]?.id || '')
   const [viewMode, setViewMode] = useState<ViewMode>(() => (hasStoredDirectMessage() || !selectedServerId ? 'dm' : 'server'))
