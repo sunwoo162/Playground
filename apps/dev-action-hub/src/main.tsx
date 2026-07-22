@@ -425,14 +425,15 @@ function App() {
   }
 
   function replaceMessage(updated: ChatMessage) {
+    const updatedId = String(updated.id)
     if (viewMode === 'dm' && selectedDm) {
       setDmMessages(prev => ({
         ...prev,
-        [selectedDm.id]: (prev[selectedDm.id] || []).map(message => (message.id === updated.id ? updated : message)),
+        [selectedDm.id]: (prev[selectedDm.id] || []).map(message => (String(message.id) === updatedId ? updated : message)),
       }))
       return
     }
-    setMessages(prev => prev.map(message => (message.id === updated.id ? updated : message)))
+    setMessages(prev => prev.map(message => (String(message.id) === updatedId ? updated : message)))
   }
 
   function appendMessage(created: ChatMessage) {
@@ -820,6 +821,7 @@ function App() {
           viewMode !== 'dm' || selectedDm ? (
           <>
             <div className="message-feed" ref={feedRef}>
+              {status && <p className="status-banner">{status}</p>}
               {pinnedMessages.length > 0 && (
                 <div className="pinned-panel">
                   <strong>고정된 메시지</strong>
