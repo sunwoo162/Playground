@@ -3,6 +3,7 @@ package com.playground.config;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -22,6 +23,13 @@ public class JwtUtil {
 
     // 리프레시 토큰: 7일
     private static final long REFRESH_TOKEN_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000L;
+
+    @PostConstruct
+    void validateSecret() {
+        if (jwtSecret == null || jwtSecret.length() < 32 || jwtSecret.contains("playground-jwt-secret-2024")) {
+            throw new IllegalStateException("JWT_SECRET must be set to a private value with at least 32 characters.");
+        }
+    }
 
     private SecretKey getKey() {
         return Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));

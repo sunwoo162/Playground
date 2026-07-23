@@ -3,11 +3,12 @@ package com.playground.config;
 import com.playground.domain.user.entity.User;
 import com.playground.domain.user.repository.UserRepository;
 import io.jsonwebtoken.Claims;
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
@@ -78,13 +79,15 @@ public class AuthController {
                 user.getAvatarUrl()
         );
 
-        Cookie accessCookie = new Cookie("playground_token", newAccessToken);
-        accessCookie.setHttpOnly(false); // 프론트에서 읽을 수 있게
-        accessCookie.setMaxAge((int) (jwtUtil.getAccessTokenExpiryMs() / 1000));
-        accessCookie.setPath("/");
-        response.addCookie(accessCookie);
+        ResponseCookie accessCookie = ResponseCookie.from("playground_token", newAccessToken)
+                .httpOnly(true)
+                .secure(true)
+                .sameSite("Strict")
+                .maxAge(jwtUtil.getAccessTokenExpiryMs() / 1000)
+                .path("/")
+                .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, accessCookie.toString());
 
-        log.info("Access token refreshed for userId: {}", userId);
         return ResponseEntity.ok(Map.of("success", true));
     }
 

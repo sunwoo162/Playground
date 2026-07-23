@@ -549,6 +549,7 @@ a {
 }
 
 .reaction-row span,
+.reaction-row button,
 .message-actions button {
   min-height: 28px;
   border-radius: 8px;
@@ -558,7 +559,8 @@ a {
   font-weight: 800;
 }
 
-.reaction-row span {
+.reaction-row span,
+.reaction-row button {
   display: inline-flex;
   align-items: center;
   padding: 0 8px;
@@ -566,6 +568,8 @@ a {
 
 .reaction-pill {
   position: relative;
+  border: 0;
+  cursor: pointer;
 }
 
 .reaction-pill small {

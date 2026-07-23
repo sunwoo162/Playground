@@ -38,7 +38,6 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             if (jwtUtil.isValid(token) && !"refresh".equals(jwtUtil.getTokenType(token))) {
                 Claims claims = jwtUtil.parseToken(token);
                 String userId = claims.get("id", String.class);
-                log.info("JWT valid - userId: {}", userId);
 
                 upsertUser(userId, claims);
 
@@ -51,6 +50,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 SecurityContextHolder.getContext().setAuthentication(auth);
             } else {
                 log.warn("JWT invalid token received");
+                SecurityContextHolder.clearContext();
             }
         }
 

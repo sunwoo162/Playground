@@ -42,6 +42,9 @@ webpush.setVapidDetails(
 const app = express();
 const PORT = process.env.PORT || 3000;
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8080';
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+
+app.set('trust proxy', 1);
 
 // 세션 설정 (로그인 상태 유지)
 app.use(session({
@@ -50,7 +53,9 @@ app.use(session({
   saveUninitialized: false,
   rolling: true,
   cookie: {
-    secure: false, // HTTPS 사용 시 true로 변경
+    httpOnly: true,
+    secure: IS_PRODUCTION,
+    sameSite: 'strict',
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7일
   },
 }));
@@ -98,9 +103,10 @@ function issueAccessTokenCookie(res, user) {
   );
 
   res.cookie('playground_token', accessToken, {
-    httpOnly: false,
+    httpOnly: true,
+    secure: IS_PRODUCTION,
     maxAge: 5 * 60 * 60 * 1000, // 5시간
-    sameSite: 'lax',
+    sameSite: 'strict',
     path: '/',
   });
 }
@@ -861,17 +867,19 @@ app.get('/auth/github/callback', async (req, res) => {
 
     // 액세스 토큰 쿠키 (5시간)
     res.cookie('playground_token', accessToken, {
-      httpOnly: false, // 프론트에서 읽을 수 있게
+      httpOnly: true,
+      secure: IS_PRODUCTION,
       maxAge: 5 * 60 * 60 * 1000, // 5시간
-      sameSite: 'lax',
+      sameSite: 'strict',
       path: '/',
     });
 
     // 리프레시 토큰 쿠키 (7일, HttpOnly로 보안 강화)
     res.cookie('playground_refresh', refreshToken, {
       httpOnly: true,
+      secure: IS_PRODUCTION,
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7일
-      sameSite: 'lax',
+      sameSite: 'strict',
       path: '/',
     });
 

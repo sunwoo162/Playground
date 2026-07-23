@@ -1082,10 +1082,16 @@ function App() {
                     {parseReactions(message.reactions).length > 0 && (
                       <div className="reaction-row">
                         {parseReactions(message.reactions).map(reaction => (
-                          <span key={reaction.emoji} className="reaction-pill">
+                          <button
+                            key={reaction.emoji}
+                            type="button"
+                            className="reaction-pill"
+                            onClick={() => void reactToMessage(message, reaction.emoji)}
+                            disabled={message.deleted}
+                          >
                             {reaction.emoji} {reaction.count}
                             <small>{reaction.users.length > 0 ? reaction.users.join('\n') : '반응 없음'}</small>
-                          </span>
+                          </button>
                         ))}
                       </div>
                     )}
