@@ -91,6 +91,7 @@ jobs:
 
             # backend (Spring Boot) 재시작 - 새 JAR 반영
             pm2 delete backend 2>/dev/null || true
+            grep -q '^JWT_SECRET=' /home/ubuntu/playground/.env.backend || { echo "JWT_SECRET is missing in /home/ubuntu/playground/.env.backend"; exit 1; }
             pm2 start ecosystem.config.js --only backend
 
             pm2 save

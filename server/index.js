@@ -31,6 +31,9 @@ const jwt = require('jsonwebtoken');
 const webpush = require('web-push');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'playground-jwt-secret-2024';
+if (JWT_SECRET.length < 32 || JWT_SECRET.includes('playground-jwt-secret-2024')) {
+  throw new Error('JWT_SECRET must be set to a private value with at least 32 characters.');
+}
 
 // Web Push VAPID 설정
 webpush.setVapidDetails(
