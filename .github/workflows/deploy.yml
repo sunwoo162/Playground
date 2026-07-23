@@ -52,6 +52,7 @@ jobs:
         env:
           GITHUB_CLIENT_ID: ${{ secrets.GITHUB_CLIENT_ID }}
           GITHUB_CLIENT_SECRET: ${{ secrets.GITHUB_CLIENT_SECRET }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
 
       - name: Copy JAR to server
         uses: appleboy/scp-action@v0.1.7
@@ -85,6 +86,7 @@ jobs:
             # playground (Node.js) 재시작 - ecosystem으로 환경변수 포함
             pm2 delete playground 2>/dev/null || true
             export $(grep -v '^#' /home/ubuntu/playground/.env | xargs)
+            test -n "$JWT_SECRET" || { echo "JWT_SECRET is missing in /home/ubuntu/playground/.env"; exit 1; }
             pm2 start ecosystem.config.js --only playground
 
             # backend (Spring Boot) 재시작 - 새 JAR 반영
