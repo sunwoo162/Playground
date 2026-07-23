@@ -410,7 +410,10 @@ function App() {
     setViewMode('server')
     setActiveTab('chat')
     setCreateOpen(false)
-    window.open(githubOrgCreateUrl(githubOrg, githubEmail), '_blank', 'noopener,noreferrer')
+    setStatus(githubEmail ? `${githubEmail} 이메일을 복사했습니다. GitHub 화면에서 붙여넣어 주세요.` : 'GitHub Organization 생성 화면으로 이동합니다.')
+    window.setTimeout(() => {
+      window.open(githubOrgCreateUrl(githubOrg, githubEmail), '_blank', 'noopener,noreferrer')
+    }, 900)
   }
 
   async function sendMessage(event: FormEvent) {
