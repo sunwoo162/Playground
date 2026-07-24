@@ -1624,50 +1624,69 @@ function App() {
             )}
             {(activeTab === 'frontlog' || activeTab === 'backlog') && (
               <>
-                <section className="panel-card log-room-card">
-                  <div className="card-row">
-                    <div>
-                      <span>{activeTab === 'frontlog' ? 'frontend' : 'backend'}</span>
-                      <h2>{activeTab === 'frontlog' ? '프론트 작업 로그' : '백엔드 작업 로그'}</h2>
-                      <p>
-                        {activeTab === 'frontlog'
-                          ? 'UI 변경, 화면 오류, 클라이언트 상태, 빌드 이슈를 기록합니다.'
-                          : 'API 변경, DB 스키마, 인증, 서버 오류와 배치 작업을 기록합니다.'}
-                      </p>
-                    </div>
-                    <button onClick={() => void setupDevHubStructure()} disabled={settingUpStructure || !selectedServer?.githubOrg}>
-                      {settingUpStructure ? '설정 중' : '구조 자동 설정'}
-                    </button>
+                <section className="webhook-toolbar">
+                  <div>
+                    <strong># {tabLabel(activeTab)}</strong>
+                    <span>
+                      {activeTab === 'frontlog'
+                        ? 'GitHub webhook처럼 프론트 변경/빌드 이벤트를 쌓아둡니다.'
+                        : 'GitHub webhook처럼 백엔드 변경/배포 이벤트를 쌓아둡니다.'}
+                    </span>
+                  </div>
+                  <div>
+                    {serverWatches.length === 0 && <button onClick={connectDefaultRepo}>Playground 연결</button>}
+                    {serverWatches[0] && <button onClick={() => loadRuns(serverWatches[0])}>웹훅 새로고침</button>}
                   </div>
                 </section>
-                <section className="panel-grid">
-                  {serverWatches.map(watch => (
-                    <article className="panel-card" key={watch.id}>
-                      <div className="card-row">
-                        <h3>{watch.fullName}</h3>
-                        <button onClick={() => loadRuns(watch)}>로그 불러오기</button>
+                <section className="webhook-feed">
+                  {(runs.length > 0 ? runs : []).map(run => (
+                    <article className="webhook-message" key={run.id}>
+                      <div className="webhook-avatar">GH</div>
+                      <div className="webhook-content">
+                        <div className="webhook-author">
+                          <strong>GitHub</strong>
+                          <span>BOT</span>
+                          <time>{formatDateTime(run.updatedAt || run.createdAt)}</time>
+                        </div>
+                        <a
+                          className={`webhook-embed ${run.conclusion || run.status}`}
+                          href={run.htmlUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          <div className="webhook-embed-title">
+                            {run.conclusion === 'success' ? '배포 성공' : run.conclusion === 'failure' ? '배포 실패' : 'Action 실행 중'}
+                          </div>
+                          <p>{activeTab === 'frontlog' ? '프론트 로그 이벤트' : '백엔드 로그 이벤트'} · {run.name}</p>
+                          <div className="webhook-fields">
+                            <div><span>브랜치</span><strong>{run.branch || 'main'}</strong></div>
+                            <div><span>상태</span><strong>{runStateLabel(run)}</strong></div>
+                            <div><span>저장소</span><strong>{serverWatches[0]?.fullName || DEFAULT_REPO}</strong></div>
+                            <div><span>구분</span><strong>{activeTab === 'frontlog' ? 'frontend' : 'backend'}</strong></div>
+                          </div>
+                          <div className="webhook-footer">GitHub Actions · 클릭하면 실행 로그가 열립니다</div>
+                        </a>
                       </div>
-                      <small>{activeTab === 'frontlog' ? '프론트 작업과 관련된 저장소' : '백엔드 작업과 관련된 저장소'}</small>
                     </article>
                   ))}
-                  {serverWatches.length === 0 && (
-                    <article className="panel-card">
-                      <h3>연결된 레포가 없습니다</h3>
-                      <p>운영 / 배포의 서버 액션 채널에서 저장소를 연결하세요. 로그는 작업 기록이고, 서버 액션은 CI/CD 실행 상태입니다.</p>
+                  {runs.length === 0 && (
+                    <article className="webhook-message">
+                      <div className="webhook-avatar">GH</div>
+                      <div className="webhook-content">
+                        <div className="webhook-author">
+                          <strong>GitHub</strong>
+                          <span>BOT</span>
+                          <time>대기 중</time>
+                        </div>
+                        <div className="webhook-embed idle">
+                          <div className="webhook-embed-title">아직 수신된 웹훅 로그가 없습니다</div>
+                          <p>저장소를 연결한 뒤 웹훅 새로고침을 누르면 GitHub Actions 이벤트가 Discord webhook 메시지처럼 표시됩니다.</p>
+                          <div className="webhook-footer">프론트 로그와 백엔드 로그는 작업 기록 채널이고, 서버 액션은 CI/CD 제어 채널입니다</div>
+                        </div>
+                      </div>
                     </article>
                   )}
                 </section>
-                {runs.length > 0 && (
-                  <section className="panel-card">
-                    <h2>{activeTab === 'frontlog' ? '프론트 관련 실행 기록' : '백엔드 관련 실행 기록'}</h2>
-                    {runs.map(run => (
-                      <a key={run.id} className="run-row" href={run.htmlUrl} target="_blank" rel="noreferrer">
-                        <span>{run.name}</span>
-                        <strong>{runStateLabel(run)}</strong>
-                      </a>
-                    ))}
-                  </section>
-                )}
               </>
             )}
             {activeTab === 'work' && (

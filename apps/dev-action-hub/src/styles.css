@@ -1120,6 +1120,205 @@ a {
   font-size: 12px;
 }
 
+.webhook-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: -20px -20px 0;
+  padding: 14px 20px;
+  border-bottom: 1px solid #24262b;
+  background: #313338;
+}
+
+.webhook-toolbar > div:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.webhook-toolbar strong {
+  overflow: hidden;
+  color: #f2f3f5;
+  font-size: 16px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.webhook-toolbar span {
+  color: #949ba4;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.webhook-toolbar > div:last-child {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.webhook-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 6px;
+  background: #5865f2;
+  color: white;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.webhook-feed {
+  display: grid;
+  gap: 2px;
+  min-height: calc(100vh - 220px);
+  margin: 0 -20px -20px;
+  padding: 18px 20px 28px;
+  background: #313338;
+}
+
+.webhook-message {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 12px;
+  padding: 6px 0;
+}
+
+.webhook-avatar {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 50%;
+  background: #24292f;
+  color: white;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.webhook-content {
+  min-width: 0;
+}
+
+.webhook-author {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  margin-bottom: 5px;
+}
+
+.webhook-author strong {
+  color: #f2f3f5;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.webhook-author span {
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: #5865f2;
+  color: white;
+  font-size: 10px;
+  font-weight: 950;
+  line-height: 1.35;
+}
+
+.webhook-author time {
+  overflow: hidden;
+  color: #949ba4;
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.webhook-embed {
+  display: block;
+  width: min(720px, 100%);
+  padding: 12px 14px 11px;
+  border-left: 4px solid #5865f2;
+  border-radius: 4px;
+  background: #2b2d31;
+  color: #dbdee1;
+}
+
+.webhook-embed.success {
+  border-left-color: #23a559;
+}
+
+.webhook-embed.failure,
+.webhook-embed.cancelled,
+.webhook-embed.timed_out {
+  border-left-color: #f23f42;
+}
+
+.webhook-embed.in_progress,
+.webhook-embed.queued,
+.webhook-embed.requested,
+.webhook-embed.waiting {
+  border-left-color: #f0b232;
+}
+
+.webhook-embed.idle {
+  border-left-color: #949ba4;
+}
+
+.webhook-embed-title {
+  margin-bottom: 5px;
+  color: #f2f3f5;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.webhook-embed p {
+  margin: 0 0 12px;
+  color: #b5bac1;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.webhook-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 18px;
+  margin-bottom: 12px;
+}
+
+.webhook-fields div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.webhook-fields span {
+  color: #949ba4;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.webhook-fields strong {
+  overflow: hidden;
+  color: #f2f3f5;
+  font-size: 13px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.webhook-footer {
+  color: #949ba4;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .friends-card h2 {
   margin-bottom: 6px;
 }
@@ -1433,6 +1632,39 @@ a {
     align-items: flex-start;
     flex-direction: column;
     padding: 12px;
+  }
+
+  .webhook-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+    margin: -14px -14px 0;
+    padding: 12px 14px;
+  }
+
+  .webhook-toolbar > div:last-child,
+  .webhook-toolbar button {
+    width: 100%;
+  }
+
+  .webhook-feed {
+    min-height: calc(100vh - 260px);
+    margin: 0 -14px -14px;
+    padding: 14px 14px 22px;
+  }
+
+  .webhook-message {
+    grid-template-columns: 38px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .webhook-avatar {
+    width: 36px;
+    height: 36px;
+    font-size: 12px;
+  }
+
+  .webhook-fields {
+    grid-template-columns: 1fr;
   }
 
   .header-actions {
