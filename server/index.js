@@ -1130,6 +1130,12 @@ app.get('/apps/action-notifier/*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'apps', 'action-notifier', 'dist', 'index.html'));
 });
 
+// Code Run Visualizer 앱
+app.use('/apps/code-run-visualizer', express.static(path.join(__dirname, '..', 'apps', 'code-run-visualizer', 'dist')));
+app.get('/apps/code-run-visualizer/*', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'apps', 'code-run-visualizer', 'dist', 'index.html'));
+});
+
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'dist', 'index.html'));
 });
