@@ -18,7 +18,8 @@ body {
 
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
 }
 
@@ -112,7 +113,8 @@ a {
 .inline-form input,
 .doc-form input,
 .doc-form textarea,
-.create-modal input {
+.create-modal input,
+.doc-form select {
   width: 100%;
   border: 1px solid #1e1f22;
   border-radius: 10px;
@@ -789,7 +791,8 @@ a {
 .inline-form input,
 .doc-form input,
 .doc-form textarea,
-.create-modal input {
+.create-modal input,
+.doc-form select {
   min-height: 46px;
   padding: 0 14px;
 }
@@ -825,6 +828,153 @@ a {
   min-height: 180px;
   padding: 14px;
   resize: vertical;
+}
+
+.ops-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.metric-card {
+  display: grid;
+  gap: 6px;
+  min-height: 118px;
+  padding: 18px;
+  border: 1px solid #424650;
+  border-radius: 12px;
+  background: #2b2d31;
+}
+
+.metric-card span,
+.metric-card small,
+.ops-item span {
+  color: #949ba4;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.metric-card strong {
+  color: #f2f3f5;
+  font-size: 34px;
+  line-height: 1;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 160px 120px;
+  gap: 10px;
+}
+
+.ops-board {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(220px, 1fr));
+  gap: 12px;
+  overflow-x: auto;
+}
+
+.ops-column {
+  min-height: 260px;
+  padding: 12px;
+  border: 1px solid #424650;
+  border-radius: 12px;
+  background: #25272c;
+}
+
+.ops-column h3 {
+  margin: 0 0 12px;
+  color: #dbdee1;
+  font-size: 14px;
+}
+
+.ops-item,
+.ops-row {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 12px;
+  border: 1px solid #424650;
+  border-radius: 10px;
+  background: #2b2d31;
+}
+
+.ops-row {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+}
+
+.ops-item p {
+  margin: 0;
+  color: #b5bac1;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.ops-item select,
+.api-card select {
+  min-height: 36px;
+  border: 1px solid #424650;
+  border-radius: 8px;
+  background: #1e1f22;
+  color: #f2f3f5;
+}
+
+.status-chip {
+  display: inline-flex;
+  width: fit-content;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.status-chip.todo { background: #3b3d45; color: #dbdee1; }
+.status-chip.doing { background: #344b82; color: #a8c7ff; }
+.status-chip.review { background: #5a4425; color: #ffd18a; }
+.status-chip.done { background: #214d35; color: #a6f3a6; }
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #dbdee1;
+  font-weight: 800;
+}
+
+.check-row input {
+  width: 18px;
+  height: 18px;
+}
+
+.api-card h3 span {
+  display: inline-flex;
+  margin-right: 6px;
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: #5865f2;
+  color: white;
+  font-size: 12px;
+}
+
+.api-card pre {
+  overflow: auto;
+  margin: 10px 0 0;
+  padding: 10px;
+  border-radius: 8px;
+  background: #1e1f22;
+  color: #dbdee1;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.deploy-card.checked {
+  border-color: #23a559;
+}
+
+.deploy-card.checked strong {
+  color: #a6f3a6;
 }
 
 .doc-form label {

@@ -8,6 +8,10 @@ const LOCAL_MESSAGES_KEY = 'dev-action-hub-local-messages'
 const LOCAL_DM_KEY = 'dev-action-hub-local-dms'
 const WATCHES_KEY = 'dev-action-hub-watches'
 const DOCS_KEY = 'dev-action-hub-docs'
+const TASKS_KEY = 'dev-action-hub-tasks'
+const API_SPECS_KEY = 'dev-action-hub-api-specs'
+const PERSONAS_KEY = 'dev-action-hub-personas'
+const DEPLOYS_KEY = 'dev-action-hub-deploys'
 const DISCORD_KEY = 'dev-action-hub-discord'
 const DM_ACTIVITY_KEY = 'dev-action-hub-dm-activity'
 const SELECTED_DM_KEY = 'dev-action-hub-selected-dm'
@@ -15,10 +19,12 @@ const FORWARDED_MESSAGE_IDS_KEY = 'dev-action-hub-forwarded-message-ids'
 const DATA_RESET_KEY = 'dev-action-hub-data-reset-2026-07-23'
 const SUPPORTED_REACTIONS = ['👍', '❤️', '😂', '🎉', '🔥', '👏', '😮', '😢', '🙏', '✅', '🚀', '👀']
 
-type RoomTab = 'chat' | 'frontlog' | 'backlog' | 'work' | 'docs' | 'alerts'
+type RoomTab = 'chat' | 'overview' | 'specs' | 'analysis' | 'frontlog' | 'backlog' | 'api' | 'work' | 'deploy' | 'docs' | 'alerts'
 type ViewMode = 'dm' | 'server'
 type DmSection = 'messages' | 'friends'
 type Presence = 'online' | 'idle' | 'offline'
+type WorkStatus = 'todo' | 'doing' | 'review' | 'done'
+type Priority = 'low' | 'medium' | 'high'
 
 type DevServer = {
   id: string
@@ -68,6 +74,49 @@ type DevDoc = {
   serverId: string
   title: string
   content: string
+  updatedAt: string
+}
+
+type DevTask = {
+  id: string
+  serverId: string
+  area: 'feature' | 'frontend' | 'backend' | 'api' | 'deploy'
+  title: string
+  detail: string
+  status: WorkStatus
+  priority: Priority
+  updatedAt: string
+}
+
+type ApiSpec = {
+  id: string
+  serverId: string
+  method: string
+  path: string
+  purpose: string
+  request: string
+  response: string
+  status: WorkStatus
+  updatedAt: string
+}
+
+type PersonaNote = {
+  id: string
+  serverId: string
+  segment: string
+  need: string
+  pain: string
+  metric: string
+  updatedAt: string
+}
+
+type DeployCheck = {
+  id: string
+  serverId: string
+  title: string
+  environment: string
+  checked: boolean
+  note: string
   updatedAt: string
 }
 
@@ -194,17 +243,40 @@ function githubOrgCreateUrl(orgName: string, email?: string) {
 
 function tabLabel(tab: RoomTab) {
   if (tab === 'chat') return '일반'
+  if (tab === 'overview') return '개요'
+  if (tab === 'specs') return '기능명세'
+  if (tab === 'analysis') return '사용자분석'
   if (tab === 'frontlog') return 'frontlog'
   if (tab === 'backlog') return 'backlog'
+  if (tab === 'api') return 'API명세'
   if (tab === 'work') return 'github-actions'
+  if (tab === 'deploy') return '배포'
   if (tab === 'docs') return '개발-문서'
   return '알림-설정'
 }
 
 function tabDescription(tab: RoomTab, server: DevServer | null) {
+  if (tab === 'overview') return '프로젝트 진행 상황'
+  if (tab === 'specs') return '기능명세서와 구현 상태'
+  if (tab === 'analysis') return '사용자 니즈와 지표'
   if (tab === 'frontlog') return 'frontend log'
   if (tab === 'backlog') return 'backendlog'
+  if (tab === 'api') return 'API 계약과 요청/응답'
+  if (tab === 'deploy') return '배포 전후 체크리스트'
   return server?.description || server?.githubOrg || '서버 작업 공간'
+}
+
+function statusLabel(status: WorkStatus) {
+  if (status === 'todo') return '대기'
+  if (status === 'doing') return '진행'
+  if (status === 'review') return '검토'
+  return '완료'
+}
+
+function priorityLabel(priority: Priority) {
+  if (priority === 'high') return '높음'
+  if (priority === 'medium') return '보통'
+  return '낮음'
 }
 
 function parseReactions(value?: string) {
@@ -252,6 +324,10 @@ function App() {
   const [watches, setWatches] = useState<Watch[]>(() => readJson(WATCHES_KEY, []))
   const [runs, setRuns] = useState<Run[]>([])
   const [docs, setDocs] = useState<DevDoc[]>(() => readJson(DOCS_KEY, []))
+  const [tasks, setTasks] = useState<DevTask[]>(() => readJson(TASKS_KEY, []))
+  const [apiSpecs, setApiSpecs] = useState<ApiSpec[]>(() => readJson(API_SPECS_KEY, []))
+  const [personas, setPersonas] = useState<PersonaNote[]>(() => readJson(PERSONAS_KEY, []))
+  const [deployChecks, setDeployChecks] = useState<DeployCheck[]>(() => readJson(DEPLOYS_KEY, []))
   const [discord, setDiscord] = useState<DiscordSettings>(() =>
     readJson(DISCORD_KEY, { webhookUrl: '', enabled: true, success: true, failure: true }),
   )
@@ -273,12 +349,20 @@ function App() {
   const [settingUpStructure, setSettingUpStructure] = useState(false)
   const [repoInput, setRepoInput] = useState('')
   const [docDraft, setDocDraft] = useState({ title: '', content: '' })
+  const [taskDraft, setTaskDraft] = useState({ title: '', detail: '', area: 'feature' as DevTask['area'], priority: 'medium' as Priority })
+  const [apiDraft, setApiDraft] = useState({ method: 'GET', path: '', purpose: '', request: '', response: '' })
+  const [personaDraft, setPersonaDraft] = useState({ segment: '', need: '', pain: '', metric: '' })
+  const [deployDraft, setDeployDraft] = useState({ title: '', environment: 'production', note: '' })
   const feedRef = useRef<HTMLDivElement>(null)
 
   const selectedServer = servers.find(server => server.id === selectedServerId) || null
   const serverMessages = messages.filter(message => message.serverId === selectedServerId)
   const serverWatches = watches.filter(watch => watch.serverId === selectedServerId)
   const serverDocs = docs.filter(doc => doc.serverId === selectedServerId)
+  const serverTasks = tasks.filter(task => task.serverId === selectedServerId)
+  const serverApiSpecs = apiSpecs.filter(spec => spec.serverId === selectedServerId)
+  const serverPersonas = personas.filter(persona => persona.serverId === selectedServerId)
+  const serverDeployChecks = deployChecks.filter(check => check.serverId === selectedServerId)
   const directRooms: DirectRoom[] = friends
     .map(friend => ({
       id: friend.githubId,
@@ -689,6 +773,113 @@ function App() {
     setDocDraft({ title: '', content: '' })
   }
 
+  function createTask(event: FormEvent) {
+    event.preventDefault()
+    if (!selectedServer || !taskDraft.title.trim()) return
+    const task: DevTask = {
+      id: nowId('task'),
+      serverId: selectedServer.id,
+      area: taskDraft.area,
+      title: taskDraft.title.trim(),
+      detail: taskDraft.detail.trim(),
+      status: 'todo',
+      priority: taskDraft.priority,
+      updatedAt: new Date().toISOString(),
+    }
+    setTasks(prev => {
+      const next = [task, ...prev]
+      writeJson(TASKS_KEY, next)
+      return next
+    })
+    setTaskDraft({ title: '', detail: '', area: 'feature', priority: 'medium' })
+  }
+
+  function updateTaskStatus(taskId: string, nextStatus: WorkStatus) {
+    setTasks(prev => {
+      const next = prev.map(task => task.id === taskId ? { ...task, status: nextStatus, updatedAt: new Date().toISOString() } : task)
+      writeJson(TASKS_KEY, next)
+      return next
+    })
+  }
+
+  function createApiSpec(event: FormEvent) {
+    event.preventDefault()
+    if (!selectedServer || !apiDraft.path.trim()) return
+    const spec: ApiSpec = {
+      id: nowId('api'),
+      serverId: selectedServer.id,
+      method: apiDraft.method,
+      path: apiDraft.path.trim(),
+      purpose: apiDraft.purpose.trim(),
+      request: apiDraft.request.trim(),
+      response: apiDraft.response.trim(),
+      status: 'todo',
+      updatedAt: new Date().toISOString(),
+    }
+    setApiSpecs(prev => {
+      const next = [spec, ...prev]
+      writeJson(API_SPECS_KEY, next)
+      return next
+    })
+    setApiDraft({ method: 'GET', path: '', purpose: '', request: '', response: '' })
+  }
+
+  function updateApiStatus(specId: string, nextStatus: WorkStatus) {
+    setApiSpecs(prev => {
+      const next = prev.map(spec => spec.id === specId ? { ...spec, status: nextStatus, updatedAt: new Date().toISOString() } : spec)
+      writeJson(API_SPECS_KEY, next)
+      return next
+    })
+  }
+
+  function createPersona(event: FormEvent) {
+    event.preventDefault()
+    if (!selectedServer || !personaDraft.segment.trim()) return
+    const persona: PersonaNote = {
+      id: nowId('persona'),
+      serverId: selectedServer.id,
+      segment: personaDraft.segment.trim(),
+      need: personaDraft.need.trim(),
+      pain: personaDraft.pain.trim(),
+      metric: personaDraft.metric.trim(),
+      updatedAt: new Date().toISOString(),
+    }
+    setPersonas(prev => {
+      const next = [persona, ...prev]
+      writeJson(PERSONAS_KEY, next)
+      return next
+    })
+    setPersonaDraft({ segment: '', need: '', pain: '', metric: '' })
+  }
+
+  function createDeployCheck(event: FormEvent) {
+    event.preventDefault()
+    if (!selectedServer || !deployDraft.title.trim()) return
+    const check: DeployCheck = {
+      id: nowId('deploy'),
+      serverId: selectedServer.id,
+      title: deployDraft.title.trim(),
+      environment: deployDraft.environment.trim() || 'production',
+      checked: false,
+      note: deployDraft.note.trim(),
+      updatedAt: new Date().toISOString(),
+    }
+    setDeployChecks(prev => {
+      const next = [check, ...prev]
+      writeJson(DEPLOYS_KEY, next)
+      return next
+    })
+    setDeployDraft({ title: '', environment: 'production', note: '' })
+  }
+
+  function toggleDeployCheck(checkId: string) {
+    setDeployChecks(prev => {
+      const next = prev.map(check => check.id === checkId ? { ...check, checked: !check.checked, updatedAt: new Date().toISOString() } : check)
+      writeJson(DEPLOYS_KEY, next)
+      return next
+    })
+  }
+
   function openServer(serverId: string) {
     setSelectedServerId(serverId)
     setViewMode('server')
@@ -925,7 +1116,15 @@ function App() {
               </button>
             </div>
             <div className="sidebar-section">
-              <button className="event-row">📅 이벤트</button>
+              <button className={`event-row ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}>📊 개요</button>
+            </div>
+            <div className="sidebar-section">
+              <div className="section-title">planning</div>
+              {(['specs', 'analysis'] as RoomTab[]).map(tab => (
+                <button key={tab} className={`channel-row ${activeTab === tab ? 'active' : ''}`} onClick={() => setActiveTab(tab)}>
+                  # {tabLabel(tab)}
+                </button>
+              ))}
             </div>
             <div className="sidebar-section">
               <div className="section-title">frontend</div>
@@ -941,7 +1140,7 @@ function App() {
             </div>
             <div className="sidebar-section">
               <div className="section-title">채팅 채널</div>
-              {(['chat', 'work', 'docs', 'alerts'] as RoomTab[]).map(tab => (
+              {(['chat', 'api', 'work', 'deploy', 'docs', 'alerts'] as RoomTab[]).map(tab => (
                 <button key={tab} className={`channel-row ${activeTab === tab ? 'active' : ''}`} onClick={() => setActiveTab(tab)}>
                   # {tabLabel(tab)}
                 </button>
@@ -1162,6 +1361,168 @@ function App() {
         ) : (
           <div className="workspace-panel">
             {status && <p className="status-banner">{status}</p>}
+            {activeTab === 'overview' && (
+              <>
+                <section className="ops-metrics">
+                  <article className="metric-card"><span>기능</span><strong>{serverTasks.length}</strong><small>{serverTasks.filter(task => task.status === 'done').length}개 완료</small></article>
+                  <article className="metric-card"><span>API</span><strong>{serverApiSpecs.length}</strong><small>{serverApiSpecs.filter(spec => spec.status === 'review').length}개 검토</small></article>
+                  <article className="metric-card"><span>사용자 분석</span><strong>{serverPersonas.length}</strong><small>세그먼트 기준</small></article>
+                  <article className="metric-card"><span>배포</span><strong>{serverDeployChecks.filter(check => check.checked).length}/{serverDeployChecks.length}</strong><small>체크 완료</small></article>
+                </section>
+                <section className="panel-grid">
+                  <article className="panel-card">
+                    <h2>다음 작업</h2>
+                    {serverTasks.filter(task => task.status !== 'done').slice(0, 5).map(task => (
+                      <div className="ops-row" key={task.id}>
+                        <span className={`status-chip ${task.status}`}>{statusLabel(task.status)}</span>
+                        <strong>{task.title}</strong>
+                      </div>
+                    ))}
+                    {serverTasks.filter(task => task.status !== 'done').length === 0 && <p>대기 중인 작업이 없습니다.</p>}
+                  </article>
+                  <article className="panel-card">
+                    <h2>배포 준비</h2>
+                    {serverDeployChecks.slice(0, 5).map(check => (
+                      <label className="check-row" key={check.id}>
+                        <input type="checkbox" checked={check.checked} onChange={() => toggleDeployCheck(check.id)} />
+                        <span>{check.title}</span>
+                      </label>
+                    ))}
+                    {serverDeployChecks.length === 0 && <p>배포 체크리스트를 추가하세요.</p>}
+                  </article>
+                </section>
+              </>
+            )}
+            {activeTab === 'specs' && (
+              <>
+                <section className="panel-card">
+                  <h2>기능명세서</h2>
+                  <form className="doc-form ops-form" onSubmit={createTask}>
+                    <div className="form-grid">
+                      <input value={taskDraft.title} onChange={event => setTaskDraft({ ...taskDraft, title: event.target.value })} placeholder="기능 이름" />
+                      <select value={taskDraft.area} onChange={event => setTaskDraft({ ...taskDraft, area: event.target.value as DevTask['area'] })}>
+                        <option value="feature">기능</option>
+                        <option value="frontend">프론트</option>
+                        <option value="backend">백엔드</option>
+                        <option value="api">API</option>
+                        <option value="deploy">배포</option>
+                      </select>
+                      <select value={taskDraft.priority} onChange={event => setTaskDraft({ ...taskDraft, priority: event.target.value as Priority })}>
+                        <option value="high">높음</option>
+                        <option value="medium">보통</option>
+                        <option value="low">낮음</option>
+                      </select>
+                    </div>
+                    <textarea value={taskDraft.detail} onChange={event => setTaskDraft({ ...taskDraft, detail: event.target.value })} placeholder="목표, 정책, 예외상황, 완료 기준" />
+                    <button type="submit">명세 추가</button>
+                  </form>
+                </section>
+                <section className="ops-board">
+                  {(['todo', 'doing', 'review', 'done'] as WorkStatus[]).map(column => (
+                    <div className="ops-column" key={column}>
+                      <h3>{statusLabel(column)}</h3>
+                      {serverTasks.filter(task => task.status === column).map(task => (
+                        <article className="ops-item" key={task.id}>
+                          <div><strong>{task.title}</strong><span>{task.area} · {priorityLabel(task.priority)}</span></div>
+                          <p>{task.detail || '세부 내용 없음'}</p>
+                          <select value={task.status} onChange={event => updateTaskStatus(task.id, event.target.value as WorkStatus)}>
+                            <option value="todo">대기</option>
+                            <option value="doing">진행</option>
+                            <option value="review">검토</option>
+                            <option value="done">완료</option>
+                          </select>
+                        </article>
+                      ))}
+                    </div>
+                  ))}
+                </section>
+              </>
+            )}
+            {activeTab === 'analysis' && (
+              <>
+                <section className="panel-card">
+                  <h2>사용자 분석</h2>
+                  <form className="doc-form" onSubmit={createPersona}>
+                    <input value={personaDraft.segment} onChange={event => setPersonaDraft({ ...personaDraft, segment: event.target.value })} placeholder="사용자 세그먼트" />
+                    <textarea value={personaDraft.need} onChange={event => setPersonaDraft({ ...personaDraft, need: event.target.value })} placeholder="사용자가 얻고 싶은 결과" />
+                    <textarea value={personaDraft.pain} onChange={event => setPersonaDraft({ ...personaDraft, pain: event.target.value })} placeholder="현재 불편한 점" />
+                    <input value={personaDraft.metric} onChange={event => setPersonaDraft({ ...personaDraft, metric: event.target.value })} placeholder="성공 지표" />
+                    <button type="submit">분석 추가</button>
+                  </form>
+                </section>
+                <section className="panel-grid">
+                  {serverPersonas.map(persona => (
+                    <article className="panel-card" key={persona.id}>
+                      <h3>{persona.segment}</h3>
+                      <p><strong>Needs</strong> {persona.need || '-'}</p>
+                      <p><strong>Pain</strong> {persona.pain || '-'}</p>
+                      <small>{persona.metric || '지표 없음'}</small>
+                    </article>
+                  ))}
+                </section>
+              </>
+            )}
+            {activeTab === 'api' && (
+              <>
+                <section className="panel-card">
+                  <h2>API 명세서</h2>
+                  <form className="doc-form ops-form" onSubmit={createApiSpec}>
+                    <div className="form-grid">
+                      <select value={apiDraft.method} onChange={event => setApiDraft({ ...apiDraft, method: event.target.value })}>
+                        {['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map(method => <option key={method}>{method}</option>)}
+                      </select>
+                      <input value={apiDraft.path} onChange={event => setApiDraft({ ...apiDraft, path: event.target.value })} placeholder="/api/example" />
+                    </div>
+                    <input value={apiDraft.purpose} onChange={event => setApiDraft({ ...apiDraft, purpose: event.target.value })} placeholder="용도" />
+                    <textarea value={apiDraft.request} onChange={event => setApiDraft({ ...apiDraft, request: event.target.value })} placeholder="Request body / query / auth" />
+                    <textarea value={apiDraft.response} onChange={event => setApiDraft({ ...apiDraft, response: event.target.value })} placeholder="Response 예시 / 에러" />
+                    <button type="submit">API 추가</button>
+                  </form>
+                </section>
+                <section className="panel-grid">
+                  {serverApiSpecs.map(spec => (
+                    <article className="panel-card api-card" key={spec.id}>
+                      <div className="card-row"><h3><span>{spec.method}</span> {spec.path}</h3><select value={spec.status} onChange={event => updateApiStatus(spec.id, event.target.value as WorkStatus)}><option value="todo">대기</option><option value="doing">진행</option><option value="review">검토</option><option value="done">완료</option></select></div>
+                      <p>{spec.purpose || '용도 없음'}</p>
+                      <pre>{spec.request || 'Request 없음'}</pre>
+                      <pre>{spec.response || 'Response 없음'}</pre>
+                    </article>
+                  ))}
+                </section>
+              </>
+            )}
+            {activeTab === 'deploy' && (
+              <>
+                <section className="panel-card">
+                  <h2>배포 체크리스트</h2>
+                  <form className="doc-form ops-form" onSubmit={createDeployCheck}>
+                    <div className="form-grid">
+                      <input value={deployDraft.title} onChange={event => setDeployDraft({ ...deployDraft, title: event.target.value })} placeholder="확인할 항목" />
+                      <input value={deployDraft.environment} onChange={event => setDeployDraft({ ...deployDraft, environment: event.target.value })} placeholder="production" />
+                    </div>
+                    <textarea value={deployDraft.note} onChange={event => setDeployDraft({ ...deployDraft, note: event.target.value })} placeholder="확인 방법 또는 실패 시 조치" />
+                    <button type="submit">체크 항목 추가</button>
+                  </form>
+                </section>
+                <section className="panel-grid">
+                  {serverDeployChecks.map(check => (
+                    <article className={`panel-card deploy-card ${check.checked ? 'checked' : ''}`} key={check.id}>
+                      <label className="check-row">
+                        <input type="checkbox" checked={check.checked} onChange={() => toggleDeployCheck(check.id)} />
+                        <strong>{check.title}</strong>
+                      </label>
+                      <p>{check.note || '확인 방법 없음'}</p>
+                      <small>{check.environment}</small>
+                    </article>
+                  ))}
+                  <article className="panel-card">
+                    <h3>배포 후 Actions 확인</h3>
+                    <p>GitHub 채널에 연결된 레포의 실행 기록을 불러와 성공/실패를 확인하세요.</p>
+                    {serverWatches.map(watch => <button key={watch.id} onClick={() => loadRuns(watch)}>{watch.fullName} 실행 확인</button>)}
+                  </article>
+                </section>
+              </>
+            )}
             {(activeTab === 'frontlog' || activeTab === 'backlog') && (
               <>
                 <section className="panel-card log-room-card">
