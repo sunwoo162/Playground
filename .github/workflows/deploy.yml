@@ -19,9 +19,7 @@ jobs:
           distribution: 'temurin'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: '8.7'
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -48,7 +46,8 @@ jobs:
       - name: Build Spring Boot JAR
         run: |
           cd backend
-          gradle bootJar -x test --no-daemon
+          chmod +x ./gradlew
+          ./gradlew bootJar -x test --no-daemon --stacktrace
         env:
           GITHUB_CLIENT_ID: ${{ secrets.GITHUB_CLIENT_ID }}
           GITHUB_CLIENT_SECRET: ${{ secrets.GITHUB_CLIENT_SECRET }}
