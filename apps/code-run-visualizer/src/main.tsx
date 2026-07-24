@@ -15,6 +15,8 @@ type Step = {
   output?: string
 }
 
+const phaseNodes: Phase[] = ['tokenize', 'parse', 'compile', 'execute']
+
 const sampleCode = `function sumScores(scores) {
   let total = 0
   for (const score of scores) {
@@ -56,6 +58,28 @@ function outputFromLine(lineText: string) {
   const quoted = lineText.match(/(?:console\.log|print|println)\((.*)\)/)
   if (!quoted) return undefined
   return quoted[1].replace(/^["'`]|["'`]$/g, '') || '콘솔 출력'
+}
+
+function tokensFromLine(lineText: string) {
+  return lineText
+    .trim()
+    .split(/(\s+|[()[\]{}.,;:+\-*/=<>])/)
+    .map(token => token.trim())
+    .filter(Boolean)
+    .slice(0, 9)
+}
+
+function memoryCells(lineText: string, activeIndex: number) {
+  const trimmed = lineText.trim()
+  const variableMatch = trimmed.match(/(?:const|let|var|int|String|double|float)?\s*([a-zA-Z_$][\w$]*)\s*=/)
+  const valueMatch = trimmed.match(/=\s*(.+?);?$/)
+  const primary = variableMatch?.[1] || (/total/.test(trimmed) ? 'total' : /score/.test(trimmed) ? 'score' : 'result')
+  const value = valueMatch?.[1]?.replace(/[;{}]/g, '').trim() || (activeIndex % 3 === 0 ? 'ready' : activeIndex % 3 === 1 ? 'evaluating' : 'updated')
+  return [
+    { key: primary, value },
+    { key: 'line', value: String(activeIndex + 1) },
+    { key: 'phase', value: activeIndex < 3 ? 'compile' : 'runtime' },
+  ]
 }
 
 function buildSteps(code: string, selectedLanguage: Language): Step[] {
@@ -125,6 +149,10 @@ function App() {
   const active = steps[Math.min(activeIndex, steps.length - 1)]
   const lines = code.split('\n')
   const consoleOutput = steps.slice(0, activeIndex + 1).filter(step => step.output).map(step => step.output)
+  const activeLineText = lines[(active?.line || 1) - 1] || ''
+  const activeTokens = tokensFromLine(activeLineText)
+  const activePhasePosition = Math.max(0, phaseNodes.indexOf(active?.phase || 'tokenize'))
+  const memory = memoryCells(activeLineText, activeIndex)
 
   useEffect(() => {
     setActiveIndex(0)
@@ -212,6 +240,45 @@ function App() {
         </section>
 
         <section className="runtime-pane">
+          <section className="cinema-stage">
+            <div className="stage-topline">
+              <span>LIVE EXECUTION</span>
+              <strong>{active?.phase === 'execute' ? `${active.line}번 줄` : phaseLabel[active?.phase || 'tokenize']}</strong>
+            </div>
+            <div className="execution-rail">
+              {phaseNodes.map((phase, index) => (
+                <div className={`rail-node ${index === activePhasePosition ? 'active' : index < activePhasePosition ? 'done' : ''}`} key={phase}>
+                  <span>{index + 1}</span>
+                  <strong>{phaseLabel[phase]}</strong>
+                </div>
+              ))}
+              <div className="rail-pulse" style={{ left: `${activePhasePosition * 31 + 3}%` }} />
+            </div>
+            <div className="motion-field" key={active?.id}>
+              <div className="scanner-line" />
+              <div className="source-strip">
+                <span>{active?.line || 1}</span>
+                <code>{activeLineText || '코드를 입력하세요'}</code>
+              </div>
+              <div className="token-stream">
+                {(activeTokens.length ? activeTokens : ['source', 'token', 'run']).map((token, index) => (
+                  <span style={{ animationDelay: `${index * 80}ms` }} key={`${active?.id}-${token}-${index}`}>{token}</span>
+                ))}
+              </div>
+              <div className="memory-board">
+                {memory.map((cell, index) => (
+                  <div className="memory-cell" style={{ animationDelay: `${index * 120}ms` }} key={`${cell.key}-${cell.value}`}>
+                    <span>{cell.key}</span>
+                    <strong>{cell.value}</strong>
+                  </div>
+                ))}
+              </div>
+              <div className="output-burst">
+                <span>{active?.output ? 'PRINT' : active?.phase.toUpperCase()}</span>
+                <strong>{active?.output || active?.title || 'waiting'}</strong>
+              </div>
+            </div>
+          </section>
           <div className="stage-card current">
             <div className="phase-chip">{phaseLabel[active?.phase || 'tokenize']}</div>
             <h2>{active?.title || '대기 중'}</h2>
