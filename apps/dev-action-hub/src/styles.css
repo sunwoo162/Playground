@@ -1005,6 +1005,63 @@ a {
   padding: 10px 12px;
 }
 
+.quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.quick-actions button,
+.action-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: 10px;
+  background: #3b3d45;
+  color: #dbdee1;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.action-status-card {
+  border-color: #5865f2;
+}
+
+.action-status-card > .card-row > strong {
+  min-width: 72px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: #3b3d45;
+  color: #dbdee1;
+  text-align: center;
+}
+
+.action-status-card.success {
+  border-color: #23a559;
+}
+
+.action-status-card.success > .card-row > strong {
+  background: #214d35;
+  color: #a6f3a6;
+}
+
+.action-status-card.failure {
+  border-color: #f23f42;
+}
+
+.action-status-card.failure > .card-row > strong {
+  background: #5c2528;
+  color: #ffb4b6;
+}
+
+.action-status-card.in_progress > .card-row > strong,
+.action-status-card.queued > .card-row > strong {
+  background: #344b82;
+  color: #a8c7ff;
+}
+
 .run-row {
   padding: 12px 0;
   border-top: 1px solid #424650;

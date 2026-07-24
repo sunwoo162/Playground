@@ -18,6 +18,7 @@ const SELECTED_DM_KEY = 'dev-action-hub-selected-dm'
 const FORWARDED_MESSAGE_IDS_KEY = 'dev-action-hub-forwarded-message-ids'
 const DATA_RESET_KEY = 'dev-action-hub-data-reset-2026-07-23'
 const SUPPORTED_REACTIONS = ['👍', '❤️', '😂', '🎉', '🔥', '👏', '😮', '😢', '🙏', '✅', '🚀', '👀']
+const DEFAULT_REPO = 'sunwoo162/Playground'
 
 type RoomTab = 'chat' | 'overview' | 'specs' | 'analysis' | 'frontlog' | 'backlog' | 'api' | 'work' | 'deploy' | 'docs' | 'alerts'
 type ViewMode = 'dm' | 'server'
@@ -67,6 +68,17 @@ type Run = {
   htmlUrl: string
   createdAt: string
   updatedAt: string
+}
+
+type GitHubRunApiItem = {
+  id: number
+  name: string
+  status: string
+  conclusion: string | null
+  head_branch: string
+  html_url: string
+  created_at: string
+  updated_at: string
 }
 
 type DevDoc = {
@@ -279,6 +291,23 @@ function priorityLabel(priority: Priority) {
   return '낮음'
 }
 
+function runStateLabel(run?: Run) {
+  if (!run) return '확인 전'
+  if (run.status !== 'completed') return '진행 중'
+  if (run.conclusion === 'success') return '성공'
+  if (run.conclusion === 'failure') return '실패'
+  if (run.conclusion === 'cancelled') return '취소됨'
+  return run.conclusion || run.status
+}
+
+function runHelpText(run?: Run) {
+  if (!run) return 'Actions 기록을 불러오면 배포 상태와 다음 조치를 확인할 수 있습니다.'
+  if (run.status !== 'completed') return '아직 실행 중입니다. 잠시 후 새로고침하세요.'
+  if (run.conclusion === 'success') return '배포가 끝났습니다. 서비스 화면에서 반영 여부만 확인하면 됩니다.'
+  if (run.conclusion === 'failure') return '실패했습니다. Actions 열기에서 실패 step을 확인하고 수정 후 다시 커밋/푸시하세요.'
+  return '실행이 정상 완료되지 않았습니다. Actions 화면에서 세부 로그를 확인하세요.'
+}
+
 function parseReactions(value?: string) {
   if (!value) return []
   return value
@@ -434,6 +463,14 @@ function App() {
     const timer = window.setTimeout(() => setForwardToast(null), 5000)
     return () => window.clearTimeout(timer)
   }, [forwardToast])
+
+  useEffect(() => {
+    if (viewMode !== 'server') return
+    if (!['overview', 'work', 'deploy', 'frontlog', 'backlog'].includes(activeTab)) return
+    const firstWatch = serverWatches[0]
+    if (!firstWatch) return
+    void loadRuns(firstWatch)
+  }, [activeTab, selectedServerId, serverWatches.length, viewMode])
 
   async function createServer(event: FormEvent) {
     event.preventDefault()
@@ -692,11 +729,48 @@ function App() {
     try {
       const data = await apiJson<Run[]>(`/api/dev-hub/github/runs?repo=${encodeURIComponent(watch.fullName)}`)
       setRuns(data)
-      setStatus('')
+      setStatus(data[0] ? `${watch.fullName} 최신 Actions: ${runStateLabel(data[0])}` : `${watch.fullName} 실행 기록이 없습니다.`)
     } catch (error) {
-      setRuns([])
-      setStatus(error instanceof Error ? error.message : '실행 기록을 불러오지 못했습니다.')
+      try {
+        const response = await fetch(`https://api.github.com/repos/${watch.fullName}/actions/runs?per_page=8`)
+        if (!response.ok) throw new Error('GitHub Actions 기록을 불러오지 못했습니다.')
+        const data = await response.json() as { workflow_runs?: GitHubRunApiItem[] }
+        const fallbackRuns: Run[] = (data.workflow_runs || []).map(run => ({
+          id: String(run.id),
+          name: run.name,
+          status: run.status,
+          conclusion: run.conclusion,
+          branch: run.head_branch,
+          htmlUrl: run.html_url,
+          createdAt: run.created_at,
+          updatedAt: run.updated_at,
+        }))
+        setRuns(fallbackRuns)
+        setStatus(fallbackRuns[0] ? `${watch.fullName} 최신 Actions: ${runStateLabel(fallbackRuns[0])}` : `${watch.fullName} 실행 기록이 없습니다.`)
+      } catch (fallbackError) {
+        setRuns([])
+        setStatus(fallbackError instanceof Error ? fallbackError.message : error instanceof Error ? error.message : '실행 기록을 불러오지 못했습니다.')
+      }
     }
+  }
+
+  function connectDefaultRepo() {
+    if (!selectedServer) return
+    const watch: Watch = {
+      id: nowId('watch'),
+      serverId: selectedServer.id,
+      fullName: DEFAULT_REPO,
+      actionsUrl: repoActionsUrl(DEFAULT_REPO),
+      enabled: true,
+    }
+    setWatches(prev => {
+      const next = [watch, ...prev.filter(item => !(item.serverId === selectedServer.id && item.fullName === DEFAULT_REPO))]
+      writeJson(WATCHES_KEY, next)
+      return next
+    })
+    setRepoInput('')
+    setStatus(`${DEFAULT_REPO} 저장소를 연결했습니다.`)
+    void loadRuns(watch)
   }
 
   function toggleWatch(id: string) {
@@ -1370,6 +1444,26 @@ function App() {
                   <article className="metric-card"><span>배포</span><strong>{serverDeployChecks.filter(check => check.checked).length}/{serverDeployChecks.length}</strong><small>체크 완료</small></article>
                 </section>
                 <section className="panel-grid">
+                  <article className={`panel-card action-status-card ${runs[0]?.conclusion || runs[0]?.status || 'idle'}`}>
+                    <div className="card-row">
+                      <div>
+                        <h2>GitHub Actions</h2>
+                        <p>{serverWatches[0]?.fullName || '연결된 저장소가 없습니다.'}</p>
+                      </div>
+                      <strong>{runStateLabel(runs[0])}</strong>
+                    </div>
+                    <p>{runHelpText(runs[0])}</p>
+                    <div className="button-row">
+                      {serverWatches[0] ? (
+                        <>
+                          <button onClick={() => loadRuns(serverWatches[0])}>상태 새로고침</button>
+                          <a href={runs[0]?.htmlUrl || serverWatches[0].actionsUrl} target="_blank" rel="noreferrer">Actions 열기</a>
+                        </>
+                      ) : (
+                        <button onClick={connectDefaultRepo}>Playground 연결</button>
+                      )}
+                    </div>
+                  </article>
                   <article className="panel-card">
                     <h2>다음 작업</h2>
                     {serverTasks.filter(task => task.status !== 'done').slice(0, 5).map(task => (
@@ -1517,8 +1611,10 @@ function App() {
                   ))}
                   <article className="panel-card">
                     <h3>배포 후 Actions 확인</h3>
-                    <p>GitHub 채널에 연결된 레포의 실행 기록을 불러와 성공/실패를 확인하세요.</p>
+                    <p>{runHelpText(runs[0])}</p>
+                    {serverWatches.length === 0 && <button onClick={connectDefaultRepo}>Playground 연결</button>}
                     {serverWatches.map(watch => <button key={watch.id} onClick={() => loadRuns(watch)}>{watch.fullName} 실행 확인</button>)}
+                    {runs[0] && <a className="action-link" href={runs[0].htmlUrl} target="_blank" rel="noreferrer">최신 실행 열기</a>}
                   </article>
                 </section>
               </>
@@ -1564,7 +1660,7 @@ function App() {
                     {runs.map(run => (
                       <a key={run.id} className="run-row" href={run.htmlUrl} target="_blank" rel="noreferrer">
                         <span>{run.name}</span>
-                        <strong>{run.conclusion || run.status}</strong>
+                        <strong>{runStateLabel(run)}</strong>
                       </a>
                     ))}
                   </section>
@@ -1579,6 +1675,10 @@ function App() {
                     <input value={repoInput} onChange={event => setRepoInput(event.target.value)} placeholder="owner/repo" />
                     <button type="submit">연결</button>
                   </form>
+                  <div className="quick-actions">
+                    <button type="button" onClick={connectDefaultRepo}>현재 Playground 바로 연결</button>
+                    {serverWatches[0] && <button type="button" onClick={() => loadRuns(serverWatches[0])}>최신 Actions 확인</button>}
+                  </div>
                 </section>
                 <section className="panel-grid">
                   {serverWatches.map(watch => (
@@ -1599,10 +1699,11 @@ function App() {
                 {runs.length > 0 && (
                   <section className="panel-card">
                     <h2>최근 실행</h2>
+                    <p>{runHelpText(runs[0])}</p>
                     {runs.map(run => (
                       <a key={run.id} className="run-row" href={run.htmlUrl} target="_blank" rel="noreferrer">
                         <span>{run.name}</span>
-                        <strong>{run.conclusion || run.status}</strong>
+                        <strong>{runStateLabel(run)}</strong>
                       </a>
                     ))}
                   </section>
