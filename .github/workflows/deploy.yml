@@ -11,14 +11,27 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect backend changes
+        id: changes
+        run: |
+          if git diff --name-only HEAD~1 HEAD | grep -q '^backend/'; then
+            echo "backend=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "backend=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Set up JDK 17
+        if: steps.changes.outputs.backend == 'true'
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
       - name: Setup Gradle
+        if: steps.changes.outputs.backend == 'true'
         uses: gradle/actions/setup-gradle@v4
 
       - name: Set up Node.js
@@ -44,6 +57,7 @@ jobs:
         run: npm run build:all
 
       - name: Build Spring Boot JAR
+        if: steps.changes.outputs.backend == 'true'
         run: |
           cd backend
           chmod +x ./gradlew
@@ -54,6 +68,7 @@ jobs:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
 
       - name: Copy JAR to server
+        if: steps.changes.outputs.backend == 'true'
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ssh.gsmsv.site
@@ -66,6 +81,8 @@ jobs:
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          BACKEND_CHANGED: ${{ steps.changes.outputs.backend }}
         with:
           host: ssh.gsmsv.site
           port: 24136
@@ -88,10 +105,12 @@ jobs:
             test -n "$JWT_SECRET" || { echo "JWT_SECRET is missing in /home/ubuntu/playground/.env"; exit 1; }
             pm2 start ecosystem.config.js --only playground
 
-            # backend (Spring Boot) 재시작 - 새 JAR 반영
-            pm2 delete backend 2>/dev/null || true
-            grep -q '^JWT_SECRET=' /home/ubuntu/playground/.env.backend || { echo "JWT_SECRET is missing in /home/ubuntu/playground/.env.backend"; exit 1; }
-            pm2 start ecosystem.config.js --only backend
+            # backend (Spring Boot) 재시작 - backend 변경이 있을 때만 새 JAR 반영
+            if [ "$BACKEND_CHANGED" = "true" ]; then
+              pm2 delete backend 2>/dev/null || true
+              grep -q '^JWT_SECRET=' /home/ubuntu/playground/.env.backend || { echo "JWT_SECRET is missing in /home/ubuntu/playground/.env.backend"; exit 1; }
+              pm2 start ecosystem.config.js --only backend
+            fi
 
             pm2 save
             sudo systemctl reload nginx 2>/dev/null || true
