@@ -258,10 +258,10 @@ function tabLabel(tab: RoomTab) {
   if (tab === 'overview') return '개요'
   if (tab === 'specs') return '기능명세'
   if (tab === 'analysis') return '사용자분석'
-  if (tab === 'frontlog') return 'frontlog'
-  if (tab === 'backlog') return 'backlog'
+  if (tab === 'frontlog') return '프론트 로그'
+  if (tab === 'backlog') return '백엔드 로그'
   if (tab === 'api') return 'API명세'
-  if (tab === 'work') return 'github-actions'
+  if (tab === 'work') return '서버 액션'
   if (tab === 'deploy') return '배포'
   if (tab === 'docs') return '개발-문서'
   return '알림-설정'
@@ -271,9 +271,10 @@ function tabDescription(tab: RoomTab, server: DevServer | null) {
   if (tab === 'overview') return '프로젝트 진행 상황'
   if (tab === 'specs') return '기능명세서와 구현 상태'
   if (tab === 'analysis') return '사용자 니즈와 지표'
-  if (tab === 'frontlog') return 'frontend log'
-  if (tab === 'backlog') return 'backendlog'
+  if (tab === 'frontlog') return '프론트 화면, UI, 클라이언트 작업 기록'
+  if (tab === 'backlog') return '백엔드 API, DB, 서버 작업 기록'
   if (tab === 'api') return 'API 계약과 요청/응답'
+  if (tab === 'work') return 'GitHub Actions 실행, 실패, 배포 상태'
   if (tab === 'deploy') return '배포 전후 체크리스트'
   return server?.description || server?.githubOrg || '서버 작업 공간'
 }
@@ -1201,28 +1202,30 @@ function App() {
               ))}
             </div>
             <div className="sidebar-section">
-              <div className="section-title">frontend</div>
+              <div className="section-title">개발 기록</div>
               <button className={`channel-row ${activeTab === 'frontlog' ? 'active' : ''}`} onClick={() => setActiveTab('frontlog')}>
-                # frontlog
+                # 프론트 로그
               </button>
-            </div>
-            <div className="sidebar-section">
-              <div className="section-title">backend</div>
               <button className={`channel-row ${activeTab === 'backlog' ? 'active' : ''}`} onClick={() => setActiveTab('backlog')}>
-                # backlog
+                # 백엔드 로그
+              </button>
+              <button className={`channel-row ${activeTab === 'api' ? 'active' : ''}`} onClick={() => setActiveTab('api')}>
+                # API명세
               </button>
             </div>
             <div className="sidebar-section">
-              <div className="section-title">채팅 채널</div>
-              {(['chat', 'api', 'work', 'deploy', 'docs', 'alerts'] as RoomTab[]).map(tab => (
+              <div className="section-title">운영 / 배포</div>
+              {(['work', 'deploy', 'docs', 'alerts'] as RoomTab[]).map(tab => (
                 <button key={tab} className={`channel-row ${activeTab === tab ? 'active' : ''}`} onClick={() => setActiveTab(tab)}>
                   # {tabLabel(tab)}
                 </button>
               ))}
             </div>
             <div className="sidebar-section">
-              <div className="section-title">음성 채널</div>
-              <button className="channel-row">🔊 일반</button>
+              <div className="section-title">커뮤니케이션</div>
+              <button className={`channel-row ${activeTab === 'chat' ? 'active' : ''}`} onClick={() => setActiveTab('chat')}>
+                # 일반
+              </button>
             </div>
           </>
         )}
@@ -1625,11 +1628,11 @@ function App() {
                   <div className="card-row">
                     <div>
                       <span>{activeTab === 'frontlog' ? 'frontend' : 'backend'}</span>
-                      <h2>{activeTab === 'frontlog' ? 'frontend log' : 'backendlog'}</h2>
+                      <h2>{activeTab === 'frontlog' ? '프론트 작업 로그' : '백엔드 작업 로그'}</h2>
                       <p>
-                        {selectedServer?.githubOrg
-                          ? `${selectedServer.githubOrg} Organization 기준으로 작업 로그를 확인합니다.`
-                          : 'Organization을 연결하면 작업 로그를 확인할 수 있습니다.'}
+                        {activeTab === 'frontlog'
+                          ? 'UI 변경, 화면 오류, 클라이언트 상태, 빌드 이슈를 기록합니다.'
+                          : 'API 변경, DB 스키마, 인증, 서버 오류와 배치 작업을 기록합니다.'}
                       </p>
                     </div>
                     <button onClick={() => void setupDevHubStructure()} disabled={settingUpStructure || !selectedServer?.githubOrg}>
@@ -1644,19 +1647,19 @@ function App() {
                         <h3>{watch.fullName}</h3>
                         <button onClick={() => loadRuns(watch)}>로그 불러오기</button>
                       </div>
-                      <small>{activeTab === 'frontlog' ? 'frontend log source' : 'backendlog source'}</small>
+                      <small>{activeTab === 'frontlog' ? '프론트 작업과 관련된 저장소' : '백엔드 작업과 관련된 저장소'}</small>
                     </article>
                   ))}
                   {serverWatches.length === 0 && (
                     <article className="panel-card">
                       <h3>연결된 레포가 없습니다</h3>
-                      <p>서버 이름 옆 + 버튼에서 레포 주소를 연결하거나 github-actions 채널에서 레포를 연결하세요.</p>
+                      <p>운영 / 배포의 서버 액션 채널에서 저장소를 연결하세요. 로그는 작업 기록이고, 서버 액션은 CI/CD 실행 상태입니다.</p>
                     </article>
                   )}
                 </section>
                 {runs.length > 0 && (
                   <section className="panel-card">
-                    <h2>{activeTab === 'frontlog' ? 'frontend log' : 'backendlog'}</h2>
+                    <h2>{activeTab === 'frontlog' ? '프론트 관련 실행 기록' : '백엔드 관련 실행 기록'}</h2>
                     {runs.map(run => (
                       <a key={run.id} className="run-row" href={run.htmlUrl} target="_blank" rel="noreferrer">
                         <span>{run.name}</span>

@@ -778,8 +778,9 @@ a {
 
 .panel-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 14px;
+  align-items: start;
 }
 
 .inline-form {
@@ -802,10 +803,19 @@ a {
 .panel-card button,
 .panel-card a,
 .modal-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 12px;
   border-radius: 10px;
   background: #5865f2;
   color: white;
+  font-size: 13px;
   font-weight: 900;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .panel-card button:disabled {
@@ -997,12 +1007,36 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  min-width: 0;
+}
+
+.card-row {
+  flex-wrap: wrap;
+}
+
+.card-row > div {
+  min-width: 0;
+  flex: 1 1 220px;
+}
+
+.card-row h2,
+.card-row h3 {
+  overflow-wrap: anywhere;
+}
+
+.button-row {
+  flex-wrap: wrap;
+  justify-content: flex-start;
 }
 
 .button-row button,
-.button-row a,
-.card-row button {
-  padding: 10px 12px;
+.button-row a {
+  flex: 0 1 auto;
+}
+
+.panel-card > button,
+.panel-card > a.action-link {
+  margin: 6px 8px 0 0;
 }
 
 .quick-actions {
@@ -1016,6 +1050,7 @@ a {
 .action-link {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   min-height: 38px;
   padding: 0 12px;
   border-radius: 10px;
@@ -1063,8 +1098,26 @@ a {
 }
 
 .run-row {
+  min-height: 48px;
   padding: 12px 0;
   border-top: 1px solid #424650;
+  color: #f2f3f5;
+}
+
+.run-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.run-row strong {
+  flex: 0 0 auto;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #3b3d45;
+  color: #dbdee1;
+  font-size: 12px;
 }
 
 .friends-card h2 {
@@ -1358,6 +1411,10 @@ a {
     grid-template-columns: 76px 260px minmax(0, 1fr);
   }
 
+  .ops-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .header-actions input {
     display: none;
   }
@@ -1380,6 +1437,40 @@ a {
 
   .header-actions {
     width: 100%;
+  }
+
+  .workspace-panel {
+    padding: 14px;
+  }
+
+  .ops-metrics,
+  .panel-grid,
+  .form-grid,
+  .inline-form {
+    grid-template-columns: 1fr;
+  }
+
+  .ops-board {
+    grid-template-columns: 1fr;
+    overflow-x: visible;
+  }
+
+  .button-row,
+  .card-row,
+  .run-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .button-row button,
+  .button-row a,
+  .panel-card > button,
+  .panel-card > a.action-link {
+    width: 100%;
+  }
+
+  .run-row span {
+    white-space: normal;
   }
 
   .composer {
