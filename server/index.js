@@ -27,25 +27,29 @@ const session = require('express-session');
 const path = require('path');
 const http = require('http');
 const https = require('https');
+const { execFile } = require('child_process');
 const jwt = require('jsonwebtoken');
 const webpush = require('web-push');
 
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const JWT_SECRET = process.env.JWT_SECRET || 'playground-jwt-secret-2024';
-if (JWT_SECRET.length < 32 || JWT_SECRET.includes('playground-jwt-secret-2024')) {
+if (IS_PRODUCTION && (JWT_SECRET.length < 32 || JWT_SECRET.includes('playground-jwt-secret-2024'))) {
   throw new Error('JWT_SECRET must be set to a private value with at least 32 characters.');
 }
 
-// Web Push VAPID 설정
-webpush.setVapidDetails(
-  process.env.VAPID_EMAIL || 'mailto:admin@playground.com',
-  process.env.VAPID_PUBLIC_KEY || '',
-  process.env.VAPID_PRIVATE_KEY || ''
-);
+const HAS_VAPID_KEYS = Boolean(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY);
+if (HAS_VAPID_KEYS) {
+  webpush.setVapidDetails(
+    process.env.VAPID_EMAIL || 'mailto:admin@playground.com',
+    process.env.VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY
+  );
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8080';
-const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+const PROJECT_ROOT = path.resolve(__dirname, '..');
 
 app.set('trust proxy', 1);
 
@@ -343,6 +347,7 @@ app.get('/push/vapid-public-key', (req, res) => {
 
 /** 특정 유저에게 Web Push 발송 */
 async function sendPushNotification(userId, payload) {
+  if (!HAS_VAPID_KEYS) return;
   try {
     const subscriptions = await new Promise((resolve) => {
       const targetUrl = new URL(`/api/push/subscriptions/${userId}`, BACKEND_URL);
@@ -545,6 +550,100 @@ app.post('/github/setup-dev-hub-structure', async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// ============================================
+// 로컬 GitHub 관리 API
+// ============================================
+
+function runLocalCommand(command, args, options = {}) {
+  return new Promise((resolve) => {
+    execFile(command, args, {
+      cwd: PROJECT_ROOT,
+      windowsHide: true,
+      timeout: options.timeout || 15000,
+      maxBuffer: 1024 * 1024,
+    }, (error, stdout, stderr) => {
+      resolve({
+        ok: !error,
+        code: error?.code ?? 0,
+        stdout: String(stdout || '').trim(),
+        stderr: String(stderr || '').trim(),
+        message: error?.message || '',
+      });
+    });
+  });
+}
+
+async function getLocalGitHubStatus() {
+  const [gitVersion, ghVersion, branch, status, remote, aheadBehind, lastCommit] = await Promise.all([
+    runLocalCommand('git', ['--version']),
+    runLocalCommand('gh', ['--version']),
+    runLocalCommand('git', ['branch', '--show-current']),
+    runLocalCommand('git', ['status', '--short']),
+    runLocalCommand('git', ['remote', '-v']),
+    runLocalCommand('git', ['status', '--short', '--branch']),
+    runLocalCommand('git', ['log', '-1', '--pretty=format:%h %s']),
+  ]);
+
+  const remoteLines = remote.stdout.split(/\r?\n/).filter(Boolean);
+  const origin = remoteLines.find(line => line.startsWith('origin') && line.includes('(fetch)')) || '';
+  const branchLine = aheadBehind.stdout.split(/\r?\n/)[0] || '';
+  const changedFiles = status.stdout ? status.stdout.split(/\r?\n/).filter(Boolean) : [];
+
+  return {
+    projectRoot: PROJECT_ROOT,
+    git: {
+      installed: gitVersion.ok,
+      version: gitVersion.stdout || gitVersion.stderr || gitVersion.message,
+    },
+    gh: {
+      installed: ghVersion.ok,
+      version: ghVersion.stdout.split(/\r?\n/)[0] || ghVersion.stderr || ghVersion.message,
+      installCommand: 'winget install --id GitHub.cli',
+    },
+    repository: {
+      isRepo: branch.ok || status.ok,
+      branch: branch.stdout || '',
+      remoteOrigin: origin.replace(/\s+\(fetch\)$/, ''),
+      hasOrigin: Boolean(origin),
+      lastCommit: lastCommit.stdout || '',
+      branchSummary: branchLine,
+      changedFiles,
+      changedCount: changedFiles.length,
+      clean: changedFiles.length === 0,
+    },
+  };
+}
+
+app.get('/local-github/status', async (req, res) => {
+  res.json(await getLocalGitHubStatus());
+});
+
+app.post('/local-github/commit-push', async (req, res) => {
+  const message = String(req.body?.message || '').trim() || `Update playground ${new Date().toISOString().slice(0, 10)}`;
+  const status = await getLocalGitHubStatus();
+
+  if (!status.git.installed) return res.status(400).json({ error: 'Git is not installed.' });
+  if (!status.repository.isRepo) return res.status(400).json({ error: 'This folder is not a Git repository.' });
+  if (!status.repository.hasOrigin) return res.status(400).json({ error: 'origin remote is not connected.' });
+  if (status.repository.clean) return res.json({ success: true, message: 'No changes to commit.', status });
+
+  const add = await runLocalCommand('git', ['add', '-A']);
+  if (!add.ok) return res.status(500).json({ error: add.stderr || add.message });
+
+  const commit = await runLocalCommand('git', ['commit', '-m', message], { timeout: 30000 });
+  if (!commit.ok) return res.status(500).json({ error: commit.stderr || commit.message });
+
+  const push = await runLocalCommand('git', ['push'], { timeout: 60000 });
+  if (!push.ok) return res.status(500).json({ error: push.stderr || push.message });
+
+  res.json({
+    success: true,
+    message: 'Committed and pushed.',
+    output: [commit.stdout, push.stdout || push.stderr].filter(Boolean).join('\n'),
+    status: await getLocalGitHubStatus(),
+  });
 });
 
 // ============================================

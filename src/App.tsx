@@ -49,6 +49,23 @@ interface AppItem {
   disabled?: boolean;
 }
 
+interface LocalGitHubStatus {
+  projectRoot: string;
+  git: { installed: boolean; version: string };
+  gh: { installed: boolean; version: string; installCommand: string };
+  repository: {
+    isRepo: boolean;
+    branch: string;
+    remoteOrigin: string;
+    hasOrigin: boolean;
+    lastCommit: string;
+    branchSummary: string;
+    changedFiles: string[];
+    changedCount: number;
+    clean: boolean;
+  };
+}
+
 const APPS: AppItem[] = [
   {
     id: 'study-planner',
@@ -156,7 +173,7 @@ function saveFavorites(ids: string[]) {
 function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState<'home' | 'mypage' | 'friends'>('home');
+  const [page, setPage] = useState<'home' | 'mypage' | 'friends' | 'github'>('home');
   const [favorites, setFavorites] = useState<string[]>(getFavorites);
   const [showFavOnly, setShowFavOnly] = useState(false);
   const [tokenExpiry, setTokenExpiry] = useState<Date | null>(null);
@@ -396,6 +413,10 @@ function App() {
     );
   }
 
+  if (page === 'github') {
+    return <GitHubManager onBack={() => setPage('home')} />;
+  }
+
   return (
     <div className="app">
       <header className="header">
@@ -411,6 +432,9 @@ function App() {
             title={theme === 'dark' ? '화이트 모드로 전환' : '다크 모드로 전환'}
           >
             {theme === 'dark' ? '☀️' : '🌙'}
+          </button>
+          <button className="btn-feature-request" onClick={() => setPage('github')}>
+            GitHub 관리
           </button>
           <button className="btn-feature-request" onClick={openFeatureRequest}>
             기능추가 요청
@@ -718,6 +742,148 @@ function App() {
           </form>
         </div>
       )}
+    </div>
+  );
+}
+
+function StatusPill({ ok, label }: { ok: boolean; label: string }) {
+  return <span className={`status-pill ${ok ? 'ok' : 'warn'}`}>{label}</span>;
+}
+
+function GitHubManager({ onBack }: { onBack: () => void }) {
+  const [status, setStatus] = useState<LocalGitHubStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState('Update playground');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState('');
+
+  const refresh = async () => {
+    setLoading(true);
+    setResult('');
+    try {
+      const res = await fetch('/local-github/status');
+      setStatus(await res.json());
+    } catch {
+      setResult('상태를 불러오지 못했습니다. 서버가 실행 중인지 확인해주세요.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    refresh();
+  }, []);
+
+  const commitPush = async () => {
+    setBusy(true);
+    setResult('');
+    try {
+      const res = await fetch('/local-github/commit-push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '커밋/푸시에 실패했습니다.');
+      setStatus(data.status);
+      setResult(data.message || '완료했습니다.');
+    } catch (error) {
+      setResult(error instanceof Error ? error.message : '커밋/푸시에 실패했습니다.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const canPush = Boolean(status?.git.installed && status.repository.isRepo && status.repository.hasOrigin && !status.repository.clean);
+
+  return (
+    <div className="app">
+      <header className="header">
+        <div className="header-left">
+          <h1 className="logo">GitHub 관리</h1>
+          <p className="tagline">연결, 변경사항, 푸시 상태를 한 화면에서 확인합니다.</p>
+        </div>
+        <div className="header-right">
+          <button className="btn-back" onClick={onBack}>← 돌아가기</button>
+          <button className="btn-primary" onClick={refresh} disabled={loading || busy}>새로고침</button>
+        </div>
+      </header>
+
+      <main className="github-manager">
+        {loading && <div className="github-panel">상태 확인 중...</div>}
+
+        {status && (
+          <>
+            <section className="github-summary">
+              <div className="github-panel">
+                <span className="panel-label">Git</span>
+                <StatusPill ok={status.git.installed} label={status.git.installed ? '설치됨' : '설치 필요'} />
+                <p>{status.git.version}</p>
+              </div>
+              <div className="github-panel">
+                <span className="panel-label">GitHub CLI</span>
+                <StatusPill ok={status.gh.installed} label={status.gh.installed ? '설치됨' : '설치 필요'} />
+                <p>{status.gh.installed ? status.gh.version : status.gh.installCommand}</p>
+              </div>
+              <div className="github-panel">
+                <span className="panel-label">저장소</span>
+                <StatusPill ok={status.repository.isRepo && status.repository.hasOrigin} label={status.repository.hasOrigin ? '연결됨' : '연결 필요'} />
+                <p>{status.repository.remoteOrigin || 'origin remote가 없습니다.'}</p>
+              </div>
+            </section>
+
+            <section className="github-panel">
+              <div className="github-panel-header">
+                <div>
+                  <span className="panel-label">현재 상태</span>
+                  <h2>{status.repository.branch || '브랜치 없음'}</h2>
+                </div>
+                <StatusPill ok={status.repository.clean} label={status.repository.clean ? '변경 없음' : `${status.repository.changedCount}개 변경`} />
+              </div>
+              <div className="github-details">
+                <div><strong>동기화</strong><span>{status.repository.branchSummary || '-'}</span></div>
+                <div><strong>마지막 커밋</strong><span>{status.repository.lastCommit || '-'}</span></div>
+                <div><strong>폴더</strong><span>{status.projectRoot}</span></div>
+              </div>
+            </section>
+
+            <section className="github-panel">
+              <div className="github-panel-header">
+                <div>
+                  <span className="panel-label">변경 파일</span>
+                  <h2>커밋할 항목</h2>
+                </div>
+              </div>
+              {status.repository.changedFiles.length > 0 ? (
+                <ul className="changed-file-list">
+                  {status.repository.changedFiles.map((file) => <li key={file}>{file}</li>)}
+                </ul>
+              ) : (
+                <p className="empty-text">현재 커밋할 변경사항이 없습니다.</p>
+              )}
+            </section>
+
+            <section className="github-panel">
+              <label className="commit-label" htmlFor="commit-message">커밋 메시지</label>
+              <div className="commit-row">
+                <input
+                  id="commit-message"
+                  className="commit-input"
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                />
+                <button className="btn-primary" onClick={commitPush} disabled={!canPush || busy}>
+                  {busy ? '처리 중...' : '커밋하고 올리기'}
+                </button>
+              </div>
+              {!status.gh.installed && (
+                <p className="github-hint">GitHub 로그인과 저장소 생성 자동화까지 쓰려면 PowerShell에서 {status.gh.installCommand} 실행 후 다시 열면 됩니다.</p>
+              )}
+              {result && <p className="request-status">{result}</p>}
+            </section>
+          </>
+        )}
+      </main>
     </div>
   );
 }
