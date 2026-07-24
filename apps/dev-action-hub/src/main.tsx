@@ -12,6 +12,7 @@ const TASKS_KEY = 'dev-action-hub-tasks'
 const API_SPECS_KEY = 'dev-action-hub-api-specs'
 const PERSONAS_KEY = 'dev-action-hub-personas'
 const DEPLOYS_KEY = 'dev-action-hub-deploys'
+const ASSISTANT_THREADS_KEY = 'dev-action-hub-assistant-threads'
 const DISCORD_KEY = 'dev-action-hub-discord'
 const DM_ACTIVITY_KEY = 'dev-action-hub-dm-activity'
 const SELECTED_DM_KEY = 'dev-action-hub-selected-dm'
@@ -26,6 +27,7 @@ type DmSection = 'messages' | 'friends'
 type Presence = 'online' | 'idle' | 'offline'
 type WorkStatus = 'todo' | 'doing' | 'review' | 'done'
 type Priority = 'low' | 'medium' | 'high'
+type AssistantScope = 'task' | 'api' | 'run' | 'doc' | 'persona' | 'deploy'
 
 type DevServer = {
   id: string
@@ -130,6 +132,18 @@ type DeployCheck = {
   checked: boolean
   note: string
   updatedAt: string
+}
+
+type AssistantReply = {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  createdAt: string
+}
+
+type AssistantThread = {
+  targetId: string
+  replies: AssistantReply[]
 }
 
 type DiscordSettings = {
@@ -309,6 +323,65 @@ function runHelpText(run?: Run) {
   return '실행이 정상 완료되지 않았습니다. Actions 화면에서 세부 로그를 확인하세요.'
 }
 
+function generateTaskDraft(area: DevTask['area'], serverName: string) {
+  const areaLabel = area === 'frontend' ? '프론트' : area === 'backend' ? '백엔드' : area === 'api' ? 'API' : area === 'deploy' ? '배포' : '기능'
+  return {
+    title: `${serverName} ${areaLabel} 개선`,
+    detail: [
+      `목표: ${serverName}에서 사용자가 한 화면 안에서 ${areaLabel} 작업을 이해하고 처리할 수 있게 한다.`,
+      '정책: 상태는 대기/진행/검토/완료로 관리하고, 각 변경은 로그 또는 API 명세와 연결한다.',
+      '예외상황: GitHub Actions 실패, 입력 누락, 외부 API 연결 실패 시 사용자가 다음 조치를 알 수 있어야 한다.',
+      '완료 기준: 사용자가 별도 Discord/Notion/GitHub 화면을 오가지 않고 현재 상태와 다음 액션을 확인할 수 있다.',
+    ].join('\n'),
+  }
+}
+
+function generateApiDraft(serverName: string) {
+  return {
+    method: 'POST',
+    path: '/api/dev-hub/assistant/replies',
+    purpose: `${serverName}의 명세서, 로그, API 항목에 대해 질문하고 답변을 남깁니다.`,
+    request: '{\n  "targetId": "task-123",\n  "message": "이 기능의 예외상황을 더 정리해줘"\n}',
+    response: '{\n  "reply": "예외상황, 확인 방법, 다음 액션을 요약해서 반환합니다.",\n  "createdAt": "2026-07-24T00:00:00.000Z"\n}',
+  }
+}
+
+function generateDocDraft(serverName: string) {
+  return {
+    title: `${serverName} 운영 문서`,
+    content: [
+      '# 목적',
+      '개발 진행 상황, 명세, 로그, 배포 확인을 한곳에서 관리합니다.',
+      '',
+      '# 현재 흐름',
+      '1. 기능명세서에서 목표와 완료 기준을 작성합니다.',
+      '2. API 명세서에서 요청/응답 계약을 고정합니다.',
+      '3. 프론트/백엔드 로그에서 GitHub Actions 이벤트를 확인합니다.',
+      '4. 각 항목의 답변 스레드에서 논의와 결정사항을 남깁니다.',
+      '',
+      '# 확인할 것',
+      '배포 실패 시 서버 액션에서 실패 로그를 열고, 수정 후 다시 푸시합니다.',
+    ].join('\n'),
+  }
+}
+
+function generateAssistantAnswer(scope: AssistantScope, title: string, question: string) {
+  const trimmed = question.trim()
+  const base = scope === 'api'
+    ? 'API 관점에서는 요청/응답, 인증, 실패 케이스, 상태코드를 먼저 고정하는 게 좋습니다.'
+    : scope === 'run'
+      ? '로그 관점에서는 실패 위치, 영향 범위, 재시도 여부, 다음 커밋에서 수정할 항목을 분리해야 합니다.'
+      : scope === 'persona'
+        ? '사용자 관점에서는 사용자가 하려는 일, 막히는 지점, 성공 지표를 한 문장씩 고정해야 합니다.'
+        : '명세 관점에서는 목표, 정책, 예외상황, 완료 기준을 분리해서 작성하는 게 좋습니다.'
+  return [
+    `${title}에 대한 답변입니다.`,
+    base,
+    trimmed ? `질문 요지: ${trimmed}` : '질문이 비어 있어 현재 항목 기준으로 다음 액션을 정리했습니다.',
+    '다음 액션: 빠진 조건을 한 줄로 추가하고, 완료 기준을 검증 가능한 문장으로 바꾸세요.',
+  ].join('\n')
+}
+
 function parseReactions(value?: string) {
   if (!value) return []
   return value
@@ -358,6 +431,8 @@ function App() {
   const [apiSpecs, setApiSpecs] = useState<ApiSpec[]>(() => readJson(API_SPECS_KEY, []))
   const [personas, setPersonas] = useState<PersonaNote[]>(() => readJson(PERSONAS_KEY, []))
   const [deployChecks, setDeployChecks] = useState<DeployCheck[]>(() => readJson(DEPLOYS_KEY, []))
+  const [assistantThreads, setAssistantThreads] = useState<Record<string, AssistantThread>>(() => readJson(ASSISTANT_THREADS_KEY, {}))
+  const [assistantDrafts, setAssistantDrafts] = useState<Record<string, string>>({})
   const [discord, setDiscord] = useState<DiscordSettings>(() =>
     readJson(DISCORD_KEY, { webhookUrl: '', enabled: true, success: true, failure: true }),
   )
@@ -848,6 +923,17 @@ function App() {
     setDocDraft({ title: '', content: '' })
   }
 
+  function fillAutoTaskDraft(area: DevTask['area'] = taskDraft.area) {
+    const generated = generateTaskDraft(area, selectedServer?.name || 'Dev Action Hub')
+    setTaskDraft(prev => ({ ...prev, area, title: generated.title, detail: generated.detail }))
+    setStatus('기능명세서 초안을 자동 작성했습니다.')
+  }
+
+  function fillAutoDocDraft() {
+    setDocDraft(generateDocDraft(selectedServer?.name || 'Dev Action Hub'))
+    setStatus('개발 문서 초안을 자동 작성했습니다.')
+  }
+
   function createTask(event: FormEvent) {
     event.preventDefault()
     if (!selectedServer || !taskDraft.title.trim()) return
@@ -897,6 +983,11 @@ function App() {
       return next
     })
     setApiDraft({ method: 'GET', path: '', purpose: '', request: '', response: '' })
+  }
+
+  function fillAutoApiDraft() {
+    setApiDraft(generateApiDraft(selectedServer?.name || 'Dev Action Hub'))
+    setStatus('API 명세서 초안을 자동 작성했습니다.')
   }
 
   function updateApiStatus(specId: string, nextStatus: WorkStatus) {
@@ -953,6 +1044,71 @@ function App() {
       writeJson(DEPLOYS_KEY, next)
       return next
     })
+  }
+
+  function addAssistantReply(targetId: string, scope: AssistantScope, title: string) {
+    const question = assistantDrafts[targetId]?.trim()
+    if (!question) return
+    const createdAt = new Date().toISOString()
+    const replies: AssistantReply[] = [
+      { id: nowId('question'), role: 'user', content: question, createdAt },
+      { id: nowId('answer'), role: 'assistant', content: generateAssistantAnswer(scope, title, question), createdAt },
+    ]
+    setAssistantThreads(prev => {
+      const current = prev[targetId] || { targetId, replies: [] }
+      const next = { ...prev, [targetId]: { targetId, replies: [...current.replies, ...replies] } }
+      writeJson(ASSISTANT_THREADS_KEY, next)
+      return next
+    })
+    setAssistantDrafts(prev => ({ ...prev, [targetId]: '' }))
+  }
+
+  function addAutoAssistantSummary(targetId: string, scope: AssistantScope, title: string) {
+    const createdAt = new Date().toISOString()
+    const reply: AssistantReply = {
+      id: nowId('answer'),
+      role: 'assistant',
+      content: generateAssistantAnswer(scope, title, '현재 항목을 요약하고 빠진 내용을 알려줘'),
+      createdAt,
+    }
+    setAssistantThreads(prev => {
+      const current = prev[targetId] || { targetId, replies: [] }
+      const next = { ...prev, [targetId]: { targetId, replies: [...current.replies, reply] } }
+      writeJson(ASSISTANT_THREADS_KEY, next)
+      return next
+    })
+  }
+
+  function renderAssistantThread(targetId: string, scope: AssistantScope, title: string) {
+    const thread = assistantThreads[targetId]
+    return (
+      <div className="assistant-thread">
+        <div className="assistant-thread-head">
+          <strong>답변 스레드</strong>
+          <button type="button" onClick={() => addAutoAssistantSummary(targetId, scope, title)}>자동 답변</button>
+        </div>
+        {thread?.replies.length ? (
+          <div className="assistant-replies">
+            {thread.replies.map(reply => (
+              <div className={`assistant-reply ${reply.role}`} key={reply.id}>
+                <span>{reply.role === 'assistant' ? 'Hub Assistant' : '나'}</span>
+                <p>{reply.content}</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="assistant-empty">이 항목에 대해 질문하면 바로 답변 스레드가 남습니다.</p>
+        )}
+        <div className="assistant-composer">
+          <input
+            value={assistantDrafts[targetId] || ''}
+            onChange={event => setAssistantDrafts(prev => ({ ...prev, [targetId]: event.target.value }))}
+            placeholder="이 내용에 대해 질문하기"
+          />
+          <button type="button" onClick={() => addAssistantReply(targetId, scope, title)}>답변</button>
+        </div>
+      </div>
+    )
   }
 
   function openServer(serverId: string) {
@@ -1511,7 +1667,10 @@ function App() {
                       </select>
                     </div>
                     <textarea value={taskDraft.detail} onChange={event => setTaskDraft({ ...taskDraft, detail: event.target.value })} placeholder="목표, 정책, 예외상황, 완료 기준" />
-                    <button type="submit">명세 추가</button>
+                    <div className="button-row">
+                      <button type="button" onClick={() => fillAutoTaskDraft()}>자동 작성</button>
+                      <button type="submit">명세 추가</button>
+                    </div>
                   </form>
                 </section>
                 <section className="ops-board">
@@ -1528,6 +1687,7 @@ function App() {
                             <option value="review">검토</option>
                             <option value="done">완료</option>
                           </select>
+                          {renderAssistantThread(task.id, 'task', task.title)}
                         </article>
                       ))}
                     </div>
@@ -1554,6 +1714,7 @@ function App() {
                       <p><strong>Needs</strong> {persona.need || '-'}</p>
                       <p><strong>Pain</strong> {persona.pain || '-'}</p>
                       <small>{persona.metric || '지표 없음'}</small>
+                      {renderAssistantThread(persona.id, 'persona', persona.segment)}
                     </article>
                   ))}
                 </section>
@@ -1573,7 +1734,10 @@ function App() {
                     <input value={apiDraft.purpose} onChange={event => setApiDraft({ ...apiDraft, purpose: event.target.value })} placeholder="용도" />
                     <textarea value={apiDraft.request} onChange={event => setApiDraft({ ...apiDraft, request: event.target.value })} placeholder="Request body / query / auth" />
                     <textarea value={apiDraft.response} onChange={event => setApiDraft({ ...apiDraft, response: event.target.value })} placeholder="Response 예시 / 에러" />
-                    <button type="submit">API 추가</button>
+                    <div className="button-row">
+                      <button type="button" onClick={fillAutoApiDraft}>자동 작성</button>
+                      <button type="submit">API 추가</button>
+                    </div>
                   </form>
                 </section>
                 <section className="panel-grid">
@@ -1583,6 +1747,7 @@ function App() {
                       <p>{spec.purpose || '용도 없음'}</p>
                       <pre>{spec.request || 'Request 없음'}</pre>
                       <pre>{spec.response || 'Response 없음'}</pre>
+                      {renderAssistantThread(spec.id, 'api', `${spec.method} ${spec.path}`)}
                     </article>
                   ))}
                 </section>
@@ -1610,6 +1775,7 @@ function App() {
                       </label>
                       <p>{check.note || '확인 방법 없음'}</p>
                       <small>{check.environment}</small>
+                      {renderAssistantThread(check.id, 'deploy', check.title)}
                     </article>
                   ))}
                   <article className="panel-card">
@@ -1666,6 +1832,7 @@ function App() {
                           </div>
                           <div className="webhook-footer">GitHub Actions · 클릭하면 실행 로그가 열립니다</div>
                         </a>
+                        {renderAssistantThread(run.id, 'run', run.name)}
                       </div>
                     </article>
                   ))}
@@ -1743,7 +1910,10 @@ function App() {
                       onChange={event => setDocDraft({ ...docDraft, content: event.target.value })}
                       placeholder="기능명세서, API 명세서, 트러블슈팅 내용을 적으세요"
                     />
-                    <button type="submit">문서 추가</button>
+                    <div className="button-row">
+                      <button type="button" onClick={fillAutoDocDraft}>자동 작성</button>
+                      <button type="submit">문서 추가</button>
+                    </div>
                   </form>
                 </section>
                 <section className="panel-grid">
@@ -1752,6 +1922,7 @@ function App() {
                       <h3>{doc.title}</h3>
                       <p>{doc.content || '내용 없음'}</p>
                       <small>{formatDateTime(doc.updatedAt)}</small>
+                      {renderAssistantThread(doc.id, 'doc', doc.title)}
                     </article>
                   ))}
                 </section>

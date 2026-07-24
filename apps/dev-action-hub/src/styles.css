@@ -1319,6 +1319,108 @@ a {
   font-weight: 700;
 }
 
+.assistant-thread {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #424650;
+}
+
+.webhook-content .assistant-thread {
+  width: min(720px, 100%);
+  border-top-color: #3f4147;
+}
+
+.assistant-thread-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.assistant-thread-head strong {
+  color: #f2f3f5;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.assistant-thread-head button,
+.assistant-composer button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 6px;
+  background: #3b3d45;
+  color: #dbdee1;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.assistant-thread-head button:hover,
+.assistant-composer button:hover {
+  background: #4e5058;
+}
+
+.assistant-replies {
+  display: grid;
+  gap: 8px;
+}
+
+.assistant-reply {
+  display: grid;
+  gap: 4px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  background: #383a40;
+}
+
+.assistant-reply.user {
+  background: #34373f;
+}
+
+.assistant-reply span {
+  color: #8ea1ff;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.assistant-reply.user span {
+  color: #a6f3a6;
+}
+
+.assistant-reply p,
+.assistant-empty {
+  margin: 0;
+  color: #dbdee1;
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.assistant-empty {
+  color: #949ba4;
+}
+
+.assistant-composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.assistant-composer input {
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid #424650;
+  border-radius: 6px;
+  background: #1e1f22;
+  color: #f2f3f5;
+}
+
 .friends-card h2 {
   margin-bottom: 6px;
 }
@@ -1665,6 +1767,21 @@ a {
 
   .webhook-fields {
     grid-template-columns: 1fr;
+  }
+
+  .assistant-thread-head,
+  .assistant-composer {
+    grid-template-columns: 1fr;
+  }
+
+  .assistant-thread-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .assistant-thread-head button,
+  .assistant-composer button {
+    width: 100%;
   }
 
   .header-actions {
