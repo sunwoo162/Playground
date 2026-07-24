@@ -54,7 +54,10 @@ jobs:
           done
 
       - name: Build frontend apps
-        run: npm run build:all
+        run: |
+          npm run build:all
+          npm run build --prefix apps/code-run-visualizer
+          test -f apps/code-run-visualizer/dist/index.html
 
       - name: Build Spring Boot JAR
         if: steps.changes.outputs.backend == 'true'
@@ -98,6 +101,8 @@ jobs:
             # 의존성 설치 및 프론트 빌드
             npm run install:all
             npm run build:all
+            npm run build --prefix apps/code-run-visualizer
+            test -f apps/code-run-visualizer/dist/index.html
 
             # playground (Node.js) 재시작 - ecosystem으로 환경변수 포함
             pm2 delete playground 2>/dev/null || true
