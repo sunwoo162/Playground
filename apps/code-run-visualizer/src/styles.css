@@ -673,8 +673,30 @@ input[type='range'] {
   box-shadow: 0 0 28px rgba(240, 178, 50, 0.28);
 }
 
-.sort-bar.active {
+.sort-bar.selected {
+  outline: 3px solid #8ea1ff;
+  outline-offset: 4px;
   transform: translateY(-12px) scale(1.04);
+}
+
+.sort-bar.selected::after {
+  content: '선택';
+  position: absolute;
+  top: -28px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 3px 6px;
+  border: 1px solid rgba(142, 161, 255, 0.7);
+  border-radius: 999px;
+  background: #151d35;
+  color: #dfe6ff;
+  font-size: 10px;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.sort-bar.compare.selected::after {
+  content: '선택';
 }
 
 .sort-bar.lifted {

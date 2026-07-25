@@ -4,7 +4,7 @@ import './styles.css'
 
 type Phase = 'tokenize' | 'parse' | 'compile' | 'execute'
 type Language = 'JavaScript' | 'Python' | 'Java'
-type SortAlgorithm = 'community' | 'selection' | 'insertion'
+type SortAlgorithm = 'community' | 'selection' | 'insertion' | 'quick' | 'merge' | 'heap' | 'linearSearch' | 'binarySearch'
 
 type Step = {
   id: string
@@ -17,6 +17,17 @@ type Step = {
 }
 
 const phaseNodes: Phase[] = ['tokenize', 'parse', 'compile', 'execute']
+const algorithmList: SortAlgorithm[] = ['community', 'selection', 'insertion', 'quick', 'merge', 'heap', 'linearSearch', 'binarySearch']
+const algorithmNames: Record<SortAlgorithm, string> = {
+  community: '버블 정렬 (Bubble Sort)',
+  selection: '선택 정렬 (Selection Sort)',
+  insertion: '삽입 정렬 (Insertion Sort)',
+  quick: '퀵 정렬 (Quick Sort)',
+  merge: '병합 정렬 (Merge Sort)',
+  heap: '힙 정렬 (Heap Sort)',
+  linearSearch: '선형 탐색 (Linear Search)',
+  binarySearch: '이진 탐색 (Binary Search)',
+}
 
 type ExpressionFrame = {
   label: string
@@ -101,6 +112,41 @@ const sortCode: Record<SortAlgorithm, string[]> = {
     '    shift a[j] right',
     '  insert key at j + 1',
   ],
+  quick: [
+    'choose pivot',
+    'partition values around pivot',
+    '  compare current with pivot',
+    '  swap into lower partition',
+    'recurse left and right',
+  ],
+  merge: [
+    'split array in half',
+    'sort left half',
+    'sort right half',
+    'merge smaller values first',
+    'write merged result',
+  ],
+  heap: [
+    'build max heap',
+    'compare parent and child',
+    'swap largest to parent',
+    'move root to sorted tail',
+    'heapify remaining range',
+  ],
+  linearSearch: [
+    'target value 준비',
+    'for each index',
+    '  compare item with target',
+    '  if same, stop',
+    'not found after full scan',
+  ],
+  binarySearch: [
+    'left = 0, right = n - 1',
+    'mid = floor((left + right) / 2)',
+    'compare a[mid] with target',
+    'move left or right boundary',
+    'found target or stop',
+  ],
 }
 
 const completions: Record<Language, CompletionItem[]> = {
@@ -182,6 +228,77 @@ for (let i = 1; i < arr.length; i++) {
 }
 
 console.log(arr.join(", "))`,
+  quick: `const arr = [42, 18, 67, 9, 55, 31, 74]
+const pivot = arr[arr.length - 1]
+
+for (let i = 0; i < arr.length - 1; i++) {
+  if (arr[i] < pivot) {
+    console.log("lower", arr[i])
+  }
+}
+
+console.log("pivot", pivot)`,
+  merge: `const arr = [42, 18, 67, 9, 55, 31, 74]
+const mid = Math.floor(arr.length / 2)
+const left = arr.slice(0, mid)
+const right = arr.slice(mid)
+
+console.log("split", left.length, right.length)`,
+  heap: `const arr = [42, 18, 67, 9, 55, 31, 74]
+
+function heapify(items, root) {
+  const left = root * 2 + 1
+  const right = root * 2 + 2
+  console.log("children", left, right)
+}
+
+heapify(arr, 0)`,
+  linearSearch: `const arr = [42, 18, 67, 9, 55, 31, 74]
+const target = 55
+
+for (let i = 0; i < arr.length; i++) {
+  if (arr[i] === target) {
+    console.log("found", i)
+    break
+  }
+}`,
+  binarySearch: `const arr = [9, 18, 31, 42, 55, 67, 74]
+const target = 55
+let left = 0
+let right = arr.length - 1
+
+while (left <= right) {
+  const mid = Math.floor((left + right) / 2)
+  if (arr[mid] === target) break
+  if (arr[mid] < target) left = mid + 1
+  else right = mid - 1
+}`,
+}
+
+function sortSampleFor(algorithm: SortAlgorithm, selectedLanguage: Language) {
+  const list = algorithm === 'binarySearch' ? '9, 18, 31, 42, 55, 67, 74' : '42, 18, 67, 9, 55, 31, 74'
+  if (selectedLanguage === 'JavaScript') return sortSamples[algorithm]
+  if (selectedLanguage === 'Python') {
+    if (algorithm === 'linearSearch') return `arr = [${list}]\ntarget = 55\n\nfor i, value in enumerate(arr):\n    if value == target:\n        print("found", i)\n        break`
+    if (algorithm === 'binarySearch') return `arr = [${list}]\ntarget = 55\nleft = 0\nright = len(arr) - 1\n\nwhile left <= right:\n    mid = (left + right) // 2\n    if arr[mid] == target:\n        break\n    if arr[mid] < target:\n        left = mid + 1\n    else:\n        right = mid - 1`
+    if (algorithm === 'quick') return `arr = [${list}]\npivot = arr[-1]\n\nfor value in arr[:-1]:\n    if value < pivot:\n        print("lower", value)\n\nprint("pivot", pivot)`
+    if (algorithm === 'merge') return `arr = [${list}]\nmid = len(arr) // 2\nleft = arr[:mid]\nright = arr[mid:]\n\nprint("split", len(left), len(right))`
+    if (algorithm === 'heap') return `arr = [${list}]\nroot = 0\nleft = root * 2 + 1\nright = root * 2 + 2\n\nprint("children", left, right)`
+    if (algorithm === 'selection') return `arr = [${list}]\n\nfor i in range(len(arr)):\n    min_index = i\n    for j in range(i + 1, len(arr)):\n        if arr[j] < arr[min_index]:\n            min_index = j\n    arr[i], arr[min_index] = arr[min_index], arr[i]\n\nprint(arr)`
+    if (algorithm === 'insertion') return `arr = [${list}]\n\nfor i in range(1, len(arr)):\n    key = arr[i]\n    j = i - 1\n    while j >= 0 and arr[j] > key:\n        arr[j + 1] = arr[j]\n        j -= 1\n    arr[j + 1] = key\n\nprint(arr)`
+    return `arr = [${list}]\n\nfor i in range(len(arr)):\n    for j in range(0, len(arr) - i - 1):\n        if arr[j] > arr[j + 1]:\n            arr[j], arr[j + 1] = arr[j + 1], arr[j]\n\nprint(arr)`
+  }
+  const javaList = `{${list}}`
+  if (algorithm === 'linearSearch') return `public class Main {\n  public static void main(String[] args) {\n    int[] arr = ${javaList};\n    int target = 55;\n    for (int i = 0; i < arr.length; i++) {\n      if (arr[i] == target) System.out.println(i);\n    }\n  }\n}`
+  if (algorithm === 'binarySearch') return `public class Main {\n  public static void main(String[] args) {\n    int[] arr = ${javaList};\n    int target = 55;\n    int left = 0, right = arr.length - 1;\n    while (left <= right) {\n      int mid = (left + right) / 2;\n      if (arr[mid] == target) break;\n      if (arr[mid] < target) left = mid + 1; else right = mid - 1;\n    }\n  }\n}`
+  return `public class Main {\n  public static void main(String[] args) {\n    int[] arr = ${javaList};\n    System.out.println(arr.length);\n  }\n}`
+}
+
+function replaceNumberList(code: string, values: number[]) {
+  const csv = values.join(', ')
+  if (/\[[\d,\s.-]+\]/.test(code)) return code.replace(/\[[\d,\s.-]+\]/, `[${csv}]`)
+  if (/\{[\d,\s.-]+\}/.test(code)) return code.replace(/\{[\d,\s.-]+\}/, `{${csv}}`)
+  return `${code}\n// values = [${csv}]`
 }
 
 const phaseLabel: Record<Phase, string> = {
@@ -522,11 +639,114 @@ function pushSortStep(steps: SortStep[], step: Omit<SortStep, 'array'> & { array
 }
 
 function buildSortSteps(source: number[], algorithm: SortAlgorithm): SortStep[] {
-  const arr = [...source]
+  const arr = algorithm === 'binarySearch' ? [...source].sort((a, b) => a - b) : [...source]
   const steps: SortStep[] = []
   let comparisons = 0
   let swaps = 0
   pushSortStep(steps, { array: arr, compare: [], active: [], sorted: [], line: 1, action: '초기 배열 준비', comparisons, swaps })
+
+  if (algorithm === 'linearSearch') {
+    const target = arr[Math.min(arr.length - 1, Math.floor(arr.length * 0.65))] ?? arr[0]
+    for (let i = 0; i < arr.length; i += 1) {
+      comparisons += 1
+      pushSortStep(steps, { array: arr, compare: [i], active: [], sorted: arr.slice(0, i).map((_, index) => index), line: 3, action: `${i}번 값 ${arr[i]} 와 target ${target} 비교`, comparisons, swaps })
+      if (arr[i] === target) {
+        pushSortStep(steps, { array: arr, compare: [], active: [i], sorted: arr.slice(0, i + 1).map((_, index) => index), line: 4, action: `${i}번 위치에서 target 발견`, comparisons, swaps })
+        return steps
+      }
+    }
+    pushSortStep(steps, { array: arr, compare: [], active: [], sorted: arr.map((_, index) => index), line: 5, action: 'target 없음', comparisons, swaps })
+    return steps
+  }
+
+  if (algorithm === 'binarySearch') {
+    const target = arr[Math.min(arr.length - 1, Math.floor(arr.length * 0.65))] ?? arr[0]
+    let left = 0
+    let right = arr.length - 1
+    while (left <= right) {
+      const mid = Math.floor((left + right) / 2)
+      comparisons += 1
+      pushSortStep(steps, { array: arr, compare: [mid], active: [left, right], sorted: [], line: 3, action: `mid ${mid}: ${arr[mid]} 와 target ${target} 비교`, comparisons, swaps })
+      if (arr[mid] === target) {
+        pushSortStep(steps, { array: arr, compare: [], active: [mid], sorted: [mid], line: 5, action: `target ${target} 발견`, comparisons, swaps })
+        return steps
+      }
+      if (arr[mid] < target) left = mid + 1
+      else right = mid - 1
+      pushSortStep(steps, { array: arr, compare: [], active: [left, right].filter(index => index >= 0 && index < arr.length), sorted: [], line: 4, action: `탐색 범위를 ${left}~${right} 로 좁힘`, comparisons, swaps })
+    }
+    return steps
+  }
+
+  if (algorithm === 'quick') {
+    const partition = (left: number, right: number) => {
+      if (left >= right) return
+      const pivot = arr[right]
+      let wall = left
+      pushSortStep(steps, { array: arr, compare: [], active: [right], sorted: [], line: 1, action: `pivot ${pivot} 선택`, comparisons, swaps })
+      for (let i = left; i < right; i += 1) {
+        comparisons += 1
+        pushSortStep(steps, { array: arr, compare: [i], active: [right, wall], sorted: [], line: 3, action: `${arr[i]} 와 pivot ${pivot} 비교`, comparisons, swaps })
+        if (arr[i] < pivot) {
+          ;[arr[i], arr[wall]] = [arr[wall], arr[i]]
+          swaps += 1
+          pushSortStep(steps, { array: arr, compare: [i, wall], active: [right], sorted: [], line: 4, action: `pivot보다 작은 값을 왼쪽 구역으로 이동`, comparisons, swaps })
+          wall += 1
+        }
+      }
+      ;[arr[wall], arr[right]] = [arr[right], arr[wall]]
+      swaps += 1
+      pushSortStep(steps, { array: arr, compare: [wall, right], active: [wall], sorted: [wall], line: 5, action: `pivot을 최종 위치 ${wall}에 배치`, comparisons, swaps })
+      partition(left, wall - 1)
+      partition(wall + 1, right)
+    }
+    partition(0, arr.length - 1)
+    pushSortStep(steps, { array: arr, compare: [], active: [], sorted: arr.map((_, index) => index), line: 5, action: '정렬 완료', comparisons, swaps })
+    return steps
+  }
+
+  if (algorithm === 'merge') {
+    const sorted = [...arr].sort((a, b) => a - b)
+    pushSortStep(steps, { array: arr, compare: [0, Math.floor(arr.length / 2)], active: [], sorted: [], line: 1, action: '배열을 왼쪽/오른쪽 절반으로 분할', comparisons, swaps })
+    sorted.forEach((value, index) => {
+      comparisons += 1
+      arr[index] = value
+      swaps += 1
+      pushSortStep(steps, { array: arr, compare: [index], active: [index], sorted: arr.slice(0, index + 1).map((_, sortedIndex) => sortedIndex), line: 4, action: `가장 작은 남은 값 ${value} 병합`, comparisons, swaps })
+    })
+    pushSortStep(steps, { array: arr, compare: [], active: [], sorted: arr.map((_, index) => index), line: 5, action: '정렬 완료', comparisons, swaps })
+    return steps
+  }
+
+  if (algorithm === 'heap') {
+    const heapify = (size: number, root: number) => {
+      let largest = root
+      const left = root * 2 + 1
+      const right = root * 2 + 2
+      ;[left, right].forEach(child => {
+        if (child < size) {
+          comparisons += 1
+          pushSortStep(steps, { array: arr, compare: [largest, child], active: [root], sorted: arr.slice(size).map((_, index) => size + index), line: 2, action: `부모 ${arr[largest]} 와 자식 ${arr[child]} 비교`, comparisons, swaps })
+          if (arr[child] > arr[largest]) largest = child
+        }
+      })
+      if (largest !== root) {
+        ;[arr[root], arr[largest]] = [arr[largest], arr[root]]
+        swaps += 1
+        pushSortStep(steps, { array: arr, compare: [root, largest], active: [root], sorted: arr.slice(size).map((_, index) => size + index), line: 3, action: `큰 자식을 부모 자리로 올림`, comparisons, swaps })
+        heapify(size, largest)
+      }
+    }
+    for (let i = Math.floor(arr.length / 2) - 1; i >= 0; i -= 1) heapify(arr.length, i)
+    for (let end = arr.length - 1; end > 0; end -= 1) {
+      ;[arr[0], arr[end]] = [arr[end], arr[0]]
+      swaps += 1
+      pushSortStep(steps, { array: arr, compare: [0, end], active: [0], sorted: arr.slice(end).map((_, index) => end + index), line: 4, action: `루트 최대값을 정렬 영역으로 이동`, comparisons, swaps })
+      heapify(end, 0)
+    }
+    pushSortStep(steps, { array: arr, compare: [], active: [], sorted: arr.map((_, index) => index), line: 5, action: '정렬 완료', comparisons, swaps })
+    return steps
+  }
 
   if (algorithm === 'selection') {
     for (let i = 0; i < arr.length; i += 1) {
@@ -586,7 +806,7 @@ function buildSortSteps(source: number[], algorithm: SortAlgorithm): SortStep[] 
 }
 
 function extractNumbersFromCode(code: string) {
-  const arrayMatch = code.match(/\[([\d,\s.-]+)\]/)
+  const arrayMatch = code.match(/\[([\d,\s.-]+)\]/) || code.match(/\{([\d,\s.-]+)\}/)
   if (!arrayMatch) return [42, 18, 67, 9, 55, 31, 74]
   const parsed = arrayMatch[1]
     .split(',')
@@ -597,6 +817,11 @@ function extractNumbersFromCode(code: string) {
 
 function detectSortAlgorithm(code: string): SortAlgorithm {
   const lower = code.toLowerCase()
+  if (/binarysearch|binary search|left\s*=|right\s*=|mid\s*=|target/.test(lower) && /mid|right/.test(lower)) return 'binarySearch'
+  if (/linearsearch|linear search|target/.test(lower)) return 'linearSearch'
+  if (/heap|heapify|largest|root\s*\*/.test(lower)) return 'heap'
+  if (/merge|slice|left\s*=.*slice|right\s*=.*slice|split/.test(lower)) return 'merge'
+  if (/quick|pivot|partition|wall/.test(lower)) return 'quick'
   if (/insertion|key\s*=|while\s*\([^)]*>\s*key|while\s+j\s*>=/.test(lower)) return 'insertion'
   if (/selection|min\s*=|minindex|minimum/.test(lower)) return 'selection'
   return 'community'
@@ -723,13 +948,10 @@ function App() {
 
   function loadDemo(nextLanguage: Language) {
     setLanguage(nextLanguage)
-    if (nextLanguage === 'Python') {
-      setCode(`def average(scores):\n    total = 0\n    for score in scores:\n        total += score\n    return total / len(scores)\n\nresult = average([82, 91, 77])\nprint("average", result)`)
-    } else if (nextLanguage === 'Java') {
-      setCode(`public class Main {\n  public static void main(String[] args) {\n    int total = 0;\n    int[] scores = {82, 91, 77};\n    for (int score : scores) {\n      total += score;\n    }\n    System.out.println(total / 3);\n  }\n}`)
-    } else {
-      setCode(sampleCode)
-    }
+    setCode(sortSampleFor(detectedSortAlgorithm, nextLanguage))
+    setSortIndex(0)
+    setActiveIndex(0)
+    setPlaying(false)
   }
 
   function runCompileAndPlay() {
@@ -766,7 +988,7 @@ function App() {
 
   function randomizeSortValues() {
     const values = Array.from({ length: 7 }, () => 8 + Math.floor(Math.random() * 72))
-    setCode(sortSamples[detectedSortAlgorithm].replace(/\[[^\]]+\]/, `[${values.join(', ')}]`))
+    setCode(replaceNumberList(sortSampleFor(detectedSortAlgorithm, language), values))
     setSortIndex(0)
     setActiveIndex(0)
     setPlaying(false)
@@ -851,9 +1073,9 @@ function App() {
         <div className="control-group">
           <label>알고리즘 시각화</label>
           <div className="segmented sort-tabs">
-            {(['community', 'selection', 'insertion'] as SortAlgorithm[]).map(item => (
-              <button className={detectedSortAlgorithm === item ? 'active' : ''} key={item} onClick={() => { setCode(sortSamples[item]); setSortIndex(0); setActiveIndex(0); setPlaying(false) }}>
-                {item === 'community' ? 'Community' : item === 'selection' ? 'Selection' : 'Insertion'}
+            {algorithmList.map(item => (
+              <button className={detectedSortAlgorithm === item ? 'active' : ''} key={item} onClick={() => { setCode(sortSampleFor(item, language)); setSortIndex(0); setActiveIndex(0); setPlaying(false) }}>
+                {algorithmNames[item]}
               </button>
             ))}
           </div>
@@ -929,7 +1151,7 @@ function App() {
               {Object.entries(runtimeResult.values).length ? Object.entries(runtimeResult.values).map(([key, value]) => (
                 <code key={key}>{key} = {value}</code>
               )) : <code>{runtimeResult.language === 'JavaScript' ? 'captured variables 없음' : '브라우저 실제 실행 미지원'}</code>}
-              <code>visual = {detectedSortAlgorithm}</code>
+              <code>visual = {algorithmNames[detectedSortAlgorithm]}</code>
               <code>array = [{detectedSortValues.join(', ')}]</code>
             </div>
             {askedToVisualize && runtimeResult.ok && (
@@ -958,7 +1180,7 @@ function App() {
                 <div className="bar-stage">
                   {sortStep?.array.map((value, index) => (
                     <div
-                      className={`sort-bar ${sortStep.compare.includes(index) ? 'compare' : ''} ${sortStep.active.includes(index) ? 'active' : ''} ${sortStep.sorted.includes(index) ? 'sorted' : ''} ${sortStep.lifted === index ? 'lifted' : ''}`}
+                      className={`sort-bar ${sortStep.compare.includes(index) ? 'compare' : ''} ${sortStep.active.includes(index) ? 'selected' : ''} ${sortStep.sorted.includes(index) ? 'sorted' : ''} ${sortStep.lifted === index ? 'lifted' : ''}`}
                       style={{ height: `${80 + value * 3}px` }}
                       key={`${index}-${value}`}
                     >
@@ -967,7 +1189,7 @@ function App() {
                   ))}
                 </div>
                 <div className="sort-action">
-                  <strong>{detectedSortAlgorithm === 'community' ? 'Community Sort' : detectedSortAlgorithm === 'selection' ? 'Selection Sort' : 'Insertion Sort'}</strong>
+                  <strong>{algorithmNames[detectedSortAlgorithm]}</strong>
                   <span>{sortStep?.action}</span>
                 </div>
                 <div className="sort-code">
