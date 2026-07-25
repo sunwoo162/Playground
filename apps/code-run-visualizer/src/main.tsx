@@ -32,6 +32,16 @@ type FeatureBlock = {
   detail: string
 }
 
+type StructureKind = 'array' | 'queue' | 'stack' | 'tree'
+
+type StructureModel = {
+  kind: StructureKind
+  title: string
+  items: string[]
+  activeItem: string
+  operation: string
+}
+
 type CompileResult = {
   ok: boolean
   checkedUntilLine: number
@@ -259,6 +269,25 @@ function buildFeatureBlocks(code: string, runtime: RuntimeResult): FeatureBlock[
     blocks.push({ id: 'output', kind: 'output', title: '결과', value: resultValue, detail: '실행이 끝난 뒤 남는 값' })
   }
   return blocks
+}
+
+function buildStructureModel(code: string, activeIndex: number): StructureModel {
+  const arrayMatch = code.match(/\[([\d,\s.'"a-zA-Z_-]+)\]/)
+  const items = arrayMatch
+    ? arrayMatch[1].split(',').map(item => item.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean)
+    : ['A', 'B', 'C']
+  const lower = code.toLowerCase()
+  const activeItem = items[Math.min(items.length - 1, activeIndex % Math.max(items.length, 1))] || 'item'
+  if (/queue|enqueue|dequeue|shift\(/.test(lower)) {
+    return { kind: 'queue', title: 'Queue', items, activeItem, operation: activeIndex % 2 ? 'dequeue' : 'enqueue' }
+  }
+  if (/stack|push\(|pop\(/.test(lower)) {
+    return { kind: 'stack', title: 'Stack', items, activeItem, operation: activeIndex % 2 ? 'pop' : 'push' }
+  }
+  if (/tree|node|left|right|dfs|bfs/.test(lower)) {
+    return { kind: 'tree', title: 'Tree Traversal', items: items.slice(0, 7), activeItem, operation: /bfs/.test(lower) ? 'BFS' : 'DFS' }
+  }
+  return { kind: 'array', title: 'Array Iteration', items, activeItem, operation: /for|while/.test(lower) ? 'iterate' : 'read' }
 }
 
 function wordAtCursor(value: string, cursor: number) {
@@ -489,6 +518,7 @@ function App() {
   const featureBlocks = useMemo(() => buildFeatureBlocks(code, runtimeResult), [code, runtimeResult])
   const activeFeatureIndex = Math.min(featureBlocks.length - 1, activeIndex % Math.max(featureBlocks.length, 1))
   const activeFeature = featureBlocks[activeFeatureIndex] || featureBlocks[0]
+  const structure = useMemo(() => buildStructureModel(code, activeIndex), [activeIndex, code])
   const currentWord = wordAtCursor(code, cursor)
   const suggestions = completions[language]
     .filter(item => currentWord ? item.label.toLowerCase().startsWith(currentWord.toLowerCase()) : true)
@@ -740,6 +770,31 @@ function App() {
                   <strong>{activeFeature?.title}</strong>
                   <code>{activeFeature?.value}</code>
                   <p>{activeFeature?.detail}</p>
+                </div>
+                <div className={`structure-view ${structure.kind}`}>
+                  <div className="structure-title">
+                    <span>{structure.title}</span>
+                    <strong>{structure.operation}</strong>
+                  </div>
+                  {structure.kind === 'stack' ? (
+                    <div className="stack-visual">
+                      {structure.items.map((item, index) => (
+                        <div className={item === structure.activeItem ? 'active' : ''} key={`${item}-${index}`}>{item}</div>
+                      ))}
+                    </div>
+                  ) : structure.kind === 'tree' ? (
+                    <div className="tree-visual">
+                      {structure.items.map((item, index) => (
+                        <div className={`tree-node node-${index} ${item === structure.activeItem ? 'active' : ''}`} key={`${item}-${index}`}>{item}</div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className={`linear-visual ${structure.kind}`}>
+                      {structure.items.map((item, index) => (
+                        <div className={item === structure.activeItem ? 'active' : ''} key={`${item}-${index}`}>{item}</div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="reel-dots">
