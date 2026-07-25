@@ -32,6 +32,15 @@ type CompileResult = {
   fix: string
 }
 
+type RuntimeResult = {
+  ok: boolean
+  language: Language
+  outputs: string[]
+  values: Record<string, string>
+  errorLine?: number
+  error?: string
+}
+
 type CompletionItem = {
   label: string
   insert: string
@@ -116,17 +125,17 @@ function tokensFromLine(lineText: string) {
     .slice(0, 9)
 }
 
-function memoryCells(lineText: string, activeIndex: number) {
+function memoryCells(lineText: string, activeIndex: number, runtime: RuntimeResult) {
   const trimmed = lineText.trim()
   const variableMatch = trimmed.match(/(?:const|let|var|int|String|double|float)?\s*([a-zA-Z_$][\w$]*)\s*=/)
   const valueMatch = trimmed.match(/=\s*(.+?);?$/)
   const primary = variableMatch?.[1] || (/total/.test(trimmed) ? 'total' : /score/.test(trimmed) ? 'score' : 'result')
-  const value = valueMatch?.[1]?.replace(/[;{}]/g, '').trim() || (activeIndex % 3 === 0 ? 'ready' : activeIndex % 3 === 1 ? 'evaluating' : 'updated')
+  const runtimeEntries = Object.entries(runtime.values).slice(0, 2).map(([key, value]) => ({ key, value }))
   return [
-    { key: primary, value },
+    { key: primary, value: runtime.values[primary] || valueMatch?.[1]?.replace(/[;{}]/g, '').trim() || 'pending' },
+    ...runtimeEntries.filter(item => item.key !== primary),
     { key: 'line', value: String(activeIndex + 1) },
-    { key: 'phase', value: activeIndex < 3 ? 'compile' : 'runtime' },
-  ]
+  ].slice(0, 3)
 }
 
 function normalizeExpression(lineText: string) {
@@ -141,7 +150,7 @@ function normalizeExpression(lineText: string) {
 }
 
 function evaluateSimpleExpression(expression: string) {
-  const numeric = expression.replace(/\bresult\b/g, '250').replace(/\btotal\b/g, '250').replace(/\bscore\b/g, '82')
+  const numeric = expression
   if (!/^[\d\s+\-*/().]+$/.test(numeric)) return null
   try {
     const value = Function(`"use strict"; return (${numeric})`)()
@@ -151,19 +160,23 @@ function evaluateSimpleExpression(expression: string) {
   }
 }
 
-function expressionFrames(lineText: string, activeIndex: number): ExpressionFrame[] {
+function substituteRuntimeValues(expression: string, values: Record<string, string>) {
+  return Object.entries(values).reduce((next, [key, value]) => {
+    if (!/^-?\d+(\.\d+)?$/.test(value)) return next
+    return next.replace(new RegExp(`\\b${key}\\b`, 'g'), value)
+  }, expression)
+}
+
+function expressionFrames(lineText: string, activeIndex: number, runtime: RuntimeResult): ExpressionFrame[] {
   const expression = normalizeExpression(lineText)
   const tokens = tokensFromLine(expression)
-  const substituted = expression
-    .replace(/\bresult\b/g, '250')
-    .replace(/\btotal\b/g, '250')
-    .replace(/\bscore\b/g, activeIndex % 2 === 0 ? '82' : '91')
+  const substituted = runtime.ok ? substituteRuntimeValues(expression, runtime.values) : expression
   const hasOperator = /[+\-*/]/.test(expression)
   const priorityMatch = substituted.match(/(\d+(?:\.\d+)?)\s*([*/])\s*(\d+(?:\.\d+)?)/)
   const priorityValue = priorityMatch
     ? String(Math.round(Function(`"use strict"; return (${priorityMatch[0]})`)() * 1000) / 1000)
     : null
-  const result = evaluateSimpleExpression(expression) || evaluateSimpleExpression(substituted)
+  const result = evaluateSimpleExpression(substituted)
   const frames: ExpressionFrame[] = [
     {
       label: '1. 식 선택',
@@ -180,8 +193,8 @@ function expressionFrames(lineText: string, activeIndex: number): ExpressionFram
     {
       label: '3. 값 대입',
       expression: substituted,
-      focus: substituted !== expression ? '변수 -> 값' : '리터럴 유지',
-      note: '현재 메모리에 있는 변수 값을 식 안으로 넣습니다.',
+      focus: substituted !== expression ? '변수 -> 실제 값' : '리터럴 유지',
+      note: runtime.ok ? '방금 실제 실행에서 얻은 변수 값을 식 안으로 넣습니다.' : '실행 실패 상태라 대입 가능한 실제 값이 없습니다.',
     },
   ]
   if (hasOperator) {
@@ -307,6 +320,45 @@ function compileCheck(code: string, language: Language): CompileResult {
   }
 }
 
+function captureDeclaredNames(code: string) {
+  const names = Array.from(code.matchAll(/\b(?:const|let|var)\s+([a-zA-Z_$][\w$]*)/g)).map(match => match[1])
+  return Array.from(new Set(names)).slice(0, 12)
+}
+
+function runJavaScript(code: string): RuntimeResult {
+  const outputs: string[] = []
+  const values: Record<string, string> = {}
+  const names = captureDeclaredNames(code)
+  try {
+    const captureCode = names
+      .map(name => `try { __values[${JSON.stringify(name)}] = String(${name}); } catch {}`)
+      .join('\n')
+    Function('console', '__values', `"use strict";\n${code}\n${captureCode}`)(
+      {
+        log: (...args: unknown[]) => outputs.push(args.map(item => typeof item === 'string' ? item : JSON.stringify(item)).join(' ')),
+      },
+      values,
+    )
+    return { ok: true, language: 'JavaScript', outputs, values }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '실행 중 알 수 없는 오류가 발생했습니다.'
+    const lineMatch = message.match(/<anonymous>:(\d+):\d+/)
+    const rawLine = lineMatch ? Math.max(1, Number(lineMatch[1]) - 2) : undefined
+    return { ok: false, language: 'JavaScript', outputs, values, errorLine: rawLine, error: message }
+  }
+}
+
+function runCode(code: string, language: Language): RuntimeResult {
+  if (language === 'JavaScript') return runJavaScript(code)
+  return {
+    ok: true,
+    language,
+    outputs: [],
+    values: {},
+    error: `${language}는 현재 브라우저에서 실제 런타임 실행이 아니라 문법 검사와 과정 시뮬레이션으로 표시됩니다.`,
+  }
+}
+
 function buildSteps(code: string, selectedLanguage: Language): Step[] {
   const language = selectedLanguage || detectLanguage(code)
   const lines = code.split('\n')
@@ -373,15 +425,16 @@ function App() {
   const [showHeat, setShowHeat] = useState(true)
   const [cursor, setCursor] = useState(0)
   const [compileResult, setCompileResult] = useState<CompileResult>(() => compileCheck(sampleCode, 'JavaScript'))
+  const [runtimeResult, setRuntimeResult] = useState<RuntimeResult>(() => runCode(sampleCode, 'JavaScript'))
   const steps = useMemo(() => buildSteps(code, language), [code, language])
   const active = steps[Math.min(activeIndex, steps.length - 1)]
   const lines = code.split('\n')
-  const consoleOutput = steps.slice(0, activeIndex + 1).filter(step => step.output).map(step => step.output)
+  const consoleOutput = runtimeResult.outputs.length ? runtimeResult.outputs : steps.slice(0, activeIndex + 1).filter(step => step.output).map(step => step.output)
   const activeLineText = lines[(active?.line || 1) - 1] || ''
   const activeTokens = tokensFromLine(activeLineText)
   const activePhasePosition = Math.max(0, phaseNodes.indexOf(active?.phase || 'tokenize'))
-  const memory = memoryCells(activeLineText, activeIndex)
-  const frames = expressionFrames(activeLineText, activeIndex)
+  const memory = memoryCells(activeLineText, activeIndex, runtimeResult)
+  const frames = expressionFrames(activeLineText, activeIndex, runtimeResult)
   const activeFrameIndex = Math.min(frames.length - 1, Math.max(0, activeIndex % Math.max(frames.length, 1)))
   const activeFrame = frames[activeFrameIndex]
   const currentWord = wordAtCursor(code, cursor)
@@ -392,7 +445,9 @@ function App() {
   useEffect(() => {
     setActiveIndex(0)
     setPlaying(false)
-    setCompileResult(compileCheck(code, language))
+    const nextCompile = compileCheck(code, language)
+    setCompileResult(nextCompile)
+    setRuntimeResult(nextCompile.ok ? runCode(code, language) : { ok: false, language, outputs: [], values: {}, errorLine: nextCompile.errorLine, error: nextCompile.message })
   }, [code, language])
 
   useEffect(() => {
@@ -424,6 +479,13 @@ function App() {
     const result = compileCheck(code, language)
     setCompileResult(result)
     if (result.ok) {
+      const runtime = runCode(code, language)
+      setRuntimeResult(runtime)
+      if (!runtime.ok) {
+        setPlaying(false)
+        setActiveIndex(Math.max(0, steps.findIndex(step => step.line === runtime.errorLine)))
+        return
+      }
       setActiveIndex(0)
       setPlaying(true)
       return
@@ -555,7 +617,7 @@ function App() {
               {lines.map((line, index) => {
                 const lineNumber = index + 1
                 const passed = showHeat && steps.slice(0, activeIndex + 1).some(step => step.line === lineNumber)
-                const failed = !compileResult.ok && compileResult.errorLine === lineNumber
+                const failed = (!compileResult.ok && compileResult.errorLine === lineNumber) || (!runtimeResult.ok && runtimeResult.errorLine === lineNumber)
                 const checked = !compileResult.ok && lineNumber <= compileResult.checkedUntilLine
                 return (
                   <div className={`code-line ${active?.line === lineNumber ? 'active' : ''} ${passed || checked ? 'passed' : ''} ${failed ? 'failed' : ''}`} key={`${lineNumber}-${line}`}>
@@ -569,6 +631,17 @@ function App() {
         </section>
 
         <section className="runtime-pane">
+          <section className={`result-card ${runtimeResult.ok ? 'ok' : 'error'}`}>
+            <div>
+              <span>{runtimeResult.language === 'JavaScript' ? '실제 실행 결과' : '시뮬레이션 결과'}</span>
+              <strong>{runtimeResult.ok ? runtimeResult.outputs[0] || '출력 없이 실행 완료' : runtimeResult.error}</strong>
+            </div>
+            <div className="result-values">
+              {Object.entries(runtimeResult.values).length ? Object.entries(runtimeResult.values).map(([key, value]) => (
+                <code key={key}>{key} = {value}</code>
+              )) : <code>{runtimeResult.language === 'JavaScript' ? 'captured variables 없음' : '브라우저 실제 실행 미지원'}</code>}
+            </div>
+          </section>
           <section className="cinema-stage">
             <div className="stage-topline">
               <span>EXPRESSION TRACE</span>
@@ -613,13 +686,13 @@ function App() {
             </div>
           </section>
           <div className="stage-card current">
-            <div className={`phase-chip ${compileResult.ok ? '' : 'error'}`}>{compileResult.ok ? phaseLabel[active?.phase || 'tokenize'] : '컴파일 실패'}</div>
-            <h2>{compileResult.ok ? active?.title || '대기 중' : `${compileResult.errorLine}번 줄에서 멈춤`}</h2>
-            <p>{compileResult.ok ? active?.detail || '코드를 입력하고 재생을 누르세요.' : compileResult.message}</p>
-            {!compileResult.ok && (
+            <div className={`phase-chip ${compileResult.ok && runtimeResult.ok ? '' : 'error'}`}>{!compileResult.ok ? '컴파일 실패' : !runtimeResult.ok ? '실행 실패' : phaseLabel[active?.phase || 'tokenize']}</div>
+            <h2>{compileResult.ok && runtimeResult.ok ? active?.title || '대기 중' : `${compileResult.errorLine || runtimeResult.errorLine || active?.line}번 줄에서 멈춤`}</h2>
+            <p>{compileResult.ok ? runtimeResult.ok ? active?.detail || '코드를 입력하고 재생을 누르세요.' : runtimeResult.error : compileResult.message}</p>
+            {(!compileResult.ok || !runtimeResult.ok) && (
               <div className="fix-panel">
                 <strong>수정 제안</strong>
-                <p>{compileResult.fix}</p>
+                <p>{compileResult.ok ? '실행 중 에러 메시지를 기준으로 변수 이름, 함수 호출, 잘못된 값 접근을 확인하세요.' : compileResult.fix}</p>
               </div>
             )}
             <div className="progress-track">

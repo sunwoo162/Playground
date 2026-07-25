@@ -318,6 +318,62 @@ input[type='range'] {
   gap: 18px;
 }
 
+.result-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.7fr);
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid #2d5a43;
+  border-radius: 8px;
+  background: #14231e;
+}
+
+.result-card.error {
+  border-color: #743338;
+  background: #2a171a;
+}
+
+.result-card span {
+  display: block;
+  margin-bottom: 6px;
+  color: #23d18b;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.result-card.error span {
+  color: #ffb4b6;
+}
+
+.result-card strong {
+  display: block;
+  overflow-wrap: anywhere;
+  color: #f8fbff;
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+.result-values {
+  display: flex;
+  align-content: flex-start;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.result-values code {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  max-width: 100%;
+  padding: 0 9px;
+  border-radius: 6px;
+  background: #0d1218;
+  color: #dce5f7;
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .cinema-stage {
   position: relative;
   overflow: hidden;
@@ -968,7 +1024,8 @@ input[type='range'] {
 @media (max-width: 1120px) {
   .app-shell,
   .workspace,
-  .runtime-grid {
+  .runtime-grid,
+  .result-card {
     grid-template-columns: 1fr;
   }
 
