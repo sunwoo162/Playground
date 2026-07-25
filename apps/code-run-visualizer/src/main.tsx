@@ -4,6 +4,7 @@ import './styles.css'
 
 type Phase = 'tokenize' | 'parse' | 'compile' | 'execute'
 type Language = 'JavaScript' | 'Python' | 'Java'
+type SortAlgorithm = 'community' | 'selection' | 'insertion'
 
 type Step = {
   id: string
@@ -63,6 +64,43 @@ type CompletionItem = {
   label: string
   insert: string
   detail: string
+}
+
+type SortStep = {
+  array: number[]
+  compare: number[]
+  active: number[]
+  sorted: number[]
+  lifted?: number
+  line: number
+  action: string
+  comparisons: number
+  swaps: number
+}
+
+const sortCode: Record<SortAlgorithm, string[]> = {
+  community: [
+    'for i from 0 to n - 1',
+    '  for j from 0 to n - i - 2',
+    '    compare a[j], a[j + 1]',
+    '    if a[j] > a[j + 1]',
+    '      swap a[j], a[j + 1]',
+  ],
+  selection: [
+    'for i from 0 to n - 1',
+    '  min = i',
+    '  for j from i + 1 to n',
+    '    compare a[j] with a[min]',
+    '    if a[j] < a[min], min = j',
+    '  swap a[i], a[min]',
+  ],
+  insertion: [
+    'for i from 1 to n - 1',
+    '  key = a[i]',
+    '  while j >= 0 and a[j] > key',
+    '    shift a[j] right',
+    '  insert key at j + 1',
+  ],
 }
 
 const completions: Record<Language, CompletionItem[]> = {
@@ -435,6 +473,74 @@ function runCode(code: string, language: Language): RuntimeResult {
   }
 }
 
+function pushSortStep(steps: SortStep[], step: Omit<SortStep, 'array'> & { array: number[] }) {
+  steps.push({ ...step, array: [...step.array], compare: [...step.compare], active: [...step.active], sorted: [...step.sorted] })
+}
+
+function buildSortSteps(source: number[], algorithm: SortAlgorithm): SortStep[] {
+  const arr = [...source]
+  const steps: SortStep[] = []
+  let comparisons = 0
+  let swaps = 0
+  pushSortStep(steps, { array: arr, compare: [], active: [], sorted: [], line: 1, action: '초기 배열 준비', comparisons, swaps })
+
+  if (algorithm === 'selection') {
+    for (let i = 0; i < arr.length; i += 1) {
+      let min = i
+      pushSortStep(steps, { array: arr, compare: [], active: [i], sorted: arr.slice(0, i).map((_, index) => index), line: 2, action: `현재 위치 ${i}, 최소값 후보 선택`, comparisons, swaps })
+      for (let j = i + 1; j < arr.length; j += 1) {
+        comparisons += 1
+        pushSortStep(steps, { array: arr, compare: [j, min], active: [min], sorted: arr.slice(0, i).map((_, index) => index), line: 4, action: `${arr[j]} 와 현재 최소 ${arr[min]} 비교`, comparisons, swaps })
+        if (arr[j] < arr[min]) {
+          min = j
+          pushSortStep(steps, { array: arr, compare: [j], active: [min], sorted: arr.slice(0, i).map((_, index) => index), line: 5, action: `새 최소값 ${arr[min]} 발견`, comparisons, swaps })
+        }
+      }
+      if (min !== i) {
+        ;[arr[i], arr[min]] = [arr[min], arr[i]]
+        swaps += 1
+        pushSortStep(steps, { array: arr, compare: [i, min], active: [i], sorted: arr.slice(0, i + 1).map((_, index) => index), line: 6, action: `${i}번 위치와 최소값 위치 swap`, comparisons, swaps })
+      }
+    }
+    pushSortStep(steps, { array: arr, compare: [], active: [], sorted: arr.map((_, index) => index), line: 6, action: '정렬 완료', comparisons, swaps })
+    return steps
+  }
+
+  if (algorithm === 'insertion') {
+    for (let i = 1; i < arr.length; i += 1) {
+      const key = arr[i]
+      let j = i - 1
+      pushSortStep(steps, { array: arr, compare: [i], active: [i], sorted: arr.slice(0, i).map((_, index) => index), lifted: i, line: 2, action: `${key} 값을 들어 올림`, comparisons, swaps })
+      while (j >= 0 && arr[j] > key) {
+        comparisons += 1
+        arr[j + 1] = arr[j]
+        swaps += 1
+        pushSortStep(steps, { array: arr, compare: [j, j + 1], active: [j], sorted: [], lifted: j + 1, line: 4, action: `${arr[j]} 를 오른쪽으로 밀기`, comparisons, swaps })
+        j -= 1
+      }
+      if (j >= 0) comparisons += 1
+      arr[j + 1] = key
+      pushSortStep(steps, { array: arr, compare: [j + 1], active: [j + 1], sorted: arr.slice(0, i + 1).map((_, index) => index), line: 5, action: `${key} 를 알맞은 위치에 삽입`, comparisons, swaps })
+    }
+    pushSortStep(steps, { array: arr, compare: [], active: [], sorted: arr.map((_, index) => index), line: 5, action: '정렬 완료', comparisons, swaps })
+    return steps
+  }
+
+  for (let i = 0; i < arr.length; i += 1) {
+    for (let j = 0; j < arr.length - i - 1; j += 1) {
+      comparisons += 1
+      pushSortStep(steps, { array: arr, compare: [j, j + 1], active: [j, j + 1], sorted: arr.slice(arr.length - i).map((_, index) => arr.length - i + index), line: 3, action: `${arr[j]} 와 ${arr[j + 1]} 비교`, comparisons, swaps })
+      if (arr[j] > arr[j + 1]) {
+        ;[arr[j], arr[j + 1]] = [arr[j + 1], arr[j]]
+        swaps += 1
+        pushSortStep(steps, { array: arr, compare: [j, j + 1], active: [j, j + 1], sorted: arr.slice(arr.length - i).map((_, index) => arr.length - i + index), line: 5, action: `큰 값을 오른쪽으로 이동`, comparisons, swaps })
+      }
+    }
+  }
+  pushSortStep(steps, { array: arr, compare: [], active: [], sorted: arr.map((_, index) => index), line: 5, action: '정렬 완료', comparisons, swaps })
+  return steps
+}
+
 function buildSteps(code: string, selectedLanguage: Language): Step[] {
   const language = selectedLanguage || detectLanguage(code)
   const lines = code.split('\n')
@@ -504,6 +610,9 @@ function App() {
   const [runtimeResult, setRuntimeResult] = useState<RuntimeResult>(() => runCode(sampleCode, 'JavaScript'))
   const [askedToVisualize, setAskedToVisualize] = useState(false)
   const [visualizing, setVisualizing] = useState(false)
+  const [sortAlgorithm, setSortAlgorithm] = useState<SortAlgorithm>('selection')
+  const [sortValues, setSortValues] = useState<number[]>([42, 18, 67, 9, 55, 31, 74])
+  const [sortIndex, setSortIndex] = useState(0)
   const steps = useMemo(() => buildSteps(code, language), [code, language])
   const active = steps[Math.min(activeIndex, steps.length - 1)]
   const lines = code.split('\n')
@@ -519,6 +628,8 @@ function App() {
   const activeFeatureIndex = Math.min(featureBlocks.length - 1, activeIndex % Math.max(featureBlocks.length, 1))
   const activeFeature = featureBlocks[activeFeatureIndex] || featureBlocks[0]
   const structure = useMemo(() => buildStructureModel(code, activeIndex), [activeIndex, code])
+  const sortSteps = useMemo(() => buildSortSteps(sortValues, sortAlgorithm), [sortAlgorithm, sortValues])
+  const sortStep = sortSteps[Math.min(sortIndex, sortSteps.length - 1)]
   const currentWord = wordAtCursor(code, cursor)
   const suggestions = completions[language]
     .filter(item => currentWord ? item.label.toLowerCase().startsWith(currentWord.toLowerCase()) : true)
@@ -538,15 +649,16 @@ function App() {
     if (!playing) return
     const timer = window.setInterval(() => {
       setActiveIndex(current => {
-        if (current >= featureBlocks.length - 1) {
+        if (current >= sortSteps.length - 1) {
           setPlaying(false)
           return current
         }
+        setSortIndex(current + 1)
         return current + 1
       })
     }, speed)
     return () => window.clearInterval(timer)
-  }, [featureBlocks.length, playing, speed])
+  }, [playing, sortSteps.length, speed])
 
   function loadDemo(nextLanguage: Language) {
     setLanguage(nextLanguage)
@@ -585,9 +697,18 @@ function App() {
 
   function startVisualization() {
     setActiveIndex(0)
+    setSortIndex(0)
     setVisualizing(true)
     setAskedToVisualize(false)
     setPlaying(true)
+  }
+
+  function randomizeSortValues() {
+    setSortValues(Array.from({ length: 7 }, () => 8 + Math.floor(Math.random() * 72)))
+    setSortIndex(0)
+    setActiveIndex(0)
+    setPlaying(false)
+    setVisualizing(false)
   }
 
   function updateEditor(nextCode: string, nextCursor: number) {
@@ -664,6 +785,17 @@ function App() {
         <div className="control-group">
           <label>속도 {speed}ms</label>
           <input type="range" min="250" max="1600" step="50" value={speed} onChange={event => setSpeed(Number(event.target.value))} />
+        </div>
+        <div className="control-group">
+          <label>알고리즘 시각화</label>
+          <div className="segmented sort-tabs">
+            {(['community', 'selection', 'insertion'] as SortAlgorithm[]).map(item => (
+              <button className={sortAlgorithm === item ? 'active' : ''} key={item} onClick={() => { setSortAlgorithm(item); setSortIndex(0); setActiveIndex(0); setPlaying(false) }}>
+                {item === 'community' ? 'Community' : item === 'selection' ? 'Selection' : 'Insertion'}
+              </button>
+            ))}
+          </div>
+          <button className="randomize-button" type="button" onClick={randomizeSortValues}>배열 랜덤</button>
         </div>
         <label className="toggle-row">
           <input type="checkbox" checked={showHeat} onChange={event => setShowHeat(event.target.checked)} />
@@ -753,56 +885,36 @@ function App() {
               <strong>{visualizing ? `${activeFeature?.title || '기능'} 흐름` : '작동 방식 보기 버튼을 누르면 시작합니다'}</strong>
             </div>
             <div className="motion-field" key={active?.id}>
-              <div className="flow-stage" key={`${activeFeature?.id}-${activeFeatureIndex}`}>
-                <div className="flow-lane">
-                  {featureBlocks.map((block, index) => (
-                    <div className={`feature-node ${block.kind} ${index === activeFeatureIndex ? 'active' : index < activeFeatureIndex ? 'done' : ''}`} key={block.id}>
-                      <span>{index + 1}</span>
-                      <strong>{block.title}</strong>
+              <div className="sort-visualizer" key={`${sortAlgorithm}-${sortIndex}`}>
+                <div className="sort-stats">
+                  <div><span>Time</span><strong>{sortIndex}</strong></div>
+                  <div><span>Compare</span><strong>{sortStep?.comparisons || 0}</strong></div>
+                  <div><span>Swap/Move</span><strong>{sortStep?.swaps || 0}</strong></div>
+                </div>
+                <div className="bar-stage">
+                  {sortStep?.array.map((value, index) => (
+                    <div
+                      className={`sort-bar ${sortStep.compare.includes(index) ? 'compare' : ''} ${sortStep.active.includes(index) ? 'active' : ''} ${sortStep.sorted.includes(index) ? 'sorted' : ''} ${sortStep.lifted === index ? 'lifted' : ''}`}
+                      style={{ height: `${80 + value * 3}px` }}
+                      key={`${index}-${value}`}
+                    >
+                      <span>{value}</span>
                     </div>
                   ))}
-                  <div className="data-packet" style={{ left: `${featureBlocks.length <= 1 ? 50 : 8 + activeFeatureIndex * (84 / (featureBlocks.length - 1))}%` }}>
-                    {activeFeature?.value}
-                  </div>
                 </div>
-                <div className={`feature-spotlight ${activeFeature?.kind}`}>
-                  <span>{activeFeature?.kind}</span>
-                  <strong>{activeFeature?.title}</strong>
-                  <code>{activeFeature?.value}</code>
-                  <p>{activeFeature?.detail}</p>
+                <div className="sort-action">
+                  <strong>{sortAlgorithm === 'community' ? 'Community Sort' : sortAlgorithm === 'selection' ? 'Selection Sort' : 'Insertion Sort'}</strong>
+                  <span>{sortStep?.action}</span>
                 </div>
-                <div className={`structure-view ${structure.kind}`}>
-                  <div className="structure-title">
-                    <span>{structure.title}</span>
-                    <strong>{structure.operation}</strong>
-                  </div>
-                  {structure.kind === 'stack' ? (
-                    <div className="stack-visual">
-                      {structure.items.map((item, index) => (
-                        <div className={item === structure.activeItem ? 'active' : ''} key={`${item}-${index}`}>{item}</div>
-                      ))}
-                    </div>
-                  ) : structure.kind === 'tree' ? (
-                    <div className="tree-visual">
-                      {structure.items.map((item, index) => (
-                        <div className={`tree-node node-${index} ${item === structure.activeItem ? 'active' : ''}`} key={`${item}-${index}`}>{item}</div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className={`linear-visual ${structure.kind}`}>
-                      {structure.items.map((item, index) => (
-                        <div className={item === structure.activeItem ? 'active' : ''} key={`${item}-${index}`}>{item}</div>
-                      ))}
-                    </div>
-                  )}
+                <div className="sort-code">
+                  {sortCode[sortAlgorithm].map((line, index) => (
+                    <code className={sortStep?.line === index + 1 ? 'active' : ''} key={line}>{line}</code>
+                  ))}
                 </div>
               </div>
               <div className="reel-dots">
-                {featureBlocks.map((block, index) => (
-                  <button className={index === activeFeatureIndex ? 'active' : index < activeFeatureIndex ? 'done' : ''} type="button" onClick={() => setActiveIndex(index)} key={block.id}>
-                    {index + 1}
-                  </button>
-                ))}
+                <button type="button" onClick={() => { setSortIndex(index => Math.max(0, index - 1)); setActiveIndex(index => Math.max(0, index - 1)) }}>이전</button>
+                <button type="button" onClick={() => { setSortIndex(index => Math.min(sortSteps.length - 1, index + 1)); setActiveIndex(index => Math.min(sortSteps.length - 1, index + 1)) }}>다음</button>
               </div>
               <div className="reel-memory">
                 {memory.map(cell => <code key={`${cell.key}-${cell.value}`}>{cell.key}: {cell.value}</code>)}
