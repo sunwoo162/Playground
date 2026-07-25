@@ -258,6 +258,7 @@ input[type='range'] {
 .code-editor {
   position: relative;
   min-height: calc(100vh - 153px);
+  background: #0f141d;
 }
 
 .code-editor textarea,
@@ -265,27 +266,30 @@ input[type='range'] {
   position: absolute;
   inset: 0;
   overflow: auto;
-  padding: 16px 0;
   font-family: "Cascadia Code", "Fira Code", Consolas, monospace;
   font-size: 14px;
-  line-height: 1.65;
+  line-height: 23px;
+  tab-size: 2;
 }
 
 .code-editor textarea {
-  z-index: 2;
+  z-index: 1;
   width: 100%;
   height: 100%;
-  padding-left: 68px;
+  padding: 16px 18px 16px 68px;
+  border: 0;
   resize: none;
   background: transparent;
-  color: transparent;
+  color: #f8fbff;
   caret-color: #f8fbff;
   outline: none;
+  white-space: pre;
 }
 
 .code-preview {
-  z-index: 1;
+  z-index: 0;
   pointer-events: none;
+  padding: 16px 0;
 }
 
 .code-line {
@@ -293,7 +297,7 @@ input[type='range'] {
   grid-template-columns: 52px minmax(0, 1fr);
   min-height: 23px;
   padding-right: 18px;
-  color: #ccd6e8;
+  color: transparent;
   white-space: pre;
 }
 
@@ -306,7 +310,8 @@ input[type='range'] {
 
 .code-line code {
   min-width: 0;
-  overflow-wrap: anywhere;
+  color: transparent;
+  overflow: hidden;
 }
 
 .code-line.passed {
@@ -316,13 +321,11 @@ input[type='range'] {
 .code-line.active {
   background: rgba(88, 101, 242, 0.28);
   box-shadow: inset 4px 0 0 #23d18b;
-  color: #ffffff;
 }
 
 .code-line.failed {
   background: rgba(242, 63, 66, 0.2);
   box-shadow: inset 4px 0 0 #f23f42;
-  color: #ffffff;
 }
 
 .runtime-pane {
