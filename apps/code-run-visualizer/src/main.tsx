@@ -140,6 +140,50 @@ const sampleCode = `function sumScores(scores) {
 const result = sumScores([82, 91, 77])
 console.log("average", result / 3)`
 
+const sortSamples: Record<SortAlgorithm, string> = {
+  community: `const arr = [42, 18, 67, 9, 55, 31, 74]
+
+for (let i = 0; i < arr.length; i++) {
+  for (let j = 0; j < arr.length - i - 1; j++) {
+    if (arr[j] > arr[j + 1]) {
+      const temp = arr[j]
+      arr[j] = arr[j + 1]
+      arr[j + 1] = temp
+    }
+  }
+}
+
+console.log(arr.join(", "))`,
+  selection: `const arr = [42, 18, 67, 9, 55, 31, 74]
+
+for (let i = 0; i < arr.length; i++) {
+  let min = i
+  for (let j = i + 1; j < arr.length; j++) {
+    if (arr[j] < arr[min]) {
+      min = j
+    }
+  }
+  const temp = arr[i]
+  arr[i] = arr[min]
+  arr[min] = temp
+}
+
+console.log(arr.join(", "))`,
+  insertion: `const arr = [42, 18, 67, 9, 55, 31, 74]
+
+for (let i = 1; i < arr.length; i++) {
+  const key = arr[i]
+  let j = i - 1
+  while (j >= 0 && arr[j] > key) {
+    arr[j + 1] = arr[j]
+    j--
+  }
+  arr[j + 1] = key
+}
+
+console.log(arr.join(", "))`,
+}
+
 const phaseLabel: Record<Phase, string> = {
   tokenize: '토큰화',
   parse: '구문 분석',
@@ -541,6 +585,23 @@ function buildSortSteps(source: number[], algorithm: SortAlgorithm): SortStep[] 
   return steps
 }
 
+function extractNumbersFromCode(code: string) {
+  const arrayMatch = code.match(/\[([\d,\s.-]+)\]/)
+  if (!arrayMatch) return [42, 18, 67, 9, 55, 31, 74]
+  const parsed = arrayMatch[1]
+    .split(',')
+    .map(value => Number(value.trim()))
+    .filter(value => Number.isFinite(value))
+  return parsed.length ? parsed.slice(0, 12) : [42, 18, 67, 9, 55, 31, 74]
+}
+
+function detectSortAlgorithm(code: string): SortAlgorithm {
+  const lower = code.toLowerCase()
+  if (/insertion|key\s*=|while\s*\([^)]*>\s*key|while\s+j\s*>=/.test(lower)) return 'insertion'
+  if (/selection|min\s*=|minindex|minimum/.test(lower)) return 'selection'
+  return 'community'
+}
+
 function buildSteps(code: string, selectedLanguage: Language): Step[] {
   const language = selectedLanguage || detectLanguage(code)
   const lines = code.split('\n')
@@ -610,8 +671,6 @@ function App() {
   const [runtimeResult, setRuntimeResult] = useState<RuntimeResult>(() => runCode(sampleCode, 'JavaScript'))
   const [askedToVisualize, setAskedToVisualize] = useState(false)
   const [visualizing, setVisualizing] = useState(false)
-  const [sortAlgorithm, setSortAlgorithm] = useState<SortAlgorithm>('selection')
-  const [sortValues, setSortValues] = useState<number[]>([42, 18, 67, 9, 55, 31, 74])
   const [sortIndex, setSortIndex] = useState(0)
   const steps = useMemo(() => buildSteps(code, language), [code, language])
   const active = steps[Math.min(activeIndex, steps.length - 1)]
@@ -628,7 +687,9 @@ function App() {
   const activeFeatureIndex = Math.min(featureBlocks.length - 1, activeIndex % Math.max(featureBlocks.length, 1))
   const activeFeature = featureBlocks[activeFeatureIndex] || featureBlocks[0]
   const structure = useMemo(() => buildStructureModel(code, activeIndex), [activeIndex, code])
-  const sortSteps = useMemo(() => buildSortSteps(sortValues, sortAlgorithm), [sortAlgorithm, sortValues])
+  const detectedSortAlgorithm = useMemo(() => detectSortAlgorithm(code), [code])
+  const detectedSortValues = useMemo(() => extractNumbersFromCode(code), [code])
+  const sortSteps = useMemo(() => buildSortSteps(detectedSortValues, detectedSortAlgorithm), [detectedSortAlgorithm, detectedSortValues])
   const sortStep = sortSteps[Math.min(sortIndex, sortSteps.length - 1)]
   const currentWord = wordAtCursor(code, cursor)
   const suggestions = completions[language]
@@ -704,7 +765,8 @@ function App() {
   }
 
   function randomizeSortValues() {
-    setSortValues(Array.from({ length: 7 }, () => 8 + Math.floor(Math.random() * 72)))
+    const values = Array.from({ length: 7 }, () => 8 + Math.floor(Math.random() * 72))
+    setCode(sortSamples[detectedSortAlgorithm].replace(/\[[^\]]+\]/, `[${values.join(', ')}]`))
     setSortIndex(0)
     setActiveIndex(0)
     setPlaying(false)
@@ -790,7 +852,7 @@ function App() {
           <label>알고리즘 시각화</label>
           <div className="segmented sort-tabs">
             {(['community', 'selection', 'insertion'] as SortAlgorithm[]).map(item => (
-              <button className={sortAlgorithm === item ? 'active' : ''} key={item} onClick={() => { setSortAlgorithm(item); setSortIndex(0); setActiveIndex(0); setPlaying(false) }}>
+              <button className={detectedSortAlgorithm === item ? 'active' : ''} key={item} onClick={() => { setCode(sortSamples[item]); setSortIndex(0); setActiveIndex(0); setPlaying(false) }}>
                 {item === 'community' ? 'Community' : item === 'selection' ? 'Selection' : 'Insertion'}
               </button>
             ))}
@@ -867,6 +929,8 @@ function App() {
               {Object.entries(runtimeResult.values).length ? Object.entries(runtimeResult.values).map(([key, value]) => (
                 <code key={key}>{key} = {value}</code>
               )) : <code>{runtimeResult.language === 'JavaScript' ? 'captured variables 없음' : '브라우저 실제 실행 미지원'}</code>}
+              <code>visual = {detectedSortAlgorithm}</code>
+              <code>array = [{detectedSortValues.join(', ')}]</code>
             </div>
             {askedToVisualize && runtimeResult.ok && (
               <div className="visualize-question">
@@ -885,7 +949,7 @@ function App() {
               <strong>{visualizing ? `${activeFeature?.title || '기능'} 흐름` : '작동 방식 보기 버튼을 누르면 시작합니다'}</strong>
             </div>
             <div className="motion-field" key={active?.id}>
-              <div className="sort-visualizer" key={`${sortAlgorithm}-${sortIndex}`}>
+              <div className="sort-visualizer" key={`${detectedSortAlgorithm}-${sortIndex}`}>
                 <div className="sort-stats">
                   <div><span>Time</span><strong>{sortIndex}</strong></div>
                   <div><span>Compare</span><strong>{sortStep?.comparisons || 0}</strong></div>
@@ -903,11 +967,11 @@ function App() {
                   ))}
                 </div>
                 <div className="sort-action">
-                  <strong>{sortAlgorithm === 'community' ? 'Community Sort' : sortAlgorithm === 'selection' ? 'Selection Sort' : 'Insertion Sort'}</strong>
+                  <strong>{detectedSortAlgorithm === 'community' ? 'Community Sort' : detectedSortAlgorithm === 'selection' ? 'Selection Sort' : 'Insertion Sort'}</strong>
                   <span>{sortStep?.action}</span>
                 </div>
                 <div className="sort-code">
-                  {sortCode[sortAlgorithm].map((line, index) => (
+                  {sortCode[detectedSortAlgorithm].map((line, index) => (
                     <code className={sortStep?.line === index + 1 ? 'active' : ''} key={line}>{line}</code>
                   ))}
                 </div>
