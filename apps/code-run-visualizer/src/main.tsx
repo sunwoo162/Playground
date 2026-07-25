@@ -1177,17 +1177,65 @@ function App() {
                   <div><span>Compare</span><strong>{sortStep?.comparisons || 0}</strong></div>
                   <div><span>Swap/Move</span><strong>{sortStep?.swaps || 0}</strong></div>
                 </div>
-                <div className="bar-stage">
-                  {sortStep?.array.map((value, index) => (
-                    <div
-                      className={`sort-bar ${sortStep.compare.includes(index) ? 'compare' : ''} ${sortStep.active.includes(index) ? 'selected' : ''} ${sortStep.sorted.includes(index) ? 'sorted' : ''} ${sortStep.lifted === index ? 'lifted' : ''}`}
-                      style={{ height: `${80 + value * 3}px` }}
-                      key={`${index}-${value}`}
-                    >
-                      <span>{value}</span>
+                {sortStep && (
+                  detectedSortAlgorithm === 'heap' ? (
+                    <div className="heap-stage">
+                      {sortStep.array.map((value, index) => (
+                        <div
+                          className={`heap-node level-${Math.floor(Math.log2(index + 1))} ${sortStep.compare.includes(index) ? 'compare' : ''} ${sortStep.active.includes(index) ? 'selected' : ''} ${sortStep.sorted.includes(index) ? 'sorted' : ''}`}
+                          key={`${index}-${value}`}
+                        >
+                          <span>{value}</span>
+                          <small>{index}</small>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  ) : detectedSortAlgorithm === 'linearSearch' ? (
+                    <div className="search-stage linear">
+                      {sortStep.array.map((value, index) => (
+                        <div className={`search-cell ${sortStep.compare.includes(index) ? 'compare' : ''} ${sortStep.active.includes(index) ? 'selected' : ''} ${sortStep.sorted.includes(index) ? 'visited' : ''}`} key={`${index}-${value}`}>
+                          <small>{index}</small>
+                          <strong>{value}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  ) : detectedSortAlgorithm === 'binarySearch' ? (
+                    <div className="search-stage binary">
+                      {sortStep.array.map((value, index) => {
+                        const bounds = sortStep.active.length >= 2 ? [Math.min(...sortStep.active), Math.max(...sortStep.active)] : [0, sortStep.array.length - 1]
+                        const outside = index < bounds[0] || index > bounds[1]
+                        return (
+                          <div className={`search-cell ${outside ? 'outside' : ''} ${sortStep.compare.includes(index) ? 'compare' : ''} ${sortStep.sorted.includes(index) ? 'selected' : ''}`} key={`${index}-${value}`}>
+                            <small>{index}</small>
+                            <strong>{value}</strong>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : detectedSortAlgorithm === 'merge' ? (
+                    <div className="merge-stage">
+                      <div className="merge-row split">
+                        {sortStep.array.map((value, index) => <span className={index < Math.ceil(sortStep.array.length / 2) ? 'left' : 'right'} key={`split-${index}-${value}`}>{value}</span>)}
+                      </div>
+                      <div className="merge-arrow">merge</div>
+                      <div className="merge-row output">
+                        {sortStep.array.map((value, index) => <span className={`${sortStep.active.includes(index) ? 'selected' : ''} ${sortStep.sorted.includes(index) ? 'sorted' : ''}`} key={`out-${index}-${value}`}>{value}</span>)}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className={`bar-stage ${detectedSortAlgorithm === 'quick' ? 'quick' : ''}`}>
+                      {sortStep.array.map((value, index) => (
+                        <div
+                          className={`sort-bar ${sortStep.compare.includes(index) ? 'compare' : ''} ${sortStep.active.includes(index) ? 'selected' : ''} ${sortStep.sorted.includes(index) ? 'sorted' : ''} ${sortStep.lifted === index ? 'lifted' : ''}`}
+                          style={{ height: `${80 + value * 3}px` }}
+                          key={`${index}-${value}`}
+                        >
+                          <span>{value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                )}
                 <div className="sort-action">
                   <strong>{algorithmNames[detectedSortAlgorithm]}</strong>
                   <span>{sortStep?.action}</span>

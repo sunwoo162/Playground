@@ -648,6 +648,13 @@ input[type='range'] {
   background: #0d1218;
 }
 
+.bar-stage.quick {
+  align-items: flex-end;
+  background:
+    linear-gradient(90deg, transparent 0 48%, rgba(142, 161, 255, 0.2) 48% 52%, transparent 52%),
+    #0d1218;
+}
+
 .sort-bar {
   position: relative;
   display: flex;
@@ -705,6 +712,188 @@ input[type='range'] {
 
 .sort-bar.sorted {
   background: linear-gradient(180deg, #23d18b, #17623f);
+}
+
+.search-stage {
+  display: grid;
+  align-content: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 22px;
+  border: 1px solid #253146;
+  border-radius: 10px;
+  background: #0d1218;
+}
+
+.search-stage.linear {
+  grid-template-columns: repeat(auto-fit, minmax(62px, 1fr));
+}
+
+.search-stage.binary {
+  grid-template-columns: repeat(auto-fit, minmax(58px, 1fr));
+}
+
+.search-cell {
+  position: relative;
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  min-height: 86px;
+  border: 1px solid #31405f;
+  border-radius: 8px;
+  background: #141d2a;
+  transition: transform 240ms ease, background 240ms ease, opacity 240ms ease, box-shadow 240ms ease;
+}
+
+.search-cell small {
+  color: #8ea1ff;
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.search-cell strong {
+  color: #f8fbff;
+  font-size: 22px;
+  font-weight: 950;
+}
+
+.search-cell.visited {
+  background: #17281f;
+}
+
+.search-cell.compare {
+  transform: translateY(-10px);
+  background: #44351a;
+  box-shadow: 0 0 28px rgba(240, 178, 50, 0.28);
+}
+
+.search-cell.selected {
+  outline: 3px solid #23d18b;
+  outline-offset: 4px;
+  background: #163226;
+}
+
+.search-cell.outside {
+  opacity: 0.28;
+  filter: grayscale(0.8);
+}
+
+.heap-stage {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(8, minmax(36px, 1fr));
+  grid-template-rows: repeat(3, minmax(74px, auto));
+  align-items: center;
+  justify-items: center;
+  min-width: 0;
+  padding: 26px 18px;
+  border: 1px solid #253146;
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg, rgba(142, 161, 255, 0.08), transparent 46%),
+    #0d1218;
+}
+
+.heap-node {
+  display: grid;
+  place-items: center;
+  width: clamp(42px, 8vw, 68px);
+  aspect-ratio: 1;
+  border: 1px solid #31405f;
+  border-radius: 999px;
+  background: #172033;
+  transition: transform 260ms ease, background 220ms ease, box-shadow 220ms ease;
+}
+
+.heap-node span {
+  color: #f8fbff;
+  font-size: 17px;
+  font-weight: 950;
+}
+
+.heap-node small {
+  color: #8ea1ff;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.heap-node:nth-child(1) { grid-column: 4 / span 2; grid-row: 1; }
+.heap-node:nth-child(2) { grid-column: 2 / span 2; grid-row: 2; }
+.heap-node:nth-child(3) { grid-column: 6 / span 2; grid-row: 2; }
+.heap-node:nth-child(4) { grid-column: 1 / span 2; grid-row: 3; }
+.heap-node:nth-child(5) { grid-column: 3 / span 2; grid-row: 3; }
+.heap-node:nth-child(6) { grid-column: 5 / span 2; grid-row: 3; }
+.heap-node:nth-child(7) { grid-column: 7 / span 2; grid-row: 3; }
+
+.heap-node.compare {
+  background: #44351a;
+  box-shadow: 0 0 24px rgba(240, 178, 50, 0.24);
+}
+
+.heap-node.selected {
+  outline: 3px solid #8ea1ff;
+  outline-offset: 4px;
+  transform: translateY(-8px);
+}
+
+.heap-node.sorted {
+  background: #163226;
+}
+
+.merge-stage {
+  display: grid;
+  align-content: center;
+  gap: 18px;
+  min-width: 0;
+  padding: 22px;
+  border: 1px solid #253146;
+  border-radius: 10px;
+  background: #0d1218;
+}
+
+.merge-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(46px, 1fr));
+  gap: 10px;
+}
+
+.merge-row span {
+  display: grid;
+  place-items: center;
+  min-height: 48px;
+  border: 1px solid #31405f;
+  border-radius: 8px;
+  color: #f8fbff;
+  font-weight: 950;
+  transition: transform 240ms ease, background 240ms ease;
+}
+
+.merge-row .left {
+  background: #172033;
+}
+
+.merge-row .right {
+  background: #211f2f;
+}
+
+.merge-row .selected {
+  transform: translateY(-8px);
+  background: #44351a;
+}
+
+.merge-row .sorted {
+  background: #163226;
+}
+
+.merge-arrow {
+  justify-self: center;
+  padding: 6px 12px;
+  border: 1px solid #344363;
+  border-radius: 999px;
+  color: #8ea1ff;
+  font-size: 12px;
+  font-weight: 950;
+  text-transform: uppercase;
 }
 
 .sort-action {
