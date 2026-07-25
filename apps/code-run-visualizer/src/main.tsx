@@ -17,6 +17,13 @@ type Step = {
 
 const phaseNodes: Phase[] = ['tokenize', 'parse', 'compile', 'execute']
 
+type ExpressionFrame = {
+  label: string
+  expression: string
+  focus: string
+  note: string
+}
+
 const sampleCode = `function sumScores(scores) {
   let total = 0
   for (const score of scores) {
@@ -80,6 +87,78 @@ function memoryCells(lineText: string, activeIndex: number) {
     { key: 'line', value: String(activeIndex + 1) },
     { key: 'phase', value: activeIndex < 3 ? 'compile' : 'runtime' },
   ]
+}
+
+function normalizeExpression(lineText: string) {
+  const trimmed = lineText.trim().replace(/;$/, '')
+  const callMatch = trimmed.match(/(?:console\.log|print|System\.out\.println)\((.*)\)$/)
+  if (callMatch) return callMatch[1]
+  const returnMatch = trimmed.match(/^return\s+(.+)$/)
+  if (returnMatch) return returnMatch[1]
+  const assignmentMatch = trimmed.match(/=\s*(.+)$/)
+  if (assignmentMatch) return assignmentMatch[1]
+  return trimmed
+}
+
+function evaluateSimpleExpression(expression: string) {
+  const numeric = expression.replace(/\bresult\b/g, '250').replace(/\btotal\b/g, '250').replace(/\bscore\b/g, '82')
+  if (!/^[\d\s+\-*/().]+$/.test(numeric)) return null
+  try {
+    const value = Function(`"use strict"; return (${numeric})`)()
+    return Number.isFinite(value) ? String(Math.round(value * 1000) / 1000) : null
+  } catch {
+    return null
+  }
+}
+
+function expressionFrames(lineText: string, activeIndex: number): ExpressionFrame[] {
+  const expression = normalizeExpression(lineText)
+  const tokens = tokensFromLine(expression)
+  const substituted = expression
+    .replace(/\bresult\b/g, '250')
+    .replace(/\btotal\b/g, '250')
+    .replace(/\bscore\b/g, activeIndex % 2 === 0 ? '82' : '91')
+  const hasOperator = /[+\-*/]/.test(expression)
+  const priorityMatch = substituted.match(/(\d+(?:\.\d+)?)\s*([*/])\s*(\d+(?:\.\d+)?)/)
+  const priorityValue = priorityMatch
+    ? String(Math.round(Function(`"use strict"; return (${priorityMatch[0]})`)() * 1000) / 1000)
+    : null
+  const result = evaluateSimpleExpression(expression) || evaluateSimpleExpression(substituted)
+  const frames: ExpressionFrame[] = [
+    {
+      label: '1. 식 선택',
+      expression,
+      focus: tokens[0] || expression || 'source',
+      note: '현재 줄에서 실제로 계산되는 식만 뽑습니다.',
+    },
+    {
+      label: '2. 토큰 분해',
+      expression: tokens.join('  '),
+      focus: tokens[Math.min(activeIndex % Math.max(tokens.length, 1), Math.max(tokens.length - 1, 0))] || expression,
+      note: '변수, 숫자, 연산자, 괄호를 계산 단위로 나눕니다.',
+    },
+    {
+      label: '3. 값 대입',
+      expression: substituted,
+      focus: substituted !== expression ? '변수 -> 값' : '리터럴 유지',
+      note: '현재 메모리에 있는 변수 값을 식 안으로 넣습니다.',
+    },
+  ]
+  if (hasOperator) {
+    frames.push({
+      label: '4. 우선순위 계산',
+      expression: priorityMatch && priorityValue ? substituted.replace(priorityMatch[0], priorityValue) : substituted,
+      focus: priorityMatch?.[0] || '왼쪽부터 평가',
+      note: priorityMatch ? '곱셈/나눗셈을 먼저 줄입니다.' : '우선순위가 같은 연산은 왼쪽에서 오른쪽으로 계산합니다.',
+    })
+  }
+  frames.push({
+    label: `${hasOperator ? '5' : '4'}. 결과`,
+    expression: result || substituted || expression,
+    focus: result || '결과 후보',
+    note: '줄 실행이 끝나면 이 값이 변수 저장, return, console 출력으로 전달됩니다.',
+  })
+  return frames
 }
 
 function buildSteps(code: string, selectedLanguage: Language): Step[] {
@@ -153,6 +232,9 @@ function App() {
   const activeTokens = tokensFromLine(activeLineText)
   const activePhasePosition = Math.max(0, phaseNodes.indexOf(active?.phase || 'tokenize'))
   const memory = memoryCells(activeLineText, activeIndex)
+  const frames = expressionFrames(activeLineText, activeIndex)
+  const activeFrameIndex = Math.min(frames.length - 1, Math.max(0, activeIndex % Math.max(frames.length, 1)))
+  const activeFrame = frames[activeFrameIndex]
 
   useEffect(() => {
     setActiveIndex(0)
@@ -242,27 +324,31 @@ function App() {
         <section className="runtime-pane">
           <section className="cinema-stage">
             <div className="stage-topline">
-              <span>LIVE EXECUTION</span>
-              <strong>{active?.phase === 'execute' ? `${active.line}번 줄` : phaseLabel[active?.phase || 'tokenize']}</strong>
+              <span>EXPRESSION TRACE</span>
+              <strong>{active?.phase === 'execute' ? `${active.line}번 줄 계산 과정` : '컴파일 준비'}</strong>
             </div>
-            <div className="execution-rail">
-              {phaseNodes.map((phase, index) => (
-                <div className={`rail-node ${index === activePhasePosition ? 'active' : index < activePhasePosition ? 'done' : ''}`} key={phase}>
-                  <span>{index + 1}</span>
-                  <strong>{phaseLabel[phase]}</strong>
-                </div>
-              ))}
-              <div className="rail-pulse" style={{ left: `${activePhasePosition * 31 + 3}%` }} />
+            <div className="expression-headline" key={`${active?.id}-headline`}>
+              <span>현재 식</span>
+              <code>{normalizeExpression(activeLineText) || activeLineText || '코드를 입력하세요'}</code>
             </div>
             <div className="motion-field" key={active?.id}>
               <div className="scanner-line" />
-              <div className="source-strip">
-                <span>{active?.line || 1}</span>
-                <code>{activeLineText || '코드를 입력하세요'}</code>
+              <div className="expression-stack">
+                {frames.map((frame, index) => (
+                  <div className={`expression-frame ${index === activeFrameIndex ? 'active' : index < activeFrameIndex ? 'done' : ''}`} style={{ animationDelay: `${index * 90}ms` }} key={`${frame.label}-${frame.expression}`}>
+                    <span>{frame.label}</span>
+                    <code>{frame.expression || 'empty'}</code>
+                    <small>{frame.note}</small>
+                  </div>
+                ))}
               </div>
-              <div className="token-stream">
-                {(activeTokens.length ? activeTokens : ['source', 'token', 'run']).map((token, index) => (
-                  <span style={{ animationDelay: `${index * 80}ms` }} key={`${active?.id}-${token}-${index}`}>{token}</span>
+              <div className="focus-lens">
+                <span>지금 보는 부분</span>
+                <strong>{activeFrame.focus}</strong>
+              </div>
+              <div className="token-stream expression-tokens">
+                {(activeTokens.length ? activeTokens : ['expression']).map((token, index) => (
+                  <span className={activeFrame.focus.includes(token) || token.includes(activeFrame.focus) ? 'hot' : ''} style={{ animationDelay: `${index * 80}ms` }} key={`${active?.id}-${token}-${index}`}>{token}</span>
                 ))}
               </div>
               <div className="memory-board">
