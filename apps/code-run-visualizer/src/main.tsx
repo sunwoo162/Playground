@@ -426,6 +426,8 @@ function App() {
   const [cursor, setCursor] = useState(0)
   const [compileResult, setCompileResult] = useState<CompileResult>(() => compileCheck(sampleCode, 'JavaScript'))
   const [runtimeResult, setRuntimeResult] = useState<RuntimeResult>(() => runCode(sampleCode, 'JavaScript'))
+  const [askedToVisualize, setAskedToVisualize] = useState(false)
+  const [visualizing, setVisualizing] = useState(false)
   const steps = useMemo(() => buildSteps(code, language), [code, language])
   const active = steps[Math.min(activeIndex, steps.length - 1)]
   const lines = code.split('\n')
@@ -445,6 +447,8 @@ function App() {
   useEffect(() => {
     setActiveIndex(0)
     setPlaying(false)
+    setAskedToVisualize(false)
+    setVisualizing(false)
     const nextCompile = compileCheck(code, language)
     setCompileResult(nextCompile)
     setRuntimeResult(nextCompile.ok ? runCode(code, language) : { ok: false, language, outputs: [], values: {}, errorLine: nextCompile.errorLine, error: nextCompile.message })
@@ -478,21 +482,32 @@ function App() {
   function runCompileAndPlay() {
     const result = compileCheck(code, language)
     setCompileResult(result)
+    setVisualizing(false)
     if (result.ok) {
       const runtime = runCode(code, language)
       setRuntimeResult(runtime)
       if (!runtime.ok) {
         setPlaying(false)
+        setAskedToVisualize(false)
         setActiveIndex(Math.max(0, steps.findIndex(step => step.line === runtime.errorLine)))
         return
       }
       setActiveIndex(0)
-      setPlaying(true)
+      setPlaying(false)
+      setAskedToVisualize(true)
       return
     }
     setPlaying(false)
+    setAskedToVisualize(false)
     const failedStepIndex = steps.findIndex(step => step.line === result.errorLine)
     setActiveIndex(Math.max(0, failedStepIndex === -1 ? result.checkedUntilLine - 1 : failedStepIndex))
+  }
+
+  function startVisualization() {
+    setActiveIndex(0)
+    setVisualizing(true)
+    setAskedToVisualize(false)
+    setPlaying(true)
   }
 
   function updateEditor(nextCode: string, nextCursor: number) {
@@ -641,11 +656,21 @@ function App() {
                 <code key={key}>{key} = {value}</code>
               )) : <code>{runtimeResult.language === 'JavaScript' ? 'captured variables 없음' : '브라우저 실제 실행 미지원'}</code>}
             </div>
+            {askedToVisualize && runtimeResult.ok && (
+              <div className="visualize-question">
+                <strong>이 코드가 어떻게 동작했는지 볼까요?</strong>
+                <p>실제 실행으로 나온 값이 식에 대입되고, 연산이 줄어들어 결과가 되는 과정을 단계별로 보여줍니다.</p>
+                <div>
+                  <button type="button" onClick={startVisualization}>작동 방식 보기</button>
+                  <button type="button" onClick={() => setAskedToVisualize(false)}>결과만 볼게요</button>
+                </div>
+              </div>
+            )}
           </section>
-          <section className="cinema-stage">
+          <section className={`cinema-stage ${visualizing ? 'visualizing' : 'waiting'}`}>
             <div className="stage-topline">
-              <span>EXPRESSION TRACE</span>
-              <strong>{active?.phase === 'execute' ? `${active.line}번 줄 계산 과정` : '컴파일 준비'}</strong>
+              <span>{visualizing ? 'EXPRESSION TRACE' : 'WAITING'}</span>
+              <strong>{visualizing ? active?.phase === 'execute' ? `${active.line}번 줄 계산 과정` : '컴파일 준비' : '작동 방식 보기 버튼을 누르면 시작합니다'}</strong>
             </div>
             <div className="expression-headline" key={`${active?.id}-headline`}>
               <span>현재 식</span>

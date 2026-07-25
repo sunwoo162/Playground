@@ -328,6 +328,48 @@ input[type='range'] {
   background: #14231e;
 }
 
+.visualize-question {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(88, 101, 242, 0.58);
+  border-radius: 8px;
+  background: #202744;
+}
+
+.visualize-question strong {
+  font-size: 18px;
+}
+
+.visualize-question p {
+  margin: 0;
+  color: #b7bfcc;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.visualize-question div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.visualize-question button {
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: 6px;
+  background: #5865f2;
+  color: white;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.visualize-question button:last-child {
+  background: #303542;
+  color: #dce5f7;
+}
+
 .result-card.error {
   border-color: #743338;
   background: #2a171a;
@@ -386,6 +428,15 @@ input[type='range'] {
     linear-gradient(0deg, rgba(35, 209, 139, 0.10) 1px, transparent 1px),
     #111722;
   background-size: 34px 34px;
+}
+
+.cinema-stage.waiting .motion-field {
+  opacity: 0.54;
+  filter: saturate(0.72);
+}
+
+.cinema-stage.visualizing .expression-headline {
+  box-shadow: 0 0 36px rgba(35, 209, 139, 0.18);
 }
 
 .cinema-stage::before {
@@ -566,9 +617,9 @@ input[type='range'] {
 .expression-frame.active {
   border-color: #23d18b;
   background: #1d2b33;
-  box-shadow: 0 0 28px rgba(35, 209, 139, 0.18);
+  box-shadow: 0 0 40px rgba(35, 209, 139, 0.28);
   opacity: 1;
-  transform: translateX(0) scale(1);
+  transform: translateX(0) scale(1.03);
 }
 
 .expression-frame span {
@@ -583,7 +634,7 @@ input[type='range'] {
   align-self: center;
   color: #f8fbff;
   font-family: "Cascadia Code", Consolas, monospace;
-  font-size: 18px;
+  font-size: 22px;
   font-weight: 900;
   text-overflow: ellipsis;
   white-space: nowrap;
