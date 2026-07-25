@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
 
@@ -22,6 +22,38 @@ type ExpressionFrame = {
   expression: string
   focus: string
   note: string
+}
+
+type CompletionItem = {
+  label: string
+  insert: string
+  detail: string
+}
+
+const completions: Record<Language, CompletionItem[]> = {
+  JavaScript: [
+    { label: 'console.log', insert: 'console.log($1)', detail: '콘솔 출력' },
+    { label: 'function', insert: 'function $1() {\n  $2\n}', detail: '함수 선언' },
+    { label: 'for', insert: 'for (const item of $1) {\n  $2\n}', detail: '반복문' },
+    { label: 'if', insert: 'if ($1) {\n  $2\n}', detail: '조건문' },
+    { label: 'return', insert: 'return $1', detail: '값 반환' },
+    { label: 'const', insert: 'const $1 = $2', detail: '상수 선언' },
+    { label: 'let', insert: 'let $1 = $2', detail: '변수 선언' },
+  ],
+  Python: [
+    { label: 'print', insert: 'print($1)', detail: '콘솔 출력' },
+    { label: 'def', insert: 'def $1():\n    $2', detail: '함수 선언' },
+    { label: 'for', insert: 'for item in $1:\n    $2', detail: '반복문' },
+    { label: 'if', insert: 'if $1:\n    $2', detail: '조건문' },
+    { label: 'return', insert: 'return $1', detail: '값 반환' },
+  ],
+  Java: [
+    { label: 'sout', insert: 'System.out.println($1);', detail: '콘솔 출력' },
+    { label: 'main', insert: 'public static void main(String[] args) {\n  $1\n}', detail: 'main 함수' },
+    { label: 'for', insert: 'for (int i = 0; i < $1; i++) {\n  $2\n}', detail: '반복문' },
+    { label: 'if', insert: 'if ($1) {\n  $2\n}', detail: '조건문' },
+    { label: 'return', insert: 'return $1;', detail: '값 반환' },
+  ],
 }
 
 const sampleCode = `function sumScores(scores) {
@@ -161,6 +193,24 @@ function expressionFrames(lineText: string, activeIndex: number): ExpressionFram
   return frames
 }
 
+function wordAtCursor(value: string, cursor: number) {
+  const before = value.slice(0, cursor)
+  const match = before.match(/[a-zA-Z_$][\w$.:]*$/)
+  return match?.[0] || ''
+}
+
+function indentationBeforeCursor(value: string, cursor: number) {
+  const lineStart = value.lastIndexOf('\n', cursor - 1) + 1
+  return value.slice(lineStart, cursor).match(/^\s*/)?.[0] || ''
+}
+
+function cleanSnippet(snippet: string) {
+  const markerIndex = snippet.indexOf('$1')
+  const withoutMarkers = snippet.replace(/\$1|\$2/g, '')
+  const cursorOffset = markerIndex === -1 ? withoutMarkers.length : markerIndex
+  return { text: withoutMarkers, cursorOffset }
+}
+
 function buildSteps(code: string, selectedLanguage: Language): Step[] {
   const language = selectedLanguage || detectLanguage(code)
   const lines = code.split('\n')
@@ -218,12 +268,14 @@ function buildSteps(code: string, selectedLanguage: Language): Step[] {
 }
 
 function App() {
+  const editorRef = useRef<HTMLTextAreaElement | null>(null)
   const [code, setCode] = useState(sampleCode)
   const [language, setLanguage] = useState<Language>('JavaScript')
   const [activeIndex, setActiveIndex] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [speed, setSpeed] = useState(850)
   const [showHeat, setShowHeat] = useState(true)
+  const [cursor, setCursor] = useState(0)
   const steps = useMemo(() => buildSteps(code, language), [code, language])
   const active = steps[Math.min(activeIndex, steps.length - 1)]
   const lines = code.split('\n')
@@ -235,6 +287,10 @@ function App() {
   const frames = expressionFrames(activeLineText, activeIndex)
   const activeFrameIndex = Math.min(frames.length - 1, Math.max(0, activeIndex % Math.max(frames.length, 1)))
   const activeFrame = frames[activeFrameIndex]
+  const currentWord = wordAtCursor(code, cursor)
+  const suggestions = completions[language]
+    .filter(item => currentWord ? item.label.toLowerCase().startsWith(currentWord.toLowerCase()) : true)
+    .slice(0, 5)
 
   useEffect(() => {
     setActiveIndex(0)
@@ -263,6 +319,61 @@ function App() {
       setCode(`public class Main {\n  public static void main(String[] args) {\n    int total = 0;\n    int[] scores = {82, 91, 77};\n    for (int score : scores) {\n      total += score;\n    }\n    System.out.println(total / 3);\n  }\n}`)
     } else {
       setCode(sampleCode)
+    }
+  }
+
+  function updateEditor(nextCode: string, nextCursor: number) {
+    setCode(nextCode)
+    window.requestAnimationFrame(() => {
+      editorRef.current?.focus()
+      editorRef.current?.setSelectionRange(nextCursor, nextCursor)
+      setCursor(nextCursor)
+    })
+  }
+
+  function insertAtCursor(insert: string, replaceLength = 0) {
+    const element = editorRef.current
+    if (!element) return
+    const start = element.selectionStart
+    const end = element.selectionEnd
+    const from = Math.max(0, start - replaceLength)
+    const { text, cursorOffset } = cleanSnippet(insert)
+    updateEditor(`${code.slice(0, from)}${text}${code.slice(end)}`, from + cursorOffset)
+  }
+
+  function handleEditorKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    const element = event.currentTarget
+    const start = element.selectionStart
+    const selected = code.slice(element.selectionStart, element.selectionEnd)
+    if (event.key === 'Tab') {
+      event.preventDefault()
+      const word = wordAtCursor(code, start)
+      const completion = completions[language].find(item => item.label.toLowerCase().startsWith(word.toLowerCase()))
+      if (completion && word) {
+        insertAtCursor(completion.insert, word.length)
+      } else {
+        insertAtCursor('  ')
+      }
+      return
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      const indent = indentationBeforeCursor(code, start)
+      const previousChar = code[start - 1]
+      const extra = previousChar === '{' || previousChar === ':' ? '  ' : ''
+      insertAtCursor(`\n${indent}${extra}`)
+      return
+    }
+    const pairs: Record<string, string> = { '(': ')', '[': ']', '{': '}', '"': '"', "'": "'", '`': '`' }
+    if (pairs[event.key]) {
+      event.preventDefault()
+      const close = pairs[event.key]
+      if (selected) {
+        const wrapped = `${event.key}${selected}${close}`
+        updateEditor(`${code.slice(0, element.selectionStart)}${wrapped}${code.slice(element.selectionEnd)}`, element.selectionStart + wrapped.length)
+      } else {
+        updateEditor(`${code.slice(0, start)}${event.key}${close}${code.slice(element.selectionEnd)}`, start + 1)
+      }
     }
   }
 
@@ -302,10 +413,29 @@ function App() {
         <section className="editor-pane">
           <div className="pane-header">
             <strong>입력 코드</strong>
-            <span>{lines.length} lines</span>
+            <span>Tab 자동완성 · {lines.length} lines</span>
+          </div>
+          <div className="completion-bar">
+            {suggestions.map((item, index) => (
+              <button type="button" key={item.label} onClick={() => insertAtCursor(item.insert, currentWord.length)}>
+                <strong>{item.label}</strong>
+                <span>{index === 0 ? 'Tab' : item.detail}</span>
+              </button>
+            ))}
           </div>
           <div className="code-editor">
-            <textarea value={code} onChange={event => setCode(event.target.value)} spellCheck={false} />
+            <textarea
+              ref={editorRef}
+              value={code}
+              onChange={event => {
+                setCode(event.target.value)
+                setCursor(event.target.selectionStart)
+              }}
+              onClick={event => setCursor(event.currentTarget.selectionStart)}
+              onKeyDown={handleEditorKeyDown}
+              onKeyUp={event => setCursor(event.currentTarget.selectionStart)}
+              spellCheck={false}
+            />
             <div className="code-preview" aria-hidden>
               {lines.map((line, index) => {
                 const lineNumber = index + 1
