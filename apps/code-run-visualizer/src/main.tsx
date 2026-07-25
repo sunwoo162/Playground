@@ -669,44 +669,32 @@ function App() {
           </section>
           <section className={`cinema-stage ${visualizing ? 'visualizing' : 'waiting'}`}>
             <div className="stage-topline">
-              <span>{visualizing ? 'EXPRESSION TRACE' : 'WAITING'}</span>
+              <span>{visualizing ? 'STEP BY STEP' : 'WAITING'}</span>
               <strong>{visualizing ? active?.phase === 'execute' ? `${active.line}번 줄 계산 과정` : '컴파일 준비' : '작동 방식 보기 버튼을 누르면 시작합니다'}</strong>
             </div>
-            <div className="expression-headline" key={`${active?.id}-headline`}>
-              <span>현재 식</span>
-              <code>{normalizeExpression(activeLineText) || activeLineText || '코드를 입력하세요'}</code>
-            </div>
             <div className="motion-field" key={active?.id}>
-              <div className="scanner-line" />
-              <div className="expression-stack">
-                {frames.map((frame, index) => (
-                  <div className={`expression-frame ${index === activeFrameIndex ? 'active' : index < activeFrameIndex ? 'done' : ''}`} style={{ animationDelay: `${index * 90}ms` }} key={`${frame.label}-${frame.expression}`}>
-                    <span>{frame.label}</span>
-                    <code>{frame.expression || 'empty'}</code>
-                    <small>{frame.note}</small>
-                  </div>
-                ))}
+              <div className="reel-scene" key={`${active?.id}-${activeFrameIndex}`}>
+                <div className="reel-label">{activeFrame.label}</div>
+                <div className="reel-expression">
+                  {(activeFrame.expression ? tokensFromLine(activeFrame.expression) : ['empty']).map((token, index) => (
+                    <span className={activeFrame.focus.includes(token) || token.includes(activeFrame.focus) ? 'focus' : ''} style={{ animationDelay: `${index * 70}ms` }} key={`${activeFrame.label}-${token}-${index}`}>{token}</span>
+                  ))}
+                </div>
+                <div className="reel-note">{activeFrame.note}</div>
               </div>
-              <div className="focus-lens">
-                <span>지금 보는 부분</span>
+              <div className="reel-focus">
+                <span>focus</span>
                 <strong>{activeFrame.focus}</strong>
               </div>
-              <div className="token-stream expression-tokens">
-                {(activeTokens.length ? activeTokens : ['expression']).map((token, index) => (
-                  <span className={activeFrame.focus.includes(token) || token.includes(activeFrame.focus) ? 'hot' : ''} style={{ animationDelay: `${index * 80}ms` }} key={`${active?.id}-${token}-${index}`}>{token}</span>
+              <div className="reel-dots">
+                {frames.map((frame, index) => (
+                  <button className={index === activeFrameIndex ? 'active' : index < activeFrameIndex ? 'done' : ''} type="button" onClick={() => setActiveIndex(current => current - activeFrameIndex + index)} key={frame.label}>
+                    {index + 1}
+                  </button>
                 ))}
               </div>
-              <div className="memory-board">
-                {memory.map((cell, index) => (
-                  <div className="memory-cell" style={{ animationDelay: `${index * 120}ms` }} key={`${cell.key}-${cell.value}`}>
-                    <span>{cell.key}</span>
-                    <strong>{cell.value}</strong>
-                  </div>
-                ))}
-              </div>
-              <div className="output-burst">
-                <span>{active?.output ? 'PRINT' : active?.phase.toUpperCase()}</span>
-                <strong>{active?.output || active?.title || 'waiting'}</strong>
+              <div className="reel-memory">
+                {memory.map(cell => <code key={`${cell.key}-${cell.value}`}>{cell.key}: {cell.value}</code>)}
               </div>
             </div>
           </section>
