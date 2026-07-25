@@ -24,6 +24,14 @@ type ExpressionFrame = {
   note: string
 }
 
+type FeatureBlock = {
+  id: string
+  kind: 'input' | 'function' | 'loop' | 'condition' | 'calculation' | 'return' | 'output'
+  title: string
+  value: string
+  detail: string
+}
+
 type CompileResult = {
   ok: boolean
   checkedUntilLine: number
@@ -212,6 +220,45 @@ function expressionFrames(lineText: string, activeIndex: number, runtime: Runtim
     note: '줄 실행이 끝나면 이 값이 변수 저장, return, console 출력으로 전달됩니다.',
   })
   return frames
+}
+
+function buildFeatureBlocks(code: string, runtime: RuntimeResult): FeatureBlock[] {
+  const blocks: FeatureBlock[] = []
+  const arrayMatch = code.match(/\[([\d,\s.-]+)\]/)
+  const functionMatch = code.match(/function\s+([a-zA-Z_$][\w$]*)\s*\(([^)]*)\)/) || code.match(/def\s+([a-zA-Z_][\w]*)\s*\(([^)]*)\)/)
+  const loopMatch = code.match(/\bfor\b[^{:\n]*[{:]?/)
+  const conditionMatch = code.match(/\bif\s*\(([^)]*)\)|\bif\s+([^:]+):/)
+  const calcMatch = code.match(/([a-zA-Z_$][\w$]*)\s*([+\-*/]?=)\s*([^;\n]+)/)
+  const returnMatch = code.match(/\breturn\s+([^;\n]+)/)
+  const outputMatch = code.match(/(console\.log|print|System\.out\.println)\(([^)]*)\)/)
+  const resultValue = runtime.outputs[0] || Object.values(runtime.values)[0] || 'result'
+
+  if (arrayMatch) {
+    blocks.push({ id: 'input', kind: 'input', title: '입력 데이터', value: `[${arrayMatch[1].trim()}]`, detail: '처음 들어오는 값 묶음' })
+  } else {
+    blocks.push({ id: 'input', kind: 'input', title: '입력', value: 'source', detail: '코드에서 시작 값 생성' })
+  }
+  if (functionMatch) {
+    blocks.push({ id: 'function', kind: 'function', title: functionMatch[1], value: functionMatch[2] || 'args', detail: '값을 받아 처리할 기능 단위' })
+  }
+  if (loopMatch) {
+    blocks.push({ id: 'loop', kind: 'loop', title: '반복 처리', value: arrayMatch ? arrayMatch[1].split(',').map(item => item.trim()).filter(Boolean).join(' -> ') : 'items', detail: '데이터를 하나씩 꺼내 같은 계산 반복' })
+  }
+  if (conditionMatch) {
+    blocks.push({ id: 'condition', kind: 'condition', title: '조건 분기', value: conditionMatch[1] || conditionMatch[2] || 'condition', detail: '조건 결과에 따라 흐름 선택' })
+  }
+  if (calcMatch) {
+    blocks.push({ id: 'calculation', kind: 'calculation', title: '계산/저장', value: `${calcMatch[1]} ${calcMatch[2]} ${calcMatch[3].trim()}`, detail: '중간 값을 갱신' })
+  }
+  if (returnMatch) {
+    blocks.push({ id: 'return', kind: 'return', title: '반환', value: substituteRuntimeValues(returnMatch[1].trim(), runtime.values), detail: '계산 결과를 호출 위치로 전달' })
+  }
+  if (outputMatch) {
+    blocks.push({ id: 'output', kind: 'output', title: '화면 출력', value: resultValue, detail: '사용자가 보는 최종 결과' })
+  } else {
+    blocks.push({ id: 'output', kind: 'output', title: '결과', value: resultValue, detail: '실행이 끝난 뒤 남는 값' })
+  }
+  return blocks
 }
 
 function wordAtCursor(value: string, cursor: number) {
@@ -439,6 +486,9 @@ function App() {
   const frames = expressionFrames(activeLineText, activeIndex, runtimeResult)
   const activeFrameIndex = Math.min(frames.length - 1, Math.max(0, activeIndex % Math.max(frames.length, 1)))
   const activeFrame = frames[activeFrameIndex]
+  const featureBlocks = useMemo(() => buildFeatureBlocks(code, runtimeResult), [code, runtimeResult])
+  const activeFeatureIndex = Math.min(featureBlocks.length - 1, activeIndex % Math.max(featureBlocks.length, 1))
+  const activeFeature = featureBlocks[activeFeatureIndex] || featureBlocks[0]
   const currentWord = wordAtCursor(code, cursor)
   const suggestions = completions[language]
     .filter(item => currentWord ? item.label.toLowerCase().startsWith(currentWord.toLowerCase()) : true)
@@ -458,7 +508,7 @@ function App() {
     if (!playing) return
     const timer = window.setInterval(() => {
       setActiveIndex(current => {
-        if (current >= steps.length - 1) {
+        if (current >= featureBlocks.length - 1) {
           setPlaying(false)
           return current
         }
@@ -466,7 +516,7 @@ function App() {
       })
     }, speed)
     return () => window.clearInterval(timer)
-  }, [playing, speed, steps.length])
+  }, [featureBlocks.length, playing, speed])
 
   function loadDemo(nextLanguage: Language) {
     setLanguage(nextLanguage)
@@ -670,25 +720,31 @@ function App() {
           <section className={`cinema-stage ${visualizing ? 'visualizing' : 'waiting'}`}>
             <div className="stage-topline">
               <span>{visualizing ? 'STEP BY STEP' : 'WAITING'}</span>
-              <strong>{visualizing ? active?.phase === 'execute' ? `${active.line}번 줄 계산 과정` : '컴파일 준비' : '작동 방식 보기 버튼을 누르면 시작합니다'}</strong>
+              <strong>{visualizing ? `${activeFeature?.title || '기능'} 흐름` : '작동 방식 보기 버튼을 누르면 시작합니다'}</strong>
             </div>
             <div className="motion-field" key={active?.id}>
-              <div className="reel-scene" key={`${active?.id}-${activeFrameIndex}`}>
-                <div className="reel-label">{activeFrame.label}</div>
-                <div className="reel-expression">
-                  {(activeFrame.expression ? tokensFromLine(activeFrame.expression) : ['empty']).map((token, index) => (
-                    <span className={activeFrame.focus.includes(token) || token.includes(activeFrame.focus) ? 'focus' : ''} style={{ animationDelay: `${index * 70}ms` }} key={`${activeFrame.label}-${token}-${index}`}>{token}</span>
+              <div className="flow-stage" key={`${activeFeature?.id}-${activeFeatureIndex}`}>
+                <div className="flow-lane">
+                  {featureBlocks.map((block, index) => (
+                    <div className={`feature-node ${block.kind} ${index === activeFeatureIndex ? 'active' : index < activeFeatureIndex ? 'done' : ''}`} key={block.id}>
+                      <span>{index + 1}</span>
+                      <strong>{block.title}</strong>
+                    </div>
                   ))}
+                  <div className="data-packet" style={{ left: `${featureBlocks.length <= 1 ? 50 : 8 + activeFeatureIndex * (84 / (featureBlocks.length - 1))}%` }}>
+                    {activeFeature?.value}
+                  </div>
                 </div>
-                <div className="reel-note">{activeFrame.note}</div>
-              </div>
-              <div className="reel-focus">
-                <span>focus</span>
-                <strong>{activeFrame.focus}</strong>
+                <div className={`feature-spotlight ${activeFeature?.kind}`}>
+                  <span>{activeFeature?.kind}</span>
+                  <strong>{activeFeature?.title}</strong>
+                  <code>{activeFeature?.value}</code>
+                  <p>{activeFeature?.detail}</p>
+                </div>
               </div>
               <div className="reel-dots">
-                {frames.map((frame, index) => (
-                  <button className={index === activeFrameIndex ? 'active' : index < activeFrameIndex ? 'done' : ''} type="button" onClick={() => setActiveIndex(current => current - activeFrameIndex + index)} key={frame.label}>
+                {featureBlocks.map((block, index) => (
+                  <button className={index === activeFeatureIndex ? 'active' : index < activeFeatureIndex ? 'done' : ''} type="button" onClick={() => setActiveIndex(index)} key={block.id}>
                     {index + 1}
                   </button>
                 ))}
