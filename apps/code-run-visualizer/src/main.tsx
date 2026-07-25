@@ -24,6 +24,14 @@ type ExpressionFrame = {
   note: string
 }
 
+type CompileResult = {
+  ok: boolean
+  checkedUntilLine: number
+  errorLine?: number
+  message: string
+  fix: string
+}
+
 type CompletionItem = {
   label: string
   insert: string
@@ -211,6 +219,94 @@ function cleanSnippet(snippet: string) {
   return { text: withoutMarkers, cursorOffset }
 }
 
+function compileCheck(code: string, language: Language): CompileResult {
+  const lines = code.split('\n')
+  const stack: { char: string; line: number }[] = []
+  let quoteChar = ''
+  let quoteLine = 0
+  const pairs: Record<string, string> = { '(': ')', '[': ']', '{': '}' }
+  const closing = new Set(Object.values(pairs))
+
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const line = lines[lineIndex]
+    for (let charIndex = 0; charIndex < line.length; charIndex += 1) {
+      const char = line[charIndex]
+      const previous = line[charIndex - 1]
+      if ((char === '"' || char === "'" || char === '`') && previous !== '\\') {
+        if (quoteChar === char) {
+          quoteChar = ''
+          quoteLine = 0
+        } else if (!quoteChar) {
+          quoteChar = char
+          quoteLine = lineIndex + 1
+        }
+        continue
+      }
+      if (quoteChar) continue
+      if (pairs[char]) {
+        stack.push({ char, line: lineIndex + 1 })
+      } else if (closing.has(char)) {
+        const last = stack.pop()
+        if (!last || pairs[last.char] !== char) {
+          return {
+            ok: false,
+            checkedUntilLine: lineIndex,
+            errorLine: lineIndex + 1,
+            message: `${char} 닫는 기호가 맞는 여는 기호 없이 나왔습니다.`,
+            fix: '바로 앞 식의 괄호/중괄호/대괄호 쌍을 확인하고 불필요한 닫는 기호를 지우세요.',
+          }
+        }
+      }
+    }
+    const trimmed = line.trim()
+    if (language === 'Python' && /^(def|if|for|while|elif|else)\b/.test(trimmed) && !trimmed.endsWith(':')) {
+      return {
+        ok: false,
+        checkedUntilLine: lineIndex,
+        errorLine: lineIndex + 1,
+        message: 'Python 블록 문장 끝에 : 이 없습니다.',
+        fix: `${lineIndex + 1}번 줄 끝에 : 를 붙이고 다음 줄을 들여쓰기 하세요.`,
+      }
+    }
+    if (language === 'Java' && trimmed && !/[{};:]$/.test(trimmed) && !/^(public|class|for|if|else|while)\b/.test(trimmed)) {
+      return {
+        ok: false,
+        checkedUntilLine: lineIndex,
+        errorLine: lineIndex + 1,
+        message: 'Java 문장이 세미콜론으로 끝나지 않았습니다.',
+        fix: `${lineIndex + 1}번 줄 끝에 ; 를 추가하세요.`,
+      }
+    }
+  }
+
+  if (quoteChar) {
+    return {
+      ok: false,
+      checkedUntilLine: quoteLine - 1,
+      errorLine: quoteLine,
+      message: `${quoteChar} 문자열이 닫히지 않았습니다.`,
+      fix: `${quoteLine}번 줄의 문자열 끝에 ${quoteChar} 를 추가하세요.`,
+    }
+  }
+  if (stack.length) {
+    const last = stack[stack.length - 1]
+    return {
+      ok: false,
+      checkedUntilLine: last.line - 1,
+      errorLine: last.line,
+      message: `${last.char} 여는 기호가 닫히지 않았습니다.`,
+      fix: `${last.line}번 줄 이후에 ${pairs[last.char]} 를 추가해 블록이나 식을 닫으세요.`,
+    }
+  }
+
+  return {
+    ok: true,
+    checkedUntilLine: lines.length,
+    message: '컴파일 검사 통과. 실행 애니메이션을 재생할 수 있습니다.',
+    fix: '현재 문법 검사에서 발견된 문제는 없습니다.',
+  }
+}
+
 function buildSteps(code: string, selectedLanguage: Language): Step[] {
   const language = selectedLanguage || detectLanguage(code)
   const lines = code.split('\n')
@@ -276,6 +372,7 @@ function App() {
   const [speed, setSpeed] = useState(850)
   const [showHeat, setShowHeat] = useState(true)
   const [cursor, setCursor] = useState(0)
+  const [compileResult, setCompileResult] = useState<CompileResult>(() => compileCheck(sampleCode, 'JavaScript'))
   const steps = useMemo(() => buildSteps(code, language), [code, language])
   const active = steps[Math.min(activeIndex, steps.length - 1)]
   const lines = code.split('\n')
@@ -295,6 +392,7 @@ function App() {
   useEffect(() => {
     setActiveIndex(0)
     setPlaying(false)
+    setCompileResult(compileCheck(code, language))
   }, [code, language])
 
   useEffect(() => {
@@ -320,6 +418,19 @@ function App() {
     } else {
       setCode(sampleCode)
     }
+  }
+
+  function runCompileAndPlay() {
+    const result = compileCheck(code, language)
+    setCompileResult(result)
+    if (result.ok) {
+      setActiveIndex(0)
+      setPlaying(true)
+      return
+    }
+    setPlaying(false)
+    const failedStepIndex = steps.findIndex(step => step.line === result.errorLine)
+    setActiveIndex(Math.max(0, failedStepIndex === -1 ? result.checkedUntilLine - 1 : failedStepIndex))
   }
 
   function updateEditor(nextCode: string, nextCursor: number) {
@@ -402,10 +513,14 @@ function App() {
           실행된 줄 흐름 표시
         </label>
         <div className="run-buttons">
-          <button onClick={() => setPlaying(value => !value)}>{playing ? '일시정지' : '재생'}</button>
+          <button onClick={playing ? () => setPlaying(false) : runCompileAndPlay}>{playing ? '일시정지' : '컴파일 후 실행'}</button>
           <button onClick={() => setActiveIndex(index => Math.max(0, index - 1))}>이전 줄</button>
           <button onClick={() => setActiveIndex(index => Math.min(steps.length - 1, index + 1))}>다음 줄</button>
           <button onClick={() => setActiveIndex(0)}>처음</button>
+        </div>
+        <div className={`compile-status ${compileResult.ok ? 'ok' : 'error'}`}>
+          <strong>{compileResult.ok ? '컴파일 통과' : `${compileResult.errorLine}번 줄 에러`}</strong>
+          <p>{compileResult.message}</p>
         </div>
       </aside>
 
@@ -440,8 +555,10 @@ function App() {
               {lines.map((line, index) => {
                 const lineNumber = index + 1
                 const passed = showHeat && steps.slice(0, activeIndex + 1).some(step => step.line === lineNumber)
+                const failed = !compileResult.ok && compileResult.errorLine === lineNumber
+                const checked = !compileResult.ok && lineNumber <= compileResult.checkedUntilLine
                 return (
-                  <div className={`code-line ${active?.line === lineNumber ? 'active' : ''} ${passed ? 'passed' : ''}`} key={`${lineNumber}-${line}`}>
+                  <div className={`code-line ${active?.line === lineNumber ? 'active' : ''} ${passed || checked ? 'passed' : ''} ${failed ? 'failed' : ''}`} key={`${lineNumber}-${line}`}>
                     <span>{lineNumber}</span>
                     <code>{line || ' '}</code>
                   </div>
@@ -496,11 +613,17 @@ function App() {
             </div>
           </section>
           <div className="stage-card current">
-            <div className="phase-chip">{phaseLabel[active?.phase || 'tokenize']}</div>
-            <h2>{active?.title || '대기 중'}</h2>
-            <p>{active?.detail || '코드를 입력하고 재생을 누르세요.'}</p>
+            <div className={`phase-chip ${compileResult.ok ? '' : 'error'}`}>{compileResult.ok ? phaseLabel[active?.phase || 'tokenize'] : '컴파일 실패'}</div>
+            <h2>{compileResult.ok ? active?.title || '대기 중' : `${compileResult.errorLine}번 줄에서 멈춤`}</h2>
+            <p>{compileResult.ok ? active?.detail || '코드를 입력하고 재생을 누르세요.' : compileResult.message}</p>
+            {!compileResult.ok && (
+              <div className="fix-panel">
+                <strong>수정 제안</strong>
+                <p>{compileResult.fix}</p>
+              </div>
+            )}
             <div className="progress-track">
-              <div style={{ width: `${((activeIndex + 1) / Math.max(steps.length, 1)) * 100}%` }} />
+              <div className={compileResult.ok ? '' : 'error'} style={{ width: `${((activeIndex + 1) / Math.max(steps.length, 1)) * 100}%` }} />
             </div>
           </div>
           <div className="runtime-grid">

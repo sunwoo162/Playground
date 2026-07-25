@@ -131,6 +131,37 @@ input[type='range'] {
   gap: 8px;
 }
 
+.compile-status {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid #2d5a43;
+  border-radius: 8px;
+  background: #15241f;
+}
+
+.compile-status.error {
+  border-color: #743338;
+  background: #2a171a;
+}
+
+.compile-status strong {
+  color: #a6f3c8;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.compile-status.error strong {
+  color: #ffb4b6;
+}
+
+.compile-status p {
+  margin: 0;
+  color: #b7bfcc;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .workspace {
   display: grid;
   grid-template-columns: minmax(390px, 0.9fr) minmax(500px, 1.1fr);
@@ -272,6 +303,12 @@ input[type='range'] {
 .code-line.active {
   background: rgba(88, 101, 242, 0.28);
   box-shadow: inset 4px 0 0 #23d18b;
+  color: #ffffff;
+}
+
+.code-line.failed {
+  background: rgba(242, 63, 66, 0.2);
+  box-shadow: inset 4px 0 0 #f23f42;
   color: #ffffff;
 }
 
@@ -692,6 +729,11 @@ input[type='range'] {
   font-weight: 950;
 }
 
+.phase-chip.error {
+  background: #4b2025;
+  color: #ffb4b6;
+}
+
 .stage-card h2 {
   margin-bottom: 8px;
   font-size: 24px;
@@ -721,6 +763,30 @@ input[type='range'] {
   border-radius: inherit;
   background: #23d18b;
   transition: width 180ms ease;
+}
+
+.progress-track div.error {
+  background: #f23f42;
+}
+
+.fix-panel {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #743338;
+  border-radius: 8px;
+  background: #24171a;
+}
+
+.fix-panel strong {
+  color: #ffb4b6;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.fix-panel p {
+  margin: 0;
 }
 
 .runtime-grid {
