@@ -1,8 +1,8 @@
 :root {
-  color-scheme: light;
+  color-scheme: dark;
   font-family: Inter, Pretendard, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: #f8fafc;
-  color: #111827;
+  background: #070a10;
+  color: #f8fafc;
 }
 
 * {
@@ -12,7 +12,9 @@
 body {
   margin: 0;
   min-width: 320px;
-  background: #f8fafc;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(145, 209, 138, 0.12), transparent 30rem),
+    #070a10;
 }
 
 button,
@@ -271,47 +273,57 @@ input:focus {
   }
 }
 
-/* White mode override */
-.app-header,
-.panel,
-.watch-item,
-.run-row,
-.status-card {
-  border-color: #d9e1ec;
+/* Imweb-style light mode override */
+[data-theme="light"] {
+  color-scheme: light;
   background: #ffffff;
-  color: #111827;
-  box-shadow: 0 12px 30px rgba(15,23,42,.07);
+  color: #15181e;
 }
 
-.back-link,
-.btn {
-  border-color: #d9e1ec;
+[data-theme="light"] body {
   background: #ffffff;
-  color: #111827;
 }
 
-.btn.primary {
-  border-color: #2563eb;
-  background: #2563eb;
+[data-theme="light"] .app-header,
+[data-theme="light"] .panel,
+[data-theme="light"] .watch-item,
+[data-theme="light"] .run-row,
+[data-theme="light"] .status-card {
+  border-color: #dbdee3;
+  background: #ffffff;
+  color: #15181e;
+  box-shadow: none;
+}
+
+[data-theme="light"] .back-link,
+[data-theme="light"] .btn {
+  border-color: #dbdee3;
+  background: #ffffff;
+  color: #15181e;
+}
+
+[data-theme="light"] .btn.primary {
+  border-color: #15181e;
+  background: #15181e;
   color: #fff;
 }
 
-.btn.muted,
-.app-header p,
-.detail-header p,
-.empty,
-.status-card span,
-.run-row small {
-  color: #64748b;
+[data-theme="light"] .btn.muted,
+[data-theme="light"] .app-header p,
+[data-theme="light"] .detail-header p,
+[data-theme="light"] .empty,
+[data-theme="light"] .status-card span,
+[data-theme="light"] .run-row small {
+  color: #717680;
 }
 
-input {
-  border-color: #d9e1ec;
-  background: #f8fafc;
-  color: #111827;
+[data-theme="light"] input {
+  border-color: #dbdee3;
+  background: #f8f9fb;
+  color: #15181e;
 }
 
-.watch-item.active {
-  border-color: #2563eb;
-  background: #eff6ff;
+[data-theme="light"] .watch-item.active {
+  border-color: #00b9ff;
+  background: rgba(0, 185, 255, 0.1);
 }

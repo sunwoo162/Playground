@@ -57,7 +57,7 @@ button {
   padding: 84px 32px 32px;
   overflow-y: auto;
   background:
-    linear-gradient(90deg, rgba(248,250,252,.94), rgba(248,250,252,.64)),
+    linear-gradient(90deg, rgba(3,4,5,.92), rgba(3,4,5,.58)),
     var(--panorama-image);
   background-size: cover, 220% auto;
   background-position: center, center;
@@ -69,7 +69,7 @@ button {
   inset: 0;
   background:
     radial-gradient(circle at 68% 28%, color-mix(in srgb, var(--place-tint) 18%, transparent), transparent 24rem),
-    rgba(255,255,255,.22);
+    rgba(0,0,0,.22);
   pointer-events: none;
 }
 
@@ -85,7 +85,7 @@ button {
   position: fixed;
   top: 24px;
   left: 24px;
-  color: #334155;
+  color: #f8fafc;
   text-decoration: none;
   font-weight: 900;
 }
@@ -105,7 +105,7 @@ button {
 .intro h1 {
   margin: 10px 0 12px;
   max-width: 760px;
-  color: #111827;
+  color: #f8fafc;
   font-size: clamp(2.05rem, 4.8vw, 4rem);
   line-height: 1.02;
   letter-spacing: 0;
@@ -115,7 +115,7 @@ button {
 .intro p {
   max-width: 620px;
   margin: 0;
-  color: #475569;
+  color: rgba(248,250,252,.72);
   font-size: .98rem;
   line-height: 1.7;
 }
@@ -132,10 +132,10 @@ button {
 .place-cards button {
   min-height: 126px;
   padding: 16px;
-  border: 1px solid #d9e1ec;
+  border: 1px solid rgba(255,255,255,.18);
   border-radius: 8px;
-  background: rgba(255,255,255,.86);
-  color: #111827;
+  background: rgba(10,12,15,.72);
+  color: #f8fafc;
   text-align: left;
   display: grid;
   gap: 8px;
@@ -145,7 +145,7 @@ button {
 
 .place-cards button.active {
   border-color: #b45309;
-  background: color-mix(in srgb, var(--place-tint) 18%, #fff);
+  background: color-mix(in srgb, var(--place-tint) 22%, rgba(10,12,15,.88));
 }
 
 .place-cards b {
@@ -157,7 +157,7 @@ button {
 }
 
 .place-cards small {
-  color: #64748b;
+  color: rgba(248,250,252,.62);
   line-height: 1.45;
 }
 
@@ -170,9 +170,9 @@ button {
   justify-content: space-between;
   gap: 18px;
   padding: 16px;
-  border: 1px solid #d9e1ec;
+  border: 1px solid rgba(255,255,255,.18);
   border-radius: 8px;
-  background: rgba(255,255,255,.9);
+  background: rgba(10,12,15,.78);
   backdrop-filter: blur(16px);
 }
 
@@ -182,7 +182,42 @@ button {
 }
 
 .start-panel span {
-  color: #64748b;
+  color: rgba(248,250,252,.62);
+}
+
+[data-theme="light"] .place-select {
+  background:
+    linear-gradient(90deg, rgba(255,255,255,.94), rgba(248,249,251,.64)),
+    var(--panorama-image);
+}
+
+[data-theme="light"] .place-select::before {
+  background:
+    radial-gradient(circle at 68% 28%, color-mix(in srgb, var(--place-tint) 18%, transparent), transparent 24rem),
+    rgba(255,255,255,.22);
+}
+
+[data-theme="light"] .back-link,
+[data-theme="light"] .intro h1,
+[data-theme="light"] .place-cards button {
+  color: #15181e;
+}
+
+[data-theme="light"] .intro p,
+[data-theme="light"] .place-cards small,
+[data-theme="light"] .start-panel span {
+  color: #717680;
+}
+
+[data-theme="light"] .place-cards button,
+[data-theme="light"] .start-panel {
+  border-color: #dbdee3;
+  background: rgba(255,255,255,.9);
+}
+
+[data-theme="light"] .place-cards button.active {
+  border-color: #00b9ff;
+  background: rgba(0,185,255,.1);
 }
 
 .start-panel button,
