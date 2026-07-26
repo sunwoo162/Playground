@@ -10,7 +10,7 @@ import trainPanorama from './assets/train-panorama.png'
 import PanoramaViewer from './PanoramaViewer'
 
 type PlaceId = 'study-cafe' | 'classroom' | 'cafe' | 'library' | 'night-reading' | 'park' | 'train' | 'rain-cafe'
-type ScreenId = 'notion' | 'pdf' | 'chatgpt' | 'youtube' | 'vscode' | 'ide' | 'docs'
+type ScreenId = 'planner' | 'notion' | 'pdf' | 'chatgpt' | 'youtube' | 'vscode' | 'ide' | 'docs'
 type TimeId = 'morning' | 'noon' | 'evening' | 'dawn'
 type WeatherId = 'sunny' | 'rain' | 'snow' | 'cloudy'
 
@@ -34,6 +34,7 @@ const PLACES: Place[] = [
 ]
 
 const SCREENS: Record<ScreenId, { label: string; title: string; items: string[] }> = {
+  planner: { label: 'Planner', title: '스터디 플래너', items: ['오늘 목표 확인', '타이머 시작', '공부 기록 저장'] },
   notion: { label: 'Notion', title: '오늘 공부 대시보드', items: ['React Query 3시간', '코테 2문제', '컴활 필기 정리'] },
   pdf: { label: 'PDF', title: '강의자료.pdf', items: ['18쪽 핵심 개념', '예제 4번 풀이', '오답 표시'] },
   chatgpt: { label: 'ChatGPT', title: 'AI 튜터', items: ['시간복잡도 질문', '개념 요약', '암기 문장 생성'] },
@@ -62,7 +63,7 @@ function clamp(value: number, min: number, max: number) {
 
 function App() {
   const [placeId, setPlaceId] = useState<PlaceId>('study-cafe')
-  const [screenId, setScreenId] = useState<ScreenId>('notion')
+  const [screenId, setScreenId] = useState<ScreenId>('planner')
   const [timeId, setTimeId] = useState<TimeId>('evening')
   const [weatherId, setWeatherId] = useState<WeatherId>('sunny')
   const [entered, setEntered] = useState(false)
@@ -242,15 +243,25 @@ function App() {
                     <strong>{screen.label}</strong>
                   </div>
                   <div className="web-page">
-                    <div className="cursor" />
-                    <header>
-                      <strong>{screen.title}</strong>
-                      <em>{timeText}</em>
-                    </header>
-                    <div className="screen-list">
-                      {screen.items.map((item) => <span key={item}>{item}</span>)}
-                    </div>
-                    <button onClick={leaveRoom}>나가기</button>
+                    {screenId === 'planner' ? (
+                      <iframe
+                        className="planner-frame"
+                        src="/apps/study-planner/"
+                        title="스터디 플래너"
+                      />
+                    ) : (
+                      <>
+                        <div className="cursor" />
+                        <header>
+                          <strong>{screen.title}</strong>
+                          <em>{timeText}</em>
+                        </header>
+                        <div className="screen-list">
+                          {screen.items.map((item) => <span key={item}>{item}</span>)}
+                        </div>
+                        <button onClick={leaveRoom}>나가기</button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
