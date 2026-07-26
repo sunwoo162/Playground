@@ -1,26 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import cafeCubemap from './assets/cafe-cubemap.png'
-import classroomCubemap from './assets/classroom-cubemap.png'
-import libraryCubemap from './assets/library-cubemap.png'
-import nightReadingCubemap from './assets/night-reading-cubemap.png'
-import parkCubemap from './assets/park-cubemap.png'
-import rainCafeCubemap from './assets/rain-cafe-cubemap.png'
-import studyCafeBack from './assets/study-cafe-back.png'
-import studyCafeDown from './assets/study-cafe-down.png'
-import studyCafeFront from './assets/study-cafe-front.png'
-import studyCafeLeft from './assets/study-cafe-left.png'
-import studyCafeRight from './assets/study-cafe-right.png'
-import studyCafeUp from './assets/study-cafe-up.png'
-import trainCubemap from './assets/train-cubemap.png'
+import cafePanorama from './assets/cafe-panorama.png'
+import classroomPanorama from './assets/classroom-panorama.png'
+import libraryPanorama from './assets/library-panorama.png'
+import nightReadingPanorama from './assets/night-reading-panorama.png'
+import parkPanorama from './assets/park-panorama.png'
+import rainCafePanorama from './assets/rain-cafe-panorama.png'
+import studyCafePanorama from './assets/study-cafe-panorama.png'
+import trainPanorama from './assets/train-panorama.png'
 
 type PlaceId = 'study-cafe' | 'classroom' | 'cafe' | 'library' | 'night-reading' | 'park' | 'train' | 'rain-cafe'
 type ScreenId = 'notion' | 'pdf' | 'chatgpt' | 'youtube' | 'vscode' | 'ide' | 'docs'
 type TimeId = 'morning' | 'noon' | 'evening' | 'dawn'
 type WeatherId = 'sunny' | 'rain' | 'snow' | 'cloudy'
-type SceneDirection = 'front' | 'right' | 'back' | 'left' | 'up' | 'down'
-type SceneAsset =
-  | { type: 'image'; src: string }
-  | { type: 'sheet'; src: string; position: string }
 
 interface Place {
   id: PlaceId
@@ -53,46 +44,19 @@ const SCREENS: Record<ScreenId, { label: string; title: string; items: string[] 
 
 const TIMES: Record<TimeId, string> = { morning: '아침', noon: '점심', evening: '저녁', dawn: '새벽' }
 const WEATHER: Record<WeatherId, string> = { sunny: '맑음', rain: '비', snow: '눈', cloudy: '흐림' }
-const DIRECTIONS: SceneDirection[] = ['front', 'right', 'back', 'left', 'up', 'down']
-const SHEET_POSITIONS: Record<SceneDirection, string> = {
-  front: '0% 0%',
-  right: '50% 0%',
-  back: '100% 0%',
-  left: '0% 100%',
-  up: '50% 100%',
-  down: '100% 100%',
-}
-const STUDY_CAFE_IMAGES: Record<SceneDirection, string> = {
-  front: studyCafeFront,
-  right: studyCafeRight,
-  back: studyCafeBack,
-  left: studyCafeLeft,
-  up: studyCafeUp,
-  down: studyCafeDown,
-}
-const PLACE_SHEETS: Partial<Record<PlaceId, string>> = {
-  classroom: classroomCubemap,
-  cafe: cafeCubemap,
-  library: libraryCubemap,
-  'night-reading': nightReadingCubemap,
-  park: parkCubemap,
-  train: trainCubemap,
-  'rain-cafe': rainCafeCubemap,
+const PLACE_PANORAMAS: Record<PlaceId, string> = {
+  'study-cafe': studyCafePanorama,
+  classroom: classroomPanorama,
+  cafe: cafePanorama,
+  library: libraryPanorama,
+  'night-reading': nightReadingPanorama,
+  park: parkPanorama,
+  train: trainPanorama,
+  'rain-cafe': rainCafePanorama,
 }
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value))
-}
-
-function yawDistance(a: number, b: number) {
-  const diff = Math.abs(a - b) % 360
-  return Math.min(diff, 360 - diff)
-}
-
-function getSceneAsset(placeId: PlaceId, direction: SceneDirection): SceneAsset {
-  const sheet = PLACE_SHEETS[placeId]
-  if (sheet) return { type: 'sheet', src: sheet, position: SHEET_POSITIONS[direction] }
-  return { type: 'image', src: STUDY_CAFE_IMAGES[direction] }
 }
 
 function App() {
@@ -115,37 +79,14 @@ function App() {
 
   const place = PLACES.find((item) => item.id === placeId) ?? PLACES[0]
   const screen = SCREENS[screenId]
-  const selectAsset = getSceneAsset(placeId, 'front')
+  const panorama = PLACE_PANORAMAS[placeId]
   const wrappedYaw = ((viewYaw % 360) + 360) % 360
   const frontDistance = Math.min(Math.abs(wrappedYaw), Math.abs(360 - wrappedYaw))
-  const sceneDirection: SceneDirection = viewPitch > 32
-    ? 'up'
-    : viewPitch < -34
-      ? 'down'
-      : wrappedYaw >= 315 || wrappedYaw < 45
-        ? 'front'
-        : wrappedYaw < 135
-          ? 'right'
-          : wrappedYaw < 225
-            ? 'back'
-            : 'left'
-  const localYaw = (((wrappedYaw + 45) % 90) - 45)
-  const laptopFocus = sceneDirection === 'front'
+  const laptopFocus = frontDistance < 54 && Math.abs(viewPitch) < 38
     ? Math.max(0, 1 - frontDistance / 42) * Math.max(0, 1 - Math.abs(viewPitch) / 34)
     : 0
-  const viewX = localYaw * -0.22
-  const viewY = clamp(viewPitch, -48, 56) * 0.32
-  const upWeight = clamp((viewPitch - 18) / 28, 0, 1)
-  const downWeight = clamp((-viewPitch - 20) / 28, 0, 1)
-  const levelWeight = 1 - Math.max(upWeight, downWeight)
-  const sceneWeights: Record<SceneDirection, number> = {
-    front: levelWeight * clamp(1 - yawDistance(wrappedYaw, 0) / 72, 0, 1),
-    right: levelWeight * clamp(1 - yawDistance(wrappedYaw, 90) / 72, 0, 1),
-    back: levelWeight * clamp(1 - yawDistance(wrappedYaw, 180) / 72, 0, 1),
-    left: levelWeight * clamp(1 - yawDistance(wrappedYaw, 270) / 72, 0, 1),
-    up: upWeight,
-    down: downWeight,
-  }
+  const panoramaX = 50 - wrappedYaw / 360 * 100
+  const panoramaY = clamp(50 + viewPitch * 0.72, 6, 94)
 
   useEffect(() => {
     let frameId = 0
@@ -241,15 +182,13 @@ function App() {
     <main
       className={`focus-room is-${placeId} is-${timeId} is-${weatherId} ${entered ? 'entered' : 'selecting'}`}
       style={{
-        '--view-x': `${viewX.toFixed(2)}vw`,
-        '--view-y': `${viewY.toFixed(2)}vh`,
         '--pitch': `${viewPitch.toFixed(2)}deg`,
         '--yaw': `${viewYaw.toFixed(2)}deg`,
         '--laptop-focus': laptopFocus.toFixed(3),
         '--place-tint': place.tint,
-        '--select-image': `url(${selectAsset.src})`,
-        '--select-position': selectAsset.type === 'sheet' ? selectAsset.position : 'center',
-        '--select-size': selectAsset.type === 'sheet' ? '300% 200%' : 'cover',
+        '--panorama-image': `url(${panorama})`,
+        '--panorama-x': `${panoramaX.toFixed(3)}%`,
+        '--panorama-y': `${panoramaY.toFixed(3)}%`,
       } as React.CSSProperties}
     >
       {!entered && (
@@ -290,26 +229,13 @@ function App() {
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerUp}
           >
-            {DIRECTIONS.map((direction) => {
-              const asset = getSceneAsset(placeId, direction)
-              return (
-                <div
-                  key={`${placeId}-${direction}`}
-                  className={`scene-layer looking-${direction}`}
-                  style={{
-                    '--scene-opacity': sceneWeights[direction].toFixed(3),
-                    '--scene-image': `url(${asset.src})`,
-                    '--scene-position': asset.type === 'sheet' ? asset.position : 'center',
-                    '--scene-size': asset.type === 'sheet' ? '300% 200%' : 'cover',
-                  } as React.CSSProperties}
-                />
-              )
-            })}
+            <div className="panorama-layer panorama-a" />
+            <div className="panorama-layer panorama-b" />
             <div className="scene-grade" />
             <div className="weather-overlay" />
             <div className="look-shadow" />
 
-            {sceneDirection === 'front' && (
+            {laptopFocus > 0.02 && (
               <div className="screen-overlay">
                 <div className="fake-browser">
                   <div className="browser-top">
