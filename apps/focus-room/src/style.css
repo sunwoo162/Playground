@@ -21,8 +21,6 @@ body {
   min-width: 320px;
   min-height: 100vh;
   overflow: hidden;
-  position: fixed;
-  inset: 0;
 }
 
 button,
@@ -52,9 +50,12 @@ button {
 .place-select {
   min-height: 100vh;
   display: grid;
-  align-content: center;
-  gap: 24px;
-  padding: 32px;
+  grid-template-columns: minmax(320px, 0.82fr) minmax(520px, 1.18fr);
+  grid-template-rows: auto 1fr auto;
+  align-items: center;
+  gap: 22px 32px;
+  padding: 84px 32px 32px;
+  overflow-y: auto;
   background:
     linear-gradient(90deg, rgba(0,0,0,.68), rgba(0,0,0,.16)),
     var(--panorama-image);
@@ -90,7 +91,9 @@ button {
 }
 
 .intro {
-  width: min(790px, 100%);
+  width: min(760px, 100%);
+  grid-column: 1;
+  align-self: end;
 }
 
 .intro span {
@@ -103,8 +106,8 @@ button {
   margin: 10px 0 12px;
   max-width: 760px;
   color: #fff;
-  font-size: clamp(2.4rem, 6vw, 5.8rem);
-  line-height: .96;
+  font-size: clamp(2.65rem, 5.8vw, 5.65rem);
+  line-height: .98;
   letter-spacing: 0;
   text-shadow: 0 18px 46px rgba(0,0,0,.55);
 }
@@ -118,15 +121,17 @@ button {
 }
 
 .place-cards {
-  width: min(1120px, 100%);
+  width: 100%;
+  grid-column: 2;
+  grid-row: 1 / span 3;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
 .place-cards button {
-  min-height: 148px;
-  padding: 18px;
+  min-height: 126px;
+  padding: 16px;
   border: 1px solid rgba(255,255,255,.18);
   border-radius: 8px;
   background: rgba(8, 10, 12, .62);
@@ -144,7 +149,7 @@ button {
 }
 
 .place-cards b {
-  font-size: 1.5rem;
+  font-size: 1.35rem;
 }
 
 .place-cards strong {
@@ -158,6 +163,8 @@ button {
 
 .start-panel {
   width: min(720px, 100%);
+  grid-column: 1;
+  align-self: start;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -549,8 +556,17 @@ select {
 
 @media (max-width: 860px) {
   .place-select {
+    grid-template-columns: 1fr;
     padding: 78px 16px 24px;
     align-content: start;
+    align-items: start;
+  }
+
+  .intro,
+  .place-cards,
+  .start-panel {
+    grid-column: 1;
+    grid-row: auto;
   }
 
   .place-cards {
