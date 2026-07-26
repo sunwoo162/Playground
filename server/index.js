@@ -1106,6 +1106,12 @@ app.get('/apps/todo/*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'apps', 'todo', 'dist', 'index.html'));
 });
 
+// Day Schedule 앱
+app.use('/apps/day-schedule', express.static(path.join(__dirname, '..', 'apps', 'day-schedule', 'dist')));
+app.get('/apps/day-schedule/*', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'apps', 'day-schedule', 'dist', 'index.html'));
+});
+
 // Cornell Notes 앱
 app.use('/apps/cornell-notes', express.static(path.join(__dirname, '..', 'apps', 'cornell-notes', 'dist')));
 app.get('/apps/cornell-notes/*', (req, res) => {

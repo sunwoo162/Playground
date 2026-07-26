@@ -92,6 +92,14 @@ const APPS: AppItem[] = [
     color: '#0f766e',
   },
   {
+    id: 'day-schedule',
+    title: '하루 시간표',
+    description: '오늘 하루를 시간 블록으로 계획하고 실행 여부를 체크',
+    emoji: '🗓️',
+    url: '/apps/day-schedule/',
+    color: '#2563eb',
+  },
+  {
     id: 'dev-notes',
     title: '개발자 노트',
     description: '프로젝트별 기능명세서, API 명세서, 사용자 분석을 한 곳에',
