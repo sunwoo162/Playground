@@ -8,19 +8,16 @@ import { StudyTimerBadge } from './components/StudyTimerBadge';
 import { useAuth } from './hooks/useAuth';
 import './App.css';
 
-type Theme = 'dark' | 'light';
 const THEME_KEY = 'playground-theme';
-const getTheme = (): Theme => localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark';
 
 function App() {
   const authed = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('failures');
-  const [theme, setTheme] = useState<Theme>(getTheme);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    localStorage.setItem(THEME_KEY, theme);
-  }, [theme]);
+    document.documentElement.dataset.theme = 'dark';
+    localStorage.removeItem(THEME_KEY);
+  }, []);
 
   if (!authed) return null;
 
@@ -33,9 +30,6 @@ function App() {
           <p className="app-subtitle">성공이 아닌, 진짜 나를 기록하는 곳</p>
         </div>
         <StudyTimerBadge />
-        <button className="theme-toggle" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} aria-label="테마 전환">
-          {theme === 'dark' ? '☀️' : '🌙'}
-        </button>
       </header>
 
       <TabNav activeTab={activeTab} onTabChange={setActiveTab} />

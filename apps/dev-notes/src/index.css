@@ -13,17 +13,6 @@
   --shadow: 0 14px 36px rgba(0,0,0,0.24);
 }
 
-[data-theme="light"] {
-  --bg: #f4f4f4;
-  --surface: #f8f8f8;
-  --surface-2: #ffffff;
-  --border: #bbbbbb;
-  --text: #222222;
-  --text-muted: #696969;
-  --accent: #00dd99;
-  --shadow: none;
-}
-
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {

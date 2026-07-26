@@ -6,7 +6,6 @@ import { StudyTimerBadge } from './StudyTimerBadge';
 import { useAuth } from './useAuth';
 
 type View = 'list' | 'edit' | 'view' | 'subjects' | 'repo' | 'detailOnly';
-type Theme = 'dark' | 'light';
 type MarkdownAction = {
   label: string;
   title: string;
@@ -22,7 +21,6 @@ type VelogPublishResult = {
   slug?: string;
 };
 const THEME_KEY = 'playground-theme';
-const getTheme = (): Theme => localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark';
 const SHARE_HASH_PREFIX = '#share=';
 const DETAIL_HASH_PREFIX = '#detail=';
 
@@ -178,7 +176,6 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [newSubjectName, setNewSubjectName] = useState('');
   const [newSubjectColor, setNewSubjectColor] = useState(COLORS[0]);
-  const [theme, setTheme] = useState<Theme>(getTheme);
   const [repoSettings, setRepoSettings] = useState<GitRepoSettings>(() => getGitRepoSettings());
   const [repoDraft, setRepoDraft] = useState<GitRepoSettings>(() => getGitRepoSettings());
   const [velogSettings, setVelogSettings] = useState<VelogSettings>(() => getVelogSettings());
@@ -189,9 +186,9 @@ export default function App() {
   const [shareStatus, setShareStatus] = useState('');
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    localStorage.setItem(THEME_KEY, theme);
-  }, [theme]);
+    document.documentElement.dataset.theme = 'dark';
+    localStorage.removeItem(THEME_KEY);
+  }, []);
 
   useEffect(() => {
     if (!authed) return;
@@ -501,9 +498,6 @@ export default function App() {
           <button className={`nav-btn ${view === 'repo' ? 'active' : ''}`} onClick={openRepoSettings}>GitHub / Velog</button>
         </nav>
         <StudyTimerBadge />
-        <button className="theme-toggle" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} aria-label="테마 전환">
-          {theme === 'dark' ? '☀️' : '🌙'}
-        </button>
       </header>
 
       {view === 'detailOnly' && selected ? (

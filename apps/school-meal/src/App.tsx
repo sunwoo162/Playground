@@ -54,7 +54,6 @@ interface SavedSchool {
 }
 
 const STORAGE_KEY = 'school-meal-settings';
-type Theme = 'dark' | 'light';
 type MainTab = 'meal' | 'timetable' | 'schedule';
 const THEME_KEY = 'playground-theme';
 const ELEMENTARY_GRADES = ['1', '2', '3', '4', '5', '6'];
@@ -101,8 +100,6 @@ const ALLERGEN_CATEGORIES = [
   { id: '18', label: '조개류', codes: ['18'] },
   { id: '19', label: '잣', codes: ['19'] },
 ];
-const getTheme = (): Theme => localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark';
-
 function padDatePart(value: number): string {
   return String(value).padStart(2, '0');
 }
@@ -230,7 +227,6 @@ export default function App() {
   const [notifPermission, setNotifPermission] = useState(Notification.permission);
   const [selectedDate, setSelectedDate] = useState<Date>(defaultMealTarget.date);
   const [selectedMealType, setSelectedMealType] = useState<string>(defaultMealTarget.mealType);
-  const [theme, setTheme] = useState<Theme>(getTheme);
   const [extensionStatus, setExtensionStatus] = useState('');
   const alertTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const gradeOptions = saved ? getGradeOptions(saved.schoolType) : SECONDARY_GRADES;
@@ -240,9 +236,9 @@ export default function App() {
     : [];
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    localStorage.setItem(THEME_KEY, theme);
-  }, [theme]);
+    document.documentElement.dataset.theme = 'dark';
+    localStorage.removeItem(THEME_KEY);
+  }, []);
 
   useEffect(() => {
     if (isCompact) {
@@ -510,9 +506,6 @@ export default function App() {
           )}
           <button className="btn-primary" onClick={() => setView(view === 'search' ? 'main' : 'search')}>
             {view === 'search' ? '취소' : '🔍 학교 변경'}
-          </button>
-          <button className="theme-toggle" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} aria-label="테마 전환">
-            {theme === 'dark' ? '☀️' : '🌙'}
           </button>
         </div>
       </header>}

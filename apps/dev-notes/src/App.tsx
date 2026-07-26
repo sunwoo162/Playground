@@ -7,25 +7,18 @@ import { StudyTimerBadge } from './components/StudyTimerBadge';
 import { useAuth } from './hooks/useAuth';
 import './App.css';
 
-type Theme = 'dark' | 'light';
 const THEME_KEY = 'playground-theme';
-const getTheme = (): Theme => localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark';
-
-function ThemeToggle({ theme, onToggle }: { theme: Theme; onToggle: () => void }) {
-  return <button className="theme-toggle" onClick={onToggle} aria-label="테마 전환">{theme === 'dark' ? '☀️' : '🌙'}</button>;
-}
 
 function App() {
   const authed = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [selected, setSelected] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
-  const [theme, setTheme] = useState<Theme>(getTheme);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    localStorage.setItem(THEME_KEY, theme);
-  }, [theme]);
+    document.documentElement.dataset.theme = 'dark';
+    localStorage.removeItem(THEME_KEY);
+  }, []);
 
   useEffect(() => {
     if (!authed) return;
@@ -50,7 +43,6 @@ function App() {
             <p className="app-shell-subtitle">프로젝트별 기능명세서, API 명세서, 사용자 분석</p>
           </div>
           <StudyTimerBadge />
-          <ThemeToggle theme={theme} onToggle={() => setTheme(theme === 'dark' ? 'light' : 'dark')} />
         </header>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, color: '#888' }}>
           불러오는 중...
@@ -68,7 +60,6 @@ function App() {
             <h1 className="app-shell-title">📒 개발자 노트</h1>
           </div>
           <StudyTimerBadge />
-          <ThemeToggle theme={theme} onToggle={() => setTheme(theme === 'dark' ? 'light' : 'dark')} />
         </header>
         <div className="app-shell-body">
           <ProjectDetail
@@ -90,7 +81,6 @@ function App() {
           <p className="app-shell-subtitle">프로젝트별 기능명세서, API 명세서, 사용자 분석</p>
         </div>
         <StudyTimerBadge />
-        <ThemeToggle theme={theme} onToggle={() => setTheme(theme === 'dark' ? 'light' : 'dark')} />
       </header>
       <div className="app-shell-body">
         <ProjectList

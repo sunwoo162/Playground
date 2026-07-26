@@ -187,11 +187,6 @@ const APPS: AppItem[] = [
 
 const FAVORITES_KEY = 'playground-favorites';
 const THEME_KEY = 'playground-theme';
-type Theme = 'dark' | 'light';
-
-function getTheme(): Theme {
-  return localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark';
-}
 
 function getFavorites(): string[] {
   const raw = localStorage.getItem(FAVORITES_KEY);
@@ -211,7 +206,6 @@ function App() {
   const [tokenExpiry, setTokenExpiry] = useState<Date | null>(null);
   const [timeLeft, setTimeLeft] = useState<string>('');
   const [studyElapsed, setStudyElapsed] = useState<number | null>(null);
-  const [theme, setTheme] = useState<Theme>(getTheme);
   const [showFeatureRequest, setShowFeatureRequest] = useState(false);
   const [featureRequestText, setFeatureRequestText] = useState('');
   const [featureRequestStatus, setFeatureRequestStatus] = useState('');
@@ -227,9 +221,9 @@ function App() {
   const [loginRedirectApp, setLoginRedirectApp] = useState<AppItem | null>(null);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    localStorage.setItem(THEME_KEY, theme);
-  }, [theme]);
+    document.documentElement.dataset.theme = 'dark';
+    localStorage.removeItem(THEME_KEY);
+  }, []);
 
   useEffect(() => {
     fetch('/auth/me', { credentials: 'include' })
@@ -457,14 +451,6 @@ function App() {
           <p className="tagline">나만의 작은 웹앱 모음</p>
         </div>
         <div className="header-right">
-          <button
-            className="theme-toggle"
-            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-            aria-label="테마 전환"
-            title={theme === 'dark' ? '화이트 모드로 전환' : '다크 모드로 전환'}
-          >
-            {theme === 'dark' ? '☀️' : '🌙'}
-          </button>
           <button className="btn-feature-request" onClick={() => setPage('github')}>
             GitHub 관리
           </button>

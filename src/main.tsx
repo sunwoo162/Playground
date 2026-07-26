@@ -3,7 +3,8 @@ import { createRoot } from 'react-dom/client'
 import App from './App'
 import './index.css'
 
-document.documentElement.dataset.theme = localStorage.getItem('playground-theme') || 'dark'
+localStorage.removeItem('playground-theme')
+document.documentElement.dataset.theme = 'dark'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

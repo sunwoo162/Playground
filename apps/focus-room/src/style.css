@@ -185,41 +185,6 @@ button {
   color: rgba(248,250,252,.62);
 }
 
-[data-theme="light"] .place-select {
-  background:
-    linear-gradient(90deg, rgba(244,244,244,.94), rgba(248,248,248,.76)),
-    var(--panorama-image);
-}
-
-[data-theme="light"] .place-select::before {
-  background:
-    radial-gradient(circle at 68% 28%, color-mix(in srgb, var(--place-tint) 18%, transparent), transparent 24rem),
-    rgba(255,255,255,.22);
-}
-
-[data-theme="light"] .back-link,
-[data-theme="light"] .intro h1,
-[data-theme="light"] .place-cards button {
-  color: #222222;
-}
-
-[data-theme="light"] .intro p,
-[data-theme="light"] .place-cards small,
-[data-theme="light"] .start-panel span {
-  color: #62626a;
-}
-
-[data-theme="light"] .place-cards button,
-[data-theme="light"] .start-panel {
-  border-color: #bbbbbb;
-  background: rgba(248,248,248,.9);
-}
-
-[data-theme="light"] .place-cards button.active {
-  border-color: #00dd99;
-  background: rgba(0,221,153,.16);
-}
-
 .start-panel button,
 .hud button,
 .web-page button {

@@ -3,7 +3,8 @@ import ReactDOM from 'react-dom/client'
 import App from './App'
 import './style.css'
 
-document.documentElement.dataset.theme = localStorage.getItem('playground-theme') === 'light' ? 'light' : 'dark'
+localStorage.removeItem('playground-theme')
+document.documentElement.dataset.theme = 'dark'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

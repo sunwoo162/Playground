@@ -5,9 +5,7 @@ import { useAuth } from './useAuth';
 
 type View = 'list' | 'edit' | 'view' | 'settings';
 type Tab = 'my' | 'community';
-type Theme = 'dark' | 'light';
 const THEME_KEY = 'playground-theme';
-const getTheme = (): Theme => localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark';
 const BAEKJOONHUB_INSTALL_URL = 'https://chromewebstore.google.com/detail/ccammcjdkpgjmcpijpahlehmapgmphmk';
 const CTBOT_REPO_URL = 'https://github.com/sunwoo162/ctbot.git';
 
@@ -80,16 +78,15 @@ export default function App() {
   const [committing, setCommitting] = useState(false);
   const [commitResult, setCommitResult] = useState<{ url?: string; error?: string; message?: string } | null>(null);
   const [fetchingCode, setFetchingCode] = useState(false);
-  const [theme, setTheme] = useState<Theme>(getTheme);
   const [velogSettings, setVelogSettings] = useState<VelogSettings>(() => getVelogSettings());
   const [velogDraft, setVelogDraft] = useState<VelogSettings>(() => getVelogSettings());
   const [publishingVelog, setPublishingVelog] = useState(false);
   const [velogResult, setVelogResult] = useState<{ url?: string; error?: string } | null>(null);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    localStorage.setItem(THEME_KEY, theme);
-  }, [theme]);
+    document.documentElement.dataset.theme = 'dark';
+    localStorage.removeItem(THEME_KEY);
+  }, []);
 
   useEffect(() => {
     if (!authed) return;
@@ -305,9 +302,6 @@ export default function App() {
           </div>
         )}
         {view === 'edit' && <button className="btn-ghost" onClick={() => setView('list')}>취소</button>}
-        <button className="theme-toggle" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} aria-label="테마 전환">
-          {theme === 'dark' ? '☀️' : '🌙'}
-        </button>
       </header>
 
       {view === 'list' && (
