@@ -57,7 +57,7 @@ button {
   padding: 84px 32px 32px;
   overflow-y: auto;
   background:
-    linear-gradient(90deg, rgba(0,0,0,.68), rgba(0,0,0,.16)),
+    linear-gradient(90deg, rgba(248,250,252,.94), rgba(248,250,252,.64)),
     var(--panorama-image);
   background-size: cover, 220% auto;
   background-position: center, center;
@@ -68,8 +68,8 @@ button {
   position: fixed;
   inset: 0;
   background:
-    radial-gradient(circle at 68% 28%, color-mix(in srgb, var(--place-tint) 22%, transparent), transparent 24rem),
-    rgba(2,4,8,.48);
+    radial-gradient(circle at 68% 28%, color-mix(in srgb, var(--place-tint) 18%, transparent), transparent 24rem),
+    rgba(255,255,255,.22);
   pointer-events: none;
 }
 
@@ -85,7 +85,7 @@ button {
   position: fixed;
   top: 24px;
   left: 24px;
-  color: #e2e8f0;
+  color: #334155;
   text-decoration: none;
   font-weight: 900;
 }
@@ -97,7 +97,7 @@ button {
 }
 
 .intro span {
-  color: #ffd89a;
+  color: #b45309;
   font-weight: 900;
   font-size: .82rem;
 }
@@ -105,18 +105,18 @@ button {
 .intro h1 {
   margin: 10px 0 12px;
   max-width: 760px;
-  color: #fff;
-  font-size: clamp(2.65rem, 5.8vw, 5.65rem);
-  line-height: .98;
+  color: #111827;
+  font-size: clamp(2.05rem, 4.8vw, 4rem);
+  line-height: 1.02;
   letter-spacing: 0;
-  text-shadow: 0 18px 46px rgba(0,0,0,.55);
+  text-shadow: none;
 }
 
 .intro p {
   max-width: 620px;
   margin: 0;
-  color: #d8dee7;
-  font-size: 1.02rem;
+  color: #475569;
+  font-size: .98rem;
   line-height: 1.7;
 }
 
@@ -132,10 +132,10 @@ button {
 .place-cards button {
   min-height: 126px;
   padding: 16px;
-  border: 1px solid rgba(255,255,255,.18);
+  border: 1px solid #d9e1ec;
   border-radius: 8px;
-  background: rgba(8, 10, 12, .62);
-  color: #f8fafc;
+  background: rgba(255,255,255,.86);
+  color: #111827;
   text-align: left;
   display: grid;
   gap: 8px;
@@ -144,8 +144,8 @@ button {
 }
 
 .place-cards button.active {
-  border-color: #ffd89a;
-  background: color-mix(in srgb, var(--place-tint) 28%, rgba(8,10,12,.64));
+  border-color: #b45309;
+  background: color-mix(in srgb, var(--place-tint) 18%, #fff);
 }
 
 .place-cards b {
@@ -157,7 +157,7 @@ button {
 }
 
 .place-cards small {
-  color: #cbd5e1;
+  color: #64748b;
   line-height: 1.45;
 }
 
@@ -170,9 +170,9 @@ button {
   justify-content: space-between;
   gap: 18px;
   padding: 16px;
-  border: 1px solid rgba(255,255,255,.18);
+  border: 1px solid #d9e1ec;
   border-radius: 8px;
-  background: rgba(8, 10, 12, .72);
+  background: rgba(255,255,255,.9);
   backdrop-filter: blur(16px);
 }
 
@@ -182,7 +182,7 @@ button {
 }
 
 .start-panel span {
-  color: #cbd5e1;
+  color: #64748b;
 }
 
 .start-panel button,

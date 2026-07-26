@@ -1830,3 +1830,87 @@ a {
     display: none;
   }
 }
+
+/* White mode override */
+:root {
+  color: #111827;
+  background: #f8fafc;
+}
+
+body {
+  background: #f8fafc;
+}
+
+.discord-shell {
+  background: #f8fafc;
+}
+
+.server-rail,
+.channel-sidebar,
+.content-pane,
+.workspace-panel,
+.panel-card,
+.message-list,
+.chat-main,
+.settings-panel,
+.thread-panel,
+.assistant-panel,
+.docs-panel,
+.ops-panel {
+  border-color: #d9e1ec !important;
+  background: #ffffff !important;
+  color: #111827 !important;
+}
+
+.rail-home,
+.rail-button,
+.rail-add,
+.channel-button,
+.tab-button,
+.ghost-button,
+.secondary-button,
+.panel-card button,
+.action-link {
+  border-color: #d9e1ec !important;
+  background: #f8fafc !important;
+  color: #111827 !important;
+}
+
+.rail-button.active,
+.channel-button.active,
+.tab-button.active,
+.primary-button {
+  border-color: #2563eb !important;
+  background: #2563eb !important;
+  color: #fff !important;
+}
+
+input,
+textarea,
+select {
+  border-color: #d9e1ec !important;
+  background: #f8fafc !important;
+  color: #111827 !important;
+}
+
+.message,
+.webhook-message,
+.doc-card,
+.task-card,
+.run-row,
+.metric-card,
+.spec-card {
+  border-color: #d9e1ec !important;
+  background: #ffffff !important;
+  color: #111827 !important;
+  box-shadow: 0 10px 24px rgba(15,23,42,.06);
+}
+
+.muted,
+.subtitle,
+.channel-meta,
+.message-meta,
+.panel-muted,
+.empty-state {
+  color: #64748b !important;
+}

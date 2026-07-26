@@ -190,7 +190,7 @@ const THEME_KEY = 'playground-theme';
 type Theme = 'dark' | 'light';
 
 function getTheme(): Theme {
-  return localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark';
+  return localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light';
 }
 
 function getFavorites(): string[] {

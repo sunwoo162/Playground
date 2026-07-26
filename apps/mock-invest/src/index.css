@@ -1,7 +1,7 @@
 :root {
   font-family: Inter, Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color: #f4f7fb;
-  background: #080b10;
+  color: #111827;
+  background: #f8fafc;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -15,9 +15,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background:
-    radial-gradient(circle at 20% 0%, rgba(64, 184, 124, 0.16), transparent 28rem),
-    linear-gradient(180deg, #10151d 0%, #080b10 42%);
+  background: #f8fafc;
 }
 
 button,
@@ -731,4 +729,51 @@ label {
   .ranking-list div {
     grid-template-columns: 42px 1fr;
   }
+}
+
+/* White mode override */
+.topbar {
+  border-bottom-color: #d9e1ec;
+  background: rgba(255,255,255,.94);
+}
+
+.back-link,
+.ghost-btn,
+.primary-btn,
+.buy-btn,
+.sell-btn,
+.tabs button {
+  border-color: #d9e1ec;
+  background: #ffffff;
+  color: #111827;
+}
+
+.topbar p,
+.muted,
+.asset-meta,
+.quote-meta {
+  color: #64748b !important;
+}
+
+.hero-panel,
+.panel,
+.asset-card,
+.order-panel,
+.portfolio-card,
+.chart-card,
+.holding-card,
+.trade-box,
+.ranking-list div,
+.modal-panel {
+  border-color: #d9e1ec !important;
+  background: #ffffff !important;
+  color: #111827 !important;
+  box-shadow: 0 12px 30px rgba(15,23,42,.08);
+}
+
+input,
+select {
+  border-color: #d9e1ec !important;
+  background: #f8fafc !important;
+  color: #111827 !important;
 }

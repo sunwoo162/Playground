@@ -1,6 +1,6 @@
 :root {
   color: #101828;
-  background: #eef2f6;
+  background: #f8fafc;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
@@ -26,10 +26,7 @@ button {
 .todo-app {
   min-height: 100vh;
   padding: 28px;
-  background:
-    linear-gradient(135deg, rgba(255,255,255,.8), rgba(231,238,245,.92)),
-    radial-gradient(circle at 20% 0%, rgba(94, 234, 212, .24), transparent 24rem),
-    radial-gradient(circle at 88% 16%, rgba(251, 191, 36, .22), transparent 20rem);
+  background: #f8fafc;
 }
 
 .hero,
@@ -41,9 +38,9 @@ button {
 .hero {
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 24px;
+  gap: 22px;
   align-items: end;
-  padding: 48px 0 26px;
+  padding: 34px 0 24px;
 }
 
 .back-link {
@@ -63,15 +60,17 @@ button {
 .hero h1 {
   margin: 8px 0 12px;
   max-width: 720px;
-  font-size: clamp(2.35rem, 6vw, 5rem);
-  line-height: .98;
+  font-size: clamp(2.05rem, 4.8vw, 4rem);
+  line-height: 1.02;
   letter-spacing: 0;
 }
 
 .hero p {
   margin: 0;
   color: #475569;
-  font-weight: 700;
+  font-size: .98rem;
+  font-weight: 650;
+  line-height: 1.6;
 }
 
 .progress-panel,
@@ -79,8 +78,8 @@ button {
 .todo-list-panel {
   border: 1px solid rgba(15, 23, 42, .08);
   border-radius: 8px;
-  background: rgba(255,255,255,.82);
-  box-shadow: 0 18px 50px rgba(15,23,42,.1);
+  background: #fff;
+  box-shadow: 0 10px 26px rgba(15,23,42,.06);
 }
 
 .progress-panel {
@@ -90,7 +89,7 @@ button {
 
 .progress-panel strong {
   display: block;
-  font-size: 2.4rem;
+  font-size: 2.2rem;
   line-height: 1;
 }
 

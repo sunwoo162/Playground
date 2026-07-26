@@ -1,6 +1,6 @@
 :root {
-  color: #172033;
-  background: #f4f7fb;
+  color: #111827;
+  background: #f8fafc;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
@@ -21,10 +21,7 @@ button { cursor: pointer; }
 .schedule-app {
   min-height: 100vh;
   padding: 28px;
-  background:
-    linear-gradient(135deg, rgba(255,255,255,.86), rgba(236,241,248,.94)),
-    radial-gradient(circle at 16% 12%, rgba(59, 130, 246, .18), transparent 24rem),
-    radial-gradient(circle at 82% 8%, rgba(16, 185, 129, .16), transparent 20rem);
+  background: #f8fafc;
 }
 
 .hero,
@@ -36,37 +33,40 @@ button { cursor: pointer; }
 .hero {
   display: grid;
   grid-template-columns: 1fr 280px;
-  gap: 24px;
+  gap: 22px;
   align-items: end;
-  padding: 48px 0 26px;
+  padding: 34px 0 24px;
 }
 
 .back-link {
   grid-column: 1 / -1;
-  color: #334155;
-  font-weight: 900;
+  color: #475569;
+  font-size: .9rem;
+  font-weight: 850;
   text-decoration: none;
 }
 
 .hero span {
   color: #2563eb;
-  font-size: .78rem;
-  font-weight: 950;
+  font-size: .76rem;
+  font-weight: 900;
   text-transform: uppercase;
 }
 
 .hero h1 {
   margin: 8px 0 12px;
-  max-width: 760px;
-  font-size: clamp(2.4rem, 5.8vw, 5rem);
-  line-height: .98;
+  max-width: 720px;
+  font-size: clamp(2.05rem, 4.8vw, 4rem);
+  line-height: 1.02;
   letter-spacing: 0;
 }
 
 .hero p {
   margin: 0;
   color: #64748b;
-  font-weight: 750;
+  font-size: .98rem;
+  font-weight: 650;
+  line-height: 1.6;
 }
 
 .summary,
@@ -74,8 +74,8 @@ button { cursor: pointer; }
 .timeline-panel {
   border: 1px solid rgba(15, 23, 42, .08);
   border-radius: 8px;
-  background: rgba(255,255,255,.86);
-  box-shadow: 0 18px 46px rgba(15,23,42,.1);
+  background: #fff;
+  box-shadow: 0 10px 26px rgba(15,23,42,.06);
 }
 
 .summary {
@@ -84,13 +84,14 @@ button { cursor: pointer; }
 
 .summary strong {
   display: block;
-  font-size: 2.65rem;
+  font-size: 2.25rem;
   line-height: 1;
 }
 
 .summary small {
   color: #64748b;
-  font-weight: 900;
+  font-size: .86rem;
+  font-weight: 800;
 }
 
 .summary div {
@@ -105,12 +106,12 @@ button { cursor: pointer; }
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #2563eb, #10b981);
+  background: #2563eb;
 }
 
 .layout {
   display: grid;
-  grid-template-columns: 360px 1fr;
+  grid-template-columns: 340px minmax(0, 1fr);
   gap: 18px;
   align-items: start;
 }
@@ -122,7 +123,7 @@ button { cursor: pointer; }
 
 .editor {
   display: grid;
-  gap: 14px;
+  gap: 13px;
   position: sticky;
   top: 18px;
 }
@@ -130,14 +131,14 @@ button { cursor: pointer; }
 label {
   display: grid;
   gap: 7px;
-  color: #334155;
-  font-size: .82rem;
-  font-weight: 950;
+  color: #475569;
+  font-size: .8rem;
+  font-weight: 850;
 }
 
 input {
   width: 100%;
-  min-height: 44px;
+  min-height: 42px;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
   background: #fff;
@@ -166,10 +167,11 @@ input:focus {
 .primary-button,
 .ghost-button,
 .danger-button {
-  min-height: 42px;
+  min-height: 40px;
   border: 0;
   border-radius: 8px;
-  font-weight: 950;
+  font-size: .88rem;
+  font-weight: 850;
 }
 
 .category-row button {
@@ -179,7 +181,7 @@ input:focus {
 
 .category-row button.active,
 .primary-button {
-  background: #172033;
+  background: #111827;
   color: #fff;
 }
 
@@ -209,11 +211,14 @@ input:focus {
 
 .panel-head h2 {
   margin: 0;
+  font-size: 1.22rem;
+  line-height: 1.2;
 }
 
 .panel-head span {
   color: #64748b;
-  font-weight: 900;
+  font-size: .86rem;
+  font-weight: 800;
 }
 
 .view-tabs {
@@ -222,17 +227,18 @@ input:focus {
 }
 
 .view-tabs button {
-  min-height: 38px;
+  min-height: 36px;
   border: 0;
   border-radius: 8px;
   background: #e2e8f0;
   color: #334155;
   padding: 0 14px;
-  font-weight: 950;
+  font-size: .88rem;
+  font-weight: 850;
 }
 
 .view-tabs button.active {
-  background: #172033;
+  background: #111827;
   color: #fff;
 }
 
@@ -244,34 +250,34 @@ input:focus {
   border-radius: 8px;
   overflow: hidden;
   background:
-    linear-gradient(90deg, rgba(248,250,252,.95) 0 88px, transparent 88px),
-    repeating-linear-gradient(180deg, #fff 0 71px, #e2e8f0 71px 72px);
+    linear-gradient(90deg, #f8fafc 0 86px, transparent 86px),
+    repeating-linear-gradient(180deg, #fff 0 71px, #e5e7eb 71px 72px);
 }
 
 .hour-line {
   position: absolute;
-  left: 14px;
+  left: 12px;
   width: 58px;
   transform: translateY(-8px);
   color: #64748b;
-  font-size: .78rem;
-  font-weight: 950;
+  font-size: .76rem;
+  font-weight: 850;
 }
 
 .schedule-card {
   position: absolute;
-  left: 96px;
-  right: 14px;
+  left: 94px;
+  right: 12px;
   display: grid;
   grid-template-columns: 34px 1fr 30px;
-  gap: 12px;
+  gap: 10px;
   align-items: start;
-  padding: 10px;
+  padding: 9px;
   border: 1px solid #e2e8f0;
   border-left: 6px solid #2563eb;
   border-radius: 8px;
   background: #fff;
-  box-shadow: 0 10px 22px rgba(15,23,42,.08);
+  box-shadow: 0 8px 18px rgba(15,23,42,.06);
 }
 
 .schedule-card.work,
@@ -296,13 +302,13 @@ input:focus {
 
 .check,
 .delete {
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
   background: #fff;
   color: #2563eb;
-  font-weight: 950;
+  font-weight: 900;
 }
 
 .delete {
@@ -312,20 +318,24 @@ input:focus {
 .schedule-card span,
 .week-block span {
   color: #64748b;
-  font-size: .82rem;
-  font-weight: 800;
+  font-size: .78rem;
+  font-weight: 750;
+  line-height: 1.25;
 }
 
 .schedule-card strong,
 .week-block strong {
   display: block;
-  color: #172033;
+  color: #111827;
+  font-size: .92rem;
+  line-height: 1.24;
   margin-bottom: 3px;
+  overflow-wrap: anywhere;
 }
 
 .week-grid {
   display: grid;
-  grid-template-columns: 72px repeat(7, minmax(104px, 1fr));
+  grid-template-columns: 68px repeat(7, minmax(108px, 1fr));
   margin-top: 18px;
   overflow: auto;
   border: 1px solid #e2e8f0;
@@ -342,15 +352,16 @@ input:focus {
 }
 
 .week-day {
-  min-height: 58px;
+  min-height: 54px;
   border-top: 0;
   border-left: 0;
   background: #f8fafc;
-  color: #172033;
+  color: #111827;
   display: grid;
   place-items: center;
   gap: 2px;
-  font-weight: 950;
+  font-size: .9rem;
+  font-weight: 850;
 }
 
 .week-day.active {
@@ -364,31 +375,31 @@ input:focus {
 }
 
 .week-hour {
-  min-height: 76px;
+  min-height: 74px;
   display: flex;
   align-items: flex-start;
   justify-content: center;
   padding-top: 8px;
   color: #64748b;
-  font-size: .76rem;
-  font-weight: 950;
+  font-size: .74rem;
+  font-weight: 850;
   background: #f8fafc;
 }
 
 .week-cell {
-  min-height: 76px;
+  min-height: 74px;
   padding: 5px;
 }
 
 .week-block {
   width: 100%;
-  min-height: 54px;
+  min-height: 52px;
   margin-bottom: 5px;
   border: 1px solid #e2e8f0;
   border-left: 5px solid #2563eb;
   border-radius: 8px;
   background: #fff;
-  color: #172033;
+  color: #111827;
   padding: 7px;
   text-align: left;
 }
@@ -403,7 +414,7 @@ input:focus {
 }
 
 .empty strong {
-  color: #172033;
+  color: #111827;
 }
 
 @media (max-width: 900px) {
@@ -423,7 +434,33 @@ input:focus {
 
 @media (max-width: 560px) {
   .hero {
-    padding-top: 28px;
+    padding-top: 24px;
+  }
+
+  .hero h1 {
+    font-size: 2rem;
+  }
+
+  .panel-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .view-tabs {
+    width: 100%;
+  }
+
+  .view-tabs button {
+    flex: 1;
+  }
+
+  .day-grid {
+    height: 1156px;
+  }
+
+  .schedule-card {
+    left: 80px;
+    grid-template-columns: 30px 1fr 28px;
   }
 
   .time-row,
@@ -432,6 +469,6 @@ input:focus {
   }
 
   .week-grid {
-    grid-template-columns: 64px repeat(7, 120px);
+    grid-template-columns: 58px repeat(7, 112px);
   }
 }
