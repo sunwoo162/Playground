@@ -1,10 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import studyCafePov from './assets/study-cafe-pov.png'
+import studyCafeBack from './assets/study-cafe-back.png'
+import studyCafeDown from './assets/study-cafe-down.png'
+import studyCafeFront from './assets/study-cafe-front.png'
+import studyCafeLeft from './assets/study-cafe-left.png'
+import studyCafeRight from './assets/study-cafe-right.png'
+import studyCafeUp from './assets/study-cafe-up.png'
 
 type PlaceId = 'study-cafe' | 'classroom' | 'cafe' | 'library' | 'night-reading' | 'park' | 'train' | 'rain-cafe'
 type ScreenId = 'notion' | 'pdf' | 'chatgpt' | 'youtube' | 'vscode' | 'ide' | 'docs'
 type TimeId = 'morning' | 'noon' | 'evening' | 'dawn'
 type WeatherId = 'sunny' | 'rain' | 'snow' | 'cloudy'
+type SceneDirection = 'front' | 'right' | 'back' | 'left' | 'up' | 'down'
 
 interface Place {
   id: PlaceId
@@ -37,6 +43,14 @@ const SCREENS: Record<ScreenId, { label: string; title: string; items: string[] 
 
 const TIMES: Record<TimeId, string> = { morning: '아침', noon: '점심', evening: '저녁', dawn: '새벽' }
 const WEATHER: Record<WeatherId, string> = { sunny: '맑음', rain: '비', snow: '눈', cloudy: '흐림' }
+const SCENE_IMAGES: Record<SceneDirection, string> = {
+  front: studyCafeFront,
+  right: studyCafeRight,
+  back: studyCafeBack,
+  left: studyCafeLeft,
+  up: studyCafeUp,
+  down: studyCafeDown,
+}
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value))
@@ -62,9 +76,24 @@ function App() {
   const screen = SCREENS[screenId]
   const wrappedYaw = ((yaw % 360) + 360) % 360
   const frontDistance = Math.min(Math.abs(wrappedYaw), Math.abs(360 - wrappedYaw))
-  const laptopFocus = Math.max(0, 1 - frontDistance / 46) * Math.max(0, 1 - Math.abs(pitch) / 42)
-  const viewX = clamp(yaw, -55, 55) * -0.72
-  const viewY = clamp(pitch, -38, 42) * 0.92
+  const sceneDirection: SceneDirection = pitch > 32
+    ? 'up'
+    : pitch < -34
+      ? 'down'
+      : wrappedYaw >= 315 || wrappedYaw < 45
+        ? 'front'
+        : wrappedYaw < 135
+          ? 'right'
+          : wrappedYaw < 225
+            ? 'back'
+            : 'left'
+  const localYaw = (((wrappedYaw + 45) % 90) - 45)
+  const laptopFocus = sceneDirection === 'front'
+    ? Math.max(0, 1 - frontDistance / 42) * Math.max(0, 1 - Math.abs(pitch) / 34)
+    : 0
+  const viewX = localYaw * -0.22
+  const viewY = clamp(pitch, -48, 56) * 0.32
+  const sceneImage = SCENE_IMAGES[sceneDirection]
 
   useEffect(() => {
     setSecondsLeft(focusMinutes * 60)
@@ -91,8 +120,8 @@ function App() {
     }
     const onMouseMove = (event: MouseEvent) => {
       if (document.pointerLockElement !== stageRef.current) return
-      setYaw((value) => clamp(value + event.movementX * 0.1, -58, 58))
-      setPitch((value) => clamp(value - event.movementY * 0.1, -42, 44))
+      setYaw((value) => value + event.movementX * 0.12)
+      setPitch((value) => clamp(value - event.movementY * 0.12, -58, 62))
     }
     document.addEventListener('pointerlockchange', onPointerLockChange)
     document.addEventListener('mousemove', onMouseMove)
@@ -121,8 +150,8 @@ function App() {
     if (!dragRef.current.active || document.pointerLockElement === event.currentTarget) return
     const dx = event.clientX - dragRef.current.x
     const dy = event.clientY - dragRef.current.y
-    setYaw(clamp(dragRef.current.yaw - dx * 0.16, -58, 58))
-    setPitch(clamp(dragRef.current.pitch - dy * 0.15, -42, 44))
+    setYaw(dragRef.current.yaw - dx * 0.2)
+    setPitch(clamp(dragRef.current.pitch - dy * 0.18, -58, 62))
   }
 
   const onPointerUp = (event: React.PointerEvent<HTMLElement>) => {
@@ -193,32 +222,34 @@ function App() {
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerUp}
           >
-            <img className="photo-scene" src={studyCafePov} alt="" draggable={false} />
+            <img className={`photo-scene looking-${sceneDirection}`} src={sceneImage} alt="" draggable={false} />
             <div className="scene-grade" />
             <div className="weather-overlay" />
             <div className="look-shadow" />
 
-            <div className="screen-overlay">
-              <div className="fake-browser">
-                <div className="browser-top">
-                  <i />
-                  <i />
-                  <i />
-                  <strong>{screen.label}</strong>
-                </div>
-                <div className="web-page">
-                  <div className="cursor" />
-                  <header>
-                    <strong>{screen.title}</strong>
-                    <em>{timeText}</em>
-                  </header>
-                  <div className="screen-list">
-                    {screen.items.map((item) => <span key={item}>{item}</span>)}
+            {sceneDirection === 'front' && (
+              <div className="screen-overlay">
+                <div className="fake-browser">
+                  <div className="browser-top">
+                    <i />
+                    <i />
+                    <i />
+                    <strong>{screen.label}</strong>
                   </div>
-                  <button onClick={leaveRoom}>나가기</button>
+                  <div className="web-page">
+                    <div className="cursor" />
+                    <header>
+                      <strong>{screen.title}</strong>
+                      <em>{timeText}</em>
+                    </header>
+                    <div className="screen-list">
+                      {screen.items.map((item) => <span key={item}>{item}</span>)}
+                    </div>
+                    <button onClick={leaveRoom}>나가기</button>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             <div className="crosshair" />
             <div className="look-help">{locked ? '마우스로 둘러보기 · ESC 해제' : '화면 클릭 후 마우스로 둘러보기'}</div>
@@ -228,7 +259,7 @@ function App() {
             <div className="hud-top">
               <button onClick={leaveRoom}>나가기</button>
               <span>{place.name}</span>
-              <strong>{Math.round(yaw)}° / {Math.round(pitch)}°</strong>
+              <strong>{Math.round(wrappedYaw)}° / {Math.round(pitch)}°</strong>
               <button onClick={() => setMenuOpen((value) => !value)}>설정</button>
             </div>
             <div className="hud-controls">

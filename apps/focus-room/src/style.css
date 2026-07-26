@@ -56,7 +56,7 @@ button {
   padding: 32px;
   background:
     linear-gradient(90deg, rgba(0,0,0,.68), rgba(0,0,0,.16)),
-    url("./assets/study-cafe-pov.png");
+    url("./assets/study-cafe-front.png");
   background-size: cover;
   background-position: center;
 }
@@ -210,18 +210,31 @@ button {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: max(126vw, 178vh);
+  width: max(118vw, 210vh);
   height: auto;
-  min-height: 118vh;
+  min-height: 100vh;
   object-fit: cover;
   transform:
     translate(-50%, -50%)
     translate3d(var(--view-x), var(--view-y), 0)
-    scale(1.16);
+    scale(1.08);
   transform-origin: center;
   filter: saturate(1.06) contrast(1.05) brightness(.96);
   will-change: transform;
   pointer-events: none;
+}
+
+.photo-scene.looking-up,
+.photo-scene.looking-down {
+  width: max(104vw, 178vh);
+  min-height: 112vh;
+  scale: 1.02;
+}
+
+.photo-scene.looking-back,
+.photo-scene.looking-left,
+.photo-scene.looking-right {
+  width: max(116vw, 196vh);
 }
 
 .scene-grade,
@@ -293,7 +306,7 @@ button {
     translate3d(calc(var(--view-x) * .24), calc(var(--view-y) * .25), 0)
     scale(calc(.86 + var(--laptop-focus) * .14));
   opacity: calc(.18 + var(--laptop-focus) * .82);
-  transition: opacity .12s linear, transform .12s linear;
+  transition: opacity .08s linear, transform .08s linear;
   pointer-events: auto;
 }
 
