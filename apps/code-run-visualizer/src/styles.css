@@ -2126,16 +2126,16 @@ input[type='range'] {
 
 /* Imweb-style light mode override */
 [data-theme="light"] {
-  color: #15181e;
-  background: #f8f9fb;
+  color: #20242b;
+  background: #eef1f4;
 }
 
 [data-theme="light"] .app-shell {
-  background: #f8f9fb;
+  background: #eef1f4;
 }
 
 [data-theme="light"] .home-link {
-  color: #0090d4;
+  color: #2c86ad;
 }
 
 [data-theme="light"] .side-panel,
@@ -2148,20 +2148,20 @@ input[type='range'] {
 [data-theme="light"] .runtime-panel,
 [data-theme="light"] .memory-panel,
 [data-theme="light"] .trace-panel {
-  border-color: #dbdee3 !important;
-  background: #ffffff !important;
-  color: #15181e !important;
+  border-color: #d3dae2 !important;
+  background: #fbfcfd !important;
+  color: #20242b !important;
   box-shadow: none;
 }
 
 [data-theme="light"] input,
 [data-theme="light"] textarea,
 [data-theme="light"] select {
-  border-color: #dbdee3 !important;
-  background: #f8f9fb !important;
-  color: #15181e !important;
+  border-color: #d3dae2 !important;
+  background: #e5eaf0 !important;
+  color: #20242b !important;
 }
 
 [data-theme="light"] .eyebrow {
-  color: #00b9ff;
+  color: #38a9d6;
 }

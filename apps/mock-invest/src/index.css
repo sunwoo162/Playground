@@ -735,17 +735,17 @@ label {
 
 /* Imweb-style light mode override */
 [data-theme="light"] {
-  color: #15181e;
-  background: #f8f9fb;
+  color: #20242b;
+  background: #eef1f4;
 }
 
 [data-theme="light"] body {
-  background: #f8f9fb;
+  background: #eef1f4;
 }
 
 [data-theme="light"] .topbar {
-  border-bottom-color: #dbdee3;
-  background: rgba(255,255,255,.94);
+  border-bottom-color: #d3dae2;
+  background: rgba(251,252,253,.94);
 }
 
 [data-theme="light"] .back-link,
@@ -754,16 +754,16 @@ label {
 [data-theme="light"] .buy-btn,
 [data-theme="light"] .sell-btn,
 [data-theme="light"] .tabs button {
-  border-color: #dbdee3;
-  background: #ffffff;
-  color: #15181e;
+  border-color: #d3dae2;
+  background: #fbfcfd;
+  color: #20242b;
 }
 
 [data-theme="light"] .topbar p,
 [data-theme="light"] .muted,
 [data-theme="light"] .asset-meta,
 [data-theme="light"] .quote-meta {
-  color: #717680 !important;
+  color: #66717d !important;
 }
 
 [data-theme="light"] .hero-panel,
@@ -776,15 +776,15 @@ label {
 [data-theme="light"] .trade-box,
 [data-theme="light"] .ranking-list div,
 [data-theme="light"] .modal-panel {
-  border-color: #dbdee3 !important;
-  background: #ffffff !important;
-  color: #15181e !important;
+  border-color: #d3dae2 !important;
+  background: #fbfcfd !important;
+  color: #20242b !important;
   box-shadow: none;
 }
 
 [data-theme="light"] input,
 [data-theme="light"] select {
-  border-color: #dbdee3 !important;
-  background: #f8f9fb !important;
-  color: #15181e !important;
+  border-color: #d3dae2 !important;
+  background: #e5eaf0 !important;
+  color: #20242b !important;
 }

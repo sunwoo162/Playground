@@ -187,7 +187,7 @@ button {
 
 [data-theme="light"] .place-select {
   background:
-    linear-gradient(90deg, rgba(248,249,251,.94), rgba(238,242,246,.66)),
+    linear-gradient(90deg, rgba(238,241,244,.94), rgba(229,234,240,.68)),
     var(--panorama-image);
 }
 
@@ -200,24 +200,24 @@ button {
 [data-theme="light"] .back-link,
 [data-theme="light"] .intro h1,
 [data-theme="light"] .place-cards button {
-  color: #15181e;
+  color: #20242b;
 }
 
 [data-theme="light"] .intro p,
 [data-theme="light"] .place-cards small,
 [data-theme="light"] .start-panel span {
-  color: #717680;
+  color: #66717d;
 }
 
 [data-theme="light"] .place-cards button,
 [data-theme="light"] .start-panel {
-  border-color: #dbdee3;
-  background: rgba(255,255,255,.9);
+  border-color: #d3dae2;
+  background: rgba(251,252,253,.9);
 }
 
 [data-theme="light"] .place-cards button.active {
-  border-color: #00b9ff;
-  background: rgba(0,185,255,.1);
+  border-color: #38a9d6;
+  background: rgba(56,169,214,.12);
 }
 
 .start-panel button,

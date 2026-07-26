@@ -12,13 +12,13 @@
 }
 
 [data-theme="light"] {
-  --bg: #f8f9fb;
-  --surface: #ffffff;
-  --surface-2: #eef2f6;
-  --border: #dbdee3;
-  --text: #15181e;
-  --text-muted: #717680;
-  --accent-blue: #00b9ff;
+  --bg: #eef1f4;
+  --surface: #fbfcfd;
+  --surface-2: #e5eaf0;
+  --border: #d3dae2;
+  --text: #20242b;
+  --text-muted: #66717d;
+  --accent-blue: #38a9d6;
   --shadow: none;
 }
 

@@ -276,12 +276,12 @@ input:focus {
 /* Imweb-style light mode override */
 [data-theme="light"] {
   color-scheme: light;
-  background: #f8f9fb;
-  color: #15181e;
+  background: #eef1f4;
+  color: #20242b;
 }
 
 [data-theme="light"] body {
-  background: #f8f9fb;
+  background: #eef1f4;
 }
 
 [data-theme="light"] .app-header,
@@ -289,22 +289,22 @@ input:focus {
 [data-theme="light"] .watch-item,
 [data-theme="light"] .run-row,
 [data-theme="light"] .status-card {
-  border-color: #dbdee3;
-  background: #ffffff;
-  color: #15181e;
+  border-color: #d3dae2;
+  background: #fbfcfd;
+  color: #20242b;
   box-shadow: none;
 }
 
 [data-theme="light"] .back-link,
 [data-theme="light"] .btn {
-  border-color: #dbdee3;
-  background: #ffffff;
-  color: #15181e;
+  border-color: #d3dae2;
+  background: #fbfcfd;
+  color: #20242b;
 }
 
 [data-theme="light"] .btn.primary {
-  border-color: #15181e;
-  background: #15181e;
+  border-color: #20242b;
+  background: #20242b;
   color: #fff;
 }
 
@@ -314,16 +314,16 @@ input:focus {
 [data-theme="light"] .empty,
 [data-theme="light"] .status-card span,
 [data-theme="light"] .run-row small {
-  color: #717680;
+  color: #66717d;
 }
 
 [data-theme="light"] input {
-  border-color: #dbdee3;
-  background: #f8f9fb;
-  color: #15181e;
+  border-color: #d3dae2;
+  background: #e5eaf0;
+  color: #20242b;
 }
 
 [data-theme="light"] .watch-item.active {
-  border-color: #00b9ff;
-  background: rgba(0, 185, 255, 0.1);
+  border-color: #38a9d6;
+  background: rgba(56, 169, 214, 0.12);
 }

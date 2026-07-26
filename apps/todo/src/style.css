@@ -1,6 +1,6 @@
 :root {
-  color: #101828;
-  background: #f8fafc;
+  color: #20242b;
+  background: #eef1f4;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
@@ -26,7 +26,7 @@ button {
 .todo-app {
   min-height: 100vh;
   padding: 28px;
-  background: #f8fafc;
+  background: #eef1f4;
 }
 
 .hero,
@@ -45,7 +45,7 @@ button {
 
 .back-link {
   grid-column: 1 / -1;
-  color: #334155;
+  color: #44505c;
   font-weight: 900;
   text-decoration: none;
 }
@@ -67,7 +67,7 @@ button {
 
 .hero p {
   margin: 0;
-  color: #475569;
+  color: #66717d;
   font-size: .98rem;
   font-weight: 650;
   line-height: 1.6;
@@ -78,7 +78,7 @@ button {
 .todo-list-panel {
   border: 1px solid rgba(15, 23, 42, .08);
   border-radius: 8px;
-  background: #fff;
+  background: #fbfcfd;
   box-shadow: 0 10px 26px rgba(15,23,42,.06);
 }
 
@@ -94,7 +94,7 @@ button {
 }
 
 .progress-panel span {
-  color: #64748b;
+  color: #66717d;
   font-weight: 900;
 }
 
@@ -103,7 +103,7 @@ button {
   margin-top: 14px;
   overflow: hidden;
   border-radius: 999px;
-  background: #e2e8f0;
+  background: #dfe5eb;
 }
 
 .progress-track i {
@@ -135,7 +135,7 @@ button {
 label {
   display: grid;
   gap: 7px;
-  color: #334155;
+  color: #44505c;
   font-size: .82rem;
   font-weight: 950;
 }
@@ -143,10 +143,10 @@ label {
 input,
 textarea {
   width: 100%;
-  border: 1px solid #cbd5e1;
+  border: 1px solid #d3dae2;
   border-radius: 8px;
-  background: #fff;
-  color: #0f172a;
+  background: #fbfcfd;
+  color: #20242b;
   padding: 12px;
   outline: none;
 }
@@ -181,8 +181,8 @@ textarea:focus {
 .priority-row button,
 .tabs button,
 .clear-button {
-  background: #e2e8f0;
-  color: #334155;
+  background: #e5eaf0;
+  color: #44505c;
   padding: 0 12px;
 }
 
@@ -193,7 +193,7 @@ textarea:focus {
 }
 
 .submit-button {
-  background: #111827;
+  background: #20242b;
   color: #fff;
 }
 
@@ -223,13 +223,13 @@ textarea:focus {
   gap: 12px;
   align-items: start;
   padding: 14px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #d3dae2;
   border-radius: 8px;
-  background: #fff;
+  background: #fbfcfd;
 }
 
 .todo-list li.done {
-  background: #f8fafc;
+  background: #e9edf2;
 }
 
 .todo-list li.done strong,
@@ -243,8 +243,8 @@ textarea:focus {
   width: 34px;
   height: 34px;
   border-radius: 8px;
-  border: 1px solid #cbd5e1;
-  background: #fff;
+  border: 1px solid #d3dae2;
+  background: #fbfcfd;
   color: #0f766e;
   font-weight: 950;
 }
@@ -261,12 +261,12 @@ textarea:focus {
 }
 
 .item-title-row strong {
-  color: #0f172a;
+  color: #20242b;
 }
 
 .todo-list p {
   margin: 5px 0 0;
-  color: #64748b;
+  color: #66717d;
   font-size: .9rem;
   line-height: 1.55;
 }
