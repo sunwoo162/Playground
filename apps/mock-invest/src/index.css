@@ -735,17 +735,17 @@ label {
 
 /* Imweb-style light mode override */
 [data-theme="light"] {
-  color: #0f1011;
-  background: #d7d7dc;
+  color: #222222;
+  background: #f4f4f4;
 }
 
 [data-theme="light"] body {
-  background: #d7d7dc;
+  background: #f4f4f4;
 }
 
 [data-theme="light"] .topbar {
-  border-bottom-color: #9f9fa8;
-  background: rgba(215,215,220,.94);
+  border-bottom-color: #bbbbbb;
+  background: rgba(248,248,248,.94);
 }
 
 [data-theme="light"] .back-link,
@@ -754,9 +754,9 @@ label {
 [data-theme="light"] .buy-btn,
 [data-theme="light"] .sell-btn,
 [data-theme="light"] .tabs button {
-  border-color: #9f9fa8;
-  background: #c9c9d0;
-  color: #0f1011;
+  border-color: #bbbbbb;
+  background: #f8f8f8;
+  color: #222222;
 }
 
 [data-theme="light"] .topbar p,
@@ -776,15 +776,15 @@ label {
 [data-theme="light"] .trade-box,
 [data-theme="light"] .ranking-list div,
 [data-theme="light"] .modal-panel {
-  border-color: #9f9fa8 !important;
-  background: #c9c9d0 !important;
-  color: #0f1011 !important;
+  border-color: #bbbbbb !important;
+  background: #f8f8f8 !important;
+  color: #222222 !important;
   box-shadow: none;
 }
 
 [data-theme="light"] input,
 [data-theme="light"] select {
-  border-color: #9f9fa8 !important;
-  background: #dedee3 !important;
-  color: #0f1011 !important;
+  border-color: #bbbbbb !important;
+  background: #ffffff !important;
+  color: #222222 !important;
 }

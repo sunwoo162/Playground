@@ -1833,16 +1833,16 @@ a {
 
 /* Imweb-style light mode override */
 [data-theme="light"] {
-  color: #0f1011;
-  background: #d7d7dc;
+  color: #222222;
+  background: #f4f4f4;
 }
 
 [data-theme="light"] body {
-  background: #d7d7dc;
+  background: #f4f4f4;
 }
 
 [data-theme="light"] .discord-shell {
-  background: #d7d7dc;
+  background: #f4f4f4;
 }
 
 [data-theme="light"] .server-rail,
@@ -1857,9 +1857,9 @@ a {
 [data-theme="light"] .assistant-panel,
 [data-theme="light"] .docs-panel,
 [data-theme="light"] .ops-panel {
-  border-color: #9f9fa8 !important;
-  background: #c9c9d0 !important;
-  color: #0f1011 !important;
+  border-color: #bbbbbb !important;
+  background: #f8f8f8 !important;
+  color: #222222 !important;
 }
 
 [data-theme="light"] .rail-home,
@@ -1871,26 +1871,26 @@ a {
 [data-theme="light"] .secondary-button,
 [data-theme="light"] .panel-card button,
 [data-theme="light"] .action-link {
-  border-color: #9f9fa8 !important;
-  background: #dedee3 !important;
-  color: #0f1011 !important;
+  border-color: #bbbbbb !important;
+  background: #ffffff !important;
+  color: #222222 !important;
 }
 
 [data-theme="light"] .rail-button.active,
 [data-theme="light"] .channel-button.active,
 [data-theme="light"] .tab-button.active,
 [data-theme="light"] .primary-button {
-  border-color: #7234e0 !important;
-  background: #7234e0 !important;
+  border-color: #222222 !important;
+  background: #222222 !important;
   color: #fff !important;
 }
 
 [data-theme="light"] input,
 [data-theme="light"] textarea,
 [data-theme="light"] select {
-  border-color: #9f9fa8 !important;
-  background: #dedee3 !important;
-  color: #0f1011 !important;
+  border-color: #bbbbbb !important;
+  background: #ffffff !important;
+  color: #222222 !important;
 }
 
 [data-theme="light"] .message,
@@ -1900,9 +1900,9 @@ a {
 [data-theme="light"] .run-row,
 [data-theme="light"] .metric-card,
 [data-theme="light"] .spec-card {
-  border-color: #9f9fa8 !important;
-  background: #c9c9d0 !important;
-  color: #0f1011 !important;
+  border-color: #bbbbbb !important;
+  background: #f8f8f8 !important;
+  color: #222222 !important;
   box-shadow: none;
 }
 

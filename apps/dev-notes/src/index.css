@@ -14,13 +14,13 @@
 }
 
 [data-theme="light"] {
-  --bg: #d7d7dc;
-  --surface: #c9c9d0;
-  --surface-2: #dedee3;
-  --border: #9f9fa8;
-  --text: #0f1011;
-  --text-muted: #62626a;
-  --accent: #7234e0;
+  --bg: #f4f4f4;
+  --surface: #f8f8f8;
+  --surface-2: #ffffff;
+  --border: #bbbbbb;
+  --text: #222222;
+  --text-muted: #696969;
+  --accent: #00dd99;
   --shadow: none;
 }
 
