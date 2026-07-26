@@ -46,6 +46,7 @@ const SCREENS: Record<ScreenId, { label: string; title: string; items: string[] 
 
 const TIMES: Record<TimeId, string> = { morning: '아침', noon: '점심', evening: '저녁', dawn: '새벽' }
 const WEATHER: Record<WeatherId, string> = { sunny: '맑음', rain: '비', snow: '눈', cloudy: '흐림' }
+const LAPTOP_FRONT_YAW = 270
 const PLACE_PANORAMAS: Record<PlaceId, string> = {
   'study-cafe': studyCafePanorama,
   classroom: classroomPanorama,
@@ -167,9 +168,9 @@ function App() {
   const enterRoom = () => {
     setEntered(true)
     setMenuOpen(false)
-    setYaw(0)
+    setYaw(LAPTOP_FRONT_YAW)
     setPitch(0)
-    setViewYaw(0)
+    setViewYaw(LAPTOP_FRONT_YAW)
     setViewPitch(0)
     setRunning(true)
   }
