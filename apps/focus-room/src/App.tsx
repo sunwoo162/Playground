@@ -7,6 +7,7 @@ import parkPanorama from './assets/park-panorama.png'
 import rainCafePanorama from './assets/rain-cafe-panorama.png'
 import studyCafePanorama from './assets/study-cafe-panorama.png'
 import trainPanorama from './assets/train-panorama.png'
+import PanoramaViewer from './PanoramaViewer'
 
 type PlaceId = 'study-cafe' | 'classroom' | 'cafe' | 'library' | 'night-reading' | 'park' | 'train' | 'rain-cafe'
 type ScreenId = 'notion' | 'pdf' | 'chatgpt' | 'youtube' | 'vscode' | 'ide' | 'docs'
@@ -85,8 +86,6 @@ function App() {
   const laptopFocus = frontDistance < 54 && Math.abs(viewPitch) < 38
     ? Math.max(0, 1 - frontDistance / 42) * Math.max(0, 1 - Math.abs(viewPitch) / 34)
     : 0
-  const panoramaX = 50 - wrappedYaw / 360 * 100
-  const panoramaY = clamp(50 + viewPitch * 0.72, 6, 94)
 
   useEffect(() => {
     let frameId = 0
@@ -187,8 +186,6 @@ function App() {
         '--laptop-focus': laptopFocus.toFixed(3),
         '--place-tint': place.tint,
         '--panorama-image': `url(${panorama})`,
-        '--panorama-x': `${panoramaX.toFixed(3)}%`,
-        '--panorama-y': `${panoramaY.toFixed(3)}%`,
       } as React.CSSProperties}
     >
       {!entered && (
@@ -229,8 +226,7 @@ function App() {
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerUp}
           >
-            <div className="panorama-layer panorama-a" />
-            <div className="panorama-layer panorama-b" />
+            <PanoramaViewer src={panorama} yaw={viewYaw} pitch={viewPitch} />
             <div className="scene-grade" />
             <div className="weather-overlay" />
             <div className="look-shadow" />
