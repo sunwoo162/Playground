@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import studyCafePov from './assets/study-cafe-pov.png'
 
 type PlaceId = 'study-cafe' | 'classroom' | 'cafe' | 'library' | 'night-reading' | 'park' | 'train' | 'rain-cafe'
 type ScreenId = 'notion' | 'pdf' | 'chatgpt' | 'youtube' | 'vscode' | 'ide' | 'docs'
@@ -10,20 +11,18 @@ interface Place {
   icon: string
   name: string
   description: string
-  accent: string
-  wall: string
-  floor: string
+  tint: string
 }
 
 const PLACES: Place[] = [
-  { id: 'study-cafe', icon: '6', name: '스터디카페', description: '칸막이 좌석, 조용한 키보드 소리, 개인 스탠드', accent: '#5dd0a0', wall: '#27313a', floor: '#33271f' },
-  { id: 'classroom', icon: '□', name: '학교 교실', description: '창가 책상, 칠판, 복도에서 들리는 낮은 발소리', accent: '#7fb3ff', wall: '#d9d2b8', floor: '#5a4939' },
-  { id: 'cafe', icon: '☕', name: '카페', description: '커피 바, 큰 창문, 잔잔한 대화와 컵 소리', accent: '#ffb35c', wall: '#3b3130', floor: '#4a3328' },
-  { id: 'library', icon: '▤', name: '도서관', description: '서가 사이 나무 책상, 페이지 넘기는 소리', accent: '#9cc3ff', wall: '#33423b', floor: '#46382b' },
-  { id: 'night-reading', icon: '◐', name: '야간 독서실', description: '어두운 칸막이와 노란 독서등만 남은 자리', accent: '#a8a5ff', wall: '#151923', floor: '#1e1b24' },
-  { id: 'park', icon: '♧', name: '공원 벤치', description: '벤치 앞 작은 테이블, 바람과 나무 그림자', accent: '#9ee493', wall: '#54735d', floor: '#39513c' },
-  { id: 'train', icon: '✈', name: '기차', description: '좌석 테이블, 창밖으로 흐르는 풍경과 레일 소리', accent: '#98c1d9', wall: '#38495e', floor: '#293241' },
-  { id: 'rain-cafe', icon: '☔', name: '빗소리 카페', description: '비 내리는 창가, 따뜻한 조명, 조용한 카페', accent: '#67e8f9', wall: '#263443', floor: '#2f2d35' },
+  { id: 'study-cafe', icon: '6', name: '스터디카페', description: '칸막이 좌석, 노트북, 커피, 조용한 램프가 있는 현실적인 공부 자리', tint: '#d7a45c' },
+  { id: 'classroom', icon: '□', name: '학교 교실', description: '교실 책상에 앉아 노트북으로 공부하는 시점', tint: '#d8c891' },
+  { id: 'cafe', icon: '☕', name: '카페', description: '카페 창가 좌석에서 공부하는 시점', tint: '#d49a62' },
+  { id: 'library', icon: '▤', name: '도서관', description: '서가가 보이는 조용한 나무 책상 자리', tint: '#b7c7a1' },
+  { id: 'night-reading', icon: '◐', name: '야간 독서실', description: '어두운 독서실에서 램프만 켜진 자리', tint: '#8f92c9' },
+  { id: 'park', icon: '♧', name: '공원 벤치', description: '야외 벤치에서 노트북을 펼친 시점', tint: '#9abd7d' },
+  { id: 'train', icon: '✈', name: '기차', description: '좌석 테이블 위 노트북과 창밖 풍경', tint: '#8eaeca' },
+  { id: 'rain-cafe', icon: '☔', name: '빗소리 카페', description: '비 내리는 창가 카페에서 공부하는 시점', tint: '#7fcbd4' },
 ]
 
 const SCREENS: Record<ScreenId, { label: string; title: string; items: string[] }> = {
@@ -39,6 +38,10 @@ const SCREENS: Record<ScreenId, { label: string; title: string; items: string[] 
 const TIMES: Record<TimeId, string> = { morning: '아침', noon: '점심', evening: '저녁', dawn: '새벽' }
 const WEATHER: Record<WeatherId, string> = { sunny: '맑음', rain: '비', snow: '눈', cloudy: '흐림' }
 
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value))
+}
+
 function App() {
   const [placeId, setPlaceId] = useState<PlaceId>('study-cafe')
   const [screenId, setScreenId] = useState<ScreenId>('notion')
@@ -50,21 +53,15 @@ function App() {
   const [focusMinutes, setFocusMinutes] = useState(50)
   const [secondsLeft, setSecondsLeft] = useState(50 * 60)
   const [running, setRunning] = useState(false)
-  const [warning, setWarning] = useState(false)
   const dragRef = useRef({ active: false, x: 0, y: 0, yaw: 0, pitch: 0 })
 
   const place = PLACES.find((item) => item.id === placeId) ?? PLACES[0]
   const screen = SCREENS[screenId]
   const wrappedYaw = ((yaw % 360) + 360) % 360
   const frontDistance = Math.min(Math.abs(wrappedYaw), Math.abs(360 - wrappedYaw))
-  const lookingAtDesk = frontDistance < 54 && pitch < 34
-  const frontFactor = Math.max(0, 1 - frontDistance / 68)
-  const pitchDeskFactor = pitch > 0 ? Math.max(0, 1 - pitch / 36) : Math.max(0.45, 1 + pitch / 95)
-  const deskOpacity = frontFactor * pitchDeskFactor
-  const deskScale = 0.9 + deskOpacity * 0.1
-  const deskDrop = (1 - deskOpacity) * 14 + pitch * 0.42
-  const panoX = -(wrappedYaw / 90) * 100
-  const panoY = pitch * 0.92
+  const laptopFocus = Math.max(0, 1 - frontDistance / 46) * Math.max(0, 1 - Math.abs(pitch) / 42)
+  const viewX = clamp(yaw, -55, 55) * -0.72
+  const viewY = clamp(pitch, -38, 42) * 0.92
 
   useEffect(() => {
     setSecondsLeft(focusMinutes * 60)
@@ -85,12 +82,6 @@ function App() {
     return () => window.clearInterval(timer)
   }, [running])
 
-  useEffect(() => {
-    if (!warning) return
-    const timeout = window.setTimeout(() => setWarning(false), 2200)
-    return () => window.clearTimeout(timeout)
-  }, [warning])
-
   const timeText = useMemo(() => {
     const minutes = Math.floor(secondsLeft / 60)
     const seconds = secondsLeft % 60
@@ -104,10 +95,10 @@ function App() {
 
   const onPointerMove = (event: React.PointerEvent<HTMLElement>) => {
     if (!dragRef.current.active) return
-    const delta = event.clientX - dragRef.current.x
-    const deltaY = event.clientY - dragRef.current.y
-    setYaw(dragRef.current.yaw - delta * 0.18)
-    setPitch(Math.max(-42, Math.min(48, dragRef.current.pitch - deltaY * 0.16)))
+    const dx = event.clientX - dragRef.current.x
+    const dy = event.clientY - dragRef.current.y
+    setYaw(clamp(dragRef.current.yaw - dx * 0.16, -58, 58))
+    setPitch(clamp(dragRef.current.pitch - dy * 0.15, -42, 44))
   }
 
   const onPointerUp = (event: React.PointerEvent<HTMLElement>) => {
@@ -127,25 +118,16 @@ function App() {
     setRunning(false)
   }
 
-  const outsideFocus = () => {
-    if (entered && lookingAtDesk) setWarning(true)
-  }
-
   return (
     <main
-      className={`focus-room is-${placeId} is-${timeId} is-${weatherId} ${entered ? 'entered' : 'selecting'} ${lookingAtDesk ? 'looking-front' : 'looking-away'}`}
+      className={`focus-room is-${placeId} is-${timeId} is-${weatherId} ${entered ? 'entered' : 'selecting'}`}
       style={{
-        '--yaw': `${yaw}deg`,
-        '--pitch': `${pitch}deg`,
-        '--pano-x': `${panoX}vw`,
-        '--pano-y': `${panoY.toFixed(2)}vh`,
-        '--desk-opacity': deskOpacity.toFixed(3),
-        '--desk-scale': deskScale.toFixed(3),
-        '--desk-drop': `${deskDrop.toFixed(2)}vh`,
-        '--sky-offset': `${-yaw * 5}px`,
-        '--accent': place.accent,
-        '--wall': place.wall,
-        '--floor': place.floor,
+        '--view-x': `${viewX.toFixed(2)}vw`,
+        '--view-y': `${viewY.toFixed(2)}vh`,
+        '--pitch': `${pitch.toFixed(2)}deg`,
+        '--yaw': `${yaw.toFixed(2)}deg`,
+        '--laptop-focus': laptopFocus.toFixed(3),
+        '--place-tint': place.tint,
       } as React.CSSProperties}
     >
       {!entered && (
@@ -153,8 +135,8 @@ function App() {
           <a className="back-link" href="/">← 놀이터</a>
           <div className="intro">
             <span>Immersive Focus Seat</span>
-            <h1>내가 그 자리에 앉아있는 360도 공부 공간</h1>
-            <p>장소를 고르면 시점이 의자에 고정됩니다. 마우스를 드래그해서 주변을 둘러보고, 앞의 노트북으로 공부합니다.</p>
+            <h1>진짜 자리에 앉은 것처럼 공부하는 공간</h1>
+            <p>입장하면 시점은 내 눈높이에 고정됩니다. 마우스를 드래그해서 위, 아래, 좌우, 대각선으로 둘러보세요.</p>
           </div>
           <div className="place-cards">
             {PLACES.map((item) => (
@@ -178,87 +160,48 @@ function App() {
       {entered && (
         <>
           <section
-            className="pov-stage"
-            aria-label={`${place.name} 좌석 360도 시점`}
+            className="immersive-stage"
+            aria-label={`${place.name} 현실형 1인칭 공부 시점`}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerUp}
-            onClick={outsideFocus}
           >
-            <div className="pano-world">
-              <div className="view view-front">
-                <div className="window-panel"><span>{WEATHER[weatherId]}</span></div>
-                <div className="ambient-person person-left" />
-                <div className="ambient-person person-right" />
-              </div>
-              <div className="view view-right">
-                <div className="bookshelf" />
-                <div className="side-table" />
-              </div>
-              <div className="view view-back">
-                <div className="distant-counter" />
-                <div className="moving-shadow" />
-              </div>
-              <div className="view view-left">
-                <div className="bookshelf wide" />
-                <div className="ambient-person reading" />
-              </div>
-              <div className="view view-front view-front-copy">
-                <div className="window-panel"><span>{WEATHER[weatherId]}</span></div>
-                <div className="ambient-person person-left" />
-                <div className="ambient-person person-right" />
-              </div>
-            </div>
-            <div className="ceiling" />
-            <div className="floor-plane" />
-            <div className="weather-layer" />
+            <img className="photo-scene" src={studyCafePov} alt="" draggable={false} />
+            <div className="scene-grade" />
+            <div className="weather-overlay" />
+            <div className="look-shadow" />
 
-            <div className="desk-pov" onClick={(event) => event.stopPropagation()}>
-              <div className="left-hand" />
-              <div className="right-hand" />
-              <div className="coffee-cup" />
-              <div className="pen-tray" />
-              <div className="study-book" />
-              <div className="sticky-note">
-                <strong>오늘 목표</strong>
-                <span>React Query</span>
-                <span>코테 2문제</span>
-                <span>컴활</span>
-              </div>
-              <div className="laptop-pov">
-                <div className="laptop-lid">
-                  <div className="browser-strip">
-                    <i />
-                    <i />
-                    <i />
-                    <strong>{screen.label}</strong>
-                  </div>
-                  <div className="study-screen">
-                    <div className="cursor" />
-                    <header>
-                      <strong>{screen.title}</strong>
-                      <em>{timeText}</em>
-                    </header>
-                    <div className="screen-content">
-                      {screen.items.map((item) => <span key={item}>{item}</span>)}
-                    </div>
-                    <button onClick={leaveRoom}>나가기</button>
-                  </div>
+            <div className="screen-overlay">
+              <div className="fake-browser">
+                <div className="browser-top">
+                  <i />
+                  <i />
+                  <i />
+                  <strong>{screen.label}</strong>
                 </div>
-                <div className="laptop-keyboard" />
+                <div className="web-page">
+                  <div className="cursor" />
+                  <header>
+                    <strong>{screen.title}</strong>
+                    <em>{timeText}</em>
+                  </header>
+                  <div className="screen-list">
+                    {screen.items.map((item) => <span key={item}>{item}</span>)}
+                  </div>
+                  <button onClick={leaveRoom}>나가기</button>
+                </div>
               </div>
             </div>
 
-            {!lookingAtDesk && <div className="turn-hint">앞쪽으로 돌리면 책상과 노트북이 다시 보입니다</div>}
-            {warning && <div className="focus-warning">집중하세요. 공부는 앞의 노트북에서 진행됩니다.</div>}
+            <div className="look-help">드래그해서 위 · 아래 · 좌우 · 대각선으로 둘러보기</div>
           </section>
 
           <aside className="hud">
             <div className="hud-top">
               <button onClick={leaveRoom}>나가기</button>
               <span>{place.name}</span>
-              <strong>{Math.round(wrappedYaw)}° / {Math.round(pitch)}°</strong>
+              <strong>{Math.round(yaw)}° / {Math.round(pitch)}°</strong>
             </div>
             <div className="hud-controls">
               <select value={screenId} onChange={(event) => setScreenId(event.target.value as ScreenId)}>
