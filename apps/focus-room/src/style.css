@@ -26,7 +26,9 @@ button {
 
 .focus-room {
   --yaw: 0deg;
+  --pitch: 0deg;
   --pano-x: 0vw;
+  --pano-y: 0vh;
   --desk-opacity: 1;
   --desk-scale: 1;
   --desk-drop: 0vh;
@@ -166,7 +168,9 @@ button {
   cursor: grab;
   user-select: none;
   touch-action: none;
-  background: #05070b;
+  background:
+    radial-gradient(ellipse at 50% 48%, rgba(255,255,255,.04), transparent 42%),
+    #05070b;
 }
 
 .pov-stage:active {
@@ -176,11 +180,11 @@ button {
 .pano-world {
   position: absolute;
   left: 0;
-  top: 0;
+  top: -18vh;
   width: 500vw;
-  height: 100vh;
+  height: 136vh;
   display: flex;
-  transform: translateX(var(--pano-x));
+  transform: translate3d(var(--pano-x), calc(var(--pano-y) * 1), 0);
   transition: transform .08s linear;
   will-change: transform;
 }
@@ -189,14 +193,15 @@ button {
   position: relative;
   flex: 0 0 100vw;
   width: 100vw;
-  height: 100vh;
+  height: 136vh;
   overflow: hidden;
   background:
-    radial-gradient(ellipse at 50% 20%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 30rem),
+    radial-gradient(ellipse at 50% 16%, rgba(255,255,255,.12), transparent 18rem),
+    radial-gradient(ellipse at 50% 30%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 34rem),
     linear-gradient(90deg, rgba(0,0,0,.34), transparent 18%, transparent 82%, rgba(0,0,0,.34)),
     repeating-linear-gradient(90deg, rgba(255,255,255,.032) 0 2px, transparent 2px 190px),
-    linear-gradient(180deg, color-mix(in srgb, var(--wall) 82%, #111827), var(--wall) 68%, var(--floor) 68%);
-  box-shadow: inset 0 0 160px rgba(0,0,0,.46);
+    linear-gradient(180deg, #11151c 0 15%, color-mix(in srgb, var(--wall) 82%, #111827) 15% 28%, var(--wall) 28% 70%, var(--floor) 70%);
+  box-shadow: inset 0 0 190px rgba(0,0,0,.5);
 }
 
 .view::after {
@@ -205,10 +210,10 @@ button {
   left: 0;
   right: 0;
   bottom: 0;
-  height: 40vh;
+  height: 52vh;
   background:
-    radial-gradient(ellipse at 50% 0, rgba(255,255,255,.08), transparent 42%),
-    linear-gradient(180deg, transparent, rgba(0,0,0,.28));
+    radial-gradient(ellipse at 50% 0, rgba(255,255,255,.1), transparent 42%),
+    linear-gradient(180deg, transparent, rgba(0,0,0,.34));
   pointer-events: none;
 }
 
@@ -243,13 +248,14 @@ button {
 .is-study-cafe .view-right,
 .is-study-cafe .view-left {
   background:
+    radial-gradient(ellipse at 50% 14%, rgba(255,255,255,.1), transparent 17rem),
     radial-gradient(ellipse at 50% 20%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 28rem),
     linear-gradient(90deg, rgba(0,0,0,.36), transparent 22%, transparent 78%, rgba(0,0,0,.36)),
     repeating-linear-gradient(90deg, #6f452e 0 24px, #b27748 24px 38px, #2d6370 38px 52px, #d3a65f 52px 68px),
-    linear-gradient(180deg, var(--wall), var(--wall) 68%, var(--floor) 68%);
-  background-size: auto, auto, 420px 44%, auto;
-  background-repeat: no-repeat, no-repeat, repeat-x, no-repeat;
-  background-position: center, center, var(--sky-offset) 18%, center;
+    linear-gradient(180deg, #12161d 0 15%, var(--wall) 15% 70%, var(--floor) 70%);
+  background-size: auto, auto, auto, 420px 40%, auto;
+  background-repeat: no-repeat, no-repeat, no-repeat, repeat-x, no-repeat;
+  background-position: center, center, center, var(--sky-offset) 22%, center;
 }
 
 .is-night-reading .view {
@@ -260,13 +266,37 @@ button {
   background:
     radial-gradient(circle at 20% 26%, #93c47d 0 70px, transparent 72px),
     radial-gradient(circle at 68% 20%, #7dbb72 0 92px, transparent 94px),
-    linear-gradient(180deg, #7ba485, #4f7556 68%, #394b2d 68%);
+    linear-gradient(180deg, #9ac6b7 0 20%, #7ba485 20% 45%, #4f7556 45% 70%, #394b2d 70%);
 }
 
 .is-train .view {
   background:
     repeating-linear-gradient(90deg, rgba(255,255,255,.08) 0 120px, rgba(0,0,0,.16) 120px 126px),
-    linear-gradient(180deg, #40536a, #293241 68%, #202633 68%);
+    linear-gradient(180deg, #1c2734 0 18%, #40536a 18% 45%, #293241 45% 70%, #202633 70%);
+}
+
+.pov-stage::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 18;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 54%, transparent 0 46%, rgba(0,0,0,.18) 66%, rgba(0,0,0,.48) 100%),
+    linear-gradient(180deg, rgba(255,255,255,.04), transparent 18%, transparent 82%, rgba(0,0,0,.16));
+  mix-blend-mode: multiply;
+}
+
+.pov-stage::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 19;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 48% 42%, rgba(255,255,255,.035), transparent 22rem),
+    repeating-linear-gradient(0deg, rgba(255,255,255,.018) 0 1px, transparent 1px 3px);
+  opacity: .34;
 }
 
 .window-panel {
@@ -279,8 +309,9 @@ button {
   border: 12px solid rgba(255,255,255,.16);
   background:
     linear-gradient(90deg, rgba(255,255,255,.18) 2px, transparent 2px 50%, rgba(255,255,255,.18) calc(50% + 2px), transparent calc(50% + 2px)),
+    radial-gradient(circle at 72% 32%, rgba(255,255,255,.85), transparent 4rem),
     linear-gradient(180deg, #9fd3ff, #f7e3a4);
-  box-shadow: 0 0 90px rgba(255,221,150,.28);
+  box-shadow: 0 0 110px rgba(255,221,150,.32), inset 0 0 44px rgba(255,255,255,.2);
 }
 
 .window-panel span {
@@ -308,6 +339,7 @@ button {
   width: 330px;
   height: 300px;
   background:
+    linear-gradient(90deg, rgba(0,0,0,.26), transparent 22%, transparent 78%, rgba(0,0,0,.22)),
     repeating-linear-gradient(180deg, rgba(255,255,255,.16) 0 4px, transparent 4px 62px),
     repeating-linear-gradient(90deg, #71432c 0 24px, #d19b55 24px 42px, #315c68 42px 60px);
 }
@@ -398,17 +430,20 @@ button {
 }
 
 .ceiling {
-  top: -46vh;
-  height: 52vh;
-  transform: rotateX(-78deg);
+  top: calc(-42vh + var(--pano-y) * .35);
+  height: 58vh;
+  transform: rotateX(-78deg) translateY(calc(var(--pano-y) * .18));
   transform-origin: bottom;
-  background: linear-gradient(180deg, rgba(255,255,255,.08), transparent);
+  background:
+    radial-gradient(ellipse at 50% 90%, rgba(255,255,255,.1), transparent 40%),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.04) 0 2px, transparent 2px 180px),
+    linear-gradient(180deg, rgba(255,255,255,.1), transparent);
 }
 
 .floor-plane {
-  bottom: -50vh;
-  height: 70vh;
-  transform: rotateX(78deg);
+  bottom: calc(-50vh - var(--pano-y) * .32);
+  height: 74vh;
+  transform: rotateX(78deg) translateY(calc(var(--pano-y) * -.2));
   transform-origin: top;
   background:
     linear-gradient(90deg, rgba(255,255,255,.05), transparent 35%, transparent 65%, rgba(0,0,0,.22)),
@@ -418,7 +453,7 @@ button {
 
 .weather-layer {
   position: absolute;
-  inset: 0;
+  inset: -18vh 0;
   pointer-events: none;
   opacity: 0;
 }
@@ -479,7 +514,7 @@ button {
   left: 50%;
   bottom: 16vh;
   width: min(660px, 58vw);
-  transform: translateX(-50%);
+  transform: translateX(-50%) translateY(calc(var(--pano-y) * .18));
 }
 
 .laptop-lid {
@@ -487,8 +522,10 @@ button {
   padding: 12px;
   border: 12px solid #0c111c;
   border-radius: 18px 18px 8px 8px;
-  background: #030712;
-  box-shadow: 0 24px 68px rgba(0,0,0,.6);
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.08), transparent 34%),
+    #030712;
+  box-shadow: 0 24px 68px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.08);
 }
 
 .browser-strip {
@@ -520,7 +557,9 @@ button {
   overflow: hidden;
   padding: 20px;
   border-radius: 0 0 7px 7px;
-  background: linear-gradient(135deg, #f8fafc, #dbeafe);
+  background:
+    radial-gradient(circle at 78% 12%, rgba(37,99,235,.14), transparent 9rem),
+    linear-gradient(135deg, #f8fafc, #dbeafe);
   color: #0f172a;
 }
 
@@ -590,6 +629,7 @@ button {
   margin-left: -3%;
   border-radius: 4px 4px 36px 36px;
   background:
+    repeating-linear-gradient(90deg, rgba(255,255,255,.06) 0 18px, transparent 18px 26px),
     radial-gradient(ellipse at 50% 22%, rgba(255,255,255,.18), transparent 18%),
     linear-gradient(180deg, #1f2937, #0f172a);
 }

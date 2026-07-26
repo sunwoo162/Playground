@@ -46,21 +46,25 @@ function App() {
   const [weatherId, setWeatherId] = useState<WeatherId>('rain')
   const [entered, setEntered] = useState(false)
   const [yaw, setYaw] = useState(0)
+  const [pitch, setPitch] = useState(0)
   const [focusMinutes, setFocusMinutes] = useState(50)
   const [secondsLeft, setSecondsLeft] = useState(50 * 60)
   const [running, setRunning] = useState(false)
   const [warning, setWarning] = useState(false)
-  const dragRef = useRef({ active: false, x: 0, yaw: 0 })
+  const dragRef = useRef({ active: false, x: 0, y: 0, yaw: 0, pitch: 0 })
 
   const place = PLACES.find((item) => item.id === placeId) ?? PLACES[0]
   const screen = SCREENS[screenId]
   const wrappedYaw = ((yaw % 360) + 360) % 360
   const frontDistance = Math.min(Math.abs(wrappedYaw), Math.abs(360 - wrappedYaw))
-  const lookingAtDesk = frontDistance < 54
-  const deskOpacity = Math.max(0, 1 - frontDistance / 62)
+  const lookingAtDesk = frontDistance < 54 && pitch < 34
+  const frontFactor = Math.max(0, 1 - frontDistance / 68)
+  const pitchDeskFactor = pitch > 0 ? Math.max(0, 1 - pitch / 36) : Math.max(0.45, 1 + pitch / 95)
+  const deskOpacity = frontFactor * pitchDeskFactor
   const deskScale = 0.9 + deskOpacity * 0.1
-  const deskDrop = (1 - deskOpacity) * 14
+  const deskDrop = (1 - deskOpacity) * 14 + pitch * 0.42
   const panoX = -(wrappedYaw / 90) * 100
+  const panoY = pitch * 0.92
 
   useEffect(() => {
     setSecondsLeft(focusMinutes * 60)
@@ -94,14 +98,16 @@ function App() {
   }, [secondsLeft])
 
   const onPointerDown = (event: React.PointerEvent<HTMLElement>) => {
-    dragRef.current = { active: true, x: event.clientX, yaw }
+    dragRef.current = { active: true, x: event.clientX, y: event.clientY, yaw, pitch }
     event.currentTarget.setPointerCapture(event.pointerId)
   }
 
   const onPointerMove = (event: React.PointerEvent<HTMLElement>) => {
     if (!dragRef.current.active) return
     const delta = event.clientX - dragRef.current.x
+    const deltaY = event.clientY - dragRef.current.y
     setYaw(dragRef.current.yaw - delta * 0.18)
+    setPitch(Math.max(-42, Math.min(48, dragRef.current.pitch - deltaY * 0.16)))
   }
 
   const onPointerUp = (event: React.PointerEvent<HTMLElement>) => {
@@ -112,6 +118,7 @@ function App() {
   const enterRoom = () => {
     setEntered(true)
     setYaw(0)
+    setPitch(0)
     setRunning(true)
   }
 
@@ -129,7 +136,9 @@ function App() {
       className={`focus-room is-${placeId} is-${timeId} is-${weatherId} ${entered ? 'entered' : 'selecting'} ${lookingAtDesk ? 'looking-front' : 'looking-away'}`}
       style={{
         '--yaw': `${yaw}deg`,
+        '--pitch': `${pitch}deg`,
         '--pano-x': `${panoX}vw`,
+        '--pano-y': `${panoY.toFixed(2)}vh`,
         '--desk-opacity': deskOpacity.toFixed(3),
         '--desk-scale': deskScale.toFixed(3),
         '--desk-drop': `${deskDrop.toFixed(2)}vh`,
@@ -249,7 +258,7 @@ function App() {
             <div className="hud-top">
               <button onClick={leaveRoom}>나가기</button>
               <span>{place.name}</span>
-              <strong>{Math.round(wrappedYaw)}°</strong>
+              <strong>{Math.round(wrappedYaw)}° / {Math.round(pitch)}°</strong>
             </div>
             <div className="hud-controls">
               <select value={screenId} onChange={(event) => setScreenId(event.target.value as ScreenId)}>
