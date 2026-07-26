@@ -1834,15 +1834,15 @@ a {
 /* Imweb-style light mode override */
 [data-theme="light"] {
   color: #0f1011;
-  background: #f2f2f3;
+  background: #d7d7dc;
 }
 
 [data-theme="light"] body {
-  background: #f2f2f3;
+  background: #d7d7dc;
 }
 
 [data-theme="light"] .discord-shell {
-  background: #f2f2f3;
+  background: #d7d7dc;
 }
 
 [data-theme="light"] .server-rail,
@@ -1857,8 +1857,8 @@ a {
 [data-theme="light"] .assistant-panel,
 [data-theme="light"] .docs-panel,
 [data-theme="light"] .ops-panel {
-  border-color: #bdbdc1 !important;
-  background: #efefef !important;
+  border-color: #9f9fa8 !important;
+  background: #c9c9d0 !important;
   color: #0f1011 !important;
 }
 
@@ -1871,8 +1871,8 @@ a {
 [data-theme="light"] .secondary-button,
 [data-theme="light"] .panel-card button,
 [data-theme="light"] .action-link {
-  border-color: #bdbdc1 !important;
-  background: #f7f7f8 !important;
+  border-color: #9f9fa8 !important;
+  background: #dedee3 !important;
   color: #0f1011 !important;
 }
 
@@ -1888,8 +1888,8 @@ a {
 [data-theme="light"] input,
 [data-theme="light"] textarea,
 [data-theme="light"] select {
-  border-color: #bdbdc1 !important;
-  background: #f7f7f8 !important;
+  border-color: #9f9fa8 !important;
+  background: #dedee3 !important;
   color: #0f1011 !important;
 }
 
@@ -1900,8 +1900,8 @@ a {
 [data-theme="light"] .run-row,
 [data-theme="light"] .metric-card,
 [data-theme="light"] .spec-card {
-  border-color: #bdbdc1 !important;
-  background: #efefef !important;
+  border-color: #9f9fa8 !important;
+  background: #c9c9d0 !important;
   color: #0f1011 !important;
   box-shadow: none;
 }

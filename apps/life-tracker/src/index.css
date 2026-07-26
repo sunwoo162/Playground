@@ -15,10 +15,10 @@
 }
 
 [data-theme="light"] {
-  --bg: #f2f2f3;
-  --surface: #efefef;
-  --surface-2: #f7f7f8;
-  --border: #bdbdc1;
+  --bg: #d7d7dc;
+  --surface: #c9c9d0;
+  --surface-2: #dedee3;
+  --border: #9f9fa8;
   --text: #0f1011;
   --text-muted: #62626a;
   --accent-blue: #7234e0;

@@ -187,7 +187,7 @@ button {
 
 [data-theme="light"] .place-select {
   background:
-    linear-gradient(90deg, rgba(242,242,243,.94), rgba(239,239,239,.72)),
+    linear-gradient(90deg, rgba(215,215,220,.94), rgba(201,201,208,.76)),
     var(--panorama-image);
 }
 
@@ -211,13 +211,13 @@ button {
 
 [data-theme="light"] .place-cards button,
 [data-theme="light"] .start-panel {
-  border-color: #bdbdc1;
-  background: rgba(239,239,239,.9);
+  border-color: #9f9fa8;
+  background: rgba(201,201,208,.9);
 }
 
 [data-theme="light"] .place-cards button.active {
   border-color: #7234e0;
-  background: rgba(232,214,255,.9);
+  background: rgba(216,194,245,.9);
 }
 
 .start-panel button,

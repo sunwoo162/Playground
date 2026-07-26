@@ -276,12 +276,12 @@ input:focus {
 /* Imweb-style light mode override */
 [data-theme="light"] {
   color-scheme: light;
-  background: #f2f2f3;
+  background: #d7d7dc;
   color: #0f1011;
 }
 
 [data-theme="light"] body {
-  background: #f2f2f3;
+  background: #d7d7dc;
 }
 
 [data-theme="light"] .app-header,
@@ -289,16 +289,16 @@ input:focus {
 [data-theme="light"] .watch-item,
 [data-theme="light"] .run-row,
 [data-theme="light"] .status-card {
-  border-color: #bdbdc1;
-  background: #efefef;
+  border-color: #9f9fa8;
+  background: #c9c9d0;
   color: #0f1011;
   box-shadow: none;
 }
 
 [data-theme="light"] .back-link,
 [data-theme="light"] .btn {
-  border-color: #bdbdc1;
-  background: #efefef;
+  border-color: #9f9fa8;
+  background: #c9c9d0;
   color: #0f1011;
 }
 
@@ -318,12 +318,12 @@ input:focus {
 }
 
 [data-theme="light"] input {
-  border-color: #bdbdc1;
-  background: #f7f7f8;
+  border-color: #9f9fa8;
+  background: #dedee3;
   color: #0f1011;
 }
 
 [data-theme="light"] .watch-item.active {
   border-color: #7234e0;
-  background: #f6eeff;
+  background: #d8c2f5;
 }

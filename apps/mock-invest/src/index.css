@@ -736,16 +736,16 @@ label {
 /* Imweb-style light mode override */
 [data-theme="light"] {
   color: #0f1011;
-  background: #f2f2f3;
+  background: #d7d7dc;
 }
 
 [data-theme="light"] body {
-  background: #f2f2f3;
+  background: #d7d7dc;
 }
 
 [data-theme="light"] .topbar {
-  border-bottom-color: #bdbdc1;
-  background: rgba(242,242,243,.94);
+  border-bottom-color: #9f9fa8;
+  background: rgba(215,215,220,.94);
 }
 
 [data-theme="light"] .back-link,
@@ -754,8 +754,8 @@ label {
 [data-theme="light"] .buy-btn,
 [data-theme="light"] .sell-btn,
 [data-theme="light"] .tabs button {
-  border-color: #bdbdc1;
-  background: #efefef;
+  border-color: #9f9fa8;
+  background: #c9c9d0;
   color: #0f1011;
 }
 
@@ -776,15 +776,15 @@ label {
 [data-theme="light"] .trade-box,
 [data-theme="light"] .ranking-list div,
 [data-theme="light"] .modal-panel {
-  border-color: #bdbdc1 !important;
-  background: #efefef !important;
+  border-color: #9f9fa8 !important;
+  background: #c9c9d0 !important;
   color: #0f1011 !important;
   box-shadow: none;
 }
 
 [data-theme="light"] input,
 [data-theme="light"] select {
-  border-color: #bdbdc1 !important;
-  background: #f7f7f8 !important;
+  border-color: #9f9fa8 !important;
+  background: #dedee3 !important;
   color: #0f1011 !important;
 }
