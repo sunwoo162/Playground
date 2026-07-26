@@ -637,12 +637,13 @@ input[type='range'] {
 }
 
 .bar-stage {
+  position: relative;
   display: flex;
   align-items: flex-end;
   justify-content: center;
   gap: 12px;
   min-width: 0;
-  padding: 18px;
+  padding: 54px 18px 18px;
   border: 1px solid #253146;
   border-radius: 10px;
   background: #0d1218;
@@ -667,6 +668,21 @@ input[type='range'] {
   transition: height 320ms ease, transform 320ms ease, background 220ms ease, box-shadow 220ms ease;
 }
 
+.sort-bar small {
+  position: absolute;
+  top: -24px;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: max-content;
+  padding: 3px 6px;
+  border: 1px solid #31405f;
+  border-radius: 999px;
+  background: #111824;
+  color: #b7bfcc;
+  font-size: 10px;
+  font-weight: 950;
+}
+
 .sort-bar span {
   position: absolute;
   bottom: 8px;
@@ -678,6 +694,11 @@ input[type='range'] {
 .sort-bar.compare {
   background: linear-gradient(180deg, #f0b232, #765820);
   box-shadow: 0 0 28px rgba(240, 178, 50, 0.28);
+}
+
+.sort-bar.compare small {
+  border-color: rgba(240, 178, 50, 0.7);
+  color: #ffd98b;
 }
 
 .sort-bar.selected {
@@ -714,12 +735,37 @@ input[type='range'] {
   background: linear-gradient(180deg, #23d18b, #17623f);
 }
 
+.sort-bar.sorted small {
+  border-color: rgba(35, 209, 139, 0.7);
+  color: #9af3c9;
+}
+
+.stage-caption {
+  position: absolute;
+  top: 14px;
+  left: 16px;
+  right: 16px;
+  z-index: 3;
+  overflow: hidden;
+  padding: 8px 10px;
+  border: 1px solid #344363;
+  border-radius: 8px;
+  background: rgba(17, 24, 36, 0.92);
+  color: #dbe2ff;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .search-stage {
+  position: relative;
   display: grid;
   align-content: center;
   gap: 12px;
   min-width: 0;
-  padding: 22px;
+  padding: 62px 22px 22px;
   border: 1px solid #253146;
   border-radius: 10px;
   background: #0d1218;
@@ -786,7 +832,7 @@ input[type='range'] {
   align-items: center;
   justify-items: center;
   min-width: 0;
-  padding: 26px 18px;
+  padding: 64px 18px 26px;
   border: 1px solid #253146;
   border-radius: 10px;
   background:
@@ -794,7 +840,23 @@ input[type='range'] {
     #0d1218;
 }
 
+.heap-edge {
+  position: absolute;
+  z-index: 0;
+  height: 2px;
+  background: #31405f;
+  transform-origin: left center;
+}
+
+.heap-edge.edge-a { top: 134px; left: 43%; width: 18%; transform: rotate(148deg); }
+.heap-edge.edge-b { top: 134px; left: 51%; width: 18%; transform: rotate(32deg); }
+.heap-edge.edge-c { top: 212px; left: 25%; width: 15%; transform: rotate(148deg); }
+.heap-edge.edge-d { top: 212px; left: 31%; width: 15%; transform: rotate(32deg); }
+.heap-edge.edge-e { top: 212px; left: 67%; width: 15%; transform: rotate(148deg); }
+.heap-edge.edge-f { top: 212px; left: 73%; width: 15%; transform: rotate(32deg); }
+
 .heap-node {
+  z-index: 1;
   display: grid;
   place-items: center;
   width: clamp(42px, 8vw, 68px);
@@ -841,11 +903,12 @@ input[type='range'] {
 }
 
 .merge-stage {
+  position: relative;
   display: grid;
   align-content: center;
   gap: 18px;
   min-width: 0;
-  padding: 22px;
+  padding: 64px 22px 22px;
   border: 1px solid #253146;
   border-radius: 10px;
   background: #0d1218;
@@ -860,12 +923,19 @@ input[type='range'] {
 .merge-row span {
   display: grid;
   place-items: center;
+  gap: 3px;
   min-height: 48px;
   border: 1px solid #31405f;
   border-radius: 8px;
   color: #f8fbff;
   font-weight: 950;
   transition: transform 240ms ease, background 240ms ease;
+}
+
+.merge-row small {
+  color: #8ea1ff;
+  font-size: 10px;
+  font-weight: 950;
 }
 
 .merge-row .left {

@@ -1180,33 +1180,42 @@ function App() {
                 {sortStep && (
                   detectedSortAlgorithm === 'heap' ? (
                     <div className="heap-stage">
+                      <div className="stage-caption">부모 노드가 두 자식 중 더 큰 값을 위로 올립니다</div>
+                      <div className="heap-edge edge-a" />
+                      <div className="heap-edge edge-b" />
+                      <div className="heap-edge edge-c" />
+                      <div className="heap-edge edge-d" />
+                      <div className="heap-edge edge-e" />
+                      <div className="heap-edge edge-f" />
                       {sortStep.array.map((value, index) => (
                         <div
                           className={`heap-node level-${Math.floor(Math.log2(index + 1))} ${sortStep.compare.includes(index) ? 'compare' : ''} ${sortStep.active.includes(index) ? 'selected' : ''} ${sortStep.sorted.includes(index) ? 'sorted' : ''}`}
                           key={`${index}-${value}`}
                         >
                           <span>{value}</span>
-                          <small>{index}</small>
+                          <small>{sortStep.active.includes(index) ? 'parent' : sortStep.compare.includes(index) ? 'child' : `i=${index}`}</small>
                         </div>
                       ))}
                     </div>
                   ) : detectedSortAlgorithm === 'linearSearch' ? (
                     <div className="search-stage linear">
+                      <div className="stage-caption">왼쪽부터 하나씩 target과 비교하고 지나간 칸은 방문 처리합니다</div>
                       {sortStep.array.map((value, index) => (
                         <div className={`search-cell ${sortStep.compare.includes(index) ? 'compare' : ''} ${sortStep.active.includes(index) ? 'selected' : ''} ${sortStep.sorted.includes(index) ? 'visited' : ''}`} key={`${index}-${value}`}>
-                          <small>{index}</small>
+                          <small>{sortStep.compare.includes(index) ? '현재 비교' : sortStep.sorted.includes(index) ? '방문 완료' : `i=${index}`}</small>
                           <strong>{value}</strong>
                         </div>
                       ))}
                     </div>
                   ) : detectedSortAlgorithm === 'binarySearch' ? (
                     <div className="search-stage binary">
+                      <div className="stage-caption">정렬된 배열에서 mid를 보고 왼쪽/오른쪽 절반을 버립니다</div>
                       {sortStep.array.map((value, index) => {
                         const bounds = sortStep.active.length >= 2 ? [Math.min(...sortStep.active), Math.max(...sortStep.active)] : [0, sortStep.array.length - 1]
                         const outside = index < bounds[0] || index > bounds[1]
                         return (
                           <div className={`search-cell ${outside ? 'outside' : ''} ${sortStep.compare.includes(index) ? 'compare' : ''} ${sortStep.sorted.includes(index) ? 'selected' : ''}`} key={`${index}-${value}`}>
-                            <small>{index}</small>
+                            <small>{sortStep.compare.includes(index) ? 'mid' : index === bounds[0] ? 'left' : index === bounds[1] ? 'right' : outside ? '제외' : `i=${index}`}</small>
                             <strong>{value}</strong>
                           </div>
                         )
@@ -1214,22 +1223,25 @@ function App() {
                     </div>
                   ) : detectedSortAlgorithm === 'merge' ? (
                     <div className="merge-stage">
+                      <div className="stage-caption">두 묶음의 맨 앞 값을 비교해서 더 작은 값부터 output에 씁니다</div>
                       <div className="merge-row split">
-                        {sortStep.array.map((value, index) => <span className={index < Math.ceil(sortStep.array.length / 2) ? 'left' : 'right'} key={`split-${index}-${value}`}>{value}</span>)}
+                        {sortStep.array.map((value, index) => <span className={index < Math.ceil(sortStep.array.length / 2) ? 'left' : 'right'} key={`split-${index}-${value}`}><small>{index < Math.ceil(sortStep.array.length / 2) ? 'left' : 'right'}</small>{value}</span>)}
                       </div>
                       <div className="merge-arrow">merge</div>
                       <div className="merge-row output">
-                        {sortStep.array.map((value, index) => <span className={`${sortStep.active.includes(index) ? 'selected' : ''} ${sortStep.sorted.includes(index) ? 'sorted' : ''}`} key={`out-${index}-${value}`}>{value}</span>)}
+                        {sortStep.array.map((value, index) => <span className={`${sortStep.active.includes(index) ? 'selected' : ''} ${sortStep.sorted.includes(index) ? 'sorted' : ''}`} key={`out-${index}-${value}`}><small>out {index}</small>{value}</span>)}
                       </div>
                     </div>
                   ) : (
                     <div className={`bar-stage ${detectedSortAlgorithm === 'quick' ? 'quick' : ''}`}>
+                      <div className="stage-caption">{detectedSortAlgorithm === 'quick' ? 'pivot을 기준으로 작은 값은 왼쪽, 큰 값은 오른쪽 구역으로 보냅니다' : '두 값을 비교하고 필요하면 위치를 바꿔 정렬된 영역을 늘립니다'}</div>
                       {sortStep.array.map((value, index) => (
                         <div
                           className={`sort-bar ${sortStep.compare.includes(index) ? 'compare' : ''} ${sortStep.active.includes(index) ? 'selected' : ''} ${sortStep.sorted.includes(index) ? 'sorted' : ''} ${sortStep.lifted === index ? 'lifted' : ''}`}
                           style={{ height: `${80 + value * 3}px` }}
                           key={`${index}-${value}`}
                         >
+                          <small>{detectedSortAlgorithm === 'quick' && sortStep.active.includes(index) ? 'pivot' : sortStep.compare.includes(index) ? '비교' : sortStep.sorted.includes(index) ? '완료' : `i=${index}`}</small>
                           <span>{value}</span>
                         </div>
                       ))}
