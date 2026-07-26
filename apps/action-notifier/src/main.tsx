@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
 
+document.documentElement.dataset.theme = localStorage.getItem('playground-theme') === 'light' ? 'light' : 'dark'
+
 type Watch = {
   id: number
   owner: string

@@ -276,12 +276,12 @@ input:focus {
 /* Imweb-style light mode override */
 [data-theme="light"] {
   color-scheme: light;
-  background: #ffffff;
+  background: #f8f9fb;
   color: #15181e;
 }
 
 [data-theme="light"] body {
-  background: #ffffff;
+  background: #f8f9fb;
 }
 
 [data-theme="light"] .app-header,

@@ -2,6 +2,8 @@ import { KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
 
+document.documentElement.dataset.theme = localStorage.getItem('playground-theme') === 'light' ? 'light' : 'dark'
+
 type Phase = 'tokenize' | 'parse' | 'compile' | 'execute'
 type Language = 'JavaScript' | 'Python' | 'Java'
 type SortAlgorithm = 'community' | 'selection' | 'insertion' | 'quick' | 'merge' | 'heap' | 'linearSearch' | 'binarySearch'

@@ -6,7 +6,7 @@
 }
 
 [data-theme="light"] {
-  --bg: #ffffff; --surface: #ffffff; --surface-2: #f8f9fb;
+  --bg: #f8f9fb; --surface: #ffffff; --surface-2: #eef2f6;
   --border: #dbdee3; --text: #15181e; --text-muted: #717680;
   --accent: #00b9ff;
 }

@@ -187,7 +187,7 @@ button {
 
 [data-theme="light"] .place-select {
   background:
-    linear-gradient(90deg, rgba(255,255,255,.94), rgba(248,249,251,.64)),
+    linear-gradient(90deg, rgba(248,249,251,.94), rgba(238,242,246,.66)),
     var(--panorama-image);
 }
 

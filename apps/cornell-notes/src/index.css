@@ -10,9 +10,9 @@
   --shadow: 0 14px 36px rgba(0,0,0,0.24);
 }
 [data-theme="light"] {
-  --bg: #ffffff;
+  --bg: #f8f9fb;
   --surface: #ffffff;
-  --surface-2: #f8f9fb;
+  --surface-2: #eef2f6;
   --border: #dbdee3;
   --text: #15181e;
   --text-muted: #717680;

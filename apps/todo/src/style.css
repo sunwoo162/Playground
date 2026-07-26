@@ -271,6 +271,60 @@ textarea:focus {
   line-height: 1.55;
 }
 
+[data-theme="dark"] {
+  color: #f4f7fb;
+  background: #090b10;
+}
+
+[data-theme="dark"] .todo-app {
+  background:
+    radial-gradient(circle at 18% 0%, rgba(15, 118, 110, .16), transparent 30rem),
+    #090b10;
+}
+
+[data-theme="dark"] .back-link,
+[data-theme="dark"] .hero h1,
+[data-theme="dark"] .item-title-row strong {
+  color: #f4f7fb;
+}
+
+[data-theme="dark"] .hero p,
+[data-theme="dark"] .progress-panel span,
+[data-theme="dark"] label,
+[data-theme="dark"] .todo-list p {
+  color: #93a1b5;
+}
+
+[data-theme="dark"] .progress-panel,
+[data-theme="dark"] .todo-form,
+[data-theme="dark"] .todo-list-panel,
+[data-theme="dark"] .todo-list li {
+  border-color: #273142;
+  background: #121722;
+  color: #f4f7fb;
+  box-shadow: 0 14px 36px rgba(0,0,0,.24);
+}
+
+[data-theme="dark"] input,
+[data-theme="dark"] textarea,
+[data-theme="dark"] .check-button,
+[data-theme="dark"] .delete-button {
+  border-color: #273142;
+  background: #1a2130;
+  color: #f4f7fb;
+}
+
+[data-theme="dark"] .priority-row button,
+[data-theme="dark"] .tabs button,
+[data-theme="dark"] .clear-button {
+  background: #1a2130;
+  color: #93a1b5;
+}
+
+[data-theme="dark"] .todo-list li.done {
+  background: #1a2130;
+}
+
 .priority {
   flex: 0 0 auto;
   padding: 4px 8px;

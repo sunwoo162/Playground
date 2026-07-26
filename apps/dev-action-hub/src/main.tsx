@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client'
 import { registerPushSubscription } from './push'
 import './styles.css'
 
+document.documentElement.dataset.theme = localStorage.getItem('playground-theme') === 'light' ? 'light' : 'dark'
+
 const LOCAL_SERVERS_KEY = 'dev-action-hub-local-servers'
 const LOCAL_MESSAGES_KEY = 'dev-action-hub-local-messages'
 const LOCAL_DM_KEY = 'dev-action-hub-local-dms'

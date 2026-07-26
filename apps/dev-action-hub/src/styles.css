@@ -1834,15 +1834,15 @@ a {
 /* Imweb-style light mode override */
 [data-theme="light"] {
   color: #15181e;
-  background: #ffffff;
+  background: #f8f9fb;
 }
 
 [data-theme="light"] body {
-  background: #ffffff;
+  background: #f8f9fb;
 }
 
 [data-theme="light"] .discord-shell {
-  background: #ffffff;
+  background: #f8f9fb;
 }
 
 [data-theme="light"] .server-rail,

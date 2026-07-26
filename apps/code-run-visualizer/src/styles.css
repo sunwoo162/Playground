@@ -2127,11 +2127,11 @@ input[type='range'] {
 /* Imweb-style light mode override */
 [data-theme="light"] {
   color: #15181e;
-  background: #ffffff;
+  background: #f8f9fb;
 }
 
 [data-theme="light"] .app-shell {
-  background: #ffffff;
+  background: #f8f9fb;
 }
 
 [data-theme="light"] .home-link {
