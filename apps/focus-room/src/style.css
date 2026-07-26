@@ -4,6 +4,14 @@
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  overscroll-behavior: none;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -13,6 +21,8 @@ body {
   min-width: 320px;
   min-height: 100vh;
   overflow: hidden;
+  position: fixed;
+  inset: 0;
 }
 
 button,
@@ -32,6 +42,9 @@ button {
   --laptop-focus: 1;
   --place-tint: #d7a45c;
   min-height: 100vh;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
   background: #030405;
 }
 
@@ -229,8 +242,7 @@ button {
 
 .look-shadow {
   background:
-    radial-gradient(ellipse at 50% 50%, transparent 0 48%, rgba(0,0,0,.22) 76%, rgba(0,0,0,.56) 100%),
-    repeating-linear-gradient(0deg, rgba(255,255,255,.018) 0 1px, transparent 1px 3px);
+    radial-gradient(ellipse at 50% 50%, transparent 0 52%, rgba(0,0,0,.18) 78%, rgba(0,0,0,.46) 100%);
 }
 
 .weather-overlay {
@@ -238,10 +250,9 @@ button {
 }
 
 .is-rain .weather-overlay {
-  opacity: .36;
+  opacity: .18;
   background:
-    linear-gradient(180deg, rgba(145,190,215,.14), rgba(4,8,12,.2)),
-    repeating-linear-gradient(108deg, transparent 0 17px, rgba(210,235,255,.28) 17px 19px);
+    linear-gradient(180deg, rgba(145,190,215,.14), rgba(4,8,12,.18));
   animation: rain-fall .7s linear infinite;
 }
 
@@ -407,6 +418,40 @@ button {
   backdrop-filter: blur(14px);
 }
 
+.crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 24;
+  width: 18px;
+  height: 18px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  opacity: .55;
+}
+
+.crosshair::before,
+.crosshair::after {
+  content: '';
+  position: absolute;
+  background: rgba(255,255,255,.8);
+  box-shadow: 0 0 8px rgba(0,0,0,.6);
+}
+
+.crosshair::before {
+  left: 8px;
+  top: 0;
+  width: 2px;
+  height: 18px;
+}
+
+.crosshair::after {
+  left: 0;
+  top: 8px;
+  width: 18px;
+  height: 2px;
+}
+
 .hud {
   position: fixed;
   top: 18px;
@@ -463,6 +508,10 @@ button {
   padding: 8px;
 }
 
+.hud:not(.open) .hud-controls {
+  display: none;
+}
+
 select {
   min-height: 38px;
   min-width: 112px;
@@ -493,10 +542,6 @@ select {
 }
 
 @media (max-width: 860px) {
-  body {
-    overflow: auto;
-  }
-
   .place-select {
     padding: 78px 16px 24px;
     align-content: start;
@@ -513,6 +558,8 @@ select {
 
   .hud {
     grid-template-columns: 1fr;
+    right: auto;
+    width: min(420px, calc(100vw - 36px));
   }
 
   .hud-controls {

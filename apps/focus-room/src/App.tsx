@@ -46,14 +46,17 @@ function App() {
   const [placeId, setPlaceId] = useState<PlaceId>('study-cafe')
   const [screenId, setScreenId] = useState<ScreenId>('notion')
   const [timeId, setTimeId] = useState<TimeId>('evening')
-  const [weatherId, setWeatherId] = useState<WeatherId>('rain')
+  const [weatherId, setWeatherId] = useState<WeatherId>('sunny')
   const [entered, setEntered] = useState(false)
+  const [locked, setLocked] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
   const [yaw, setYaw] = useState(0)
   const [pitch, setPitch] = useState(0)
   const [focusMinutes, setFocusMinutes] = useState(50)
   const [secondsLeft, setSecondsLeft] = useState(50 * 60)
   const [running, setRunning] = useState(false)
   const dragRef = useRef({ active: false, x: 0, y: 0, yaw: 0, pitch: 0 })
+  const stageRef = useRef<HTMLElement | null>(null)
 
   const place = PLACES.find((item) => item.id === placeId) ?? PLACES[0]
   const screen = SCREENS[screenId]
@@ -82,6 +85,23 @@ function App() {
     return () => window.clearInterval(timer)
   }, [running])
 
+  useEffect(() => {
+    const onPointerLockChange = () => {
+      setLocked(document.pointerLockElement === stageRef.current)
+    }
+    const onMouseMove = (event: MouseEvent) => {
+      if (document.pointerLockElement !== stageRef.current) return
+      setYaw((value) => clamp(value + event.movementX * 0.1, -58, 58))
+      setPitch((value) => clamp(value - event.movementY * 0.1, -42, 44))
+    }
+    document.addEventListener('pointerlockchange', onPointerLockChange)
+    document.addEventListener('mousemove', onMouseMove)
+    return () => {
+      document.removeEventListener('pointerlockchange', onPointerLockChange)
+      document.removeEventListener('mousemove', onMouseMove)
+    }
+  }, [])
+
   const timeText = useMemo(() => {
     const minutes = Math.floor(secondsLeft / 60)
     const seconds = secondsLeft % 60
@@ -89,12 +109,16 @@ function App() {
   }, [secondsLeft])
 
   const onPointerDown = (event: React.PointerEvent<HTMLElement>) => {
+    if (event.target instanceof HTMLElement && event.target.closest('.hud, .screen-overlay')) return
+    if (document.pointerLockElement !== event.currentTarget) {
+      event.currentTarget.requestPointerLock?.()
+    }
     dragRef.current = { active: true, x: event.clientX, y: event.clientY, yaw, pitch }
     event.currentTarget.setPointerCapture(event.pointerId)
   }
 
   const onPointerMove = (event: React.PointerEvent<HTMLElement>) => {
-    if (!dragRef.current.active) return
+    if (!dragRef.current.active || document.pointerLockElement === event.currentTarget) return
     const dx = event.clientX - dragRef.current.x
     const dy = event.clientY - dragRef.current.y
     setYaw(clamp(dragRef.current.yaw - dx * 0.16, -58, 58))
@@ -108,6 +132,7 @@ function App() {
 
   const enterRoom = () => {
     setEntered(true)
+    setMenuOpen(false)
     setYaw(0)
     setPitch(0)
     setRunning(true)
@@ -160,6 +185,7 @@ function App() {
       {entered && (
         <>
           <section
+            ref={stageRef}
             className="immersive-stage"
             aria-label={`${place.name} 현실형 1인칭 공부 시점`}
             onPointerDown={onPointerDown}
@@ -194,14 +220,16 @@ function App() {
               </div>
             </div>
 
-            <div className="look-help">드래그해서 위 · 아래 · 좌우 · 대각선으로 둘러보기</div>
+            <div className="crosshair" />
+            <div className="look-help">{locked ? '마우스로 둘러보기 · ESC 해제' : '화면 클릭 후 마우스로 둘러보기'}</div>
           </section>
 
-          <aside className="hud">
+          <aside className={`hud ${menuOpen ? 'open' : ''}`}>
             <div className="hud-top">
               <button onClick={leaveRoom}>나가기</button>
               <span>{place.name}</span>
               <strong>{Math.round(yaw)}° / {Math.round(pitch)}°</strong>
+              <button onClick={() => setMenuOpen((value) => !value)}>설정</button>
             </div>
             <div className="hud-controls">
               <select value={screenId} onChange={(event) => setScreenId(event.target.value as ScreenId)}>
