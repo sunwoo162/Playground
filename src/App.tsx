@@ -84,6 +84,14 @@ const APPS: AppItem[] = [
     color: '#5dd0a0',
   },
   {
+    id: 'todo',
+    title: 'Todo',
+    description: '오늘 할 일을 계획하고 완료 여부를 체크하는 데일리 할 일 관리',
+    emoji: '✅',
+    url: '/apps/todo/',
+    color: '#0f766e',
+  },
+  {
     id: 'dev-notes',
     title: '개발자 노트',
     description: '프로젝트별 기능명세서, API 명세서, 사용자 분석을 한 곳에',
