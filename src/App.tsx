@@ -76,6 +76,14 @@ const APPS: AppItem[] = [
     color: '#55efc4',
   },
   {
+    id: 'focus-room',
+    title: '몰입형 가상 면학석',
+    description: '카페·도서관·교실 같은 360도 공간에서 노트북으로 공부하는 집중 룸',
+    emoji: '🪑',
+    url: '/apps/focus-room/',
+    color: '#5dd0a0',
+  },
+  {
     id: 'dev-notes',
     title: '개발자 노트',
     description: '프로젝트별 기능명세서, API 명세서, 사용자 분석을 한 곳에',

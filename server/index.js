@@ -1094,6 +1094,12 @@ app.get('/apps/study-planner/*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'apps', 'study-planner', 'dist', 'index.html'));
 });
 
+// Focus Room 앱
+app.use('/apps/focus-room', express.static(path.join(__dirname, '..', 'apps', 'focus-room', 'dist')));
+app.get('/apps/focus-room/*', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'apps', 'focus-room', 'dist', 'index.html'));
+});
+
 // Cornell Notes 앱
 app.use('/apps/cornell-notes', express.static(path.join(__dirname, '..', 'apps', 'cornell-notes', 'dist')));
 app.get('/apps/cornell-notes/*', (req, res) => {
