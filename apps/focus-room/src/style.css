@@ -41,6 +41,13 @@ button {
   --pitch: 0deg;
   --laptop-focus: 1;
   --place-tint: #d7a45c;
+  --scene-opacity: 1;
+  --scene-image: none;
+  --scene-position: center;
+  --scene-size: cover;
+  --select-image: url("./assets/study-cafe-front.png");
+  --select-position: center;
+  --select-size: cover;
   min-height: 100vh;
   width: 100vw;
   height: 100vh;
@@ -56,9 +63,9 @@ button {
   padding: 32px;
   background:
     linear-gradient(90deg, rgba(0,0,0,.68), rgba(0,0,0,.16)),
-    url("./assets/study-cafe-front.png");
-  background-size: cover;
-  background-position: center;
+    var(--select-image);
+  background-size: cover, var(--select-size);
+  background-position: center, var(--select-position);
 }
 
 .place-select::before {
@@ -206,35 +213,42 @@ button {
   cursor: grabbing;
 }
 
-.photo-scene {
+.scene-layer {
   position: absolute;
   left: 50%;
   top: 50%;
   width: max(118vw, 210vh);
-  height: auto;
+  height: max(118vh, 66.4vw);
   min-height: 100vh;
-  object-fit: cover;
+  background-image: var(--scene-image);
+  background-size: var(--scene-size);
+  background-position: var(--scene-position);
+  background-repeat: no-repeat;
   transform:
     translate(-50%, -50%)
     translate3d(var(--view-x), var(--view-y), 0)
     scale(1.08);
   transform-origin: center;
+  opacity: var(--scene-opacity);
   filter: saturate(1.06) contrast(1.05) brightness(.96);
-  will-change: transform;
+  will-change: transform, opacity;
   pointer-events: none;
+  transition: opacity .18s linear;
 }
 
-.photo-scene.looking-up,
-.photo-scene.looking-down {
+.scene-layer.looking-up,
+.scene-layer.looking-down {
   width: max(104vw, 178vh);
+  height: max(122vh, 68.6vw);
   min-height: 112vh;
   scale: 1.02;
 }
 
-.photo-scene.looking-back,
-.photo-scene.looking-left,
-.photo-scene.looking-right {
+.scene-layer.looking-back,
+.scene-layer.looking-left,
+.scene-layer.looking-right {
   width: max(116vw, 196vh);
+  height: max(116vh, 65.2vw);
 }
 
 .scene-grade,
@@ -279,15 +293,15 @@ button {
   animation: rain-fall 5s linear infinite;
 }
 
-.is-cloudy .photo-scene {
+.is-cloudy .scene-layer {
   filter: saturate(.82) contrast(1.02) brightness(.82);
 }
 
-.is-morning .photo-scene {
+.is-morning .scene-layer {
   filter: saturate(1.02) contrast(1.03) brightness(1.06);
 }
 
-.is-dawn .photo-scene {
+.is-dawn .scene-layer {
   filter: saturate(.88) contrast(1.08) brightness(.72);
 }
 
