@@ -1833,16 +1833,16 @@ a {
 
 /* Imweb-style light mode override */
 [data-theme="light"] {
-  color: #20242b;
-  background: #eef1f4;
+  color: #0f1011;
+  background: #f2f2f3;
 }
 
 [data-theme="light"] body {
-  background: #eef1f4;
+  background: #f2f2f3;
 }
 
 [data-theme="light"] .discord-shell {
-  background: #eef1f4;
+  background: #f2f2f3;
 }
 
 [data-theme="light"] .server-rail,
@@ -1857,9 +1857,9 @@ a {
 [data-theme="light"] .assistant-panel,
 [data-theme="light"] .docs-panel,
 [data-theme="light"] .ops-panel {
-  border-color: #d3dae2 !important;
-  background: #fbfcfd !important;
-  color: #20242b !important;
+  border-color: #bdbdc1 !important;
+  background: #efefef !important;
+  color: #0f1011 !important;
 }
 
 [data-theme="light"] .rail-home,
@@ -1871,26 +1871,26 @@ a {
 [data-theme="light"] .secondary-button,
 [data-theme="light"] .panel-card button,
 [data-theme="light"] .action-link {
-  border-color: #d3dae2 !important;
-  background: #e5eaf0 !important;
-  color: #20242b !important;
+  border-color: #bdbdc1 !important;
+  background: #f7f7f8 !important;
+  color: #0f1011 !important;
 }
 
 [data-theme="light"] .rail-button.active,
 [data-theme="light"] .channel-button.active,
 [data-theme="light"] .tab-button.active,
 [data-theme="light"] .primary-button {
-  border-color: #20242b !important;
-  background: #20242b !important;
+  border-color: #7234e0 !important;
+  background: #7234e0 !important;
   color: #fff !important;
 }
 
 [data-theme="light"] input,
 [data-theme="light"] textarea,
 [data-theme="light"] select {
-  border-color: #d3dae2 !important;
-  background: #e5eaf0 !important;
-  color: #20242b !important;
+  border-color: #bdbdc1 !important;
+  background: #f7f7f8 !important;
+  color: #0f1011 !important;
 }
 
 [data-theme="light"] .message,
@@ -1900,9 +1900,9 @@ a {
 [data-theme="light"] .run-row,
 [data-theme="light"] .metric-card,
 [data-theme="light"] .spec-card {
-  border-color: #d3dae2 !important;
-  background: #fbfcfd !important;
-  color: #20242b !important;
+  border-color: #bdbdc1 !important;
+  background: #efefef !important;
+  color: #0f1011 !important;
   box-shadow: none;
 }
 
@@ -1912,5 +1912,5 @@ a {
 [data-theme="light"] .message-meta,
 [data-theme="light"] .panel-muted,
 [data-theme="light"] .empty-state {
-  color: #66717d !important;
+  color: #62626a !important;
 }
