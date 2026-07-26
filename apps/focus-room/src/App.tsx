@@ -81,6 +81,7 @@ function App() {
   const place = PLACES.find((item) => item.id === placeId) ?? PLACES[0]
   const screen = SCREENS[screenId]
   const panorama = PLACE_PANORAMAS[placeId]
+  const seatedPitchOffset = placeId === 'study-cafe' ? -7 : 0
   const wrappedYaw = ((viewYaw % 360) + 360) % 360
   const frontDistance = Math.min(Math.abs(wrappedYaw), Math.abs(360 - wrappedYaw))
   const laptopFocus = frontDistance < 54 && Math.abs(viewPitch) < 38
@@ -226,7 +227,7 @@ function App() {
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerUp}
           >
-            <PanoramaViewer src={panorama} yaw={viewYaw} pitch={viewPitch} />
+            <PanoramaViewer src={panorama} yaw={viewYaw} pitch={viewPitch + seatedPitchOffset} />
             <div className="scene-grade" />
             <div className="weather-overlay" />
             <div className="look-shadow" />
