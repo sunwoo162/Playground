@@ -193,9 +193,16 @@ input:focus {
   color: #b91c1c;
 }
 
+.form-error {
+  margin: 0;
+  color: #b91c1c;
+  font-size: .86rem;
+  font-weight: 900;
+}
+
 .panel-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
@@ -209,36 +216,80 @@ input:focus {
   font-weight: 900;
 }
 
-.timeline {
-  display: grid;
-  gap: 10px;
-  margin: 18px 0 0;
-  padding: 0;
-  list-style: none;
+.view-tabs {
+  display: flex;
+  gap: 8px;
 }
 
-.block {
+.view-tabs button {
+  min-height: 38px;
+  border: 0;
+  border-radius: 8px;
+  background: #e2e8f0;
+  color: #334155;
+  padding: 0 14px;
+  font-weight: 950;
+}
+
+.view-tabs button.active {
+  background: #172033;
+  color: #fff;
+}
+
+.day-grid {
+  position: relative;
+  height: 1224px;
+  margin-top: 18px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  background:
+    linear-gradient(90deg, rgba(248,250,252,.95) 0 88px, transparent 88px),
+    repeating-linear-gradient(180deg, #fff 0 71px, #e2e8f0 71px 72px);
+}
+
+.hour-line {
+  position: absolute;
+  left: 14px;
+  width: 58px;
+  transform: translateY(-8px);
+  color: #64748b;
+  font-size: .78rem;
+  font-weight: 950;
+}
+
+.schedule-card {
+  position: absolute;
+  left: 96px;
+  right: 14px;
   display: grid;
-  grid-template-columns: 36px 74px 1fr 34px;
+  grid-template-columns: 34px 1fr 30px;
   gap: 12px;
-  align-items: center;
-  padding: 14px;
+  align-items: start;
+  padding: 10px;
   border: 1px solid #e2e8f0;
   border-left: 6px solid #2563eb;
   border-radius: 8px;
   background: #fff;
+  box-shadow: 0 10px 22px rgba(15,23,42,.08);
 }
 
-.block.work { border-left-color: #7c3aed; }
-.block.break { border-left-color: #f59e0b; }
-.block.life { border-left-color: #10b981; }
+.schedule-card.work,
+.week-block.work { border-left-color: #7c3aed; }
+.schedule-card.break,
+.week-block.break { border-left-color: #f59e0b; }
+.schedule-card.life,
+.week-block.life { border-left-color: #10b981; }
 
-.block.done {
+.schedule-card.done,
+.week-block.done {
   background: #f8fafc;
 }
 
-.block.done .block-body strong,
-.block.done .block-body span {
+.schedule-card.done strong,
+.schedule-card.done span,
+.week-block.done strong,
+.week-block.done span {
   color: #94a3b8;
   text-decoration: line-through;
 }
@@ -258,26 +309,88 @@ input:focus {
   color: #ef4444;
 }
 
-time {
-  display: grid;
-  gap: 2px;
-}
-
-time strong {
-  color: #0f172a;
-}
-
-time span,
-.block-body span {
+.schedule-card span,
+.week-block span {
   color: #64748b;
   font-size: .82rem;
   font-weight: 800;
 }
 
-.block-body strong {
+.schedule-card strong,
+.week-block strong {
   display: block;
   color: #172033;
   margin-bottom: 3px;
+}
+
+.week-grid {
+  display: grid;
+  grid-template-columns: 72px repeat(7, minmax(104px, 1fr));
+  margin-top: 18px;
+  overflow: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.week-corner,
+.week-day,
+.week-hour,
+.week-cell {
+  border-right: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.week-day {
+  min-height: 58px;
+  border-top: 0;
+  border-left: 0;
+  background: #f8fafc;
+  color: #172033;
+  display: grid;
+  place-items: center;
+  gap: 2px;
+  font-weight: 950;
+}
+
+.week-day.active {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.week-day span {
+  color: #64748b;
+  font-size: .78rem;
+}
+
+.week-hour {
+  min-height: 76px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 8px;
+  color: #64748b;
+  font-size: .76rem;
+  font-weight: 950;
+  background: #f8fafc;
+}
+
+.week-cell {
+  min-height: 76px;
+  padding: 5px;
+}
+
+.week-block {
+  width: 100%;
+  min-height: 54px;
+  margin-bottom: 5px;
+  border: 1px solid #e2e8f0;
+  border-left: 5px solid #2563eb;
+  border-radius: 8px;
+  background: #fff;
+  color: #172033;
+  padding: 7px;
+  text-align: left;
 }
 
 .empty {
@@ -318,18 +431,7 @@ time span,
     grid-template-columns: 1fr 1fr;
   }
 
-  .block {
-    grid-template-columns: 34px 1fr 30px;
-  }
-
-  .block time {
-    grid-column: 2;
-    grid-row: 1;
-    display: flex;
-    gap: 6px;
-  }
-
-  .block-body {
-    grid-column: 2;
+  .week-grid {
+    grid-template-columns: 64px repeat(7, 120px);
   }
 }
