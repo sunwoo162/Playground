@@ -26,6 +26,10 @@ button {
 
 .focus-room {
   --yaw: 0deg;
+  --pano-x: 0vw;
+  --desk-opacity: 1;
+  --desk-scale: 1;
+  --desk-drop: 0vh;
   --sky-offset: 0px;
   --accent: #5dd0a0;
   --wall: #27313a;
@@ -159,7 +163,6 @@ button {
   position: fixed;
   inset: 0;
   overflow: hidden;
-  perspective: 760px;
   cursor: grab;
   user-select: none;
   touch-action: none;
@@ -170,38 +173,44 @@ button {
   cursor: grabbing;
 }
 
-.panorama-cylinder {
+.pano-world {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 100vw;
+  left: 0;
+  top: 0;
+  width: 500vw;
   height: 100vh;
-  transform-style: preserve-3d;
-  transform: translate(-50%, -50%) rotateY(var(--yaw));
+  display: flex;
+  transform: translateX(var(--pano-x));
   transition: transform .08s linear;
+  will-change: transform;
 }
 
 .view {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 138vw;
-  height: 105vh;
-  margin-left: -69vw;
-  margin-top: -52.5vh;
+  position: relative;
+  flex: 0 0 100vw;
+  width: 100vw;
+  height: 100vh;
   overflow: hidden;
   background:
-    radial-gradient(circle at 50% 15%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 22rem),
-    repeating-linear-gradient(90deg, rgba(255,255,255,.035) 0 2px, transparent 2px 160px),
-    linear-gradient(180deg, color-mix(in srgb, var(--wall) 76%, #101722), var(--wall) 58%, var(--floor) 58%);
-  box-shadow: inset 0 0 140px rgba(0,0,0,.48);
-  backface-visibility: hidden;
+    radial-gradient(ellipse at 50% 20%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 30rem),
+    linear-gradient(90deg, rgba(0,0,0,.34), transparent 18%, transparent 82%, rgba(0,0,0,.34)),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.032) 0 2px, transparent 2px 190px),
+    linear-gradient(180deg, color-mix(in srgb, var(--wall) 82%, #111827), var(--wall) 61%, var(--floor) 61%);
+  box-shadow: inset 0 0 160px rgba(0,0,0,.46);
 }
 
-.view-front { transform: rotateY(0deg) translateZ(70vw); }
-.view-right { transform: rotateY(90deg) translateZ(70vw); }
-.view-back { transform: rotateY(180deg) translateZ(70vw); }
-.view-left { transform: rotateY(270deg) translateZ(70vw); }
+.view::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 40vh;
+  background:
+    radial-gradient(ellipse at 50% 0, rgba(255,255,255,.08), transparent 42%),
+    linear-gradient(180deg, transparent, rgba(0,0,0,.28));
+  pointer-events: none;
+}
 
 .is-classroom .view-front::before,
 .is-classroom .view-back::before {
@@ -234,11 +243,13 @@ button {
 .is-study-cafe .view-right,
 .is-study-cafe .view-left {
   background:
+    radial-gradient(ellipse at 50% 20%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 28rem),
+    linear-gradient(90deg, rgba(0,0,0,.36), transparent 22%, transparent 78%, rgba(0,0,0,.36)),
     repeating-linear-gradient(90deg, #6f452e 0 24px, #b27748 24px 38px, #2d6370 38px 52px, #d3a65f 52px 68px),
     linear-gradient(180deg, var(--wall), var(--floor));
-  background-size: 420px 46%, auto;
-  background-repeat: repeat-x, no-repeat;
-  background-position: var(--sky-offset) 18%, center;
+  background-size: auto, auto, 420px 44%, auto;
+  background-repeat: no-repeat, no-repeat, repeat-x, no-repeat;
+  background-position: center, center, var(--sky-offset) 18%, center;
 }
 
 .is-night-reading .view {
@@ -428,12 +439,12 @@ button {
   animation: weather-fall 5s linear infinite;
 }
 
-.is-cloudy .panorama-cylinder {
+.is-cloudy .pano-world {
   filter: saturate(.72) brightness(.84);
 }
 
-.is-dawn .panorama-cylinder,
-.is-evening .panorama-cylinder {
+.is-dawn .pano-world,
+.is-evening .pano-world {
   filter: brightness(.76) saturate(.95);
 }
 
@@ -445,40 +456,39 @@ button {
   position: absolute;
   left: 50%;
   bottom: -6vh;
-  width: min(1100px, 96vw);
-  height: 48vh;
-  transform: translateX(-50%);
+  width: min(1180px, 98vw);
+  height: 50vh;
+  opacity: var(--desk-opacity);
+  transform: translateX(-50%) translateY(var(--desk-drop)) scale(var(--desk-scale));
   transform-origin: bottom center;
-  border-radius: 44px 44px 0 0;
+  border-radius: 46px 46px 0 0;
   background:
     linear-gradient(90deg, rgba(255,255,255,.08), transparent 18%, transparent 82%, rgba(0,0,0,.22)),
     repeating-linear-gradient(90deg, rgba(255,255,255,.04) 0 2px, transparent 2px 90px),
     color-mix(in srgb, var(--floor) 78%, #15110e);
   box-shadow: 0 -26px 90px rgba(0,0,0,.48);
-  transition: opacity .22s, transform .22s;
+  transition: opacity .16s linear, transform .16s linear;
 }
 
 .looking-away .desk-pov {
-  opacity: .18;
-  transform: translateX(-50%) translateY(14vh) scale(.92);
   pointer-events: none;
 }
 
 .laptop-pov {
   position: absolute;
   left: 50%;
-  bottom: 13vh;
-  width: min(640px, 58vw);
-  transform: translateX(-50%);
+  bottom: 14vh;
+  width: min(700px, 62vw);
+  transform: translateX(-50%) perspective(900px) rotateX(1.5deg);
 }
 
 .laptop-lid {
-  height: min(390px, 39vh);
+  height: min(410px, 40vh);
   padding: 12px;
   border: 12px solid #0c111c;
   border-radius: 18px 18px 8px 8px;
   background: #030712;
-  box-shadow: 0 28px 70px rgba(0,0,0,.58);
+  box-shadow: 0 30px 80px rgba(0,0,0,.62);
 }
 
 .browser-strip {
@@ -575,7 +585,7 @@ button {
 }
 
 .laptop-keyboard {
-  height: 40px;
+  height: 52px;
   width: 112%;
   margin-left: -6%;
   border-radius: 4px 4px 36px 36px;
@@ -595,8 +605,8 @@ button {
 }
 
 .coffee-cup {
-  right: 13%;
-  bottom: 19vh;
+  right: 12%;
+  bottom: 20vh;
   width: 56px;
   height: 64px;
   border-radius: 10px 10px 18px 18px;
@@ -606,7 +616,7 @@ button {
 
 .pen-tray {
   right: 24%;
-  bottom: 15vh;
+  bottom: 16vh;
   width: 140px;
   height: 18px;
   border-radius: 999px;
@@ -615,9 +625,9 @@ button {
 
 .study-book {
   left: 11%;
-  bottom: 14vh;
-  width: 190px;
-  height: 122px;
+  bottom: 15vh;
+  width: min(220px, 18vw);
+  height: 132px;
   transform: rotate(-7deg);
   border-radius: 7px;
   background: repeating-linear-gradient(180deg, #f8fafc 0 17px, #cbd5e1 17px 18px);
@@ -625,7 +635,7 @@ button {
 
 .sticky-note {
   left: 24%;
-  bottom: 27vh;
+  bottom: 29vh;
   width: 132px;
   min-height: 118px;
   padding: 10px;
@@ -654,9 +664,9 @@ button {
 
 .left-hand,
 .right-hand {
-  bottom: 7vh;
-  width: 110px;
-  height: 58px;
+  bottom: 7.5vh;
+  width: 126px;
+  height: 64px;
   border-radius: 48px 48px 22px 22px;
   background: #d9ad8c;
   opacity: .76;

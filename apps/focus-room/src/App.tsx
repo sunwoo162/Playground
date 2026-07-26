@@ -56,7 +56,11 @@ function App() {
   const screen = SCREENS[screenId]
   const wrappedYaw = ((yaw % 360) + 360) % 360
   const frontDistance = Math.min(Math.abs(wrappedYaw), Math.abs(360 - wrappedYaw))
-  const lookingAtDesk = frontDistance < 42
+  const lookingAtDesk = frontDistance < 54
+  const deskOpacity = Math.max(0, 1 - frontDistance / 62)
+  const deskScale = 0.9 + deskOpacity * 0.1
+  const deskDrop = (1 - deskOpacity) * 14
+  const panoX = -(wrappedYaw / 90) * 100
 
   useEffect(() => {
     setSecondsLeft(focusMinutes * 60)
@@ -125,6 +129,10 @@ function App() {
       className={`focus-room is-${placeId} is-${timeId} is-${weatherId} ${entered ? 'entered' : 'selecting'} ${lookingAtDesk ? 'looking-front' : 'looking-away'}`}
       style={{
         '--yaw': `${yaw}deg`,
+        '--pano-x': `${panoX}vw`,
+        '--desk-opacity': deskOpacity.toFixed(3),
+        '--desk-scale': deskScale.toFixed(3),
+        '--desk-drop': `${deskDrop.toFixed(2)}vh`,
         '--sky-offset': `${-yaw * 5}px`,
         '--accent': place.accent,
         '--wall': place.wall,
@@ -169,7 +177,7 @@ function App() {
             onPointerCancel={onPointerUp}
             onClick={outsideFocus}
           >
-            <div className="panorama-cylinder">
+            <div className="pano-world">
               <div className="view view-front">
                 <div className="window-panel"><span>{WEATHER[weatherId]}</span></div>
                 <div className="ambient-person person-left" />
@@ -186,6 +194,11 @@ function App() {
               <div className="view view-left">
                 <div className="bookshelf wide" />
                 <div className="ambient-person reading" />
+              </div>
+              <div className="view view-front view-front-copy">
+                <div className="window-panel"><span>{WEATHER[weatherId]}</span></div>
+                <div className="ambient-person person-left" />
+                <div className="ambient-person person-right" />
               </div>
             </div>
             <div className="ceiling" />
