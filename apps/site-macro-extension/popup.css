@@ -1,0 +1,126 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, Pretendard, system-ui, sans-serif;
+  background: #111827;
+  color: #f8fafc;
+}
+
+body {
+  width: 380px;
+  margin: 0;
+  background: #111827;
+}
+
+header,
+main {
+  padding: 16px;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid rgba(255,255,255,.12);
+}
+
+strong {
+  display: block;
+  font-size: 16px;
+}
+
+p {
+  margin: 4px 0 0;
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+button {
+  min-height: 34px;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 6px;
+  background: #1f2937;
+  color: #f8fafc;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+button.primary {
+  border-color: #00dd99;
+  background: #00dd99;
+  color: #082018;
+}
+
+main {
+  display: grid;
+  gap: 16px;
+}
+
+.notice {
+  border: 1px solid rgba(0,221,153,.28);
+  border-radius: 8px;
+  padding: 10px;
+  background: rgba(0,221,153,.08);
+  color: #c7f9e6;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.section-title,
+.job-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+h2 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.job-list,
+.log-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.job,
+.log {
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 8px;
+  padding: 10px;
+  background: #182231;
+}
+
+.job strong,
+.log strong {
+  font-size: 13px;
+}
+
+.job small,
+.log small {
+  display: block;
+  margin-top: 4px;
+  color: #9ca3af;
+  word-break: break-all;
+}
+
+.job-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.job-actions button {
+  flex: 1;
+}
+
+.empty {
+  padding: 14px;
+  border: 1px dashed rgba(255,255,255,.18);
+  border-radius: 8px;
+  color: #9ca3af;
+  text-align: center;
+}

@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>사이트 액션 매크로 설정</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <p class="eyebrow">Site Action Macro</p>
+          <h1>사이트별 예약 작업</h1>
+          <p>URL 패턴, 실행 시간, 액션 순서를 지정하면 해당 사이트에서만 실행됩니다.</p>
+        </div>
+        <button id="addJob" type="button" class="primary">작업 추가</button>
+      </header>
+
+      <section class="guardrail">
+        <strong>안전 제한</strong>
+        <span>최소 간격 5초, 작업당 액션 최대 20개, 비밀번호/로그인 폼 자동 입력 차단, 사이트 권한 허용 필요.</span>
+      </section>
+
+      <section id="jobEditorList" class="job-editor-list"></section>
+    </main>
+
+    <template id="jobTemplate">
+      <article class="job-card">
+        <div class="card-head">
+          <input data-field="name" placeholder="작업 이름" />
+          <label><input data-field="enabled" type="checkbox" /> 사용</label>
+        </div>
+
+        <div class="grid">
+          <label>URL 패턴 <input data-field="urlPattern" placeholder="https://example.com/page*" /></label>
+          <label>없으면 열 URL <input data-field="startUrl" placeholder="https://example.com/page" /></label>
+          <label class="check"><input data-field="openIfMissing" type="checkbox" /> 탭이 없으면 새 탭으로 열기</label>
+        </div>
+
+        <div class="grid schedule">
+          <label>실행 방식
+            <select data-field="scheduleType">
+              <option value="interval">몇 초 간격</option>
+              <option value="time">특정 시간</option>
+            </select>
+          </label>
+          <label>간격(초) <input data-field="intervalSeconds" type="number" min="5" step="1" /></label>
+          <label>특정 시간 <input data-field="timeOfDay" type="time" /></label>
+        </div>
+
+        <div class="actions-head">
+          <strong>액션 순서</strong>
+          <button data-action="addAction" type="button">액션 추가</button>
+        </div>
+        <div data-role="actions" class="actions-list"></div>
+
+        <div class="footer-actions">
+          <button data-action="permission" type="button">사이트 권한 허용</button>
+          <button data-action="duplicate" type="button">복제</button>
+          <button data-action="delete" type="button" class="danger">삭제</button>
+        </div>
+      </article>
+    </template>
+
+    <template id="actionTemplate">
+      <div class="action-row">
+        <select data-field="type">
+          <option value="click">클릭</option>
+          <option value="type">입력</option>
+          <option value="wait">대기</option>
+          <option value="scroll">스크롤</option>
+          <option value="reload">새로고침</option>
+        </select>
+        <input data-field="selector" placeholder="CSS selector, 예: #submit" />
+        <input data-field="value" placeholder="입력값" />
+        <input data-field="ms" type="number" placeholder="대기 ms" />
+        <input data-field="y" type="number" placeholder="스크롤 Y" />
+        <button data-action="removeAction" type="button">삭제</button>
+      </div>
+    </template>
+
+    <script src="options.js"></script>
+  </body>
+</html>

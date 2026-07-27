@@ -1,0 +1,189 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, Pretendard, system-ui, sans-serif;
+  background: #0f172a;
+  color: #f8fafc;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at 10% 0%, rgba(0,221,153,.12), transparent 28rem),
+    #0f172a;
+}
+
+main {
+  width: min(1120px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 40px 0;
+}
+
+header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 20px;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: #00dd99;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+h1 {
+  margin: 0;
+  font-size: 34px;
+}
+
+p {
+  margin: 8px 0 0;
+  color: #a7b0c0;
+}
+
+button,
+input,
+select {
+  min-height: 40px;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 6px;
+  background: #111827;
+  color: #f8fafc;
+  font: inherit;
+}
+
+button {
+  padding: 0 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+button.primary {
+  border-color: #00dd99;
+  background: #00dd99;
+  color: #082018;
+}
+
+button.danger {
+  border-color: rgba(248,113,113,.45);
+  color: #fecaca;
+}
+
+input,
+select {
+  width: 100%;
+  padding: 0 10px;
+}
+
+label {
+  display: grid;
+  gap: 6px;
+  color: #a7b0c0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+label.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+label.check input,
+.card-head input[type='checkbox'] {
+  width: auto;
+  min-height: auto;
+}
+
+.guardrail,
+.job-card {
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 10px;
+  background: rgba(17,24,39,.88);
+}
+
+.guardrail {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 20px;
+  padding: 16px;
+}
+
+.guardrail strong {
+  color: #00dd99;
+}
+
+.guardrail span {
+  color: #cbd5e1;
+}
+
+.job-editor-list {
+  display: grid;
+  gap: 16px;
+}
+
+.job-card {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+}
+
+.card-head,
+.actions-head,
+.footer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.card-head > input {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.actions-list {
+  display: grid;
+  gap: 8px;
+}
+
+.action-row {
+  display: grid;
+  grid-template-columns: 110px 1.5fr 1fr 110px 110px 70px;
+  gap: 8px;
+  align-items: center;
+}
+
+.empty {
+  padding: 24px;
+  border: 1px dashed rgba(255,255,255,.16);
+  border-radius: 10px;
+  color: #a7b0c0;
+  text-align: center;
+}
+
+@media (max-width: 820px) {
+  header,
+  .card-head,
+  .footer-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .grid,
+  .action-row {
+    grid-template-columns: 1fr;
+  }
+}
