@@ -168,6 +168,7 @@
           </p>
           <div class="actions">
             <a class="button primary" href="#install">설치 방법 보기</a>
+            <a class="button" href="#webhook">웹훅 사용 방법</a>
             <a class="button" href="#files">파일 기능 보기</a>
           </div>
         </div>
@@ -206,6 +207,83 @@
           <li>확장 아이콘을 고정하고 <code>관리</code> 버튼으로 규칙을 만듭니다.</li>
           <li>현재 페이지에서 실행하려면 팝업의 ▶ 버튼 또는 <code>Alt+Shift+B</code>를 사용합니다.</li>
         </ol>
+      </section>
+
+      <section id="webhook" class="panel" style="margin-top:24px">
+        <h2>웹훅 사용 방법</h2>
+        <p>
+          웹훅은 WebBridge가 웹페이지에서 뽑은 데이터를 다른 서버로 보내는 방식입니다.
+          예를 들어 현재 페이지 제목과 URL을 추출해서 Discord, Make, Zapier, 직접 만든 API 서버로 전송할 수 있습니다.
+        </p>
+
+        <h2>1. 웹훅 URL 준비</h2>
+        <ol>
+          <li>Discord라면 채널 설정 → 연동 → 웹후크 만들기에서 URL을 복사합니다.</li>
+          <li>직접 만든 서버라면 <code>POST https://your-server.com/webhook</code> 같은 수신 API를 준비합니다.</li>
+          <li>테스트용으로는 webhook.site 같은 임시 수신 페이지를 사용할 수 있습니다.</li>
+        </ol>
+
+        <h2>2. WebBridge 규칙 만들기</h2>
+        <ol>
+          <li>확장 아이콘 → <code>관리</code>를 엽니다.</li>
+          <li><code>＋ 새 규칙</code>을 누릅니다.</li>
+          <li>트리거는 처음엔 <code>수동</code>으로 둡니다.</li>
+          <li>단계 JSON에 아래 예시를 붙여 넣습니다.</li>
+          <li><code>https://hooks.example.com/replace-me</code> 부분을 본인 웹훅 URL로 바꿉니다.</li>
+          <li>저장 후 원하는 웹페이지에서 팝업의 ▶ 버튼으로 테스트합니다.</li>
+        </ol>
+
+        <pre>{
+  "name": "현재 페이지 정보 웹훅 전송",
+  "trigger": { "type": "manual" },
+  "steps": [
+    {
+      "type": "extract",
+      "fields": {
+        "title": "h1",
+        "pageTitle": "title",
+        "canonicalUrl": { "selector": "link[rel=canonical]", "attr": "href" }
+      }
+    },
+    {
+      "type": "transform",
+      "script": "return { title: data.title || data.pageTitle, url: data.canonicalUrl || context.url, sentAt: new Date().toISOString() };"
+    },
+    {
+      "type": "http",
+      "url": "https://hooks.example.com/replace-me",
+      "method": "POST",
+      "headers": { "Content-Type": "application/json" },
+      "body": "{{JSON.stringify(data)}}"
+    },
+    {
+      "type": "notify",
+      "title": "WebBridge",
+      "message": "웹훅 전송 완료: {{data.title}}"
+    }
+  ]
+}</pre>
+
+        <h2>3. Discord 웹훅 예시</h2>
+        <p>
+          Discord 웹훅은 보통 <code>content</code> 또는 <code>embeds</code> 형태를 받습니다.
+          아래처럼 body를 Discord 형식으로 바꾸면 채널에 메시지가 올라갑니다.
+        </p>
+        <pre>{
+  "type": "http",
+  "url": "디스코드_웹훅_URL",
+  "method": "POST",
+  "headers": { "Content-Type": "application/json" },
+  "body": "{ \"content\": \"새 페이지 저장: {{data.title}}\\n{{data.url}}\" }"
+}</pre>
+
+        <h2>4. 주의사항</h2>
+        <ul>
+          <li>웹훅 URL은 비밀번호처럼 취급하세요. URL을 아는 사람이 메시지를 보낼 수 있습니다.</li>
+          <li>API 키, JWT, 세션 쿠키 같은 민감한 값은 body에 넣지 마세요.</li>
+          <li>처음에는 반드시 수동 트리거로 테스트한 뒤, 문제 없을 때 page-load나 interval로 바꾸세요.</li>
+          <li>너무 짧은 간격으로 반복 전송하면 대상 서비스에서 차단될 수 있습니다.</li>
+        </ul>
       </section>
 
       <section id="files" class="panel" style="margin-top:24px">
