@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>사이트 액션 매크로</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Inter, Pretendard, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #0f172a;
+        color: #f8fafc;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background:
+          radial-gradient(circle at 12% 4%, rgba(0, 221, 153, .16), transparent 26rem),
+          radial-gradient(circle at 82% 0%, rgba(56, 174, 250, .12), transparent 24rem),
+          #0f172a;
+      }
+
+      main {
+        width: min(1080px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 48px 0;
+      }
+
+      .back {
+        display: inline-flex;
+        align-items: center;
+        min-height: 40px;
+        padding: 0 14px;
+        border: 1px solid rgba(255,255,255,.14);
+        border-radius: 8px;
+        background: rgba(17,24,39,.78);
+        color: #f8fafc;
+        font-weight: 800;
+        text-decoration: none;
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1.1fr) minmax(320px, .9fr);
+        gap: 24px;
+        align-items: stretch;
+        margin-top: 32px;
+      }
+
+      .panel {
+        border: 1px solid rgba(255,255,255,.12);
+        border-radius: 12px;
+        background: rgba(17,24,39,.88);
+      }
+
+      .intro {
+        padding: 34px;
+      }
+
+      .eyebrow {
+        margin: 0 0 12px;
+        color: #00dd99;
+        font-size: 13px;
+        font-weight: 900;
+      }
+
+      h1 {
+        margin: 0;
+        max-width: 760px;
+        font-size: clamp(34px, 5vw, 56px);
+        line-height: 1.08;
+        letter-spacing: 0;
+      }
+
+      .lead {
+        margin: 18px 0 0;
+        max-width: 680px;
+        color: #cbd5e1;
+        font-size: 17px;
+        line-height: 1.7;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 26px;
+      }
+
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 46px;
+        padding: 0 16px;
+        border: 1px solid rgba(255,255,255,.14);
+        border-radius: 8px;
+        background: #1f2937;
+        color: #f8fafc;
+        font-weight: 900;
+        text-decoration: none;
+      }
+
+      .button.primary {
+        border-color: #00dd99;
+        background: #00dd99;
+        color: #082018;
+      }
+
+      .preview {
+        padding: 18px;
+      }
+
+      .browser {
+        overflow: hidden;
+        border: 1px solid rgba(255,255,255,.12);
+        border-radius: 10px;
+        background: #0b1120;
+      }
+
+      .bar {
+        display: flex;
+        gap: 6px;
+        padding: 12px;
+        border-bottom: 1px solid rgba(255,255,255,.1);
+      }
+
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: #64748b;
+      }
+
+      .screen {
+        display: grid;
+        gap: 12px;
+        padding: 18px;
+      }
+
+      .job {
+        border: 1px solid rgba(255,255,255,.12);
+        border-radius: 8px;
+        padding: 14px;
+        background: #111827;
+      }
+
+      .job strong {
+        display: block;
+        font-size: 15px;
+      }
+
+      .job span {
+        display: block;
+        margin-top: 6px;
+        color: #9ca3af;
+        font-size: 13px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+        margin-top: 24px;
+      }
+
+      .card {
+        padding: 18px;
+      }
+
+      .card h2 {
+        margin: 0;
+        font-size: 18px;
+      }
+
+      .card p,
+      li {
+        color: #cbd5e1;
+        line-height: 1.6;
+      }
+
+      .steps {
+        margin-top: 24px;
+        padding: 24px;
+      }
+
+      code {
+        display: inline-block;
+        padding: 2px 6px;
+        border-radius: 6px;
+        background: #020617;
+        color: #b7f7df;
+      }
+
+      @media (max-width: 860px) {
+        .hero,
+        .grid {
+          grid-template-columns: 1fr;
+        }
+
+        .intro {
+          padding: 24px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <a class="back" href="/">← 놀이터로 돌아가기</a>
+
+      <section class="hero">
+        <div class="intro panel">
+          <p class="eyebrow">Chrome Extension</p>
+          <h1>사이트별 클릭·입력·스크롤 작업을 원하는 시간에 실행</h1>
+          <p class="lead">
+            특정 웹사이트 URL 패턴을 등록하고, 몇 초 간격 또는 매일 12:00 같은 특정 시간에 액션 순서를 실행하는 확장 프로그램입니다.
+            작업은 사용자가 권한을 허용한 사이트에서만 실행됩니다.
+          </p>
+          <div class="actions">
+            <a class="button primary" href="https://github.com/sunwoo162/Playground/tree/main/apps/site-macro-extension" target="_blank" rel="noreferrer">GitHub에서 파일 보기</a>
+            <a class="button" href="#install">설치 방법</a>
+          </div>
+        </div>
+
+        <div class="preview panel">
+          <div class="browser">
+            <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+            <div class="screen">
+              <div class="job">
+                <strong>출석 버튼 누르기</strong>
+                <span>https://example.com/check-in* · 매일 12:00</span>
+              </div>
+              <div class="job">
+                <strong>대시보드 새로고침</strong>
+                <span>클릭 #refresh → 대기 1000ms → 스크롤 500px</span>
+              </div>
+              <div class="job">
+                <strong>최근 로그</strong>
+                <span>success · 액션 3개 실행 완료</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="grid">
+        <article class="card panel">
+          <h2>예약 방식</h2>
+          <p>작업마다 실행 방식을 선택합니다. 예: 30초 간격, 매일 12:00, 매일 18:30.</p>
+        </article>
+        <article class="card panel">
+          <h2>액션 종류</h2>
+          <p>클릭, 입력, 대기, 스크롤, 새로고침을 순서대로 조합합니다.</p>
+        </article>
+        <article class="card panel">
+          <h2>안전 제한</h2>
+          <p>비밀번호 입력, 로그인 폼 자동 입력, 캡차 우회, 숨김 실행은 차단합니다.</p>
+        </article>
+      </section>
+
+      <section id="install" class="steps panel">
+        <h2>설치 방법</h2>
+        <ol>
+          <li>GitHub에서 <code>apps/site-macro-extension</code> 폴더를 내려받습니다.</li>
+          <li>Chrome 주소창에 <code>chrome://extensions</code>를 입력합니다.</li>
+          <li>오른쪽 위 <code>개발자 모드</code>를 켭니다.</li>
+          <li><code>압축해제된 확장 프로그램을 로드</code>를 누르고 해당 폴더를 선택합니다.</li>
+          <li>확장 아이콘 → 설정 → 작업 추가 → URL 패턴과 액션을 입력합니다.</li>
+          <li><code>사이트 권한 허용</code>을 누른 뒤 작업을 켭니다.</li>
+        </ol>
+      </section>
+    </main>
+  </body>
+</html>
