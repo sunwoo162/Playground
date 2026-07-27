@@ -1,7 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
-import './index.css'
+import './styles.css'
 
 localStorage.removeItem('playground-theme')
 document.documentElement.dataset.theme = 'dark'

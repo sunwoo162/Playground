@@ -11,8 +11,8 @@ FSD는 "기술 종류"보다 "비즈니스 의미와 의존 방향"을 기준으
 
 | 계층 | 기준 | 이 프로젝트에서의 예시 |
 |---|---|---|
-| `app` | 앱 시작점, 전역 provider, 라우팅, 전역 스타일 연결 | `src/main.tsx`, `src/App.tsx`, `apps/*/src/main.tsx`, `apps/study-planner/src/app/App.tsx` |
-| `pages` | 사용자가 직접 진입하는 화면 단위 | `src/pages/MyPage.tsx`, 앱별 메인 화면 |
+| `app` | 앱 시작점, 전역 provider, 라우팅, 전역 스타일 연결 | `src/app/main.tsx`, `src/app/App.tsx`, `apps/*/src/main.tsx`, `apps/study-planner/src/app/App.tsx` |
+| `pages` | 사용자가 직접 진입하는 화면 단위 | `src/pages/my-page/MyPage.tsx`, 앱별 메인 화면 |
 | `widgets` | 여러 feature/entity를 조합한 큰 UI 블록 | 탭 네비게이션, 미니 타이머, 대시보드 패널 |
 | `features` | 사용자의 행동 하나를 완성하는 기능 | 공부 타이머 시작/정지, 노트 작성, 그룹 관리, 알림 구독, 매수/매도 |
 | `entities` | 도메인 핵심 데이터와 규칙 | 사용자, 과목, 세션, 노트, 프로젝트, 주식 계좌, 친구 |
@@ -117,12 +117,12 @@ backend/src/main/java/com/playground/
 
 | 파일 | FSD 분류 | 역할 |
 |---|---|---|
-| `src/main.tsx` | `app` | React 루트 마운트. 전역 다크 테마 고정. |
-| `src/App.tsx` | 현재 `app + pages + widgets + features` 혼재 | 앱 카드 목록, 즐겨찾기, 로그인 상태, 공지, 기능 요청, GitHub 관리 화면 전환을 담당. 분리 1순위. |
-| `src/index.css` | `app/styles` | 루트 포털 전역 스타일과 다크 토큰. |
-| `src/pages/MyPage.tsx` | `pages/my-page` | 내 정보/계정 관련 페이지 UI. |
-| `src/api/auth.ts` | `shared/api` 또는 `entities/user/api` | 인증 토큰 만료 시간 계산 및 인증 관련 API 보조 로직. |
-| `src/api/push.ts` | `features/push-subscription/api` | 웹 푸시 구독 등록 처리. |
+| `src/app/main.tsx` | `app` | React 루트 마운트. 전역 다크 테마 고정. |
+| `src/app/App.tsx` | 현재 `app + pages + widgets + features` 혼재 | 앱 카드 목록, 즐겨찾기, 로그인 상태, 공지, 기능 요청, GitHub 관리 화면 전환을 담당. 분리 1순위. |
+| `src/app/styles.css` | `app/styles` | 루트 포털 전역 스타일과 다크 토큰. |
+| `src/pages/my-page/MyPage.tsx` | `pages/my-page` | 내 정보/계정 관련 페이지 UI. |
+| `src/shared/api/auth.ts` | `shared/api` 또는 `entities/user/api` | 인증 토큰 만료 시간 계산 및 인증 관련 API 보조 로직. |
+| `src/features/push-subscription/api/push.ts` | `features/push-subscription/api` | 웹 푸시 구독 등록 처리. |
 | `public/sw.js` | `app/service-worker` | 브라우저 푸시 알림 수신 서비스 워커. |
 | `index.html` | `app` | Vite HTML 엔트리. |
 | `vite.config.ts` | 설정 | 루트 포털 빌드 설정. |
@@ -391,7 +391,7 @@ shared/assets/panoramas/
 
 ## 9. 리팩터링 우선순위
 
-1. 루트 `src/App.tsx` 분리
+1. 루트 `src/app/App.tsx` 분리
    - `entities/app-item`
    - `entities/user`
    - `entities/notice`
@@ -436,7 +436,7 @@ shared/assets/panoramas/
 
 ## 11. 다음 실제 코드 정리 권장안
 
-바로 다음 커밋에서 하면 좋은 작업은 루트 포털의 `src/App.tsx` 분리다.
+바로 다음 커밋에서 하면 좋은 작업은 루트 포털의 `src/app/App.tsx` 추가 분리다.
 
 추천 순서:
 

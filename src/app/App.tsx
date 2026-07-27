@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { MyPage } from './pages/MyPage'
-import { getAccessTokenExpiry, formatTimeLeft } from './api/auth'
-import { registerPushSubscription } from './api/push'
+import { MyPage } from '../pages/my-page/MyPage'
+import { getAccessTokenExpiry, formatTimeLeft } from '../shared/api/auth'
+import { registerPushSubscription } from '../features/push-subscription/api/push'
 
 // 스터디 플래너 타이머 상태 읽기
 function getStudyTimerElapsed(): number | null {
