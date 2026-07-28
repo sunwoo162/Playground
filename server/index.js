@@ -1154,6 +1154,12 @@ app.get('/apps/code-run-visualizer/*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'apps', 'code-run-visualizer', 'dist', 'index.html'));
 });
 
+// Voice Phishing 앱
+app.use('/apps/voice-phishing', express.static(path.join(__dirname, '..', 'apps', 'voice-phishing', 'dist')));
+app.get('/apps/voice-phishing/*', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'apps', 'voice-phishing', 'dist', 'index.html'));
+});
+
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'dist', 'index.html'));
 });
