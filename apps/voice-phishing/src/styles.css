@@ -487,6 +487,39 @@ p {
   font-weight: 800;
 }
 
+.save-status {
+  margin-top: 20px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.save-status > strong {
+  display: block;
+  color: var(--yellow);
+  font-size: 0.9rem;
+}
+
+.recent-sessions {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.recent-sessions span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.recent-sessions p {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
 @media (max-width: 760px) {
   .experience {
     padding: 14px;

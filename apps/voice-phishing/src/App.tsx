@@ -15,6 +15,16 @@ type Step = {
   choices: Choice[]
 }
 
+type SaveState = 'idle' | 'saving' | 'saved' | 'login-required' | 'failed'
+
+type RecentSession = {
+  id: number
+  riskScore: number
+  riskyChoicesCount: number
+  durationSeconds: number
+  createdAt: string
+}
+
 const STEPS: Step[] = [
   {
     speaker: '서울중앙지검 수사관',
@@ -93,6 +103,10 @@ function App() {
   const [risk, setRisk] = useState(0)
   const [incidents, setIncidents] = useState<Incident[]>([])
   const [lastIncident, setLastIncident] = useState<Incident | null>(null)
+  const [choicesCount, setChoicesCount] = useState(0)
+  const [startedAt, setStartedAt] = useState<number | null>(null)
+  const [saveState, setSaveState] = useState<SaveState>('idle')
+  const [recentSessions, setRecentSessions] = useState<RecentSession[]>([])
 
   const step = STEPS[stepIndex]
   const latestIncident = lastIncident ?? incidents.at(-1) ?? 'remote-app'
@@ -108,6 +122,35 @@ function App() {
     if (phase === 'final') window.speechSynthesis.cancel()
   }, [phase, step])
 
+  useEffect(() => {
+    if (phase !== 'final' || saveState !== 'idle') return
+
+    const durationSeconds = startedAt ? Math.max(0, Math.round((Date.now() - startedAt) / 1000)) : 0
+    setSaveState('saving')
+    fetch('/api/voice-phishing/sessions', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        riskScore: risk,
+        choicesCount,
+        durationSeconds,
+        incidents,
+      }),
+    })
+      .then(async (res) => {
+        if (res.status === 401) {
+          setSaveState('login-required')
+          return
+        }
+        if (!res.ok) throw new Error(await res.text())
+        setSaveState('saved')
+        const recent = await fetch('/api/voice-phishing/sessions/recent', { credentials: 'include' })
+        if (recent.ok) setRecentSessions(await recent.json())
+      })
+      .catch(() => setSaveState('failed'))
+  }, [choicesCount, incidents, phase, risk, saveState, startedAt])
+
   const start = () => {
     window.speechSynthesis.cancel()
     setPhase('incoming')
@@ -115,6 +158,10 @@ function App() {
     setRisk(0)
     setIncidents([])
     setLastIncident(null)
+    setChoicesCount(0)
+    setStartedAt(Date.now())
+    setSaveState('idle')
+    setRecentSessions([])
   }
 
   const answerCall = () => {
@@ -123,6 +170,7 @@ function App() {
 
   const choose = (choice: Choice) => {
     window.speechSynthesis.cancel()
+    setChoicesCount((current) => current + 1)
     setRisk((current) => Math.min(100, current + choice.risk))
     if (choice.incident) {
       setLastIncident(choice.incident)
@@ -197,10 +245,43 @@ function App() {
                 ))}
               </div>
             )}
+            <SaveStatus state={saveState} recentSessions={recentSessions} />
           </div>
         </section>
       )}
     </main>
+  )
+}
+
+function SaveStatus({
+  state,
+  recentSessions,
+}: {
+  state: SaveState
+  recentSessions: RecentSession[]
+}) {
+  const label = {
+    idle: '결과 저장 준비 중',
+    saving: '체험 결과 저장 중',
+    saved: '체험 결과가 DB에 저장됐습니다',
+    'login-required': '로그인하면 체험 기록이 DB에 저장됩니다',
+    failed: '체험 결과 저장에 실패했습니다',
+  }[state]
+
+  return (
+    <div className="save-status">
+      <strong>{label}</strong>
+      {recentSessions.length > 0 && (
+        <div className="recent-sessions">
+          <span>최근 기록</span>
+          {recentSessions.slice(0, 3).map((session) => (
+            <p key={session.id}>
+              위험도 {session.riskScore}% · 위험 선택 {session.riskyChoicesCount}개 · {session.durationSeconds}초
+            </p>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 

@@ -119,6 +119,13 @@ backend/src/main/java/com/playground/
 |---|---|---|
 | `src/app/main.tsx` | `app` | React 루트 마운트. 전역 다크 테마 고정. |
 | `src/app/App.tsx` | 현재 `app + pages + widgets + features` 혼재 | 앱 카드 목록, 즐겨찾기, 로그인 상태, 공지, 기능 요청, GitHub 관리 화면 전환을 담당. 분리 1순위. |
+| `src/entities/app-item/model/apps.ts` | `entities/app-item` | 놀이터 포털의 독립 웹앱 목록. |
+| `src/entities/app-item/model/types.ts` | `entities/app-item` | 앱 카드 타입. |
+| `src/entities/user/model/types.ts` | `entities/user` | 사용자 타입. |
+| `src/entities/notice/model/types.ts` | `entities/notice` | 공지사항 타입. |
+| `src/entities/github-status/model/types.ts` | `entities/github-status` | 로컬 GitHub 상태 타입. |
+| `src/features/app-favorite/model/storage.ts` | `features/app-favorite` | 앱 즐겨찾기 저장/조회. |
+| `src/features/study-timer-badge/model/timer.ts` | `features/study-timer-badge` | 스터디 타이머 경과 시간 복원과 표시 포맷. |
 | `src/app/styles.css` | `app/styles` | 루트 포털 전역 스타일과 다크 토큰. |
 | `src/pages/my-page/MyPage.tsx` | `pages/my-page` | 내 정보/계정 관련 페이지 UI. |
 | `src/shared/api/auth.ts` | `shared/api` 또는 `entities/user/api` | 인증 토큰 만료 시간 계산 및 인증 관련 API 보조 로직. |
@@ -323,6 +330,17 @@ shared/assets/panoramas/
 | `src/styles.css` | `app/styles` | 코드/실행 단계/시각화 스타일. |
 
 권장 분리: `features/code-run`, `features/step-visualize`, `entities/execution-step`, `widgets/code-editor`, `widgets/execution-timeline`.
+
+### `apps/voice-phishing`
+
+| 파일 | FSD 분류 | 역할 |
+|---|---|---|
+| `src/main.tsx` | `app` | 앱 마운트. |
+| `src/App.tsx` | 현재 `pages + features` 혼재 | 전화 수신, 통화 선택, 피해 화면, 결과 저장 UI를 조합. |
+| `src/styles.css` | `app/styles` | 휴대폰 형태 체험 화면과 결과 화면 스타일. |
+| `vite.config.ts` | 설정 | `/apps/voice-phishing/` base와 개발 API 프록시. |
+
+권장 분리: `features/call-simulation`, `features/incident-result-save`, `entities/session-result`, `widgets/phone-frame`.
 
 ## 6. 브라우저 확장 프로그램 파일
 

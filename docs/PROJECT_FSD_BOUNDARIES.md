@@ -22,6 +22,7 @@
 | `apps/mock-invest/` | 모의 투자 | 가상 주식 투자 앱 |
 | `apps/action-notifier/` | Action 알리미 | GitHub Actions 알림 앱 |
 | `apps/code-run-visualizer/` | 코드 실행 시각화 | 코드 실행 흐름 시각화 앱 |
+| `apps/voice-phishing/` | 보이스피싱 체험 | 전화 수신/피해 상황을 재현하는 보안 교육 앱 |
 | `apps/*-extension/` | 브라우저 확장 | Chrome 확장 프로그램 |
 | `backend/` | Spring Boot API | 서버 도메인/API 프로젝트 |
 | `server/` | Express 서버 | 정적 서빙, OAuth, 프록시, 운영 보조 서버 |
@@ -53,11 +54,18 @@ src/
     main.tsx
     App.tsx
     styles.css
+  entities/
+    app-item/
+    github-status/
+    notice/
+    user/
   pages/
     my-page/
       MyPage.tsx
   features/
+    app-favorite/
     push-subscription/
+    study-timer-badge/
       api/
         push.ts
   shared/
@@ -68,7 +76,14 @@ src/
 ### 분리 기준
 
 - `src/app/main.tsx`: React 마운트와 전역 초기화만 담당한다.
-- `src/app/App.tsx`: 아직 포털 화면 조립이 많이 남아 있는 최상위 앱 파일이다. 다음 단계에서 widgets/features/entities로 더 쪼갠다.
+- `src/app/App.tsx`: 포털 화면 조립을 담당한다. 앱 목록, 주요 타입, 즐겨찾기 저장소, 스터디 타이머 유틸은 entities/features로 분리했다.
+- `src/entities/app-item/model/apps.ts`: 놀이터에 표시되는 독립 웹앱 목록이다.
+- `src/entities/app-item/model/types.ts`: 앱 카드 타입이다.
+- `src/entities/user/model/types.ts`: 로그인 사용자 타입이다.
+- `src/entities/notice/model/types.ts`: 공지사항 타입이다.
+- `src/entities/github-status/model/types.ts`: 로컬 GitHub 상태 타입이다.
+- `src/features/app-favorite/model/storage.ts`: 앱 즐겨찾기 localStorage 저장 로직이다.
+- `src/features/study-timer-badge/model/timer.ts`: 스터디 플래너 타이머 뱃지 복원/포맷 로직이다.
 - `src/pages/my-page/MyPage.tsx`: 사용자가 직접 보는 마이페이지 화면이다.
 - `src/features/push-subscription/api/push.ts`: 푸시 구독 등록이라는 사용자 기능에 속한다.
 - `src/shared/api/auth.ts`: 인증 토큰 시간 계산처럼 여러 화면에서 재사용 가능한 API 보조 로직이다.
