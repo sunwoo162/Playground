@@ -138,12 +138,9 @@ async function runJob(job) {
     return;
   }
 
-  const tabs = await chrome.tabs.query({});
-  let tab = tabs.find((item) => urlMatchesPattern(item.url, job.urlPattern));
-  if (!tab && job.openIfMissing) {
-    tab = await chrome.tabs.create({ url: job.startUrl || job.urlPattern.replace('*', ''), active: false });
-    await waitForTabComplete(tab.id);
-  }
+  const tab = job.backgroundTab
+    ? await getOrCreateBackgroundTab(job)
+    : await getRunnableTab(job);
   if (!tab?.id) {
     await addLog(job, 'skipped', '조건에 맞는 탭을 찾지 못했습니다.');
     return;
@@ -160,6 +157,54 @@ async function runJob(job) {
   } catch (error) {
     await addLog(job, 'failed', error.message || String(error));
   }
+}
+
+async function getRunnableTab(job) {
+  const tabs = await chrome.tabs.query({});
+  let tab = tabs.find((item) => urlMatchesPattern(item.url, job.urlPattern));
+  if (!tab && job.openIfMissing) {
+    tab = await chrome.tabs.create({ url: getStartUrl(job), active: false });
+    await waitForTabComplete(tab.id);
+  }
+  return tab;
+}
+
+async function getOrCreateBackgroundTab(job) {
+  const tabId = Number(job.backgroundTabId);
+  if (tabId) {
+    try {
+      const tab = await chrome.tabs.get(tabId);
+      if (tab?.id && urlMatchesPattern(tab.url, job.urlPattern)) return tab;
+      if (tab?.id) await chrome.tabs.update(tab.id, { url: getStartUrl(job), active: false });
+      await waitForTabComplete(tab.id);
+      return tab;
+    } catch {
+      await saveJobPatch(job.id, { backgroundTabId: null });
+    }
+  }
+
+  const tabs = await chrome.tabs.query({});
+  const existing = tabs.find((item) => urlMatchesPattern(item.url, job.urlPattern));
+  if (existing?.id) {
+    await saveJobPatch(job.id, { backgroundTabId: existing.id });
+    return existing;
+  }
+
+  const created = await chrome.tabs.create({ url: getStartUrl(job), active: false, pinned: true });
+  await saveJobPatch(job.id, { backgroundTabId: created.id });
+  await waitForTabComplete(created.id);
+  return created;
+}
+
+function getStartUrl(job) {
+  return job.startUrl || job.urlPattern.replace('*', '');
+}
+
+async function saveJobPatch(jobId, patch) {
+  const jobs = await getJobs();
+  await chrome.storage.sync.set({
+    [STORAGE_KEY]: jobs.map((job) => job.id === jobId ? { ...job, ...patch } : job),
+  });
 }
 
 function waitForTabComplete(tabId) {

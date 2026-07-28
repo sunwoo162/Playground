@@ -51,7 +51,7 @@ async function renderJobs() {
         <span>${job.enabled ? '켜짐' : '꺼짐'}</span>
       </div>
       <small>${escapeHtml(job.urlPattern)}</small>
-      <small>${job.scheduleType === 'time' ? `매일 ${job.timeOfDay}` : `${job.intervalSeconds}초 간격`} · 액션 ${job.actions.length}개</small>
+      <small>${job.scheduleType === 'time' ? `매일 ${job.timeOfDay}` : `${job.intervalSeconds}초 간격`} · 액션 ${job.actions.length}개${job.backgroundTab ? ' · 백그라운드 탭' : ''}</small>
       <div class="job-actions">
         <button type="button" data-action="run">지금 실행</button>
         <button type="button" data-action="toggle">${job.enabled ? '끄기' : '켜기'}</button>

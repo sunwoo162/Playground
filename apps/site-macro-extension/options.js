@@ -30,6 +30,7 @@ function createJob(overrides = {}) {
     urlPattern: '',
     startUrl: '',
     openIfMissing: false,
+    backgroundTab: false,
     scheduleType: 'interval',
     intervalSeconds: 30,
     timeOfDay: '12:00',
@@ -46,6 +47,7 @@ function normalizeJob(job) {
     urlPattern: String(job.urlPattern || '').trim(),
     startUrl: String(job.startUrl || '').trim(),
     openIfMissing: Boolean(job.openIfMissing),
+    backgroundTab: Boolean(job.backgroundTab),
     scheduleType: job.scheduleType === 'time' ? 'time' : 'interval',
     intervalSeconds: Math.max(Number(job.intervalSeconds) || MIN_INTERVAL_SECONDS, MIN_INTERVAL_SECONDS),
     timeOfDay: /^\d{2}:\d{2}$/.test(job.timeOfDay || '') ? job.timeOfDay : '12:00',
@@ -180,6 +182,7 @@ async function render() {
     bindField(card, job, 'urlPattern');
     bindField(card, job, 'startUrl');
     bindField(card, job, 'openIfMissing');
+    bindField(card, job, 'backgroundTab');
     bindField(card, job, 'scheduleType');
     bindField(card, job, 'intervalSeconds', Number);
     bindField(card, job, 'timeOfDay');
