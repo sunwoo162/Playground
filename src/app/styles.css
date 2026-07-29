@@ -1,14 +1,14 @@
 :root {
   color-scheme: light;
-  --bg: #f7f8f4;
+  --bg: #ffffff;
   --surface: #ffffff;
-  --surface-2: #eef3eb;
-  --border: #d9dfd4;
-  --text: #18201d;
-  --text-muted: #60706a;
-  --accent-blue: #315f96;
-  --shadow: 0 18px 50px rgba(24, 32, 29, 0.12);
-  --radius: 14px;
+  --surface-2: #f6f7f9;
+  --border: #e5e7eb;
+  --text: #111827;
+  --text-muted: #6b7280;
+  --accent-blue: #2563eb;
+  --shadow: 0 12px 34px rgba(15, 23, 42, 0.08);
+  --radius: 10px;
   --radius-sm: 8px;
 }
 
@@ -33,7 +33,7 @@
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background:
-    radial-gradient(circle at top left, color-mix(in srgb, var(--accent-blue) 16%, transparent), transparent 32rem),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-2) 72%, transparent), transparent 18rem),
     var(--bg);
   color: var(--text);
   min-height: 100vh;

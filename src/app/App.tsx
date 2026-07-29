@@ -36,7 +36,7 @@ function App() {
   const [loginRedirectApp, setLoginRedirectApp] = useState<AppItem | null>(null);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem(THEME_KEY);
-    return saved === 'dark' ? 'dark' : 'light';
+    return saved === 'light' ? 'light' : 'dark';
   });
 
   useEffect(() => {
