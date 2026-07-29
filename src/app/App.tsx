@@ -34,11 +34,15 @@ function App() {
   const [noticeStatus, setNoticeStatus] = useState('');
   const [noticeSubmitting, setNoticeSubmitting] = useState(false);
   const [loginRedirectApp, setLoginRedirectApp] = useState<AppItem | null>(null);
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const saved = localStorage.getItem(THEME_KEY);
+    return saved === 'dark' ? 'dark' : 'light';
+  });
 
   useEffect(() => {
-    document.documentElement.dataset.theme = 'dark';
-    localStorage.removeItem(THEME_KEY);
-  }, []);
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem(THEME_KEY, theme);
+  }, [theme]);
 
   useEffect(() => {
     fetch('/auth/me', { credentials: 'include' })
@@ -266,6 +270,14 @@ function App() {
           <p className="tagline">나만의 작은 웹앱 모음</p>
         </div>
         <div className="header-right">
+          <button
+            className="theme-toggle"
+            onClick={() => setTheme((current) => current === 'light' ? 'dark' : 'light')}
+            aria-label={theme === 'light' ? '다크 모드로 변경' : '화이트 모드로 변경'}
+            title={theme === 'light' ? '다크 모드' : '화이트 모드'}
+          >
+            {theme === 'light' ? '🌙' : '☀️'}
+          </button>
           <button className="btn-feature-request" onClick={() => setPage('github')}>
             GitHub 관리
           </button>
