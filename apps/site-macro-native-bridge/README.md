@@ -24,6 +24,6 @@ apps\site-macro-native-bridge\install-chrome-host.ps1 -ExtensionId YOUR_EXTENSIO
 - `type`: sends text to the active target window.
 - `nativeClick`: clicks screen coordinates using action `x` and `y`.
 - `wait`: waits for `ms`.
-- `listWindows`: returns currently opened Windows app windows so the extension can show a picker.
+- `listWindows`: returns currently opened Windows app windows with icons so the extension can show a clickable picker.
 
 The target window is found by process name and/or window title from the Site Macro options page.

@@ -201,6 +201,79 @@ label.check input,
   background: rgba(47,125,84,.07);
 }
 
+.native-picker {
+  grid-column: 1 / -1;
+  min-height: 94px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 10px;
+}
+
+.native-picker-empty {
+  grid-column: 1 / -1;
+  padding: 18px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.native-app-tile {
+  min-height: 96px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 10px 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--ink);
+  text-align: center;
+}
+
+.native-app-tile.selected {
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(47,125,84,.14);
+}
+
+.native-app-tile img,
+.native-app-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 7px;
+  object-fit: contain;
+}
+
+.native-app-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--line);
+  color: var(--muted);
+  font-weight: 900;
+}
+
+.native-app-name {
+  width: 100%;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.native-app-title {
+  width: 100%;
+  max-height: 28px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.25;
+}
+
 .actions-list {
   display: grid;
   gap: 8px;

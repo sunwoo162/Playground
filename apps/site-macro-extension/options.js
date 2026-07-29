@@ -57,7 +57,6 @@ function createJob(overrides = {}) {
     customAppPath: '',
     nativeProcess: '',
     nativeWindowTitle: '',
-    nativeWindowChoice: '',
     targetArea: '',
     areaSelector: '',
     urlPattern: '',
@@ -83,7 +82,6 @@ function normalizeJob(job) {
     customAppPath: normalizeAppPath(job.customAppPath),
     nativeProcess: String(job.nativeProcess || '').trim().slice(0, 120),
     nativeWindowTitle: String(job.nativeWindowTitle || '').trim().slice(0, 200),
-    nativeWindowChoice: String(job.nativeWindowChoice || '').trim().slice(0, 500),
     targetArea: ['', 'main', 'form', 'header', 'nav', 'custom'].includes(job.targetArea) ? job.targetArea : '',
     areaSelector: String(job.areaSelector || '').slice(0, 600),
     urlPattern: String(job.urlPattern || '').trim(),
@@ -205,17 +203,6 @@ function bindField(element, job, field, coerce = (value) => value) {
     const patch = { [field]: value };
     if (field === 'targetApp') patch.customAppPath = '';
     if (field === 'customAppPath' && value) patch.targetApp = '';
-    if (field === 'nativeWindowChoice' && value) {
-      const selected = nativeWindows.find((item) => item.key === value);
-      if (selected) {
-        patch.nativeProcess = selected.process;
-        patch.nativeWindowTitle = selected.title;
-        const processInput = element.querySelector('[data-field="nativeProcess"]');
-        const titleInput = element.querySelector('[data-field="nativeWindowTitle"]');
-        if (processInput) processInput.value = selected.process;
-        if (titleInput) titleInput.value = selected.title;
-      }
-    }
     await updateJob(job.id, patch);
     if (field === 'targetApp' || field === 'appBaseUrl' || field === 'customAppPath') await applyTargetApp(job.id);
     if (field === 'targetArea') await applyTargetArea(job.id);
@@ -224,29 +211,73 @@ function bindField(element, job, field, coerce = (value) => value) {
 }
 
 async function refreshNativeWindows(card) {
-  const select = card.querySelector('[data-field="nativeWindowChoice"]');
-  if (!select) return;
-  select.innerHTML = '<option value="">조회 중...</option>';
+  const grid = card.querySelector('[data-role="nativeWindowGrid"]');
+  if (!grid) return;
+  grid.innerHTML = '<div class="native-picker-empty">켜져 있는 앱을 불러오는 중...</div>';
   try {
     const response = await chrome.runtime.sendNativeMessage('com.playground.site_macro_bridge', { type: 'listWindows' });
     if (!response?.ok || !Array.isArray(response.windows)) throw new Error(response?.message || '창 목록을 불러오지 못했습니다.');
     nativeWindows = response.windows.map((item, index) => ({
       process: String(item.process || ''),
       title: String(item.title || ''),
+      icon: String(item.icon || ''),
       key: `${item.process || ''}::${item.id || index}::${item.title || ''}`,
     }));
-    select.innerHTML = '<option value="">선택하세요</option>';
-    for (const item of nativeWindows) {
-      const option = document.createElement('option');
-      option.value = item.key;
-      option.textContent = `${item.process} - ${item.title}`;
-      select.append(option);
-    }
+    renderNativeWindowGrid(card);
   } catch (error) {
     nativeWindows = [];
-    select.innerHTML = '<option value="">브리지 설치/등록 필요</option>';
+    grid.innerHTML = '<div class="native-picker-empty">브리지 설치/등록 필요</div>';
     alert(`Windows 앱 목록을 가져오지 못했습니다.\n${error.message || String(error)}`);
   }
+}
+
+async function selectNativeWindow(card, jobId, item) {
+  const processInput = card.querySelector('[data-field="nativeProcess"]');
+  const titleInput = card.querySelector('[data-field="nativeWindowTitle"]');
+  if (processInput) processInput.value = item.process;
+  if (titleInput) titleInput.value = item.title;
+  await updateJob(jobId, {
+    targetKind: 'native',
+    nativeProcess: item.process,
+    nativeWindowTitle: item.title,
+  });
+  renderNativeWindowGrid(card, item.key);
+}
+
+function renderNativeWindowGrid(card, selectedKey = '') {
+  const grid = card.querySelector('[data-role="nativeWindowGrid"]');
+  if (!grid) return;
+  if (!nativeWindows.length) {
+    grid.innerHTML = '<div class="native-picker-empty">켜져 있는 앱 창이 없습니다.</div>';
+    return;
+  }
+  grid.innerHTML = '';
+  for (const item of nativeWindows) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `native-app-tile ${item.key === selectedKey ? 'selected' : ''}`;
+    const icon = item.icon
+      ? `<img src="${escapeAttr(item.icon)}" alt="" />`
+      : `<div class="native-app-icon">${escapeHtml(item.process.slice(0, 1).toUpperCase() || '?')}</div>`;
+    button.innerHTML = `
+      ${icon}
+      <div class="native-app-name">${escapeHtml(item.process)}</div>
+      <div class="native-app-title">${escapeHtml(item.title)}</div>
+    `;
+    button.addEventListener('click', () => {
+      const jobId = card.dataset.jobId;
+      if (jobId) selectNativeWindow(card, jobId, item);
+    });
+    grid.append(button);
+  }
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+}
+
+function escapeAttr(value) {
+  return escapeHtml(value).replace(/`/g, '&#96;');
 }
 
 async function applyTargetApp(jobId) {
@@ -303,13 +334,13 @@ async function render() {
 
   for (const job of jobs) {
     const card = jobTemplate.content.firstElementChild.cloneNode(true);
+    card.dataset.jobId = job.id;
     bindField(card, job, 'name');
     bindField(card, job, 'enabled');
     bindField(card, job, 'targetKind');
     bindField(card, job, 'appBaseUrl');
     bindField(card, job, 'targetApp');
     bindField(card, job, 'customAppPath');
-    bindField(card, job, 'nativeWindowChoice');
     bindField(card, job, 'nativeProcess');
     bindField(card, job, 'nativeWindowTitle');
     bindField(card, job, 'targetArea');

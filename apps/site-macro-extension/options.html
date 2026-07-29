@@ -70,14 +70,12 @@
             </select>
           </label>
           <label>직접 앱 경로 <input data-field="customAppPath" placeholder="/apps/todo/" /></label>
-          <label>켜져 있는 Windows 앱
-            <select data-field="nativeWindowChoice">
-              <option value="">목록 새로고침 필요</option>
-            </select>
-          </label>
           <button data-action="refreshNativeWindows" type="button">앱 목록 새로고침</button>
           <label>Windows 프로세스명 <input data-field="nativeProcess" placeholder="예: notepad" /></label>
           <label>Windows 창 제목 <input data-field="nativeWindowTitle" placeholder="예: 메모장" /></label>
+          <div class="native-picker" data-role="nativeWindowGrid">
+            <div class="native-picker-empty">새로고침을 누르면 켜져 있는 앱이 아이콘으로 표시됩니다.</div>
+          </div>
         </div>
 
         <div class="grid">

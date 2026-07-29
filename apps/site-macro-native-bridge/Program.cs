@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Drawing;
+using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
@@ -96,7 +98,8 @@ static class Program
             {
                 process = p.ProcessName,
                 title = p.MainWindowTitle,
-                id = p.Id
+                id = p.Id,
+                icon = GetIconDataUrl(p)
             })
             .Cast<object>()
             .ToList();
@@ -166,4 +169,23 @@ static class Program
 
     static int GetInt(JsonElement obj, string name, int fallback) =>
         obj.TryGetProperty(name, out var value) && value.TryGetInt32(out var result) ? result : fallback;
+
+    static string GetIconDataUrl(Process process)
+    {
+        try
+        {
+            var path = process.MainModule?.FileName;
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return "";
+            using var icon = Icon.ExtractAssociatedIcon(path);
+            if (icon == null) return "";
+            using var bitmap = icon.ToBitmap();
+            using var stream = new MemoryStream();
+            bitmap.Save(stream, ImageFormat.Png);
+            return "data:image/png;base64," + Convert.ToBase64String(stream.ToArray());
+        }
+        catch
+        {
+            return "";
+        }
+    }
 }
