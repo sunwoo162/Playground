@@ -51,6 +51,7 @@ async function renderJobs() {
         <span>${job.enabled ? '켜짐' : '꺼짐'}</span>
       </div>
       ${job.targetApp ? `<small>대상 앱: ${escapeHtml(job.targetApp)}</small>` : ''}
+      ${job.areaSelector ? `<small>대상 구역: ${escapeHtml(job.areaSelector)}</small>` : ''}
       <small>${escapeHtml(job.urlPattern)}</small>
       <small>${job.scheduleType === 'time' ? `매일 ${job.timeOfDay}` : `${job.intervalSeconds}초 간격`} · 액션 ${job.actions.length}개${job.backgroundTab ? ' · 백그라운드 탭' : ''}</small>
       <div class="job-actions">

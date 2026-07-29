@@ -50,8 +50,22 @@
               <option value="/apps/action-notifier/">Action 알리미</option>
               <option value="/apps/code-run-visualizer/">코드 실행 시각화</option>
               <option value="/apps/voice-phishing/">보이스피싱 체험</option>
+              <option value="/apps/site-macro-extension/">사이트 액션 매크로</option>
+              <option value="/apps/webbridge/">WebBridge</option>
+              <option value="/apps/focustime-extension/">FocusTime</option>
             </select>
           </label>
+          <label>대상 구역
+            <select data-field="targetArea">
+              <option value="">전체 화면</option>
+              <option value="main">메인 영역</option>
+              <option value="form">폼/입력 영역</option>
+              <option value="header">상단 영역</option>
+              <option value="nav">내비게이션</option>
+              <option value="custom">직접 CSS 선택자</option>
+            </select>
+          </label>
+          <label>구역 CSS 선택자 <input data-field="areaSelector" placeholder="예: main, form, .editor" /></label>
           <label>URL 패턴 <input data-field="urlPattern" placeholder="https://example.com/page*" /></label>
           <label>없으면 열 URL <input data-field="startUrl" placeholder="https://example.com/page" /></label>
           <label class="check"><input data-field="openIfMissing" type="checkbox" /> 탭이 없으면 새 탭으로 열기</label>

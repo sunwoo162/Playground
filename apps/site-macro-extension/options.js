@@ -1,6 +1,12 @@
 const STORAGE_KEY = 'siteMacroJobs';
 const MIN_INTERVAL_SECONDS = 5;
 const DEFAULT_APP_BASE_URL = 'https://playground.https.gsmsv.site';
+const AREA_SELECTORS = {
+  main: 'main',
+  form: 'form, [role="form"], .form, .editor, .panel',
+  header: 'header, [role="banner"]',
+  nav: 'nav, [role="navigation"]',
+};
 
 const jobEditorList = document.querySelector('#jobEditorList');
 const addJobButton = document.querySelector('#addJob');
@@ -30,6 +36,8 @@ function createJob(overrides = {}) {
     enabled: false,
     appBaseUrl: DEFAULT_APP_BASE_URL,
     targetApp: '',
+    targetArea: '',
+    areaSelector: '',
     urlPattern: '',
     startUrl: '',
     openIfMissing: false,
@@ -49,6 +57,8 @@ function normalizeJob(job) {
     enabled: Boolean(job.enabled),
     appBaseUrl: normalizeBaseUrl(job.appBaseUrl),
     targetApp: String(job.targetApp || ''),
+    targetArea: ['', 'main', 'form', 'header', 'nav', 'custom'].includes(job.targetArea) ? job.targetArea : '',
+    areaSelector: String(job.areaSelector || '').slice(0, 600),
     urlPattern: String(job.urlPattern || '').trim(),
     startUrl: String(job.startUrl || '').trim(),
     openIfMissing: Boolean(job.openIfMissing),
@@ -161,7 +171,8 @@ function bindField(element, job, field, coerce = (value) => value) {
     const value = input.type === 'checkbox' ? input.checked : coerce(input.value);
     await updateJob(job.id, { [field]: value });
     if (field === 'targetApp' || field === 'appBaseUrl') await applyTargetApp(job.id);
-    if (field === 'scheduleType' || field === 'targetApp' || field === 'appBaseUrl') render();
+    if (field === 'targetArea') await applyTargetArea(job.id);
+    if (field === 'scheduleType' || field === 'targetApp' || field === 'appBaseUrl' || field === 'targetArea') render();
   });
 }
 
@@ -177,6 +188,15 @@ async function applyTargetApp(jobId) {
     startUrl,
     openIfMissing: true,
     backgroundTab: true,
+  });
+}
+
+async function applyTargetArea(jobId) {
+  const jobs = await getJobs();
+  const job = jobs.find((item) => item.id === jobId);
+  if (!job || job.targetArea === 'custom') return;
+  await updateJob(jobId, {
+    areaSelector: AREA_SELECTORS[job.targetArea] || '',
   });
 }
 
@@ -212,6 +232,8 @@ async function render() {
     bindField(card, job, 'enabled');
     bindField(card, job, 'appBaseUrl');
     bindField(card, job, 'targetApp');
+    bindField(card, job, 'targetArea');
+    bindField(card, job, 'areaSelector');
     bindField(card, job, 'urlPattern');
     bindField(card, job, 'startUrl');
     bindField(card, job, 'openIfMissing');

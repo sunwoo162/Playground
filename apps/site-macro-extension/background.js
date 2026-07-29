@@ -150,7 +150,7 @@ async function runJob(job) {
     const [{ result }] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: executeActions,
-      args: [job.actions],
+      args: [job.actions, job.areaSelector || ''],
       world: 'MAIN',
     });
     await addLog(job, result.ok ? 'success' : 'failed', result.message);
@@ -219,7 +219,7 @@ function waitForTabComplete(tabId) {
   });
 }
 
-async function executeActions(actions) {
+async function executeActions(actions, areaSelector) {
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const visible = (element) => {
     if (!element) return false;
@@ -227,9 +227,17 @@ async function executeActions(actions) {
     const style = window.getComputedStyle(element);
     return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none';
   };
+  const getScope = () => {
+    if (!areaSelector) return document;
+    if (areaSelector.length > 600) throw new Error('구역 selector가 너무 깁니다.');
+    const scope = document.querySelector(areaSelector);
+    if (!visible(scope)) throw new Error(`대상 구역을 찾지 못했습니다: ${areaSelector}`);
+    return scope;
+  };
   const getElement = (selector) => {
     if (!selector || selector.length > 600) throw new Error('selector가 비어있거나 너무 깁니다.');
-    const element = document.querySelector(selector);
+    const scope = getScope();
+    const element = scope.querySelector(selector);
     if (!visible(element)) throw new Error(`요소를 찾지 못했습니다: ${selector}`);
     return element;
   };
@@ -265,7 +273,7 @@ async function executeActions(actions) {
         window.location.reload();
       }
     }
-    return { ok: true, message: `${actions.length}개 액션 실행 완료` };
+    return { ok: true, message: `${actions.length}개 액션 실행 완료${areaSelector ? ` · 구역 ${areaSelector}` : ''}` };
   } catch (error) {
     return { ok: false, message: error.message || String(error) };
   }
