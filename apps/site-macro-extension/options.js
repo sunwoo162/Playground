@@ -1,5 +1,6 @@
 const STORAGE_KEY = 'siteMacroJobs';
 const MIN_INTERVAL_SECONDS = 5;
+const DEFAULT_APP_BASE_URL = 'https://playground.https.gsmsv.site';
 
 const jobEditorList = document.querySelector('#jobEditorList');
 const addJobButton = document.querySelector('#addJob');
@@ -27,6 +28,8 @@ function createJob(overrides = {}) {
     id: crypto.randomUUID(),
     name: '새 작업',
     enabled: false,
+    appBaseUrl: DEFAULT_APP_BASE_URL,
+    targetApp: '',
     urlPattern: '',
     startUrl: '',
     openIfMissing: false,
@@ -44,6 +47,8 @@ function normalizeJob(job) {
     id: job.id || crypto.randomUUID(),
     name: String(job.name || '작업').slice(0, 80),
     enabled: Boolean(job.enabled),
+    appBaseUrl: normalizeBaseUrl(job.appBaseUrl),
+    targetApp: String(job.targetApp || ''),
     urlPattern: String(job.urlPattern || '').trim(),
     startUrl: String(job.startUrl || '').trim(),
     openIfMissing: Boolean(job.openIfMissing),
@@ -53,6 +58,16 @@ function normalizeJob(job) {
     timeOfDay: /^\d{2}:\d{2}$/.test(job.timeOfDay || '') ? job.timeOfDay : '12:00',
     actions: Array.isArray(job.actions) ? job.actions.slice(0, 20).map(normalizeAction) : [],
   };
+}
+
+function normalizeBaseUrl(value) {
+  const fallback = DEFAULT_APP_BASE_URL;
+  try {
+    const url = new URL(String(value || fallback).trim());
+    return `${url.protocol}//${url.host}`;
+  } catch {
+    return fallback;
+  }
 }
 
 function normalizeAction(action) {
@@ -145,7 +160,23 @@ function bindField(element, job, field, coerce = (value) => value) {
   input.addEventListener('change', async () => {
     const value = input.type === 'checkbox' ? input.checked : coerce(input.value);
     await updateJob(job.id, { [field]: value });
-    if (field === 'scheduleType') render();
+    if (field === 'targetApp' || field === 'appBaseUrl') await applyTargetApp(job.id);
+    if (field === 'scheduleType' || field === 'targetApp' || field === 'appBaseUrl') render();
+  });
+}
+
+async function applyTargetApp(jobId) {
+  const jobs = await getJobs();
+  const job = jobs.find((item) => item.id === jobId);
+  if (!job?.targetApp) return;
+  const baseUrl = normalizeBaseUrl(job.appBaseUrl);
+  const startUrl = `${baseUrl}${job.targetApp}`;
+  await updateJob(jobId, {
+    appBaseUrl: baseUrl,
+    urlPattern: `${startUrl}*`,
+    startUrl,
+    openIfMissing: true,
+    backgroundTab: true,
   });
 }
 
@@ -179,6 +210,8 @@ async function render() {
     const card = jobTemplate.content.firstElementChild.cloneNode(true);
     bindField(card, job, 'name');
     bindField(card, job, 'enabled');
+    bindField(card, job, 'appBaseUrl');
+    bindField(card, job, 'targetApp');
     bindField(card, job, 'urlPattern');
     bindField(card, job, 'startUrl');
     bindField(card, job, 'openIfMissing');

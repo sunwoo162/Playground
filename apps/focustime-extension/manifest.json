@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "FocusTime",
+  "version": "1.0.0",
+  "description": "웹사이트 사용 시간 추적, 일일 한도 설정, 사이트 접근 차단 대시보드",
+  "permissions": ["tabs", "storage", "alarms", "idle", "activeTab"],
+  "host_permissions": [
+    "<all_urls>",
+    "http://localhost:7421/*",
+    "http://127.0.0.1:7421/*",
+    "https://ugczkmfjamlnpncivxcr.supabase.co/*"
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' http://localhost:7421 http://127.0.0.1:7421 https://ugczkmfjamlnpncivxcr.supabase.co"
+  },
+  "background": { "service_worker": "background.js" },
+  "action": { "default_popup": "popup.html", "default_title": "FocusTime" },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

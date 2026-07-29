@@ -1,0 +1,49 @@
+{
+  "manifest_version": 3,
+  "name": "WebBridge",
+  "version": "1.0.0",
+  "description": "API가 없는 웹 서비스들을 연동하는 범용 브라우저 확장. 데이터 추출, 자동화, 웹훅, 사이트 간 전송을 규칙 기반으로 수행합니다.",
+  "permissions": [
+    "storage",
+    "tabs",
+    "scripting",
+    "activeTab",
+    "notifications",
+    "alarms",
+    "clipboardWrite",
+    "contextMenus",
+    "cookies"
+  ],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "WebBridge"
+  },
+  "options_page": "options/options.html",
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "commands": {
+    "run-on-page": {
+      "suggested_key": { "default": "Alt+Shift+B" },
+      "description": "현재 페이지에서 활성화된 규칙 실행"
+    },
+    "record-toggle": {
+      "suggested_key": { "default": "Alt+Shift+R" },
+      "description": "매크로 녹화 시작/중지 토글"
+    }
+  }
+}

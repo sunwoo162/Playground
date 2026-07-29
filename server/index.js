@@ -1160,6 +1160,12 @@ app.get('/apps/voice-phishing/*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'apps', 'voice-phishing', 'dist', 'index.html'));
 });
 
+// Extension apps and guides
+app.use('/apps/site-macro-extension', express.static(path.join(__dirname, '..', 'apps', 'site-macro-extension')));
+app.use('/apps/webbridge', express.static(path.join(__dirname, '..', 'apps', 'webbridge')));
+app.use('/apps/focustime-extension', express.static(path.join(__dirname, '..', 'apps', 'focustime-extension')));
+app.use('/apps/focustime-tracker', express.static(path.join(__dirname, '..', 'apps', 'focustime-tracker')));
+
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'dist', 'index.html'));
 });

@@ -33,6 +33,25 @@
         </div>
 
         <div class="grid">
+          <label>놀이터 주소 <input data-field="appBaseUrl" placeholder="https://playground.https.gsmsv.site" /></label>
+          <label>대상 앱
+            <select data-field="targetApp">
+              <option value="">직접 URL 입력</option>
+              <option value="/apps/study-planner/">스터디 플래너</option>
+              <option value="/apps/focus-room/">몰입형 가상 면학석</option>
+              <option value="/apps/todo/">Todo</option>
+              <option value="/apps/day-schedule/">하루 시간표</option>
+              <option value="/apps/dev-notes/">개발자 노트</option>
+              <option value="/apps/dev-action-hub/">개발 액션 허브</option>
+              <option value="/apps/cornell-notes/">코넬 노트</option>
+              <option value="/apps/coding-log/">코테 일지</option>
+              <option value="/apps/school-meal/">학교 알리미</option>
+              <option value="/apps/mock-invest/">모의 투자</option>
+              <option value="/apps/action-notifier/">Action 알리미</option>
+              <option value="/apps/code-run-visualizer/">코드 실행 시각화</option>
+              <option value="/apps/voice-phishing/">보이스피싱 체험</option>
+            </select>
+          </label>
           <label>URL 패턴 <input data-field="urlPattern" placeholder="https://example.com/page*" /></label>
           <label>없으면 열 URL <input data-field="startUrl" placeholder="https://example.com/page" /></label>
           <label class="check"><input data-field="openIfMissing" type="checkbox" /> 탭이 없으면 새 탭으로 열기</label>

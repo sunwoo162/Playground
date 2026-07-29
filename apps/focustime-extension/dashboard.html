@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>FocusTime · 대시보드</title>
+<link rel="stylesheet" href="dashboard.css" />
+</head>
+<body>
+<header class="top">
+  <div class="brand">⏱ FocusTime</div>
+  <div class="top-actions">
+    <label class="sw" title="추적 켜기/끄기">
+      <input type="checkbox" id="track-toggle" />
+      <span class="track"><span class="thumb"></span></span>
+      <span id="track-label">추적 중</span>
+    </label>
+  </div>
+</header>
+
+<main class="container">
+  <!-- 오늘 요약 -->
+  <section class="hero">
+    <div class="hero-total">
+      <div class="hero-label">오늘 총 사용 시간</div>
+      <div class="hero-time" id="today-total">0m</div>
+    </div>
+    <div class="hero-meta">
+      <div><span class="k">추적 도메인</span> <span class="v" id="today-count">0</span></div>
+      <div><span class="k">한도 도달</span> <span class="v" id="today-limited">0</span></div>
+      <div><span class="k">앱 사용(트래커)</span> <span class="v" id="app-total">연결 없음</span></div>
+    </div>
+  </section>
+
+  <!-- 7일 차트 -->
+  <section class="card">
+    <div class="card-hd"><h2>최근 7일</h2><span class="hint">일일 총 사용 시간</span></div>
+    <div class="chart" id="week-chart"></div>
+  </section>
+
+  <!-- 오늘 도메인별 -->
+  <section class="card">
+    <div class="card-hd"><h2>오늘 사이트별 사용 시간</h2></div>
+    <div class="donut-wrap"><div id="today-donut"></div></div>
+    <div id="today-list" class="dlist"></div>
+    <div id="today-empty" class="empty" hidden>아직 기록된 사용 시간이 없습니다.</div>
+  </section>
+
+  <!-- 앱 사용 시간 (트래커) -->
+  <section class="card">
+    <div class="card-hd">
+      <h2>앱 사용 시간 <span class="hint">(FocusTime 트래커)</span></h2>
+      <div class="hd-btns">
+        <button id="app-add" class="btn primary small">＋ 앱 추가</button>
+        <button id="app-refresh" class="btn small">새로고침</button>
+      </div>
+    </div>
+    <div id="app-status" class="app-status"></div>
+    <div id="app-limited-list" class="dlist"></div>
+    <div class="sub-hd">전체 앱</div>
+    <div id="app-list" class="dlist"></div>
+  </section>
+
+  <!-- 한도 / 차단 관리 -->
+  <section class="card">
+    <div class="card-hd"><h2>접근 제한 관리</h2></div>
+
+    <div class="add-row">
+      <input id="block-input" type="text" placeholder="차단할 도메인 (예: youtube.com)" />
+      <button id="block-add" class="btn primary">＋ 차단 추가</button>
+    </div>
+    <div id="block-list" class="blist"></div>
+
+    <div class="divider"></div>
+    <div class="add-row">
+      <input id="limit-domain" type="text" placeholder="도메인 (예: twitter.com)" />
+      <input id="limit-min" type="number" min="1" placeholder="분" style="max-width:90px" />
+      <button id="limit-add" class="btn primary">＋ 한도 설정</button>
+    </div>
+    <div id="limit-list" class="blist"></div>
+  </section>
+
+  <section class="card danger-zone">
+    <div class="card-hd"><h2>데이터</h2></div>
+    <div class="btns">
+      <button id="reset-today" class="btn">오늘 기록 초기화</button>
+      <button id="reset-all" class="btn danger">전체 초기화</button>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="ft-inner">
+    <div class="ft-brand">⏱ FocusTime <span class="ft-ver">v1.0.0</span></div>
+    <div class="ft-links">
+      <button id="ft-export" class="ft-link">데이터 내보내기</button>
+      <button id="ft-import" class="ft-link">가져오기</button>
+      <a class="ft-link" id="ft-shortcut" href="#">단축키 안내</a>
+    </div>
+    <div class="ft-note">브라우저 사용 시간 추적 & 접근 제한 · 로컬 전용(서버 없음)</div>
+  </div>
+</footer>
+
+<template id="domain-row-tpl">
+  <div class="drow">
+    <div class="dname"></div>
+    <div class="dbar"><div class="dfill"></div></div>
+    <div class="dtime"></div>
+    <div class="dstatus"></div>
+    <div class="dctrl">
+      <button class="btn small block-btn">차단</button>
+    </div>
+  </div>
+</template>
+
+<template id="block-row-tpl">
+  <div class="brow">
+    <span class="bname"></span>
+    <span class="btag"></span>
+    <button class="btn small del">삭제</button>
+  </div>
+</template>
+
+<!-- 앱 추가 모달 -->
+<div id="app-modal" class="modal" hidden>
+  <div class="modal-card">
+    <div class="modal-hd">
+      <span>앱 추가 · 아이콘 클릭</span>
+      <button id="modal-close" class="link">×</button>
+    </div>
+    <div class="tabs">
+      <button class="tab active" data-tab="installed">📱 설치된 앱</button>
+      <button class="tab" data-tab="search">🔍 검색</button>
+    </div>
+    <div class="tab-pane" id="pane-installed">
+      <div class="pane-hint">내 기기에 설치된 앱이 자동으로 표시됩니다 · 클릭 시 추가</div>
+      <div id="app-grid" class="app-grid"></div>
+    </div>
+    <div class="tab-pane" id="pane-search" hidden>
+      <div class="modal-search">
+        <input id="modal-search" type="search" placeholder="앱 이름 검색..." />
+      </div>
+      <div id="app-grid-search" class="app-grid"></div>
+    </div>
+  </div>
+</div>
+<script src="lib/apexcharts.min.js"></script>
+<script src="dashboard.js"></script>
+</body>
+</html>

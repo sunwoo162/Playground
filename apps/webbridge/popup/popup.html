@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header class="hd">
+    <div class="logo">WebBridge</div>
+    <button id="open-options" class="link" title="규칙 관리">관리</button>
+  </header>
+
+  <div class="toolbar">
+    <input id="search" type="search" placeholder="규칙 검색..." />
+    <button id="btn-scan" class="btn" title="이 페이지 값 스캔">🔎</button>
+    <button id="btn-record" class="btn" title="매크로 녹화 시작/중지">● 녹화</button>
+    <button id="new-rule" class="btn primary" title="새 규칙">＋</button>
+  </div>
+
+  <ul id="rule-list" class="rules"></ul>
+
+  <div id="token-panel" class="token-panel" hidden>
+    <div class="tp-hd">가져올 수 있는 값 <button id="tp-close" class="link">×</button></div>
+    <div id="tp-body" class="tp-body"></div>
+  </div>
+
+  <div id="status" class="status"></div>
+
+  <footer class="ft">
+    <span id="current-url" class="url"></span>
+  </footer>
+
+  <template id="rule-item-tpl">
+    <li class="rule">
+      <label class="sw">
+        <input type="checkbox" class="toggle" />
+        <span class="track"><span class="thumb"></span></span>
+      </label>
+      <div class="info">
+        <div class="name"></div>
+        <div class="meta"></div>
+      </div>
+      <div class="actions">
+        <button class="btn small run" title="현재 탭에서 실행">▶</button>
+        <button class="btn small edit" title="편집">✎</button>
+        <button class="btn small del" title="삭제">🗑</button>
+      </div>
+    </li>
+  </template>
+
+  <script src="popup.js"></script>
+</body>
+</html>

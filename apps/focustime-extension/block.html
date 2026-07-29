@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>접근 제한 - FocusTime</title>
+<style>
+  :root { --bg:#0f1115; --panel:#171a21; --accent:#5b8cff; --text:#e6e9ef; --muted:#8b93a5; --warn:#f0a93b; --err:#ef5b5b; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--text);
+    font:16px/1.6 -apple-system,"Segoe UI",Roboto,"Malgun Gothic",sans-serif; }
+  .wrap { min-height:100%; display:flex; align-items:center; justify-content:center; padding:24px; text-align:center; }
+  .card { max-width:520px; background:var(--panel); border:1px solid #2a2f3a; border-radius:16px; padding:40px 32px; }
+  .icon { font-size:64px; margin-bottom:8px; }
+  h1 { margin:8px 0 4px; font-size:24px; }
+  .reason { color:var(--warn); font-weight:600; margin-bottom:8px; }
+  .domain { color:var(--accent); font-weight:700; word-break:break-all; }
+  .muted { color:var(--muted); font-size:14px; margin-top:8px; }
+  .btns { display:flex; gap:10px; justify-content:center; margin-top:24px; flex-wrap:wrap; }
+  .btn { background:#1e222b; border:1px solid #2a2f3a; color:var(--text); border-radius:8px; padding:10px 16px; cursor:pointer; font-size:14px; text-decoration:none; }
+  .btn:hover { background:#242936; }
+  .btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <div class="icon" id="icon">🛑</div>
+    <div class="reason" id="reason">차단됨</div>
+    <h1 id="heading"><span class="domain" id="domain">이 사이트</span> 에 접근할 수 없습니다</h1>
+    <p class="muted" id="msg">FocusTime 규칙에 의해 제한되었습니다.</p>
+    <div class="btns">
+      <button id="unblock" class="btn primary" hidden>🔓 제한 삭제</button>
+      <a class="btn" href="dashboard.html">대시보드에서 관리</a>
+      <button id="back" class="btn">뒤로 가기</button>
+    </div>
+  </div>
+</div>
+<script src="block.js" charset="UTF-8"></script>
+</body>
+</html>
