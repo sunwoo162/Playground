@@ -14,7 +14,12 @@ const addJobButton = document.querySelector('#addJob');
 const jobTemplate = document.querySelector('#jobTemplate');
 const actionTemplate = document.querySelector('#actionTemplate');
 const themeSelect = document.querySelector('#themeSelect');
+const appPickerModal = document.querySelector('#appPickerModal');
+const closeAppPickerButton = document.querySelector('#closeAppPicker');
+const webPickerGrid = document.querySelector('#webPickerGrid');
+const nativePickerGrid = document.querySelector('#nativePickerGrid');
 let nativeWindows = [];
+let activePickerJobId = '';
 
 initTheme();
 
@@ -57,6 +62,7 @@ function createJob(overrides = {}) {
     customAppPath: '',
     nativeProcess: '',
     nativeWindowTitle: '',
+    selectedTabId: null,
     targetArea: '',
     areaSelector: '',
     urlPattern: '',
@@ -82,11 +88,12 @@ function normalizeJob(job) {
     customAppPath: normalizeAppPath(job.customAppPath),
     nativeProcess: String(job.nativeProcess || '').trim().slice(0, 120),
     nativeWindowTitle: String(job.nativeWindowTitle || '').trim().slice(0, 200),
+    selectedTabId: Number(job.selectedTabId) || null,
     targetArea: ['', 'main', 'form', 'header', 'nav', 'custom'].includes(job.targetArea) ? job.targetArea : '',
     areaSelector: String(job.areaSelector || '').slice(0, 600),
     urlPattern: String(job.urlPattern || '').trim(),
     startUrl: String(job.startUrl || '').trim(),
-    openIfMissing: Boolean(job.openIfMissing),
+    openIfMissing: false,
     backgroundTab: Boolean(job.backgroundTab),
     scheduleType: job.scheduleType === 'time' ? 'time' : 'interval',
     intervalSeconds: Math.max(Number(job.intervalSeconds) || MIN_INTERVAL_SECONDS, MIN_INTERVAL_SECONDS),
@@ -94,6 +101,14 @@ function normalizeJob(job) {
     actions: Array.isArray(job.actions) ? job.actions.slice(0, 20).map(normalizeAction) : [],
   };
 }
+
+closeAppPickerButton?.addEventListener('click', closeAppPicker);
+appPickerModal?.addEventListener('click', (event) => {
+  if (event.target === appPickerModal) closeAppPicker();
+});
+document.querySelectorAll('[data-picker-tab]').forEach((button) => {
+  button.addEventListener('click', () => switchPickerTab(button.dataset.pickerTab));
+});
 
 function normalizeBaseUrl(value) {
   const fallback = DEFAULT_APP_BASE_URL;
@@ -210,10 +225,9 @@ function bindField(element, job, field, coerce = (value) => value) {
   });
 }
 
-async function refreshNativeWindows(card) {
-  const grid = card.querySelector('[data-role="nativeWindowGrid"]');
-  if (!grid) return;
-  grid.innerHTML = '<div class="native-picker-empty">켜져 있는 앱을 불러오는 중...</div>';
+async function loadNativeWindows(grid = nativePickerGrid) {
+  if (!grid) return [];
+  grid.innerHTML = '<div class="picker-empty">Windows 앱을 불러오는 중...</div>';
   try {
     const response = await chrome.runtime.sendNativeMessage('com.playground.site_macro_bridge', { type: 'listWindows' });
     if (!response?.ok || !Array.isArray(response.windows)) throw new Error(response?.message || '창 목록을 불러오지 못했습니다.');
@@ -223,32 +237,41 @@ async function refreshNativeWindows(card) {
       icon: String(item.icon || ''),
       key: `${item.process || ''}::${item.id || index}::${item.title || ''}`,
     }));
-    renderNativeWindowGrid(card);
+    renderNativeWindowGrid(grid);
+    return nativeWindows;
   } catch (error) {
     nativeWindows = [];
-    grid.innerHTML = '<div class="native-picker-empty">브리지 설치/등록 필요</div>';
-    alert(`Windows 앱 목록을 가져오지 못했습니다.\n${error.message || String(error)}`);
+    grid.innerHTML = `
+      <div class="picker-empty">
+        Windows 앱 목록을 가져오지 못했습니다.<br />
+        브리지를 빌드하고 Chrome Native Messaging host로 등록해야 합니다.<br />
+        <small>${escapeHtml(error.message || String(error))}</small>
+      </div>
+    `;
+    return [];
   }
 }
 
-async function selectNativeWindow(card, jobId, item) {
-  const processInput = card.querySelector('[data-field="nativeProcess"]');
-  const titleInput = card.querySelector('[data-field="nativeWindowTitle"]');
+async function selectNativeWindow(jobId, item) {
+  const card = document.querySelector(`[data-job-id="${escapeSelector(jobId)}"]`);
+  const processInput = card?.querySelector('[data-field="nativeProcess"]');
+  const titleInput = card?.querySelector('[data-field="nativeWindowTitle"]');
   if (processInput) processInput.value = item.process;
   if (titleInput) titleInput.value = item.title;
   await updateJob(jobId, {
     targetKind: 'native',
     nativeProcess: item.process,
     nativeWindowTitle: item.title,
+    selectedTabId: null,
   });
-  renderNativeWindowGrid(card, item.key);
+  closeAppPicker();
+  render();
 }
 
-function renderNativeWindowGrid(card, selectedKey = '') {
-  const grid = card.querySelector('[data-role="nativeWindowGrid"]');
+function renderNativeWindowGrid(grid = nativePickerGrid, selectedKey = '') {
   if (!grid) return;
   if (!nativeWindows.length) {
-    grid.innerHTML = '<div class="native-picker-empty">켜져 있는 앱 창이 없습니다.</div>';
+    grid.innerHTML = '<div class="picker-empty">켜져 있는 Windows 앱 창이 없습니다.</div>';
     return;
   }
   grid.innerHTML = '';
@@ -265,11 +288,77 @@ function renderNativeWindowGrid(card, selectedKey = '') {
       <div class="native-app-title">${escapeHtml(item.title)}</div>
     `;
     button.addEventListener('click', () => {
-      const jobId = card.dataset.jobId;
-      if (jobId) selectNativeWindow(card, jobId, item);
+      if (activePickerJobId) selectNativeWindow(activePickerJobId, item);
     });
     grid.append(button);
   }
+}
+
+async function openAppPicker(jobId) {
+  activePickerJobId = jobId;
+  if (!appPickerModal) return;
+  appPickerModal.hidden = false;
+  switchPickerTab('web');
+  await loadWebTabs();
+  loadNativeWindows();
+}
+
+function closeAppPicker() {
+  if (appPickerModal) appPickerModal.hidden = true;
+  activePickerJobId = '';
+}
+
+function switchPickerTab(tab = 'web') {
+  document.querySelectorAll('[data-picker-tab]').forEach((button) => {
+    button.classList.toggle('active', button.dataset.pickerTab === tab);
+  });
+  if (webPickerGrid) webPickerGrid.hidden = tab !== 'web';
+  if (nativePickerGrid) nativePickerGrid.hidden = tab !== 'native';
+}
+
+async function loadWebTabs() {
+  if (!webPickerGrid) return;
+  webPickerGrid.innerHTML = '<div class="picker-empty">켜져 있는 웹 탭을 불러오는 중...</div>';
+  const tabs = (await chrome.tabs.query({}))
+    .filter((tab) => tab.id && /^https?:\/\//.test(tab.url || ''))
+    .sort((a, b) => Number(b.active) - Number(a.active));
+  if (!tabs.length) {
+    webPickerGrid.innerHTML = '<div class="picker-empty">선택할 수 있는 웹 탭이 없습니다.</div>';
+    return;
+  }
+  webPickerGrid.innerHTML = '';
+  for (const tab of tabs) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'picker-tile web-tile';
+    const host = new URL(tab.url).host;
+    button.innerHTML = `
+      ${tab.favIconUrl ? `<img src="${escapeAttr(tab.favIconUrl)}" alt="" />` : `<div class="native-app-icon">${escapeHtml(host.slice(0, 1).toUpperCase())}</div>`}
+      <div class="native-app-name">${escapeHtml(tab.title || host)}</div>
+      <div class="native-app-title">${escapeHtml(host)}</div>
+    `;
+    button.addEventListener('click', () => selectWebTab(tab));
+    webPickerGrid.append(button);
+  }
+}
+
+async function selectWebTab(tab) {
+  const url = tab.url || '';
+  if (!activePickerJobId || !url) return;
+  const parsed = new URL(url);
+  const pattern = `${parsed.origin}${parsed.pathname}*`;
+  await updateJob(activePickerJobId, {
+    targetKind: 'web',
+    selectedTabId: tab.id,
+    urlPattern: pattern,
+    startUrl: url,
+    openIfMissing: false,
+    backgroundTab: true,
+    targetApp: '',
+    customAppPath: '',
+  });
+  closeAppPicker();
+  render();
 }
 
 function escapeHtml(value) {
@@ -278,6 +367,10 @@ function escapeHtml(value) {
 
 function escapeAttr(value) {
   return escapeHtml(value).replace(/`/g, '&#96;');
+}
+
+function escapeSelector(value) {
+  return globalThis.CSS?.escape ? CSS.escape(value) : String(value).replace(/["\\]/g, '\\$&');
 }
 
 async function applyTargetApp(jobId) {
@@ -292,7 +385,7 @@ async function applyTargetApp(jobId) {
     customAppPath: job.customAppPath ? appPath : '',
     urlPattern: `${startUrl}*`,
     startUrl,
-    openIfMissing: true,
+    openIfMissing: false,
     backgroundTab: true,
   });
 }
@@ -319,6 +412,7 @@ function renderAction(job, action, index) {
   bindActionField(row, job, action, index, 'selector');
   bindActionField(row, job, action, index, 'value');
   bindActionField(row, job, action, index, 'ms', Number);
+  bindActionField(row, job, action, index, 'x', Number);
   bindActionField(row, job, action, index, 'y', Number);
   row.querySelector('[data-action="removeAction"]').addEventListener('click', () => removeAction(job.id, index));
   return row;
@@ -357,7 +451,7 @@ async function render() {
     for (const [index, action] of job.actions.entries()) actions.append(renderAction(job, action, index));
 
     card.querySelector('[data-action="addAction"]').addEventListener('click', () => addAction(job.id));
-    card.querySelector('[data-action="refreshNativeWindows"]').addEventListener('click', () => refreshNativeWindows(card));
+    card.querySelector('[data-action="openAppPicker"]').addEventListener('click', () => openAppPicker(job.id));
     card.querySelector('[data-action="permission"]').addEventListener('click', () => requestPermission(job));
     card.querySelector('[data-action="duplicate"]').addEventListener('click', () => duplicateJob(job.id));
     card.querySelector('[data-action="delete"]').addEventListener('click', () => deleteJob(job.id));

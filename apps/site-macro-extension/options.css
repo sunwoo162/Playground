@@ -201,6 +201,87 @@ label.check input,
   background: rgba(47,125,84,.07);
 }
 
+.pick-button {
+  min-height: 48px;
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(8, 13, 11, .52);
+}
+
+.modal[hidden] {
+  display: none;
+}
+
+.modal-card {
+  width: min(900px, 100%);
+  max-height: min(760px, calc(100vh - 48px));
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 22px;
+  border-bottom: 1px solid var(--line);
+}
+
+.modal-head h2 {
+  margin: 0;
+  font-size: 26px;
+}
+
+.picker-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 12px 22px;
+  border-bottom: 1px solid var(--line);
+}
+
+.picker-tabs button.active {
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.picker-grid {
+  min-height: 280px;
+  overflow: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  gap: 12px;
+  padding: 18px 22px 24px;
+}
+
+.picker-empty {
+  grid-column: 1 / -1;
+  align-self: center;
+  padding: 28px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  color: var(--muted);
+  line-height: 1.6;
+  text-align: center;
+}
+
+.picker-empty small {
+  display: block;
+  margin-top: 8px;
+  word-break: break-all;
+}
+
 .native-picker {
   grid-column: 1 / -1;
   min-height: 94px;
@@ -218,6 +299,7 @@ label.check input,
   text-align: center;
 }
 
+.picker-tile,
 .native-app-tile {
   min-height: 96px;
   display: flex;
@@ -231,6 +313,11 @@ label.check input,
   background: var(--panel);
   color: var(--ink);
   text-align: center;
+}
+
+.picker-tile:hover,
+.native-app-tile:hover {
+  border-color: var(--green);
 }
 
 .native-app-tile.selected {

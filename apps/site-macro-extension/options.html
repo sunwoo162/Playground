@@ -33,6 +33,25 @@
       <section id="jobEditorList" class="job-editor-list"></section>
     </main>
 
+    <div id="appPickerModal" class="modal" hidden>
+      <div class="modal-card">
+        <div class="modal-head">
+          <div>
+            <p class="eyebrow">Target Picker</p>
+            <h2>앱 선택하기</h2>
+            <p>현재 켜져 있는 웹 탭이나 Windows 앱 창만 선택할 수 있습니다.</p>
+          </div>
+          <button id="closeAppPicker" type="button">닫기</button>
+        </div>
+        <div class="picker-tabs">
+          <button data-picker-tab="web" type="button" class="active">웹 탭</button>
+          <button data-picker-tab="native" type="button">Windows 앱</button>
+        </div>
+        <div id="webPickerGrid" class="picker-grid"></div>
+        <div id="nativePickerGrid" class="picker-grid" hidden></div>
+      </div>
+    </div>
+
     <template id="jobTemplate">
       <article class="job-card">
         <div class="card-head">
@@ -41,6 +60,7 @@
         </div>
 
         <div class="app-target">
+          <button data-action="openAppPicker" type="button" class="primary pick-button">앱 선택하기</button>
           <label>대상 종류
             <select data-field="targetKind">
               <option value="web">웹/놀이터 앱</option>
@@ -70,12 +90,8 @@
             </select>
           </label>
           <label>직접 앱 경로 <input data-field="customAppPath" placeholder="/apps/todo/" /></label>
-          <button data-action="refreshNativeWindows" type="button">앱 목록 새로고침</button>
           <label>Windows 프로세스명 <input data-field="nativeProcess" placeholder="예: notepad" /></label>
           <label>Windows 창 제목 <input data-field="nativeWindowTitle" placeholder="예: 메모장" /></label>
-          <div class="native-picker" data-role="nativeWindowGrid">
-            <div class="native-picker-empty">새로고침을 누르면 켜져 있는 앱이 아이콘으로 표시됩니다.</div>
-          </div>
         </div>
 
         <div class="grid">
@@ -91,8 +107,8 @@
           </label>
           <label>구역 CSS 선택자 <input data-field="areaSelector" placeholder="예: main, form, .editor" /></label>
           <label>URL 패턴 <input data-field="urlPattern" placeholder="https://example.com/page*" /></label>
-          <label>없으면 열 URL <input data-field="startUrl" placeholder="https://example.com/page" /></label>
-          <label class="check"><input data-field="openIfMissing" type="checkbox" /> 탭이 없으면 새 탭으로 열기</label>
+          <label>선택한 URL <input data-field="startUrl" placeholder="켜져 있는 웹 탭 선택 시 자동 입력" /></label>
+          <label class="check"><input data-field="openIfMissing" type="checkbox" /> 탭이 없으면 실행하지 않음</label>
           <label class="check"><input data-field="backgroundTab" type="checkbox" /> 전용 백그라운드 탭에서 계속 실행</label>
         </div>
 

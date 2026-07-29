@@ -178,16 +178,19 @@ async function runNativeJob(job) {
 }
 
 async function getRunnableTab(job) {
+  const selectedTab = await getSelectedTab(job);
+  if (selectedTab) return selectedTab;
   const tabs = await chrome.tabs.query({});
-  let tab = tabs.find((item) => urlMatchesPattern(item.url, job.urlPattern));
-  if (!tab && job.openIfMissing) {
-    tab = await chrome.tabs.create({ url: getStartUrl(job), active: false });
-    await waitForTabComplete(tab.id);
-  }
-  return tab;
+  return tabs.find((item) => urlMatchesPattern(item.url, job.urlPattern));
 }
 
 async function getOrCreateBackgroundTab(job) {
+  const selectedTab = await getSelectedTab(job);
+  if (selectedTab) {
+    await saveJobPatch(job.id, { backgroundTabId: selectedTab.id });
+    return selectedTab;
+  }
+
   const tabId = Number(job.backgroundTabId);
   if (tabId) {
     try {
@@ -208,10 +211,23 @@ async function getOrCreateBackgroundTab(job) {
     return existing;
   }
 
+  if (!job.openIfMissing) return null;
   const created = await chrome.tabs.create({ url: getStartUrl(job), active: false, pinned: true });
   await saveJobPatch(job.id, { backgroundTabId: created.id });
   await waitForTabComplete(created.id);
   return created;
+}
+
+async function getSelectedTab(job) {
+  const tabId = Number(job.selectedTabId);
+  if (!tabId) return null;
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    return tab?.id && urlMatchesPattern(tab.url, job.urlPattern) ? tab : null;
+  } catch {
+    await saveJobPatch(job.id, { selectedTabId: null, backgroundTabId: null });
+    return null;
+  }
 }
 
 function getStartUrl(job) {
