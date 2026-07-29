@@ -6,23 +6,29 @@
     <title>사이트 액션 매크로</title>
     <style>
       :root {
-        color-scheme: dark;
-        font-family: Inter, Pretendard, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        background: #0f172a;
-        color: #f8fafc;
+        color-scheme: light;
+        --ink: #18201d;
+        --muted: #60706a;
+        --paper: #f7f8f4;
+        --panel: #ffffff;
+        --line: #d9dfd4;
+        --green: #2f7d54;
+        --blue: #315f96;
+        --red: #b84b43;
+        --shadow: 0 24px 70px rgba(24, 32, 29, .13);
+        font-family: "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
+        background: var(--paper);
+        color: var(--ink);
       }
 
-      * {
-        box-sizing: border-box;
-      }
+      * { box-sizing: border-box; }
 
       body {
         margin: 0;
         min-height: 100vh;
         background:
-          radial-gradient(circle at 12% 4%, rgba(0, 221, 153, .16), transparent 26rem),
-          radial-gradient(circle at 82% 0%, rgba(56, 174, 250, .12), transparent 24rem),
-          #0f172a;
+          radial-gradient(circle at 12% 0%, rgba(47,125,84,.1), transparent 28rem),
+          var(--paper);
       }
 
       main {
@@ -31,17 +37,26 @@
         padding: 48px 0;
       }
 
-      .back {
+      .back,
+      .button {
         display: inline-flex;
         align-items: center;
-        min-height: 40px;
-        padding: 0 14px;
-        border: 1px solid rgba(255,255,255,.14);
+        justify-content: center;
+        min-height: 44px;
+        padding: 0 16px;
+        border: 1px solid var(--line);
         border-radius: 8px;
-        background: rgba(17,24,39,.78);
-        color: #f8fafc;
-        font-weight: 800;
+        background: var(--panel);
+        color: var(--ink);
+        font-weight: 850;
         text-decoration: none;
+        transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+      }
+
+      .back:hover,
+      .button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 24px rgba(24,32,29,.12);
       }
 
       .hero {
@@ -53,20 +68,21 @@
       }
 
       .panel {
-        border: 1px solid rgba(255,255,255,.12);
-        border-radius: 12px;
-        background: rgba(17,24,39,.88);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        box-shadow: var(--shadow);
       }
 
-      .intro {
-        padding: 34px;
-      }
+      .intro { padding: 34px; }
 
       .eyebrow {
         margin: 0 0 12px;
-        color: #00dd99;
-        font-size: 13px;
+        color: var(--green);
+        font-size: 12px;
         font-weight: 900;
+        letter-spacing: .12em;
+        text-transform: uppercase;
       }
 
       h1 {
@@ -80,7 +96,7 @@
       .lead {
         margin: 18px 0 0;
         max-width: 680px;
-        color: #cbd5e1;
+        color: var(--muted);
         font-size: 17px;
         line-height: 1.7;
       }
@@ -92,49 +108,33 @@
         margin-top: 26px;
       }
 
-      .button {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-height: 46px;
-        padding: 0 16px;
-        border: 1px solid rgba(255,255,255,.14);
-        border-radius: 8px;
-        background: #1f2937;
-        color: #f8fafc;
-        font-weight: 900;
-        text-decoration: none;
-      }
-
       .button.primary {
-        border-color: #00dd99;
-        background: #00dd99;
-        color: #082018;
+        border-color: var(--ink);
+        background: var(--ink);
+        color: #ffffff;
       }
 
-      .preview {
-        padding: 18px;
-      }
+      .preview { padding: 18px; }
 
       .browser {
         overflow: hidden;
-        border: 1px solid rgba(255,255,255,.12);
-        border-radius: 10px;
-        background: #0b1120;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #eef2eb;
       }
 
       .bar {
         display: flex;
         gap: 6px;
         padding: 12px;
-        border-bottom: 1px solid rgba(255,255,255,.1);
+        border-bottom: 1px solid var(--line);
       }
 
       .dot {
         width: 10px;
         height: 10px;
         border-radius: 999px;
-        background: #64748b;
+        background: #9ca8a1;
       }
 
       .screen {
@@ -144,23 +144,14 @@
       }
 
       .job {
-        border: 1px solid rgba(255,255,255,.12);
+        border: 1px solid rgba(96,112,106,.18);
         border-radius: 8px;
         padding: 14px;
-        background: #111827;
+        background: rgba(255,255,255,.78);
       }
 
-      .job strong {
-        display: block;
-        font-size: 15px;
-      }
-
-      .job span {
-        display: block;
-        margin-top: 6px;
-        color: #9ca3af;
-        font-size: 13px;
-      }
+      .job strong { display: block; font-size: 15px; }
+      .job span { display: block; margin-top: 6px; color: var(--muted); font-size: 13px; }
 
       .grid {
         display: grid;
@@ -169,18 +160,12 @@
         margin-top: 24px;
       }
 
-      .card {
-        padding: 18px;
-      }
-
-      .card h2 {
-        margin: 0;
-        font-size: 18px;
-      }
+      .card { padding: 18px; }
+      .card h2 { margin: 0; font-size: 18px; }
 
       .card p,
       li {
-        color: #cbd5e1;
+        color: var(--muted);
         line-height: 1.6;
       }
 
@@ -196,14 +181,9 @@
         margin-top: 24px;
       }
 
-      .usage .panel {
-        padding: 22px;
-      }
-
+      .usage .panel { padding: 22px; }
       .usage h2,
-      .steps h2 {
-        margin: 0 0 14px;
-      }
+      .steps h2 { margin: 0 0 14px; }
 
       .field-list {
         display: grid;
@@ -215,34 +195,48 @@
 
       .field-list li {
         padding: 12px;
-        border: 1px solid rgba(255,255,255,.1);
+        border: 1px solid rgba(96,112,106,.18);
         border-radius: 8px;
-        background: rgba(2,6,23,.42);
+        background: rgba(247,248,244,.72);
       }
 
-      .field-list strong {
-        display: block;
-        color: #f8fafc;
-      }
+      .field-list strong { display: block; color: var(--ink); }
 
       code {
         display: inline-block;
         padding: 2px 6px;
         border-radius: 6px;
-        background: #020617;
-        color: #b7f7df;
+        background: #edf2ea;
+        color: var(--green);
+        font-weight: 800;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          color-scheme: dark;
+          --ink: #f4f7f1;
+          --muted: #aeb9b2;
+          --paper: #111713;
+          --panel: #19211c;
+          --line: #344139;
+          --green: #69c18d;
+          --blue: #7ea7d8;
+          --red: #e37b72;
+          --shadow: 0 24px 70px rgba(0, 0, 0, .26);
+        }
+
+        .button.primary { background: var(--green); border-color: var(--green); color: #07140d; }
+        .browser { background: #111713; }
+        .job { background: rgba(255,255,255,.04); }
+        .field-list li { background: rgba(255,255,255,.04); }
+        code { background: #0d1511; }
       }
 
       @media (max-width: 860px) {
         .hero,
         .grid,
-        .usage {
-          grid-template-columns: 1fr;
-        }
-
-        .intro {
-          padding: 24px;
-        }
+        .usage { grid-template-columns: 1fr; }
+        .intro { padding: 24px; }
       }
     </style>
   </head>

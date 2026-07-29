@@ -1,4 +1,5 @@
 const STORAGE_KEY = 'siteMacroJobs';
+const THEME_KEY = 'siteMacroTheme';
 const MIN_INTERVAL_SECONDS = 5;
 const DEFAULT_APP_BASE_URL = 'https://playground.https.gsmsv.site';
 const AREA_SELECTORS = {
@@ -12,6 +13,9 @@ const jobEditorList = document.querySelector('#jobEditorList');
 const addJobButton = document.querySelector('#addJob');
 const jobTemplate = document.querySelector('#jobTemplate');
 const actionTemplate = document.querySelector('#actionTemplate');
+const themeSelect = document.querySelector('#themeSelect');
+
+initTheme();
 
 addJobButton.addEventListener('click', async () => {
   const jobs = await getJobs();
@@ -19,6 +23,18 @@ addJobButton.addEventListener('click', async () => {
   await setJobs(jobs);
   render();
 });
+
+async function initTheme() {
+  const result = await chrome.storage.local.get(THEME_KEY);
+  const theme = result[THEME_KEY] === 'dark' ? 'dark' : 'light';
+  document.documentElement.dataset.theme = theme;
+  if (themeSelect) themeSelect.value = theme;
+  themeSelect?.addEventListener('change', async () => {
+    const nextTheme = themeSelect.value === 'dark' ? 'dark' : 'light';
+    document.documentElement.dataset.theme = nextTheme;
+    await chrome.storage.local.set({ [THEME_KEY]: nextTheme });
+  });
+}
 
 async function getJobs() {
   const result = await chrome.storage.sync.get(STORAGE_KEY);

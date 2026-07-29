@@ -1,14 +1,28 @@
 :root {
-  color-scheme: dark;
-  font-family: Inter, Pretendard, system-ui, sans-serif;
-  background: #111827;
-  color: #f8fafc;
+  color-scheme: light;
+  --ink: #18201d;
+  --muted: #60706a;
+  --paper: #f7f8f4;
+  --panel: #ffffff;
+  --line: #d9dfd4;
+  --green: #2f7d54;
+  --blue: #315f96;
+  --red: #b84b43;
+  font-family: "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
   width: 380px;
   margin: 0;
-  background: #111827;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(47,125,84,.12), transparent 18rem),
+    var(--paper);
 }
 
 header,
@@ -21,7 +35,13 @@ header {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  border-bottom: 1px solid rgba(255,255,255,.12);
+  border-bottom: 1px solid var(--line);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 strong {
@@ -31,24 +51,34 @@ strong {
 
 p {
   margin: 4px 0 0;
-  color: #9ca3af;
+  color: var(--muted);
   font-size: 12px;
 }
 
-button {
+button,
+select {
   min-height: 34px;
-  border: 1px solid rgba(255,255,255,.14);
-  border-radius: 6px;
-  background: #1f2937;
-  color: #f8fafc;
-  font-weight: 700;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--ink);
+  font-weight: 800;
+}
+
+button {
   cursor: pointer;
 }
 
+select {
+  width: 86px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
 button.primary {
-  border-color: #00dd99;
-  background: #00dd99;
-  color: #082018;
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #ffffff;
 }
 
 main {
@@ -57,11 +87,11 @@ main {
 }
 
 .notice {
-  border: 1px solid rgba(0,221,153,.28);
+  border: 1px solid rgba(47,125,84,.24);
   border-radius: 8px;
   padding: 10px;
-  background: rgba(0,221,153,.08);
-  color: #c7f9e6;
+  background: rgba(47,125,84,.08);
+  color: var(--green);
   font-size: 12px;
   line-height: 1.5;
 }
@@ -88,10 +118,10 @@ h2 {
 
 .job,
 .log {
-  border: 1px solid rgba(255,255,255,.12);
+  border: 1px solid var(--line);
   border-radius: 8px;
   padding: 10px;
-  background: #182231;
+  background: var(--panel);
 }
 
 .job strong,
@@ -103,7 +133,7 @@ h2 {
 .log small {
   display: block;
   margin-top: 4px;
-  color: #9ca3af;
+  color: var(--muted);
   word-break: break-all;
 }
 
@@ -119,8 +149,26 @@ h2 {
 
 .empty {
   padding: 14px;
-  border: 1px dashed rgba(255,255,255,.18);
+  border: 1px dashed var(--line);
   border-radius: 8px;
-  color: #9ca3af;
+  color: var(--muted);
   text-align: center;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --ink: #f4f7f1;
+  --muted: #aeb9b2;
+  --paper: #111713;
+  --panel: #19211c;
+  --line: #344139;
+  --green: #69c18d;
+  --blue: #7ea7d8;
+  --red: #e37b72;
+}
+
+:root[data-theme='dark'] button.primary {
+  background: var(--green);
+  border-color: var(--green);
+  color: #07140d;
 }

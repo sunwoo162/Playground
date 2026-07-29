@@ -1,11 +1,15 @@
 const STORAGE_KEY = 'siteMacroJobs';
 const LOG_KEY = 'siteMacroLogs';
+const THEME_KEY = 'siteMacroTheme';
 
 const jobList = document.querySelector('#jobList');
 const logList = document.querySelector('#logList');
 const openOptionsButton = document.querySelector('#openOptions');
 const newJobButton = document.querySelector('#newJob');
 const clearLogsButton = document.querySelector('#clearLogs');
+const themeSelect = document.querySelector('#themeSelect');
+
+initTheme();
 
 openOptionsButton.addEventListener('click', () => chrome.runtime.openOptionsPage());
 newJobButton.addEventListener('click', () => chrome.runtime.openOptionsPage());
@@ -13,6 +17,18 @@ clearLogsButton.addEventListener('click', async () => {
   await chrome.storage.local.set({ [LOG_KEY]: [] });
   await render();
 });
+
+async function initTheme() {
+  const result = await chrome.storage.local.get(THEME_KEY);
+  const theme = result[THEME_KEY] === 'dark' ? 'dark' : 'light';
+  document.documentElement.dataset.theme = theme;
+  if (themeSelect) themeSelect.value = theme;
+  themeSelect?.addEventListener('change', async () => {
+    const nextTheme = themeSelect.value === 'dark' ? 'dark' : 'light';
+    document.documentElement.dataset.theme = nextTheme;
+    await chrome.storage.local.set({ [THEME_KEY]: nextTheme });
+  });
+}
 
 async function getJobs() {
   const result = await chrome.storage.sync.get(STORAGE_KEY);
