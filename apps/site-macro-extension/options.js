@@ -36,6 +36,7 @@ function createJob(overrides = {}) {
     enabled: false,
     appBaseUrl: DEFAULT_APP_BASE_URL,
     targetApp: '',
+    customAppPath: '',
     targetArea: '',
     areaSelector: '',
     urlPattern: '',
@@ -57,6 +58,7 @@ function normalizeJob(job) {
     enabled: Boolean(job.enabled),
     appBaseUrl: normalizeBaseUrl(job.appBaseUrl),
     targetApp: String(job.targetApp || ''),
+    customAppPath: normalizeAppPath(job.customAppPath),
     targetArea: ['', 'main', 'form', 'header', 'nav', 'custom'].includes(job.targetArea) ? job.targetArea : '',
     areaSelector: String(job.areaSelector || '').slice(0, 600),
     urlPattern: String(job.urlPattern || '').trim(),
@@ -81,7 +83,7 @@ function normalizeBaseUrl(value) {
 }
 
 function normalizeAction(action) {
-  const type = ['click', 'type', 'wait', 'scroll', 'reload'].includes(action.type) ? action.type : 'click';
+  const type = ['click', 'type', 'key', 'wait', 'scroll', 'reload'].includes(action.type) ? action.type : 'click';
   return {
     type,
     selector: String(action.selector || '').slice(0, 600),
@@ -90,6 +92,12 @@ function normalizeAction(action) {
     x: Number(action.x) || 0,
     y: Number(action.y) || 0,
   };
+}
+
+function normalizeAppPath(value) {
+  const path = String(value || '').trim();
+  if (!path) return '';
+  return path.startsWith('/') ? path : `/${path}`;
 }
 
 function originFromPattern(urlPattern) {
@@ -169,8 +177,11 @@ function bindField(element, job, field, coerce = (value) => value) {
   else input.value = job[field] ?? '';
   input.addEventListener('change', async () => {
     const value = input.type === 'checkbox' ? input.checked : coerce(input.value);
-    await updateJob(job.id, { [field]: value });
-    if (field === 'targetApp' || field === 'appBaseUrl') await applyTargetApp(job.id);
+    const patch = { [field]: value };
+    if (field === 'targetApp') patch.customAppPath = '';
+    if (field === 'customAppPath' && value) patch.targetApp = '';
+    await updateJob(job.id, patch);
+    if (field === 'targetApp' || field === 'appBaseUrl' || field === 'customAppPath') await applyTargetApp(job.id);
     if (field === 'targetArea') await applyTargetArea(job.id);
     if (field === 'scheduleType' || field === 'targetApp' || field === 'appBaseUrl' || field === 'targetArea') render();
   });
@@ -179,11 +190,13 @@ function bindField(element, job, field, coerce = (value) => value) {
 async function applyTargetApp(jobId) {
   const jobs = await getJobs();
   const job = jobs.find((item) => item.id === jobId);
-  if (!job?.targetApp) return;
+  const appPath = normalizeAppPath(job?.customAppPath || job?.targetApp);
+  if (!appPath) return;
   const baseUrl = normalizeBaseUrl(job.appBaseUrl);
-  const startUrl = `${baseUrl}${job.targetApp}`;
+  const startUrl = `${baseUrl}${appPath}`;
   await updateJob(jobId, {
     appBaseUrl: baseUrl,
+    customAppPath: job.customAppPath ? appPath : '',
     urlPattern: `${startUrl}*`,
     startUrl,
     openIfMissing: true,
@@ -232,6 +245,7 @@ async function render() {
     bindField(card, job, 'enabled');
     bindField(card, job, 'appBaseUrl');
     bindField(card, job, 'targetApp');
+    bindField(card, job, 'customAppPath');
     bindField(card, job, 'targetArea');
     bindField(card, job, 'areaSelector');
     bindField(card, job, 'urlPattern');

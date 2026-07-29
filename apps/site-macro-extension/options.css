@@ -154,6 +154,16 @@ label.check input,
   gap: 12px;
 }
 
+.app-target {
+  display: grid;
+  grid-template-columns: 1.2fr 1.2fr 1fr;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(0,221,153,.28);
+  border-radius: 8px;
+  background: rgba(0,221,153,.06);
+}
+
 .actions-list {
   display: grid;
   gap: 8px;
@@ -183,6 +193,7 @@ label.check input,
   }
 
   .grid,
+  .app-target,
   .action-row {
     grid-template-columns: 1fr;
   }

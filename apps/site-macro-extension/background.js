@@ -241,6 +241,20 @@ async function executeActions(actions, areaSelector) {
     if (!visible(element)) throw new Error(`요소를 찾지 못했습니다: ${selector}`);
     return element;
   };
+  const getOptionalElement = (selector) => {
+    if (!selector) return document.activeElement && document.activeElement !== document.body ? document.activeElement : document.body;
+    return getElement(selector);
+  };
+  const keyFromValue = (value) => {
+    const key = String(value || 'Enter').trim() || 'Enter';
+    const aliases = { enter: 'Enter', esc: 'Escape', escape: 'Escape', space: ' ', tab: 'Tab', backspace: 'Backspace', delete: 'Delete' };
+    return aliases[key.toLowerCase()] || key;
+  };
+  const dispatchKey = (target, key) => {
+    const eventInit = { key, code: key === ' ' ? 'Space' : key, bubbles: true, cancelable: true };
+    target.dispatchEvent(new KeyboardEvent('keydown', eventInit));
+    target.dispatchEvent(new KeyboardEvent('keyup', eventInit));
+  };
   const assertSafeInput = (element) => {
     const type = String(element.getAttribute('type') || '').toLowerCase();
     if (type === 'password') throw new Error('비밀번호 입력칸 자동 입력은 차단됩니다.');
@@ -265,6 +279,11 @@ async function executeActions(actions, areaSelector) {
         element.value = String(action.value || '').slice(0, 1000);
         element.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: element.value }));
         element.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      if (action.type === 'key') {
+        const element = getOptionalElement(action.selector);
+        if (element instanceof HTMLElement) element.focus();
+        dispatchKey(element, keyFromValue(action.value));
       }
       if (action.type === 'scroll') {
         window.scrollBy({ top: Number(action.y) || 0, left: Number(action.x) || 0, behavior: 'smooth' });

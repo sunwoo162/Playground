@@ -32,7 +32,7 @@
           <label><input data-field="enabled" type="checkbox" /> 사용</label>
         </div>
 
-        <div class="grid">
+        <div class="app-target">
           <label>놀이터 주소 <input data-field="appBaseUrl" placeholder="https://playground.https.gsmsv.site" /></label>
           <label>대상 앱
             <select data-field="targetApp">
@@ -55,6 +55,10 @@
               <option value="/apps/focustime-extension/">FocusTime</option>
             </select>
           </label>
+          <label>직접 앱 경로 <input data-field="customAppPath" placeholder="/apps/todo/" /></label>
+        </div>
+
+        <div class="grid">
           <label>대상 구역
             <select data-field="targetArea">
               <option value="">전체 화면</option>
@@ -102,12 +106,13 @@
         <select data-field="type">
           <option value="click">클릭</option>
           <option value="type">입력</option>
+          <option value="key">키 입력</option>
           <option value="wait">대기</option>
           <option value="scroll">스크롤</option>
           <option value="reload">새로고침</option>
         </select>
-        <input data-field="selector" placeholder="CSS selector, 예: #submit" />
-        <input data-field="value" placeholder="입력값" />
+        <input data-field="selector" placeholder="대상 CSS selector, 비워두면 현재 포커스/화면" />
+        <input data-field="value" placeholder="입력값 또는 키, 예: Enter" />
         <input data-field="ms" type="number" placeholder="대기 ms" />
         <input data-field="y" type="number" placeholder="스크롤 Y" />
         <button data-action="removeAction" type="button">삭제</button>
