@@ -14,6 +14,7 @@ const addJobButton = document.querySelector('#addJob');
 const jobTemplate = document.querySelector('#jobTemplate');
 const actionTemplate = document.querySelector('#actionTemplate');
 const themeSelect = document.querySelector('#themeSelect');
+let nativeWindows = [];
 
 initTheme();
 
@@ -56,6 +57,7 @@ function createJob(overrides = {}) {
     customAppPath: '',
     nativeProcess: '',
     nativeWindowTitle: '',
+    nativeWindowChoice: '',
     targetArea: '',
     areaSelector: '',
     urlPattern: '',
@@ -81,6 +83,7 @@ function normalizeJob(job) {
     customAppPath: normalizeAppPath(job.customAppPath),
     nativeProcess: String(job.nativeProcess || '').trim().slice(0, 120),
     nativeWindowTitle: String(job.nativeWindowTitle || '').trim().slice(0, 200),
+    nativeWindowChoice: String(job.nativeWindowChoice || '').trim().slice(0, 500),
     targetArea: ['', 'main', 'form', 'header', 'nav', 'custom'].includes(job.targetArea) ? job.targetArea : '',
     areaSelector: String(job.areaSelector || '').slice(0, 600),
     urlPattern: String(job.urlPattern || '').trim(),
@@ -202,11 +205,48 @@ function bindField(element, job, field, coerce = (value) => value) {
     const patch = { [field]: value };
     if (field === 'targetApp') patch.customAppPath = '';
     if (field === 'customAppPath' && value) patch.targetApp = '';
+    if (field === 'nativeWindowChoice' && value) {
+      const selected = nativeWindows.find((item) => item.key === value);
+      if (selected) {
+        patch.nativeProcess = selected.process;
+        patch.nativeWindowTitle = selected.title;
+        const processInput = element.querySelector('[data-field="nativeProcess"]');
+        const titleInput = element.querySelector('[data-field="nativeWindowTitle"]');
+        if (processInput) processInput.value = selected.process;
+        if (titleInput) titleInput.value = selected.title;
+      }
+    }
     await updateJob(job.id, patch);
     if (field === 'targetApp' || field === 'appBaseUrl' || field === 'customAppPath') await applyTargetApp(job.id);
     if (field === 'targetArea') await applyTargetArea(job.id);
     if (field === 'scheduleType' || field === 'targetApp' || field === 'appBaseUrl' || field === 'targetArea') render();
   });
+}
+
+async function refreshNativeWindows(card) {
+  const select = card.querySelector('[data-field="nativeWindowChoice"]');
+  if (!select) return;
+  select.innerHTML = '<option value="">조회 중...</option>';
+  try {
+    const response = await chrome.runtime.sendNativeMessage('com.playground.site_macro_bridge', { type: 'listWindows' });
+    if (!response?.ok || !Array.isArray(response.windows)) throw new Error(response?.message || '창 목록을 불러오지 못했습니다.');
+    nativeWindows = response.windows.map((item, index) => ({
+      process: String(item.process || ''),
+      title: String(item.title || ''),
+      key: `${item.process || ''}::${item.id || index}::${item.title || ''}`,
+    }));
+    select.innerHTML = '<option value="">선택하세요</option>';
+    for (const item of nativeWindows) {
+      const option = document.createElement('option');
+      option.value = item.key;
+      option.textContent = `${item.process} - ${item.title}`;
+      select.append(option);
+    }
+  } catch (error) {
+    nativeWindows = [];
+    select.innerHTML = '<option value="">브리지 설치/등록 필요</option>';
+    alert(`Windows 앱 목록을 가져오지 못했습니다.\n${error.message || String(error)}`);
+  }
 }
 
 async function applyTargetApp(jobId) {
@@ -269,6 +309,7 @@ async function render() {
     bindField(card, job, 'appBaseUrl');
     bindField(card, job, 'targetApp');
     bindField(card, job, 'customAppPath');
+    bindField(card, job, 'nativeWindowChoice');
     bindField(card, job, 'nativeProcess');
     bindField(card, job, 'nativeWindowTitle');
     bindField(card, job, 'targetArea');
@@ -285,6 +326,7 @@ async function render() {
     for (const [index, action] of job.actions.entries()) actions.append(renderAction(job, action, index));
 
     card.querySelector('[data-action="addAction"]').addEventListener('click', () => addAction(job.id));
+    card.querySelector('[data-action="refreshNativeWindows"]').addEventListener('click', () => refreshNativeWindows(card));
     card.querySelector('[data-action="permission"]').addEventListener('click', () => requestPermission(job));
     card.querySelector('[data-action="duplicate"]').addEventListener('click', () => duplicateJob(job.id));
     card.querySelector('[data-action="delete"]').addEventListener('click', () => deleteJob(job.id));

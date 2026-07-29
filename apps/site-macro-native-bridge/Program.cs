@@ -60,6 +60,13 @@ static class Program
 
     static string Run(JsonElement request)
     {
+        if (GetString(request, "type") == "listWindows")
+        {
+            var windows = GetWindows();
+            WriteMessage(new { ok = true, windows, message = $"{windows.Count}개 창 조회 완료" });
+            Environment.Exit(0);
+        }
+
         var processName = GetString(request, "process");
         var windowTitle = GetString(request, "windowTitle");
         var handle = FindWindow(processName, windowTitle);
@@ -80,6 +87,19 @@ static class Program
         }
         return $"{count}개 Windows 앱 액션 실행 완료";
     }
+
+    static List<object> GetWindows() =>
+        Process.GetProcesses()
+            .Where(p => p.MainWindowHandle != IntPtr.Zero && !string.IsNullOrWhiteSpace(p.MainWindowTitle))
+            .OrderBy(p => p.ProcessName)
+            .Select(p => new
+            {
+                process = p.ProcessName,
+                title = p.MainWindowTitle,
+                id = p.Id
+            })
+            .Cast<object>()
+            .ToList();
 
     static IntPtr FindWindow(string processName, string windowTitle)
     {
