@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>매크로 Windows 브리지</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #090b10;
+        --panel: #121722;
+        --line: #273142;
+        --text: #f4f7fb;
+        --muted: #93a1b5;
+        --blue: #6ea8fe;
+        font-family: "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--bg); color: var(--text); }
+      main { width: min(980px, calc(100% - 32px)); margin: 0 auto; padding: 48px 0; }
+      a { color: var(--blue); font-weight: 800; }
+      .back { display: inline-flex; margin-bottom: 28px; text-decoration: none; }
+      .hero, section {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--panel);
+        padding: 26px;
+      }
+      .hero { margin-bottom: 16px; }
+      .eyebrow { margin: 0 0 10px; color: var(--blue); font-size: 12px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+      h1 { margin: 0; font-size: clamp(34px, 5vw, 60px); line-height: 1.05; }
+      h2 { margin: 0 0 14px; }
+      p, li { color: var(--muted); line-height: 1.65; }
+      code, pre {
+        border-radius: 8px;
+        background: #05070b;
+        color: #dbeafe;
+      }
+      code { padding: 2px 6px; }
+      pre { overflow: auto; padding: 16px; }
+      .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+      @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <a class="back" href="/">← 놀이터로 돌아가기</a>
+      <div class="hero">
+        <p class="eyebrow">Native Messaging</p>
+        <h1>사이트 액션 매크로를 Windows 앱과 연결</h1>
+        <p>Chrome 확장이 직접 제어하지 못하는 Windows 앱에 키 입력, 텍스트 입력, 좌표 클릭을 전달하는 로컬 브리지입니다.</p>
+      </div>
+      <div class="grid">
+        <section>
+          <h2>설치</h2>
+          <ol>
+            <li>.NET SDK 8 이상을 설치합니다.</li>
+            <li><code>apps\site-macro-native-bridge\build.ps1</code>을 실행합니다.</li>
+            <li><code>chrome://extensions</code>에서 사이트 액션 매크로 확장 ID를 복사합니다.</li>
+            <li><code>install-chrome-host.ps1 -ExtensionId 확장ID</code>를 실행합니다.</li>
+          </ol>
+        </section>
+        <section>
+          <h2>지원 액션</h2>
+          <ul>
+            <li><code>키 입력</code>: Enter, Tab, Escape 등</li>
+            <li><code>입력</code>: 활성 앱 창에 텍스트 전송</li>
+            <li><code>Windows 좌표 클릭</code>: 화면 x/y 좌표 클릭</li>
+            <li><code>대기</code>: 지정 ms만큼 대기</li>
+          </ul>
+        </section>
+      </div>
+      <section style="margin-top:16px">
+        <h2>명령</h2>
+        <pre>apps\site-macro-native-bridge\build.ps1
+apps\site-macro-native-bridge\install-chrome-host.ps1 -ExtensionId YOUR_EXTENSION_ID</pre>
+      </section>
+    </main>
+  </body>
+</html>

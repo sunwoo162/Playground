@@ -123,6 +123,14 @@ export const APPS: AppItem[] = [
     color: '#00dd99',
   },
   {
+    id: 'site-macro-native-bridge',
+    title: '매크로 Windows 브리지',
+    description: '사이트 액션 매크로가 Windows 앱에 키 입력과 좌표 클릭을 보낼 수 있게 연결',
+    emoji: '🪟',
+    url: '/apps/site-macro-native-bridge/',
+    color: '#315f96',
+  },
+  {
     id: 'webbridge',
     title: 'WebBridge',
     description: 'API가 없는 웹사이트도 데이터 추출·자동화·웹훅으로 연결하는 브라우저 확장 가이드',

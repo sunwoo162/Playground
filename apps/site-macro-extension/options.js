@@ -50,9 +50,12 @@ function createJob(overrides = {}) {
     id: crypto.randomUUID(),
     name: '새 작업',
     enabled: false,
+    targetKind: 'web',
     appBaseUrl: DEFAULT_APP_BASE_URL,
     targetApp: '',
     customAppPath: '',
+    nativeProcess: '',
+    nativeWindowTitle: '',
     targetArea: '',
     areaSelector: '',
     urlPattern: '',
@@ -72,9 +75,12 @@ function normalizeJob(job) {
     id: job.id || crypto.randomUUID(),
     name: String(job.name || '작업').slice(0, 80),
     enabled: Boolean(job.enabled),
+    targetKind: job.targetKind === 'native' ? 'native' : 'web',
     appBaseUrl: normalizeBaseUrl(job.appBaseUrl),
     targetApp: String(job.targetApp || ''),
     customAppPath: normalizeAppPath(job.customAppPath),
+    nativeProcess: String(job.nativeProcess || '').trim().slice(0, 120),
+    nativeWindowTitle: String(job.nativeWindowTitle || '').trim().slice(0, 200),
     targetArea: ['', 'main', 'form', 'header', 'nav', 'custom'].includes(job.targetArea) ? job.targetArea : '',
     areaSelector: String(job.areaSelector || '').slice(0, 600),
     urlPattern: String(job.urlPattern || '').trim(),
@@ -99,7 +105,7 @@ function normalizeBaseUrl(value) {
 }
 
 function normalizeAction(action) {
-  const type = ['click', 'type', 'key', 'wait', 'scroll', 'reload'].includes(action.type) ? action.type : 'click';
+  const type = ['click', 'type', 'key', 'nativeClick', 'wait', 'scroll', 'reload'].includes(action.type) ? action.type : 'click';
   return {
     type,
     selector: String(action.selector || '').slice(0, 600),
@@ -259,9 +265,12 @@ async function render() {
     const card = jobTemplate.content.firstElementChild.cloneNode(true);
     bindField(card, job, 'name');
     bindField(card, job, 'enabled');
+    bindField(card, job, 'targetKind');
     bindField(card, job, 'appBaseUrl');
     bindField(card, job, 'targetApp');
     bindField(card, job, 'customAppPath');
+    bindField(card, job, 'nativeProcess');
+    bindField(card, job, 'nativeWindowTitle');
     bindField(card, job, 'targetArea');
     bindField(card, job, 'areaSelector');
     bindField(card, job, 'urlPattern');

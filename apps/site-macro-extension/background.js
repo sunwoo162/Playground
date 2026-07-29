@@ -127,6 +127,10 @@ async function runJob(job) {
     await addLog(job, 'skipped', '실행할 액션이 없습니다.');
     return;
   }
+  if (job.targetKind === 'native') {
+    await runNativeJob(job);
+    return;
+  }
   if (!(await ensureHostPermission(job))) {
     await addLog(job, 'blocked', '사이트 권한이 없어 실행하지 않았습니다. 팝업에서 권한을 허용하세요.');
     await chrome.notifications.create({
@@ -156,6 +160,20 @@ async function runJob(job) {
     await addLog(job, result.ok ? 'success' : 'failed', result.message);
   } catch (error) {
     await addLog(job, 'failed', error.message || String(error));
+  }
+}
+
+async function runNativeJob(job) {
+  try {
+    const response = await chrome.runtime.sendNativeMessage('com.playground.site_macro_bridge', {
+      type: 'run',
+      process: job.nativeProcess || '',
+      windowTitle: job.nativeWindowTitle || '',
+      actions: job.actions,
+    });
+    await addLog(job, response?.ok ? 'success' : 'failed', response?.message || 'Windows 앱 작업 요청 완료');
+  } catch (error) {
+    await addLog(job, 'failed', `로컬 브리지를 실행하지 못했습니다: ${error.message || String(error)}`);
   }
 }
 

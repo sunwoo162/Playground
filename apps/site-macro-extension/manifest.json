@@ -3,7 +3,7 @@
   "name": "사이트 액션 매크로",
   "description": "사용자가 지정한 웹사이트에서 선택한 액션을 간격 또는 특정 시간에 실행합니다.",
   "version": "0.1.0",
-  "permissions": ["alarms", "notifications", "storage", "tabs", "scripting"],
+  "permissions": ["alarms", "notifications", "storage", "tabs", "scripting", "nativeMessaging"],
   "optional_host_permissions": ["<all_urls>"],
   "action": {
     "default_title": "사이트 액션 매크로",
