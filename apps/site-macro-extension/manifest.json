@@ -3,7 +3,8 @@
   "name": "사이트 액션 매크로",
   "description": "사용자가 지정한 웹사이트에서 선택한 액션을 간격 또는 특정 시간에 실행합니다.",
   "version": "0.1.0",
-  "permissions": ["alarms", "notifications", "storage", "tabs", "scripting", "nativeMessaging"],
+  "permissions": ["alarms", "notifications", "storage", "tabs", "scripting", "nativeMessaging", "activeTab", "offscreen"],
+  "host_permissions": ["http://localhost:7421/*", "http://127.0.0.1:7421/*"],
   "optional_host_permissions": ["<all_urls>"],
   "action": {
     "default_title": "사이트 액션 매크로",
@@ -11,6 +12,14 @@
   },
   "background": {
     "service_worker": "background.js"
+  },
+  "commands": {
+    "toggle-terminal-automation": {
+      "suggested_key": {
+        "default": "Alt+Shift+U"
+      },
+      "description": "터미널 자동화 시작/멈춤"
+    }
   },
   "options_page": "options.html",
   "icons": {

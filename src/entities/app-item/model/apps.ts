@@ -18,6 +18,14 @@ export const APPS: AppItem[] = [
     color: '#5dd0a0',
   },
   {
+    id: 'virtual-study-room',
+    title: '가상 독서실',
+    description: '내 캠만 실제로 켜고 주변은 AI 스터디 인원처럼 움직이는 혼자 공부방',
+    emoji: '🎥',
+    url: '/apps/virtual-study-room/',
+    color: '#9fe0c4',
+  },
+  {
     id: 'todo',
     title: 'Todo',
     description: '오늘 할 일을 계획하고 완료 여부를 체크하는 데일리 할 일 관리',

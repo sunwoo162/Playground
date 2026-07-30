@@ -180,6 +180,55 @@ label.check input,
   gap: 12px;
 }
 
+.run-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.status-badge {
+  min-width: 64px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: var(--panel-muted);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+  text-align: center;
+}
+
+.status-badge.running {
+  border-color: #d49c1f;
+  background: #fff5d8;
+  color: #8a5b00;
+}
+
+.status-badge.active {
+  border-color: #4e9ed6;
+  background: #e9f5ff;
+  color: #1e5e8f;
+}
+
+.status-badge.success {
+  border-color: #64b986;
+  background: #e8f7ee;
+  color: #246b43;
+}
+
+.status-badge.failed,
+.status-badge.blocked {
+  border-color: #e08b8b;
+  background: #fff0f0;
+  color: #9a2f2f;
+}
+
+.status-badge.skipped {
+  border-color: #aab4c0;
+  background: #f2f5f8;
+  color: #4d5d70;
+}
+
 .card-head > input {
   font-size: 18px;
   font-weight: 850;
@@ -201,18 +250,24 @@ label.check input,
   background: rgba(47,125,84,.07);
 }
 
+.job-card[data-target-kind='web'] [data-target-group='native'],
+.job-card[data-target-kind='native'] [data-target-group='web'] {
+  display: none;
+}
+
+.job-card[data-schedule-type='interval'] [data-schedule-group='time'],
+.job-card[data-schedule-type='time'] [data-schedule-group='interval'] {
+  display: none;
+}
+
 .pick-button {
   min-height: 48px;
 }
 
 .modal {
-  position: fixed;
-  inset: 0;
-  z-index: 20;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-  background: rgba(8, 13, 11, .52);
+  width: 100%;
+  margin: 0;
+  padding: 0;
 }
 
 .modal[hidden] {
@@ -220,13 +275,12 @@ label.check input,
 }
 
 .modal-card {
-  width: min(900px, 100%);
-  max-height: min(760px, calc(100vh - 48px));
-  overflow: hidden;
+  width: 100%;
+  overflow: visible;
   display: grid;
   grid-template-rows: auto auto 1fr;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--panel);
   box-shadow: var(--shadow);
 }
@@ -260,7 +314,7 @@ label.check input,
   min-height: 280px;
   overflow: auto;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 12px;
   padding: 18px 22px 24px;
 }
@@ -301,7 +355,7 @@ label.check input,
 
 .picker-tile,
 .native-app-tile {
-  min-height: 96px;
+  min-height: 132px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -312,7 +366,51 @@ label.check input,
   border-radius: 10px;
   background: var(--panel);
   color: var(--ink);
+  cursor: default;
   text-align: center;
+}
+
+.picker-tile-actions,
+.native-app-actions {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.picker-tile-actions button,
+.native-app-actions button {
+  min-height: 32px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.tab-preview,
+.native-window-preview {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(96,112,106,.08);
+}
+
+.tab-preview img,
+.native-window-preview img {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  object-fit: cover;
+}
+
+.tab-preview-empty,
+.native-window-preview-empty {
+  padding: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.3;
 }
 
 .picker-tile:hover,
@@ -325,6 +423,7 @@ label.check input,
   box-shadow: 0 0 0 3px rgba(47,125,84,.14);
 }
 
+.picker-tile img,
 .native-app-tile img,
 .native-app-icon {
   width: 34px;
@@ -368,10 +467,51 @@ label.check input,
 
 .action-row {
   display: grid;
-  grid-template-columns: 110px 1.4fr 1fr 90px 90px 90px 70px;
+  grid-template-columns: 110px 1.3fr 1fr 90px 90px 90px 82px 92px 70px;
   gap: 8px;
   align-items: center;
 }
+
+.action-row [data-action-field]:not([data-field='type']) {
+  display: none;
+}
+
+.action-row [data-action='pickFromScreen'] {
+  display: none;
+}
+
+.once-check {
+  min-height: 40px;
+  justify-content: center;
+}
+
+.job-card[data-target-kind='web'] .action-row[data-action-type='click'] [data-action-field='selector'],
+.job-card[data-target-kind='web'] .action-row[data-action-type='type'] [data-action-field='selector'],
+.job-card[data-target-kind='web'] .action-row[data-action-type='key'] [data-action-field='selector'],
+.job-card[data-target-kind='web'] .action-row[data-action-type='type'] [data-action-field='value'],
+.job-card[data-target-kind='web'] .action-row[data-action-type='key'] [data-action-field='value'],
+.job-card[data-target-kind='web'] .action-row[data-action-type='wait'] [data-action-field='ms'],
+.job-card[data-target-kind='web'] .action-row[data-action-type='scroll'] [data-action-field='x'],
+.job-card[data-target-kind='web'] .action-row[data-action-type='scroll'] [data-action-field='y'],
+.job-card[data-target-kind='native'] .action-row[data-action-type='nativeClick'] [data-action-field='x'],
+.job-card[data-target-kind='native'] .action-row[data-action-type='nativeClick'] [data-action-field='y'],
+.job-card[data-target-kind='native'] .action-row[data-action-type='type'] [data-action-field='value'],
+.job-card[data-target-kind='native'] .action-row[data-action-type='key'] [data-action-field='value'],
+.job-card[data-target-kind='native'] .action-row[data-action-type='wait'] [data-action-field='ms'] {
+  display: block;
+}
+
+.job-card[data-target-kind='native'] .action-row[data-action-type='nativeClick'] [data-action-field='once'] {
+  display: flex;
+}
+
+.job-card[data-target-kind='web'] .action-row[data-action-type='click'] [data-action='pickFromScreen'],
+.job-card[data-target-kind='web'] .action-row[data-action-type='type'] [data-action='pickFromScreen'],
+.job-card[data-target-kind='web'] .action-row[data-action-type='key'] [data-action='pickFromScreen'],
+.job-card[data-target-kind='native'] .action-row[data-action-type='nativeClick'] [data-action='pickFromScreen'] {
+  display: block;
+}
+
 
 .empty {
   padding: 24px;

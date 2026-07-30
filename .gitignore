@@ -3,3 +3,6 @@ dist/
 .env
 *.log
 *.tsbuildinfo
+bin/
+obj/
+apps/site-macro-native-bridge/com.playground.site_macro_bridge.json

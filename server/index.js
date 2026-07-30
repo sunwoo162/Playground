@@ -1160,6 +1160,12 @@ app.get('/apps/voice-phishing/*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'apps', 'voice-phishing', 'dist', 'index.html'));
 });
 
+// Virtual Study Room 앱
+app.use('/apps/virtual-study-room', express.static(path.join(__dirname, '..', 'apps', 'virtual-study-room', 'dist')));
+app.get('/apps/virtual-study-room/*', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'apps', 'virtual-study-room', 'dist', 'index.html'));
+});
+
 // Extension apps and guides
 app.use('/apps/site-macro-extension', express.static(path.join(__dirname, '..', 'apps', 'site-macro-extension')));
 app.use('/apps/site-macro-native-bridge', express.static(path.join(__dirname, '..', 'apps', 'site-macro-native-bridge')));

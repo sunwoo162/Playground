@@ -1,6 +1,7 @@
 const STORAGE_KEY = 'siteMacroJobs';
 const LOG_KEY = 'siteMacroLogs';
 const THEME_KEY = 'siteMacroTheme';
+const MIN_INTERVAL_SECONDS = 2;
 
 const jobList = document.querySelector('#jobList');
 const logList = document.querySelector('#logList');
@@ -10,12 +11,17 @@ const clearLogsButton = document.querySelector('#clearLogs');
 const themeSelect = document.querySelector('#themeSelect');
 
 initTheme();
+syncTerminalJob();
 
 openOptionsButton.addEventListener('click', () => chrome.runtime.openOptionsPage());
 newJobButton.addEventListener('click', () => chrome.runtime.openOptionsPage());
 clearLogsButton.addEventListener('click', async () => {
   await chrome.storage.local.set({ [LOG_KEY]: [] });
   await render();
+});
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if ((area === 'sync' && changes[STORAGE_KEY]) || (area === 'local' && changes[LOG_KEY])) render();
 });
 
 async function initTheme() {
@@ -40,8 +46,10 @@ async function setJobs(jobs) {
 }
 
 async function runNow(jobId) {
-  await chrome.runtime.sendMessage({ type: 'run-job-now', jobId });
-  setTimeout(render, 500);
+  setJobStatus(jobId, 'running', '실행중');
+  const response = await chrome.runtime.sendMessage({ type: 'run-job-now', jobId });
+  if (response?.result) setJobStatus(jobId, response.result.status, response.result.message);
+  setTimeout(render, 250);
 }
 
 async function toggleJob(jobId) {
@@ -53,6 +61,7 @@ async function toggleJob(jobId) {
 
 async function renderJobs() {
   const jobs = await getJobs();
+  const statuses = await getLatestStatusMap();
   jobList.innerHTML = '';
   if (!jobs.length) {
     jobList.innerHTML = '<div class="empty">아직 등록된 작업이 없습니다.</div>';
@@ -61,14 +70,15 @@ async function renderJobs() {
   for (const job of jobs) {
     const item = document.createElement('article');
     item.className = 'job';
+    item.dataset.jobId = job.id;
     item.innerHTML = `
       <div class="job-head">
         <strong>${escapeHtml(job.name)}</strong>
-        <span>${job.enabled ? '켜짐' : '꺼짐'}</span>
+        <span class="status-badge ${statusClass(job, statuses.get(job.id))}" data-role="jobStatus">${escapeHtml(statusLabel(job, statuses.get(job.id)))}</span>
       </div>
-      ${job.targetApp ? `<small>대상 앱: ${escapeHtml(job.targetApp)}</small>` : ''}
+      ${targetLabel(job)}
       ${job.areaSelector ? `<small>대상 구역: ${escapeHtml(job.areaSelector)}</small>` : ''}
-      <small>${escapeHtml(job.urlPattern)}</small>
+      ${job.targetKind === 'web' ? `<small>${escapeHtml(job.urlPattern)}</small>` : ''}
       <small>${job.scheduleType === 'time' ? `매일 ${job.timeOfDay}` : `${job.intervalSeconds}초 간격`} · 액션 ${job.actions.length}개${job.backgroundTab ? ' · 백그라운드 탭' : ''}</small>
       <div class="job-actions">
         <button type="button" data-action="run">지금 실행</button>
@@ -79,6 +89,90 @@ async function renderJobs() {
     item.querySelector('[data-action="toggle"]').addEventListener('click', () => toggleJob(job.id));
     jobList.append(item);
   }
+}
+
+async function syncTerminalJob() {
+  let jobs = await getJobs();
+  const originalLength = jobs.length;
+  jobs = jobs.filter((job) => job.id !== 'mock-vscode-enter-3s');
+  const sample = {
+    id: 'terminal-automation-enter-3s',
+    name: '터미널 자동화',
+    enabled: false,
+    targetKind: 'native',
+    nativeProcess: 'Code',
+    nativeWindowTitle: '',
+    scheduleType: 'interval',
+    intervalSeconds: MIN_INTERVAL_SECONDS,
+    actions: [{ type: 'key', selector: '', value: 'Enter', ms: 1000, x: 0, y: 0, once: false }],
+  };
+  let changed = jobs.length !== originalLength;
+  const existingIndex = jobs.findIndex((job) => job.id === sample.id);
+  if (existingIndex >= 0) {
+    const existing = jobs[existingIndex];
+    const next = {
+      ...existing,
+      name: sample.name,
+      targetKind: 'native',
+      nativeProcess: existing.nativeProcess || 'Code',
+      scheduleType: 'interval',
+      intervalSeconds: MIN_INTERVAL_SECONDS,
+      actions: sample.actions,
+    };
+    changed = changed || JSON.stringify(existing) !== JSON.stringify(next);
+    jobs[existingIndex] = next;
+  } else {
+    jobs.unshift(sample);
+    changed = true;
+  }
+  if (changed) await setJobs(jobs);
+  await render();
+}
+
+async function getLatestStatusMap() {
+  const result = await chrome.storage.local.get(LOG_KEY);
+  const logs = Array.isArray(result[LOG_KEY]) ? result[LOG_KEY] : [];
+  const map = new Map();
+  for (const log of logs) {
+    if (log.jobId && !map.has(log.jobId)) map.set(log.jobId, log);
+  }
+  return map;
+}
+
+function setJobStatus(jobId, status, message) {
+  const item = document.querySelector(`[data-job-id="${escapeSelector(jobId)}"]`);
+  const badge = item?.querySelector('[data-role="jobStatus"]');
+  if (!badge) return;
+  badge.className = `status-badge ${status}`;
+  badge.textContent = statusLabel(null, { status, message });
+  badge.title = message || '';
+}
+
+function statusClass(job, log) {
+  return job?.enabled ? 'active' : log?.status || 'idle';
+}
+
+function statusLabel(job, log) {
+  const status = job?.enabled ? 'active' : log?.status || 'idle';
+  const labels = {
+    idle: '대기',
+    active: '작동중',
+    running: '실행중',
+    success: '완료',
+    failed: '실패',
+    skipped: '건너뜀',
+    blocked: '차단됨',
+  };
+  if (log?.message && ['blocked', 'failed', 'skipped'].includes(status)) return `${labels[status] || status}: ${log.message}`;
+  return labels[status] || status;
+}
+
+function targetLabel(job) {
+  if (job.targetKind === 'native') {
+    const title = job.nativeWindowTitle ? ` · ${job.nativeWindowTitle}` : '';
+    return `<small>대상 앱: ${escapeHtml(job.nativeProcess || 'Windows 앱')}${escapeHtml(title)}</small>`;
+  }
+  return job.targetApp ? `<small>대상 앱: ${escapeHtml(job.targetApp)}</small>` : '';
 }
 
 async function renderLogs() {
@@ -103,6 +197,11 @@ async function renderLogs() {
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+}
+
+function escapeSelector(value) {
+  if (window.CSS?.escape) return CSS.escape(value);
+  return String(value).replace(/["\\]/g, '\\$&');
 }
 
 async function render() {
