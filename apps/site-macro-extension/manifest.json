@@ -13,14 +13,6 @@
   "background": {
     "service_worker": "background.js"
   },
-  "commands": {
-    "toggle-terminal-automation": {
-      "suggested_key": {
-        "default": "Alt+Shift+U"
-      },
-      "description": "터미널 자동화 시작/멈춤"
-    }
-  },
   "options_page": "options.html",
   "icons": {
     "16": "icons/icon.svg",
