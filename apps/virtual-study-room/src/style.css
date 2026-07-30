@@ -46,32 +46,39 @@ input {
   padding: 10px 16px;
   pointer-events: none;
 }
-.channel-name, .chat-icon { pointer-events: auto; }
-.channel-name {
+.back-button,
+.study-duration {
+  pointer-events: auto;
+}
+.back-button {
+  min-height: 38px;
+  padding: 0 14px;
+  border-color: rgba(255,255,255,.14);
+  background: rgba(31,32,39,.86);
+  color: #dfe1e8;
+  font-size: 13px;
+  font-weight: 900;
+}
+.back-button:hover {
+  background: rgba(255,255,255,.12);
+}
+.study-duration {
   display: inline-flex;
   align-items: center;
-  gap: 12px;
-  color: #c8c9cf;
-  font-size: 24px;
-  font-weight: 800;
+  gap: 10px;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 8px;
+  background: rgba(31,32,39,.72);
 }
-.speaker-icon {
-  width: 22px;
-  height: 22px;
-  border-radius: 4px;
-  background:
-    linear-gradient(90deg, transparent 0 35%, #8f9098 35% 55%, transparent 55%),
-    conic-gradient(from 320deg at 64% 50%, transparent 0 22%, #8f9098 22% 37%, transparent 37% 100%);
+.study-duration span {
+  color: #aaaeba;
+  font-size: 12px;
+  font-weight: 900;
 }
-.chat-icon {
-  width: 34px;
-  height: 34px;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: #90919a;
-  font-size: 30px;
-  line-height: 1;
+.study-duration strong {
+  font-size: 14px;
 }
 
 .room-layout {

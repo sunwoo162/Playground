@@ -39,6 +39,8 @@ function App() {
   const [contextBotId, setContextBotId] = useState<string | null>(null)
   const [roomId] = useState(() => new URLSearchParams(window.location.search).get('room') || crypto.randomUUID())
   const [incomingInvite, setIncomingInvite] = useState(() => new URLSearchParams(window.location.search).get('invitedBy'))
+  const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  const [returnConfirmOpen, setReturnConfirmOpen] = useState(false)
   const cameraRef = useRef<HTMLVideoElement | null>(null)
   const shareRef = useRef<HTMLVideoElement | null>(null)
   const cameraStream = useRef<MediaStream | null>(null)
@@ -51,6 +53,15 @@ function App() {
   useEffect(() => {
     updateTile('me', { cameraOn, micOn, listening, sharing })
   }, [cameraOn, micOn, listening, sharing])
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setElapsedSeconds((value) => value + 1), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  function goToPlayground() {
+    window.location.href = '/'
+  }
 
   function acceptIncomingInvite() {
     if (!incomingInvite) return
@@ -141,11 +152,11 @@ function App() {
   return (
     <main className="study-room" onClick={() => setContextBotId(null)}>
       <header className="room-header">
-        <div className="channel-name">
-          <span className="speaker-icon" aria-hidden />
-          <strong>일반</strong>
+        <button className="back-button" onClick={() => setReturnConfirmOpen(true)}>놀이터로 돌아가기</button>
+        <div className="study-duration">
+          <span>공부 중</span>
+          <strong>{formatElapsed(elapsedSeconds)}</strong>
         </div>
-        <button className="chat-icon" aria-label="채팅">●</button>
       </header>
 
       <section className={sharingTile ? 'room-layout sharing' : 'room-layout'}>
@@ -228,6 +239,17 @@ function App() {
             <p>친구가 같이 공부하자고 초대했습니다. 수락하면 이 방에 참가합니다.</p>
             <button className="primary" onClick={acceptIncomingInvite}>수락하고 참가</button>
             <button onClick={() => setIncomingInvite(null)}>거절</button>
+          </section>
+        </div>
+      )}
+
+      {returnConfirmOpen && (
+        <div className="dialog-backdrop" onClick={() => setReturnConfirmOpen(false)}>
+          <section className="dialog" onClick={(event) => event.stopPropagation()}>
+            <h2>놀이터로 돌아갈까요?</h2>
+            <p>현재 가상 독서실 화면을 나가고 놀이터 메인으로 이동합니다.</p>
+            <button className="primary" onClick={goToPlayground}>돌아가기</button>
+            <button onClick={() => setReturnConfirmOpen(false)}>계속 있기</button>
           </section>
         </div>
       )}
@@ -580,6 +602,15 @@ function tileStatus(tile: RoomTile) {
   if (!tile.cameraOn) return '카메라 꺼짐'
   if (!tile.micOn) return '마이크 꺼짐'
   return '공부 중'
+}
+
+function formatElapsed(totalSeconds: number) {
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  if (hours > 0) return `${hours}시간 ${minutes}분`
+  if (minutes > 0) return `${minutes}분 ${String(seconds).padStart(2, '0')}초`
+  return `${seconds}초`
 }
 
 function toYoutubeEmbed(url: string | undefined, options: { loop?: boolean; muted?: boolean } = {}) {
