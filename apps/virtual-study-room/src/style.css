@@ -175,6 +175,9 @@ input {
   border: 0;
   object-fit: cover;
 }
+.camera-tile video {
+  transform: scaleX(-1);
+}
 
 .camera-placeholder {
   position: absolute;
