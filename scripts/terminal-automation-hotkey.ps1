@@ -43,7 +43,11 @@ public class TerminalHotkeyWindow : Form
         notify.Icon = System.Drawing.SystemIcons.Information;
         notify.Visible = true;
         notify.Text = "Terminal automation hotkey";
-        RegisterHotKey(Handle, HotkeyId, ModAlt | ModShift, VkU);
+        if (!RegisterHotKey(Handle, HotkeyId, ModAlt | ModShift, VkU))
+        {
+            notify.ShowBalloonTip(5000, "Terminal automation", "Alt+Shift+U is already used by another app", ToolTipIcon.Error);
+            throw new InvalidOperationException("Alt+Shift+U hotkey registration failed.");
+        }
     }
 
     protected override void WndProc(ref Message m)
