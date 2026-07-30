@@ -8,6 +8,8 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Net;
+using System.Text;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
@@ -32,6 +34,7 @@ public class TerminalHotkeyWindow : Form
 
     Timer timer;
     NotifyIcon notify;
+    HttpListener listener;
     string targetTitle = "";
 
     public TerminalHotkeyWindow()
@@ -48,6 +51,7 @@ public class TerminalHotkeyWindow : Form
             notify.ShowBalloonTip(5000, "Terminal automation", "Alt+Shift+U is already used by another app", ToolTipIcon.Error);
             throw new InvalidOperationException("Alt+Shift+U hotkey registration failed.");
         }
+        StartApi();
     }
 
     protected override void WndProc(ref Message m)
@@ -59,6 +63,7 @@ public class TerminalHotkeyWindow : Form
     protected override void Dispose(bool disposing)
     {
         UnregisterHotKey(Handle, HotkeyId);
+        if (listener != null) listener.Stop();
         if (timer != null) timer.Dispose();
         if (notify != null) notify.Dispose();
         base.Dispose(disposing);
@@ -66,12 +71,19 @@ public class TerminalHotkeyWindow : Form
 
     void Toggle()
     {
+        if (IsRunning()) StopAutomation();
+        else StartAutomation();
+    }
+
+    bool IsRunning()
+    {
+        return timer != null;
+    }
+
+    void StartAutomation()
+    {
         if (timer != null)
         {
-            timer.Stop();
-            timer.Dispose();
-            timer = null;
-            notify.ShowBalloonTip(1800, "Terminal automation", "Stopped", ToolTipIcon.Info);
             return;
         }
 
@@ -88,6 +100,65 @@ public class TerminalHotkeyWindow : Form
         timer.Start();
         SendEnter(handle);
         notify.ShowBalloonTip(1800, "Terminal automation", "Started", ToolTipIcon.Info);
+    }
+
+    void StopAutomation()
+    {
+        if (timer == null) return;
+        timer.Stop();
+        timer.Dispose();
+        timer = null;
+        notify.ShowBalloonTip(1800, "Terminal automation", "Stopped", ToolTipIcon.Info);
+    }
+
+    void StartApi()
+    {
+        listener = new HttpListener();
+        listener.Prefixes.Add("http://127.0.0.1:18765/");
+        listener.Start();
+        listener.BeginGetContext(HandleRequest, null);
+    }
+
+    void HandleRequest(IAsyncResult result)
+    {
+        HttpListenerContext context = null;
+        try
+        {
+            context = listener.EndGetContext(result);
+            listener.BeginGetContext(HandleRequest, null);
+            var request = context.Request;
+            var response = context.Response;
+            response.Headers.Add("Access-Control-Allow-Origin", "*");
+            response.Headers.Add("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+            response.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
+
+            if (request.HttpMethod == "OPTIONS")
+            {
+                response.StatusCode = 204;
+                response.Close();
+                return;
+            }
+
+            var path = request.Url.AbsolutePath.Trim('/').ToLowerInvariant();
+            if (request.HttpMethod == "POST" && path == "toggle") BeginInvoke((Action)(() => Toggle()));
+            if (request.HttpMethod == "POST" && path == "start") BeginInvoke((Action)(() => StartAutomation()));
+            if (request.HttpMethod == "POST" && path == "stop") BeginInvoke((Action)(() => StopAutomation()));
+
+            WriteJson(response, "{\"ok\":true,\"running\":" + (IsRunning() ? "true" : "false") + "}");
+        }
+        catch
+        {
+            try { if (context != null) context.Response.Close(); } catch {}
+        }
+    }
+
+    void WriteJson(HttpListenerResponse response, string json)
+    {
+        var bytes = Encoding.UTF8.GetBytes(json);
+        response.ContentType = "application/json; charset=utf-8";
+        response.ContentLength64 = bytes.Length;
+        response.OutputStream.Write(bytes, 0, bytes.Length);
+        response.Close();
     }
 
     IntPtr FindCodeWindow()

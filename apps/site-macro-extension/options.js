@@ -5,6 +5,8 @@ const MIN_INTERVAL_SECONDS = 2;
 const DEFAULT_APP_BASE_URL = 'https://playground.https.gsmsv.site';
 const TRACKER_URL = 'http://localhost:7421';
 const TRACKER_TIMEOUT_MS = 3000;
+const TERMINAL_JOB_ID = 'terminal-automation-enter-3s';
+const HOTKEY_API = 'http://127.0.0.1:18765';
 const AREA_SELECTORS = {
   main: 'main',
   form: 'form, [role="form"], .form, .editor, .panel',
@@ -206,6 +208,11 @@ async function requestPermission(job) {
 }
 
 async function runJobNow(jobId) {
+  if (jobId === TERMINAL_JOB_ID) {
+    await toggleGlobalTerminalAutomation();
+    await updateStatusBadges();
+    return;
+  }
   setJobStatus(jobId, 'running', '실행중');
   try {
     const response = await chrome.runtime.sendMessage({ type: 'run-job-now', jobId });
@@ -862,6 +869,7 @@ function pickElementOnPage() {
 async function render() {
   const jobs = await getJobs();
   const statuses = await getLatestStatusMap();
+  const globalStatus = await getGlobalTerminalStatus();
   jobEditorList.innerHTML = '';
   if (!jobs.length) {
     jobEditorList.innerHTML = '<div class="empty">작업을 추가해서 시작하세요.</div>';
@@ -873,7 +881,7 @@ async function render() {
     card.dataset.jobId = job.id;
     card.dataset.targetKind = job.targetKind;
     card.dataset.scheduleType = job.scheduleType;
-    applyStatusBadge(card.querySelector('[data-role="jobStatus"]'), statuses.get(job.id), job);
+    applyStatusBadge(card.querySelector('[data-role="jobStatus"]'), statuses.get(job.id), job, globalStatus);
     bindField(card, job, 'name');
     bindField(card, job, 'enabled');
     bindField(card, job, 'targetKind');
@@ -921,9 +929,10 @@ async function getLatestStatusMap() {
 async function updateStatusBadges() {
   const statuses = await getLatestStatusMap();
   const jobs = await getJobs();
+  const globalStatus = await getGlobalTerminalStatus();
   const jobMap = new Map(jobs.map((job) => [job.id, job]));
   document.querySelectorAll('[data-job-id]').forEach((card) => {
-    applyStatusBadge(card.querySelector('[data-role="jobStatus"]'), statuses.get(card.dataset.jobId), jobMap.get(card.dataset.jobId));
+    applyStatusBadge(card.querySelector('[data-role="jobStatus"]'), statuses.get(card.dataset.jobId), jobMap.get(card.dataset.jobId), globalStatus);
   });
 }
 
@@ -932,9 +941,29 @@ function setJobStatus(jobId, status, message) {
   applyStatusBadge(card?.querySelector('[data-role="jobStatus"]'), { status, message });
 }
 
-function applyStatusBadge(badge, log, job = null) {
+async function getGlobalTerminalStatus() {
+  try {
+    const response = await fetch(`${HOTKEY_API}/status`, { cache: 'no-store' });
+    if (!response.ok) throw new Error(String(response.status));
+    return await response.json();
+  } catch {
+    return { ok: false, running: false, disconnected: true };
+  }
+}
+
+async function toggleGlobalTerminalAutomation() {
+  try {
+    await fetch(`${HOTKEY_API}/toggle`, { method: 'POST' });
+  } catch {
+    alert('전역 단축키 연결 프로그램이 꺼져 있습니다. scripts\\start-terminal-automation-hotkey.ps1를 실행하세요.');
+  }
+}
+
+function applyStatusBadge(badge, log, job = null, globalStatus = null) {
   if (!badge) return;
-  const status = job?.enabled ? 'active' : log?.status || 'idle';
+  const status = job?.id === TERMINAL_JOB_ID
+    ? globalStatus?.disconnected ? 'blocked' : globalStatus?.running ? 'active' : 'idle'
+    : job?.enabled ? 'active' : log?.status || 'idle';
   const labels = {
     idle: '대기',
     active: '작동중',
@@ -945,6 +974,11 @@ function applyStatusBadge(badge, log, job = null) {
     blocked: '차단됨',
   };
   badge.className = `status-badge ${status}`;
+  if (job?.id === TERMINAL_JOB_ID) {
+    badge.textContent = globalStatus?.disconnected ? '연결 안됨' : globalStatus?.running ? '작동중' : '대기';
+    badge.title = globalStatus?.disconnected ? '전역 단축키 연결 프로그램이 꺼져 있습니다.' : '';
+    return;
+  }
   badge.textContent = log?.message && ['blocked', 'failed', 'skipped'].includes(status)
     ? `${labels[status] || status}: ${log.message}`
     : labels[status] || status;
