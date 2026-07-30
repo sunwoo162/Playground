@@ -16,6 +16,11 @@ public class VirtualStudyRoomController {
 
     private final VirtualStudyRoomService virtualStudyRoomService;
 
+    @GetMapping("/status")
+    public ResponseEntity<Map<String, Boolean>> status() {
+        return ResponseEntity.ok(Map.of("available", true));
+    }
+
     @PostMapping("/invite")
     public ResponseEntity<Map<String, Boolean>> inviteFriend(
             @RequestBody Map<String, String> body,
