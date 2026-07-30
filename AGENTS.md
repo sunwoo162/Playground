@@ -1,3 +1,4 @@
 # Codex Local Rules
 
-- Do not run task-complete sound or popup notifications unless the user explicitly asks for them again.
+- When a Codex task is complete, run `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\notify-task-complete.ps1` before the final response when shell execution is available.
+- If the notification command fails because audio is unavailable, continue normally and mention it briefly only when relevant.

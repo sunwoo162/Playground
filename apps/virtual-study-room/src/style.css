@@ -121,11 +121,13 @@ h1 { margin: 0; font-size: clamp(28px, 5vw, 58px); line-height: 1.02; letter-spa
 .goal input { width: 100%; min-height: 40px; border: 1px solid var(--line); border-radius: 8px; padding: 0 10px; background: rgba(255,255,255,.06); color: var(--ink); }
 .progress { height: 8px; margin: 12px 0 6px; border-radius: 999px; background: rgba(255,255,255,.1); overflow: hidden; }
 .progress span { display: block; height: 100%; border-radius: inherit; background: #9fe0c4; }
-.seg, .control-grid, .phase-buttons, .summary { display: grid; gap: 8px; margin-top: 14px; }
+.seg, .control-grid, .phase-buttons, .summary, .sound-grid { display: grid; gap: 8px; margin-top: 14px; }
 .seg { grid-template-columns: repeat(2, 1fr); }
-.seg button.on { border-color: #9fe0c4; color: #9fe0c4; }
+.seg button.on, .sound-grid button.on { border-color: #9fe0c4; color: #9fe0c4; }
 .control-grid { grid-template-columns: repeat(2, 1fr); }
 .control-grid select { padding: 0 10px; }
+.sound-grid { grid-template-columns: repeat(3, 1fr); }
+.sound-grid button { min-height: 34px; font-size: 12px; }
 .phase-buttons { grid-template-columns: 1fr; }
 .summary span { color: var(--muted); font-weight: 800; }
 .phase-break .tile:not(.me) .body { transform: translateX(-50%) rotate(-5deg); }

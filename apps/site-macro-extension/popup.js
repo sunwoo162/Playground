@@ -26,6 +26,10 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if ((area === 'sync' && changes[STORAGE_KEY]) || (area === 'local' && changes[LOG_KEY])) render();
 });
 
+setInterval(() => {
+  if (!document.hidden) renderJobs();
+}, 1000);
+
 async function initTheme() {
   const result = await chrome.storage.local.get(THEME_KEY);
   const theme = result[THEME_KEY] === 'dark' ? 'dark' : 'light';

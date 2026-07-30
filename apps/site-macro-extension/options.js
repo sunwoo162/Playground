@@ -159,6 +159,10 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'sync' && changes[STORAGE_KEY]) render();
 });
 
+setInterval(() => {
+  if (!document.hidden) updateStatusBadges();
+}, 1000);
+
 function normalizeBaseUrl(value) {
   const fallback = DEFAULT_APP_BASE_URL;
   try {

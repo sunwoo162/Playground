@@ -36,6 +36,7 @@ public class TerminalHotkeyWindow : Form
     NotifyIcon notify;
     HttpListener listener;
     string targetTitle = "";
+    DateTime lastToggleAt = DateTime.MinValue;
 
     public TerminalHotkeyWindow()
     {
@@ -56,7 +57,7 @@ public class TerminalHotkeyWindow : Form
 
     protected override void WndProc(ref Message m)
     {
-        if (m.Msg == WmHotkey && m.WParam.ToInt32() == HotkeyId) Toggle();
+        if (m.Msg == WmHotkey && m.WParam.ToInt32() == HotkeyId) ToggleFromHotkey();
         base.WndProc(ref m);
     }
 
@@ -73,6 +74,14 @@ public class TerminalHotkeyWindow : Form
     {
         if (IsRunning()) StopAutomation();
         else StartAutomation();
+    }
+
+    void ToggleFromHotkey()
+    {
+        var now = DateTime.UtcNow;
+        if ((now - lastToggleAt).TotalMilliseconds < 900) return;
+        lastToggleAt = now;
+        Toggle();
     }
 
     bool IsRunning()
