@@ -2,334 +2,653 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './style.css'
 
-declare global {
-  interface Window {
-    webkitAudioContext?: typeof AudioContext
-  }
+type TileKind = 'me' | 'friend' | 'repeatBot' | 'musicBot'
+
+type RoomTile = {
+  id: string
+  kind: TileKind
+  name: string
+  cameraOn?: boolean
+  micOn?: boolean
+  listening?: boolean
+  sharing?: boolean
+  url?: string
+  queue?: string[]
+  volume?: number
 }
 
-type Mood = 'library' | 'rainCafe' | 'night' | 'campus' | 'office' | 'coding'
-type Phase = 'focus' | 'break' | 'meditation'
-type AmbientSound = 'library' | 'cafe' | 'rain' | 'keyboard' | 'pencil' | 'white'
-
-const moods: Record<Mood, { label: string; room: string; sound: string; tint: string }> = {
-  library: { label: '도서관', room: '긴 책상과 낮은 발소리', sound: '책장 넘김', tint: '#476B5C' },
-  rainCafe: { label: '비오는 카페', room: '창가 좌석과 빗물 자국', sound: '비 + 커피머신', tint: '#3D6076' },
-  night: { label: '새벽 독서실', room: '스탠드 불빛과 깊은 정적', sound: '백색소음', tint: '#504C7E' },
-  campus: { label: '대학교 열람실', room: '넓은 열람석과 형광등', sound: '연필 소리', tint: '#6F7047' },
-  office: { label: '회사 사무실', room: '키보드와 모니터 불빛', sound: '키보드 소리', tint: '#4A6678' },
-  coding: { label: '코딩 스튜디오', room: '듀얼 모니터와 터미널', sound: '기계식 키보드', tint: '#326F68' },
+type AddMode = 'musicBot' | 'invite' | 'repeatBot' | null
+type FriendUser = {
+  githubId: string
+  login: string
+  name?: string
+  avatarUrl?: string
 }
 
-const people = [
-  ['여학생 공부중', '필기', 'notes'],
-  ['남학생 코딩중', '코딩', 'code'],
-  ['시험공부중', '암기', 'book'],
-  ['노트필기중', '정리', 'pen'],
-  ['문제풀이중', '계산', 'paper'],
-  ['강의보는중', '강의', 'screen'],
-  ['스터디 플래너', '계획', 'plan'],
-  ['새벽 집중러', '복습', 'lamp'],
-  ['자격증 준비', '기출', 'mark'],
-  ['논문 읽는중', '읽기', 'paper'],
-  ['알고리즘 풀이', '코테', 'code'],
-  ['한국사 회독', '회독', 'book'],
-  ['영단어 암기', '단어', 'mark'],
-  ['자료 정리', '정리', 'notes'],
-  ['프로젝트 구현', '빌드', 'screen'],
-  ['시험 전날', '집중', 'lamp'],
-] as const
-
-const phaseText: Record<Phase, string> = {
-  focus: '집중중',
-  break: '휴식',
-  meditation: '명상',
-}
-
-const focusActions = ['필기', '코딩', '암기', '문제풀이', '강의 시청', '계획 정리', '자료 읽기', '기출 풀이']
-const breakActions = ['물 마심', '기지개', '창밖 보기', '커피 가져옴', '자리 비움', '손목 스트레칭']
-const meditationActions = ['눈 감고 호흡', '조용히 쉬는 중', '호흡 맞추기', '화면 낮춤']
-const soundLabels: Record<AmbientSound, string> = {
-  library: '도서관',
-  cafe: '카페',
-  rain: '비',
-  keyboard: '키보드',
-  pencil: '연필',
-  white: '백색소음',
-}
+const friendNames = ['민준', '서연', '지우', '하준', '도윤', '유나', '수빈']
 
 function App() {
-  const [entered, setEntered] = useState(false)
-  const [mood, setMood] = useState<Mood>('library')
-  const [count, setCount] = useState(4)
-  const [phase, setPhase] = useState<Phase>('focus')
-  const [seconds, setSeconds] = useState(50 * 60)
-  const [running, setRunning] = useState(false)
-  const [goal, setGoal] = useState('React Query 3강')
-  const [done, setDone] = useState(35)
-  const [soundOn, setSoundOn] = useState(false)
-  const [sound, setSound] = useState<AmbientSound>('library')
+  const [tiles, setTiles] = useState<RoomTile[]>([
+    { id: 'me', kind: 'me', name: '나', cameraOn: false, micOn: false, listening: true, sharing: false },
+  ])
   const [cameraOn, setCameraOn] = useState(false)
+  const [micOn, setMicOn] = useState(false)
+  const [listening, setListening] = useState(true)
+  const [sharing, setSharing] = useState(false)
   const [cameraError, setCameraError] = useState('')
-  const [sessionCount, setSessionCount] = useState(0)
-  const [breakCount, setBreakCount] = useState(0)
-  const [meditationCount, setMeditationCount] = useState(0)
-  const [actionSeed, setActionSeed] = useState(0)
-  const [focusScore, setFocusScore] = useState(88)
-  const videoRef = useRef<HTMLVideoElement | null>(null)
-  const audioRef = useRef<{ context: AudioContext; nodes: AudioNode[] } | null>(null)
+  const [addMenuOpen, setAddMenuOpen] = useState(false)
+  const [addMode, setAddMode] = useState<AddMode>(null)
+  const [contextBotId, setContextBotId] = useState<string | null>(null)
+  const [roomId] = useState(() => new URLSearchParams(window.location.search).get('room') || crypto.randomUUID())
+  const [incomingInvite, setIncomingInvite] = useState(() => {
+    const params = new URLSearchParams(window.location.search)
+    return params.get('invitedBy')
+  })
+  const cameraRef = useRef<HTMLVideoElement | null>(null)
+  const shareRef = useRef<HTMLVideoElement | null>(null)
+  const cameraStream = useRef<MediaStream | null>(null)
+  const shareStream = useRef<MediaStream | null>(null)
 
-  const visiblePeople = useMemo(() => people.slice(0, count), [count])
-  const sessionLabel = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
-
-  useEffect(() => {
-    if (!running) return
-    const timer = window.setInterval(() => {
-      setSeconds((value) => {
-        if (value > 1) return value - 1
-        setPhase((current) => {
-          if (current === 'focus') {
-            setDone((v) => Math.min(100, v + 20))
-            setSessionCount((v) => v + 1)
-            setSeconds(5 * 60)
-            return 'break'
-          }
-          if (current === 'break') {
-            setBreakCount((v) => v + 1)
-            setSeconds(5 * 60)
-            return 'meditation'
-          }
-          setMeditationCount((v) => v + 1)
-          setSeconds(50 * 60)
-          return 'focus'
-        })
-        return 1
-      })
-    }, 1000)
-    return () => window.clearInterval(timer)
-  }, [running])
+  const botForMenu = tiles.find((tile) => tile.id === contextBotId)
+  const sharingTile = tiles.find((tile) => tile.sharing)
+  const visibleTiles = sharingTile ? tiles.filter((tile) => tile.id !== sharingTile.id) : tiles
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      setActionSeed((value) => value + 1)
-      setFocusScore((value) => {
-        const drift = Math.round(Math.sin(Date.now() / 9000) * 4)
-        const base = cameraOn && phase === 'focus' ? 90 : phase === 'focus' ? 82 : 76
-        return Math.max(55, Math.min(98, base + drift))
-      })
-    }, 6500)
-    return () => window.clearInterval(timer)
-  }, [cameraOn, phase])
+    updateTile('me', { cameraOn, micOn, listening, sharing })
+  }, [cameraOn, micOn, listening, sharing])
 
-  useEffect(() => {
-    stopAmbient()
-    if (!soundOn) return
-    audioRef.current = createAmbient(sound)
-    return stopAmbient
-  }, [soundOn, sound])
+  function acceptIncomingInvite() {
+    if (!incomingInvite) return
+    setTiles((current) => {
+      if (current.some((tile) => tile.id === `friend-${incomingInvite}`)) return current
+      return [
+        ...current,
+        { id: `friend-${incomingInvite}`, kind: 'friend', name: '초대한 친구', cameraOn: true, micOn: false, listening: true },
+      ]
+    })
+    setIncomingInvite(null)
+    const url = new URL(window.location.href)
+    url.searchParams.delete('invitedBy')
+    window.history.replaceState(null, '', url.toString())
+  }
 
   async function toggleCamera() {
     if (cameraOn) {
-      const stream = videoRef.current?.srcObject as MediaStream | null
-      stream?.getTracks().forEach((track) => track.stop())
-      if (videoRef.current) videoRef.current.srcObject = null
+      stopStream(cameraStream.current)
+      cameraStream.current = null
+      if (cameraRef.current) cameraRef.current.srcObject = null
       setCameraOn(false)
       return
     }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-      if (videoRef.current) videoRef.current.srcObject = stream
+      cameraStream.current = stream
+      if (cameraRef.current) cameraRef.current.srcObject = stream
       setCameraError('')
       setCameraOn(true)
     } catch {
-      setCameraError('카메라 권한이 필요합니다.')
+      setCameraError('카메라 권한이 필요합니다')
     }
   }
 
-  function resetPhase(next: Phase) {
-    setPhase(next)
-    setSeconds(next === 'focus' ? 50 * 60 : 5 * 60)
+  async function toggleShare() {
+    if (sharing) {
+      stopStream(shareStream.current)
+      shareStream.current = null
+      if (shareRef.current) shareRef.current.srcObject = null
+      setSharing(false)
+      return
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true })
+      shareStream.current = stream
+      stream.getVideoTracks()[0]?.addEventListener('ended', () => setSharing(false))
+      if (shareRef.current) shareRef.current.srcObject = stream
+      setSharing(true)
+    } catch {
+      setSharing(false)
+    }
   }
 
-  function stopAmbient() {
-    if (!audioRef.current) return
-    audioRef.current.nodes.forEach((node) => {
-      if ('stop' in node && typeof node.stop === 'function') node.stop()
-      node.disconnect()
-    })
-    void audioRef.current.context.close()
-    audioRef.current = null
+  function updateTile(id: string, patch: Partial<RoomTile>) {
+    setTiles((current) => current.map((tile) => tile.id === id ? { ...tile, ...patch } : tile))
   }
 
-  if (!entered) {
-    return (
-      <main className="entry">
-        <section className="entry-panel">
-          <p className="kicker">AI 가상 스터디 공간</p>
-          <h1>오늘은 어떤 분위기에서 공부하시겠어요?</h1>
-          <div className="mood-grid">
-            {(Object.entries(moods) as [Mood, typeof moods[Mood]][]).map(([key, item]) => (
-              <button className={mood === key ? 'selected' : ''} key={key} onClick={() => setMood(key)}>
-                <span style={{ background: item.tint }} />
-                {item.label}
-              </button>
-            ))}
-          </div>
-          <div className="entry-row">
-            <label>
-              사람 수
-              <select value={count} onChange={(event) => setCount(Number(event.target.value))}>
-                {[1, 2, 4, 8, 16].map((value) => <option key={value}>{value}</option>)}
-              </select>
-            </label>
-            <button className="enter" onClick={() => { setEntered(true); setRunning(true) }}>방 입장</button>
-          </div>
-        </section>
-      </main>
-    )
+  function removeTile(id: string) {
+    if (id === 'me') return
+    setTiles((current) => current.filter((tile) => tile.id !== id))
+    setContextBotId(null)
+  }
+
+  function createRepeatBot(url = '') {
+    setTiles((current) => [
+      ...current,
+      { id: crypto.randomUUID(), kind: 'repeatBot', name: `봇 ${current.filter((tile) => tile.kind === 'repeatBot').length + 1}`, url, volume: 70 },
+    ])
+    closeAdd()
+  }
+
+  function createMusicBot(queue: string[] = []) {
+    setTiles((current) => [
+      ...current,
+      { id: crypto.randomUUID(), kind: 'musicBot', name: '노래봇', queue, volume: 80 },
+    ])
+    closeAdd()
+  }
+
+  function addFriendTile(friend?: FriendUser) {
+    const index = tiles.filter((tile) => tile.kind === 'friend').length
+    const friendId = friend?.githubId ?? crypto.randomUUID()
+    setTiles((current) => [
+      ...current,
+      {
+        id: `friend-${friendId}`,
+        kind: 'friend',
+        name: friend ? (friend.name || friend.login) : `${friendNames[index % friendNames.length]}님`,
+        cameraOn: true,
+        micOn: false,
+        listening: true,
+      },
+    ])
+    closeAdd()
+  }
+
+  function closeAdd() {
+    setAddMode(null)
+    setAddMenuOpen(false)
   }
 
   return (
-    <main className={`room phase-${phase}`} style={{ '--mood': moods[mood].tint } as React.CSSProperties}>
-      <section className="stage">
-        <div className="room-top">
-          <div>
-            <p className="kicker">{moods[mood].label}</p>
-            <h1>{moods[mood].room}</h1>
-          </div>
-          <div className="timer">
-            <strong>{sessionLabel}</strong>
-            <span>{phaseText[phase]}</span>
-          </div>
+    <main className="study-room" onClick={() => setContextBotId(null)}>
+      <header className="room-header">
+        <div className="channel-name">
+          <span className="speaker-icon" aria-hidden />
+          <strong>일반</strong>
         </div>
+        <button className="chat-icon" aria-label="채팅">●</button>
+      </header>
 
-        <div className="video-wall" data-count={count}>
-          {visiblePeople.map((person, index) => (
-            <StudyTile key={person[0]} person={person} index={index} phase={phase} seed={actionSeed} />
-          ))}
-          <article className="tile me">
-            <div className="camera">
-              <video ref={videoRef} autoPlay playsInline muted />
-              {!cameraOn && <span>내 캠</span>}
-            </div>
-            <div className="tile-caption">
-              <strong>나</strong>
-              <small>{cameraOn ? `집중도 ${focusScore}%` : cameraError || '카메라 꺼짐'}</small>
-            </div>
+      <section className={sharingTile ? 'room-layout sharing' : 'room-layout'}>
+        {sharingTile && (
+          <article className="share-stage">
+            <video ref={shareRef} autoPlay playsInline muted />
+            <div className="share-label">화면 공유 중</div>
           </article>
+        )}
+
+        <div className="tile-grid" data-count={visibleTiles.length}>
+          {visibleTiles.map((tile) => (
+            <TileCard
+              key={tile.id}
+              tile={tile}
+              cameraRef={tile.id === 'me' ? cameraRef : undefined}
+              cameraError={cameraError}
+              listening={listening}
+              updateTile={updateTile}
+              removeTile={removeTile}
+              openBotMenu={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+                if (tile.kind === 'repeatBot' || tile.kind === 'musicBot') setContextBotId(tile.id)
+              }}
+            />
+          ))}
         </div>
       </section>
 
-      <aside className="control">
-        <div className="goal">
-          <label>오늘 목표</label>
-          <input value={goal} onChange={(event) => setGoal(event.target.value)} />
-          <div className="progress"><span style={{ width: `${done}%` }} /></div>
-          <small>{done}%</small>
+      <button className="quick-invite" onClick={() => setAddMode('invite')} aria-label="친구 초대">
+        <span className="people-icon" aria-hidden />
+        <b>+</b>
+      </button>
+
+      <nav className="call-controls" onClick={(event) => event.stopPropagation()}>
+        <div className="control-pack">
+          <button className={!micOn ? 'danger' : ''} onClick={() => setMicOn((value) => !value)} title="마이크">
+            {micOn ? 'Mic' : 'Mic off'}
+          </button>
+          <button className={!cameraOn ? 'off' : ''} onClick={toggleCamera} title="카메라">
+            {cameraOn ? 'Cam' : 'Cam off'}
+          </button>
         </div>
 
-        <div className="seg">
-          {(Object.keys(moods) as Mood[]).map((key) => (
-            <button key={key} className={mood === key ? 'on' : ''} onClick={() => setMood(key)}>{moods[key].label}</button>
-          ))}
+        <div className="control-pack">
+          <button className={sharing ? 'active' : ''} onClick={toggleShare} title="화면 공유">Share</button>
+          <div className="add-control">
+            <button className="add-trigger" onClick={() => setAddMenuOpen((value) => !value)} title="추가">+</button>
+            {addMenuOpen && (
+              <div className="add-menu">
+                <button onClick={() => setAddMode('musicBot')}>노래봇</button>
+                <button onClick={() => setAddMode('invite')}>친구 초대하기</button>
+                <button onClick={() => setAddMode('repeatBot')}>봇 추가하기</button>
+              </div>
+            )}
+          </div>
+          <button className={!listening ? 'off' : ''} onClick={() => setListening((value) => !value)} title="소리 듣기">
+            {listening ? 'Sound' : 'Muted'}
+          </button>
         </div>
 
-        <div className="control-grid">
-          <button onClick={() => setRunning((v) => !v)}>{running ? '일시정지' : '시작'}</button>
-          <button onClick={toggleCamera}>{cameraOn ? '캠 끄기' : '캠 켜기'}</button>
-          <button onClick={() => setSoundOn((v) => !v)}>{soundOn ? `${soundLabels[sound]} 켜짐` : '환경음 끄짐'}</button>
-          <select value={count} onChange={(event) => setCount(Number(event.target.value))}>
-            {[1, 2, 4, 8, 16].map((value) => <option key={value} value={value}>{value}명</option>)}
-          </select>
-        </div>
+        <button className="leave-button" title="나가기">Call end</button>
+      </nav>
 
-        <div className="sound-grid">
-          {(Object.keys(soundLabels) as AmbientSound[]).map((key) => (
-            <button key={key} className={sound === key ? 'on' : ''} onClick={() => { setSound(key); setSoundOn(true) }}>
-              {soundLabels[key]}
-            </button>
-          ))}
-        </div>
+      {addMode && (
+        <AddDialog
+          mode={addMode}
+          roomId={roomId}
+          createRepeatBot={createRepeatBot}
+          createMusicBot={createMusicBot}
+          addFriendTile={addFriendTile}
+          close={closeAdd}
+        />
+      )}
 
-        <div className="phase-buttons">
-          <button onClick={() => resetPhase('focus')}>50분 공부</button>
-          <button onClick={() => resetPhase('break')}>5분 휴식</button>
-          <button onClick={() => resetPhase('meditation')}>5분 명상</button>
+      {incomingInvite && (
+        <div className="dialog-backdrop" onClick={() => setIncomingInvite(null)}>
+          <section className="dialog" onClick={(event) => event.stopPropagation()}>
+            <h2>가상 독서실 초대</h2>
+            <p>친구가 같이 공부하자고 초대했습니다. 수락하면 이 방에 참가합니다.</p>
+            <button className="primary" onClick={acceptIncomingInvite}>수락하고 참가</button>
+            <button onClick={() => setIncomingInvite(null)}>거절</button>
+          </section>
         </div>
+      )}
 
-        <div className="summary">
-          <span>오늘 {Math.floor(sessionCount * 50 / 60)}시간 {(sessionCount * 50) % 60}분</span>
-          <span>50분 세션 {sessionCount}회</span>
-          <span>휴식 {breakCount}회</span>
-          <span>명상 {meditationCount}회</span>
-        </div>
-      </aside>
+      {botForMenu && (
+        <BotMenu
+          bot={botForMenu}
+          updateTile={updateTile}
+          removeTile={removeTile}
+        />
+      )}
     </main>
   )
 }
 
-function StudyTile({ person, index, phase, seed }: { person: typeof people[number]; index: number; phase: Phase; seed: number }) {
-  const pool = phase === 'focus' ? focusActions : phase === 'break' ? breakActions : meditationActions
-  const activity = pool[(index * 3 + seed) % pool.length]
+function TileCard({
+  tile,
+  cameraRef,
+  cameraError,
+  listening,
+  updateTile,
+  removeTile,
+  openBotMenu,
+}: {
+  tile: RoomTile
+  cameraRef?: React.RefObject<HTMLVideoElement | null>
+  cameraError: string
+  listening: boolean
+  updateTile: (id: string, patch: Partial<RoomTile>) => void
+  removeTile: (id: string) => void
+  openBotMenu: (event: React.MouseEvent) => void
+}) {
   return (
-    <article className={`tile avatar-${person[2]}`} style={{ '--delay': `${index * -7.5}s` } as React.CSSProperties}>
-      <div className="avatar-scene">
-        <div className="head" />
-        <div className="body" />
-        <div className="desk" />
-        <div className="hands" />
-        <div className="steam" />
-      </div>
-      <div className="tile-caption">
-        <strong>{person[0]}</strong>
-        <small>{activity}</small>
+    <article className={`tile-card ${tile.kind}`} onContextMenu={openBotMenu}>
+      {tile.kind === 'me' && (
+        <CameraTile tile={tile} cameraRef={cameraRef} cameraError={cameraError} />
+      )}
+      {tile.kind === 'friend' && <FriendTile tile={tile} updateTile={updateTile} />}
+      {tile.kind === 'repeatBot' && (
+        <RepeatBotTile tile={tile} listening={listening} updateTile={updateTile} />
+      )}
+      {tile.kind === 'musicBot' && (
+        <MusicBotTile tile={tile} listening={listening} updateTile={updateTile} />
+      )}
+
+      {(tile.kind === 'repeatBot' || tile.kind === 'musicBot') && (
+        <button className="tile-delete" onClick={() => removeTile(tile.id)} aria-label="삭제">x</button>
+      )}
+
+      <div className="tile-footer">
+        <strong>{tile.name}</strong>
+        <span>{tileStatus(tile)}</span>
       </div>
     </article>
   )
 }
 
-function createAmbient(sound: AmbientSound) {
-  const AudioContextClass = window.AudioContext || window.webkitAudioContext
-  const context = new AudioContextClass()
-  const gain = context.createGain()
-  gain.gain.value = 0.035
-  gain.connect(context.destination)
-  const nodes: AudioNode[] = [gain]
+function CameraTile({
+  tile,
+  cameraRef,
+  cameraError,
+}: {
+  tile: RoomTile
+  cameraRef?: React.RefObject<HTMLVideoElement | null>
+  cameraError: string
+}) {
+  return (
+    <div className="camera-tile">
+      <video ref={cameraRef} autoPlay playsInline muted />
+      {!tile.cameraOn && (
+        <div className="camera-placeholder">
+          <span>나</span>
+          <small>{cameraError || '카메라 꺼짐'}</small>
+        </div>
+      )}
+    </div>
+  )
+}
 
-  if (sound === 'rain' || sound === 'white' || sound === 'library' || sound === 'cafe') {
-    const bufferSize = context.sampleRate * 2
-    const buffer = context.createBuffer(1, bufferSize, context.sampleRate)
-    const data = buffer.getChannelData(0)
-    for (let i = 0; i < bufferSize; i += 1) data[i] = Math.random() * 2 - 1
-    const noise = context.createBufferSource()
-    noise.buffer = buffer
-    noise.loop = true
-    const filter = context.createBiquadFilter()
-    filter.type = sound === 'rain' ? 'lowpass' : 'bandpass'
-    filter.frequency.value = sound === 'rain' ? 900 : sound === 'white' ? 1800 : 1200
-    noise.connect(filter)
-    filter.connect(gain)
-    noise.start()
-    nodes.push(noise, filter)
+function FriendTile({
+  tile,
+  updateTile,
+}: {
+  tile: RoomTile
+  updateTile: (id: string, patch: Partial<RoomTile>) => void
+}) {
+  return (
+    <div className="friend-tile">
+      {tile.cameraOn ? (
+        <div className="study-avatar">
+          <span className="head" />
+          <span className="body" />
+          <span className="desk" />
+          <span className="book" />
+        </div>
+      ) : (
+        <div className="camera-placeholder">
+          <span>{tile.name.slice(0, 1)}</span>
+          <small>카메라 꺼짐</small>
+        </div>
+      )}
+      <div className="mini-controls">
+        <button onClick={() => updateTile(tile.id, { cameraOn: !tile.cameraOn })}>캠</button>
+        <button onClick={() => updateTile(tile.id, { micOn: !tile.micOn })}>마이크</button>
+      </div>
+    </div>
+  )
+}
+
+function RepeatBotTile({
+  tile,
+  listening,
+  updateTile,
+}: {
+  tile: RoomTile
+  listening: boolean
+  updateTile: (id: string, patch: Partial<RoomTile>) => void
+}) {
+  const src = useMemo(() => toYoutubeEmbed(tile.url, { loop: true, muted: !listening || (tile.volume ?? 70) === 0 }), [tile.url, listening, tile.volume])
+
+  return (
+    <div className="bot-tile">
+      {src ? (
+        <YoutubeFrame src={src} volume={listening ? tile.volume ?? 70 : 0} title={tile.name} />
+      ) : (
+        <label className="link-panel">
+          <b>반복 봇</b>
+          <span>유튜브 링크를 넣으면 이 화면에서 무한 반복됩니다.</span>
+          <input
+            value={tile.url ?? ''}
+            onChange={(event) => updateTile(tile.id, { url: event.target.value })}
+            placeholder="https://youtu.be/..."
+          />
+        </label>
+      )}
+    </div>
+  )
+}
+
+function MusicBotTile({
+  tile,
+  listening,
+  updateTile,
+}: {
+  tile: RoomTile
+  listening: boolean
+  updateTile: (id: string, patch: Partial<RoomTile>) => void
+}) {
+  const [draft, setDraft] = useState('')
+  const [index, setIndex] = useState(0)
+  const queue = tile.queue ?? []
+  const currentUrl = queue[index % Math.max(queue.length, 1)]
+  const src = useMemo(() => toYoutubeEmbed(currentUrl, { muted: !listening || (tile.volume ?? 80) === 0 }), [currentUrl, listening, tile.volume])
+
+  function addSong() {
+    if (!draft.trim()) return
+    updateTile(tile.id, { queue: [...queue, draft.trim()] })
+    setDraft('')
   }
 
-  const clickRate = sound === 'keyboard' ? 0.16 : sound === 'pencil' ? 0.28 : sound === 'cafe' ? 0.5 : sound === 'library' ? 0.7 : 0
-  if (clickRate) {
-    const interval = window.setInterval(() => {
-      const osc = context.createOscillator()
-      const clickGain = context.createGain()
-      osc.frequency.value = sound === 'keyboard' ? 520 + Math.random() * 240 : 240 + Math.random() * 90
-      clickGain.gain.setValueAtTime(0.02, context.currentTime)
-      clickGain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.035)
-      osc.connect(clickGain)
-      clickGain.connect(gain)
-      osc.start()
-      osc.stop(context.currentTime + 0.04)
-    }, clickRate * 1000)
-    nodes.push({ disconnect: () => window.clearInterval(interval) } as AudioNode)
+  function removeSong(songIndex: number) {
+    const nextQueue = queue.filter((_, itemIndex) => itemIndex !== songIndex)
+    updateTile(tile.id, { queue: nextQueue })
+    setIndex(0)
   }
 
-  return { context, nodes }
+  return (
+    <div className="music-tile">
+      <div className="music-player">
+        {src ? (
+          <YoutubeFrame src={src} volume={listening ? tile.volume ?? 80 : 0} title={tile.name} />
+        ) : (
+          <div className="music-empty">
+            <b>노래봇</b>
+            <span>유튜브 링크를 추가하면 플레이리스트로 재생됩니다.</span>
+          </div>
+        )}
+      </div>
+      <form
+        className="song-form"
+        onSubmit={(event) => {
+          event.preventDefault()
+          addSong()
+        }}
+      >
+        <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="노래 유튜브 링크" />
+        <button>추가</button>
+        <button type="button" onClick={() => setIndex((value) => value + 1)} disabled={!queue.length}>다음</button>
+      </form>
+      <div className="queue-list">
+        {queue.map((song, songIndex) => (
+          <button
+            key={`${song}-${songIndex}`}
+            className={songIndex === index % Math.max(queue.length, 1) ? 'playing' : ''}
+            onClick={() => setIndex(songIndex)}
+            onContextMenu={(event) => {
+              event.preventDefault()
+              removeSong(songIndex)
+            }}
+          >
+            {songIndex + 1}. {getYoutubeId(song) || song}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function YoutubeFrame({ src, volume, title }: { src: string; volume: number; title: string }) {
+  const iframeRef = useRef<HTMLIFrameElement | null>(null)
+
+  useEffect(() => {
+    const frame = iframeRef.current
+    if (!frame?.contentWindow) return
+    frame.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'setVolume', args: [volume] }), '*')
+    frame.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'playVideo', args: [] }), '*')
+  }, [src, volume])
+
+  return (
+    <iframe
+      ref={iframeRef}
+      src={src}
+      title={title}
+      allow="autoplay; encrypted-media; picture-in-picture"
+      allowFullScreen
+    />
+  )
+}
+
+function AddDialog({
+  mode,
+  roomId,
+  createRepeatBot,
+  createMusicBot,
+  addFriendTile,
+  close,
+}: {
+  mode: AddMode
+  roomId: string
+  createRepeatBot: (url?: string) => void
+  createMusicBot: (queue?: string[]) => void
+  addFriendTile: (friend?: FriendUser) => void
+  close: () => void
+}) {
+  const [url, setUrl] = useState('')
+  const [friends, setFriends] = useState<FriendUser[]>([])
+  const [loadingFriends, setLoadingFriends] = useState(false)
+  const [inviteStatus, setInviteStatus] = useState('')
+
+  useEffect(() => {
+    if (mode !== 'invite') return
+    setLoadingFriends(true)
+    fetch('/api/friends', { credentials: 'include' })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error('친구 목록을 불러오지 못했습니다')))
+      .then((data: FriendUser[]) => setFriends(data))
+      .catch((error) => setInviteStatus(error instanceof Error ? error.message : '친구 목록을 불러오지 못했습니다'))
+      .finally(() => setLoadingFriends(false))
+  }, [mode])
+
+  async function sendRoomInvite(friend: FriendUser) {
+    setInviteStatus(`${friend.name || friend.login}님에게 초대 알림을 보내는 중입니다.`)
+    try {
+      const response = await fetch('/api/virtual-study-room/invite', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetUserId: friend.githubId, roomId }),
+      })
+      if (!response.ok) throw new Error(await response.text())
+      setInviteStatus(`${friend.name || friend.login}님에게 초대 알림을 보냈습니다. 친구가 수락하면 방에 참가합니다.`)
+    } catch (error) {
+      setInviteStatus(error instanceof Error ? error.message : '초대 알림을 보내지 못했습니다')
+    }
+  }
+
+  return (
+    <div className="dialog-backdrop" onClick={close}>
+      <section className="dialog" onClick={(event) => event.stopPropagation()}>
+        <button className="dialog-close" onClick={close} aria-label="닫기">x</button>
+        {mode === 'repeatBot' && (
+          <>
+            <h2>봇 추가하기</h2>
+            <p>추가된 화면에 유튜브 링크를 넣으면 영상이 무한 반복됩니다.</p>
+            <input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://youtu.be/..." />
+            <button className="primary" onClick={() => createRepeatBot(url)}>봇 화면 추가</button>
+          </>
+        )}
+        {mode === 'musicBot' && (
+          <>
+            <h2>노래봇</h2>
+            <p>유튜브 링크를 플레이리스트에 넣고 소리 나게 재생합니다.</p>
+            <input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="첫 번째 노래 링크" />
+            <button className="primary" onClick={() => createMusicBot(url.trim() ? [url.trim()] : [])}>노래봇 추가</button>
+          </>
+        )}
+        {mode === 'invite' && (
+          <>
+            <h2>친구 초대하기</h2>
+            <p>놀이터에서 내 친구인 사용자에게 초대 알림을 보냅니다. 친구가 알림을 눌러 수락하면 방에 참가합니다.</p>
+            {loadingFriends ? (
+              <p>친구 목록을 불러오는 중입니다.</p>
+            ) : friends.length === 0 ? (
+              <p>초대할 친구가 없습니다. 놀이터에서 친구를 먼저 추가해주세요.</p>
+            ) : (
+              <div className="invite-friend-list">
+                {friends.map((friend) => (
+                  <div className="invite-friend" key={friend.githubId}>
+                    {friend.avatarUrl ? <img src={friend.avatarUrl} alt={friend.login} /> : <span>{(friend.name || friend.login).slice(0, 1)}</span>}
+                    <div>
+                      <strong>{friend.name || friend.login}</strong>
+                      <small>@{friend.login}</small>
+                    </div>
+                    <button onClick={() => sendRoomInvite(friend)}>초대</button>
+                    <button onClick={() => addFriendTile(friend)}>로컬 참가</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {inviteStatus && <p className="invite-status">{inviteStatus}</p>}
+          </>
+        )}
+      </section>
+    </div>
+  )
+}
+
+function BotMenu({
+  bot,
+  updateTile,
+  removeTile,
+}: {
+  bot: RoomTile
+  updateTile: (id: string, patch: Partial<RoomTile>) => void
+  removeTile: (id: string) => void
+}) {
+  return (
+    <aside className="bot-context" onClick={(event) => event.stopPropagation()}>
+      <strong>{bot.name}</strong>
+      <label>
+        소리 {bot.volume ?? 80}%
+        <input
+          type="range"
+          min="0"
+          max="100"
+          value={bot.volume ?? 80}
+          onChange={(event) => updateTile(bot.id, { volume: Number(event.target.value) })}
+        />
+      </label>
+      <button onClick={() => removeTile(bot.id)}>삭제</button>
+    </aside>
+  )
+}
+
+function tileStatus(tile: RoomTile) {
+  if (tile.kind === 'repeatBot') return `반복 재생 · ${tile.volume ?? 70}%`
+  if (tile.kind === 'musicBot') return `플레이리스트 ${(tile.queue ?? []).length}곡 · ${tile.volume ?? 80}%`
+  if (tile.sharing) return '화면 공유 중'
+  if (!tile.cameraOn) return '카메라 꺼짐'
+  if (!tile.micOn) return '마이크 꺼짐'
+  return '공부 중'
+}
+
+function toYoutubeEmbed(url: string | undefined, options: { loop?: boolean; muted?: boolean } = {}) {
+  const id = getYoutubeId(url)
+  if (!id) return ''
+  const params = new URLSearchParams({
+    autoplay: '1',
+    controls: '1',
+    enablejsapi: '1',
+    playsinline: '1',
+    rel: '0',
+    mute: options.muted ? '1' : '0',
+  })
+  if (options.loop) {
+    params.set('loop', '1')
+    params.set('playlist', id)
+  }
+  return `https://www.youtube.com/embed/${id}?${params.toString()}`
+}
+
+function getYoutubeId(url?: string) {
+  if (!url) return ''
+  try {
+    const parsed = new URL(url)
+    if (parsed.hostname.includes('youtu.be')) return parsed.pathname.replace('/', '')
+    if (parsed.hostname.includes('youtube.com')) {
+      if (parsed.pathname.startsWith('/shorts/')) return parsed.pathname.split('/')[2]
+      if (parsed.pathname.startsWith('/embed/')) return parsed.pathname.split('/')[2]
+      return parsed.searchParams.get('v') ?? ''
+    }
+  } catch {
+    return ''
+  }
+  return ''
+}
+
+function stopStream(stream: MediaStream | null) {
+  stream?.getTracks().forEach((track) => track.stop())
 }
 
 createRoot(document.getElementById('root')!).render(<App />)
