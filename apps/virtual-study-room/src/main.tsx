@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './style.css'
 
 type TileKind = 'me' | 'friend' | 'repeatBot' | 'musicBot'
+type AddMode = 'musicBot' | 'invite' | 'repeatBot' | null
 
 type RoomTile = {
   id: string
@@ -17,15 +18,12 @@ type RoomTile = {
   volume?: number
 }
 
-type AddMode = 'musicBot' | 'invite' | 'repeatBot' | null
 type FriendUser = {
   githubId: string
   login: string
   name?: string
   avatarUrl?: string
 }
-
-const friendNames = ['민준', '서연', '지우', '하준', '도윤', '유나', '수빈']
 
 function App() {
   const [tiles, setTiles] = useState<RoomTile[]>([
@@ -40,10 +38,7 @@ function App() {
   const [addMode, setAddMode] = useState<AddMode>(null)
   const [contextBotId, setContextBotId] = useState<string | null>(null)
   const [roomId] = useState(() => new URLSearchParams(window.location.search).get('room') || crypto.randomUUID())
-  const [incomingInvite, setIncomingInvite] = useState(() => {
-    const params = new URLSearchParams(window.location.search)
-    return params.get('invitedBy')
-  })
+  const [incomingInvite, setIncomingInvite] = useState(() => new URLSearchParams(window.location.search).get('invitedBy'))
   const cameraRef = useRef<HTMLVideoElement | null>(null)
   const shareRef = useRef<HTMLVideoElement | null>(null)
   const cameraStream = useRef<MediaStream | null>(null)
@@ -138,23 +133,6 @@ function App() {
     closeAdd()
   }
 
-  function addFriendTile(friend?: FriendUser) {
-    const index = tiles.filter((tile) => tile.kind === 'friend').length
-    const friendId = friend?.githubId ?? crypto.randomUUID()
-    setTiles((current) => [
-      ...current,
-      {
-        id: `friend-${friendId}`,
-        kind: 'friend',
-        name: friend ? (friend.name || friend.login) : `${friendNames[index % friendNames.length]}님`,
-        cameraOn: true,
-        micOn: false,
-        listening: true,
-      },
-    ])
-    closeAdd()
-  }
-
   function closeAdd() {
     setAddMode(null)
     setAddMenuOpen(false)
@@ -239,7 +217,6 @@ function App() {
           roomId={roomId}
           createRepeatBot={createRepeatBot}
           createMusicBot={createMusicBot}
-          addFriendTile={addFriendTile}
           close={closeAdd}
         />
       )}
@@ -285,16 +262,10 @@ function TileCard({
 }) {
   return (
     <article className={`tile-card ${tile.kind}`} onContextMenu={openBotMenu}>
-      {tile.kind === 'me' && (
-        <CameraTile tile={tile} cameraRef={cameraRef} cameraError={cameraError} />
-      )}
+      {tile.kind === 'me' && <CameraTile tile={tile} cameraRef={cameraRef} cameraError={cameraError} />}
       {tile.kind === 'friend' && <FriendTile tile={tile} updateTile={updateTile} />}
-      {tile.kind === 'repeatBot' && (
-        <RepeatBotTile tile={tile} listening={listening} updateTile={updateTile} />
-      )}
-      {tile.kind === 'musicBot' && (
-        <MusicBotTile tile={tile} listening={listening} updateTile={updateTile} />
-      )}
+      {tile.kind === 'repeatBot' && <RepeatBotTile tile={tile} listening={listening} updateTile={updateTile} />}
+      {tile.kind === 'musicBot' && <MusicBotTile tile={tile} listening={listening} updateTile={updateTile} />}
 
       {(tile.kind === 'repeatBot' || tile.kind === 'musicBot') && (
         <button className="tile-delete" onClick={() => removeTile(tile.id)} aria-label="삭제">x</button>
@@ -485,14 +456,12 @@ function AddDialog({
   roomId,
   createRepeatBot,
   createMusicBot,
-  addFriendTile,
   close,
 }: {
   mode: AddMode
   roomId: string
   createRepeatBot: (url?: string) => void
   createMusicBot: (queue?: string[]) => void
-  addFriendTile: (friend?: FriendUser) => void
   close: () => void
 }) {
   const [url, setUrl] = useState('')
@@ -503,6 +472,7 @@ function AddDialog({
   useEffect(() => {
     if (mode !== 'invite') return
     setLoadingFriends(true)
+    setInviteStatus('')
     fetch('/api/friends', { credentials: 'include' })
       .then((response) => response.ok ? response.json() : Promise.reject(new Error('친구 목록을 불러오지 못했습니다')))
       .then((data: FriendUser[]) => setFriends(data))
@@ -520,7 +490,7 @@ function AddDialog({
         body: JSON.stringify({ targetUserId: friend.githubId, roomId }),
       })
       if (!response.ok) throw new Error(await response.text())
-      setInviteStatus(`${friend.name || friend.login}님에게 초대 알림을 보냈습니다. 친구가 수락하면 방에 참가합니다.`)
+      setInviteStatus(`${friend.name || friend.login}님에게 초대 알림을 보냈습니다.`)
     } catch (error) {
       setInviteStatus(error instanceof Error ? error.message : '초대 알림을 보내지 못했습니다')
     }
@@ -549,11 +519,11 @@ function AddDialog({
         {mode === 'invite' && (
           <>
             <h2>친구 초대하기</h2>
-            <p>놀이터에서 내 친구인 사용자에게 초대 알림을 보냅니다. 친구가 알림을 눌러 수락하면 방에 참가합니다.</p>
+            <p>놀이터 친구 목록에서 초대할 사람을 선택하세요. 친구인 사용자에게만 초대 알림을 보낼 수 있습니다.</p>
             {loadingFriends ? (
               <p>친구 목록을 불러오는 중입니다.</p>
             ) : friends.length === 0 ? (
-              <p>초대할 친구가 없습니다. 놀이터에서 친구를 먼저 추가해주세요.</p>
+              <p>초대할 친구가 없습니다. 놀이터 친구 기능에서 친구를 먼저 추가해주세요.</p>
             ) : (
               <div className="invite-friend-list">
                 {friends.map((friend) => (
@@ -564,7 +534,6 @@ function AddDialog({
                       <small>@{friend.login}</small>
                     </div>
                     <button onClick={() => sendRoomInvite(friend)}>초대</button>
-                    <button onClick={() => addFriendTile(friend)}>로컬 참가</button>
                   </div>
                 ))}
               </div>
