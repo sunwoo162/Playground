@@ -12,6 +12,15 @@ import { getStudyTimerElapsed, formatStudyTime } from '../features/study-timer-b
 
 const THEME_KEY = 'playground-theme';
 
+const APP_CATEGORIES: Array<{ id: AppItem['category']; label: string; description: string }> = [
+  { id: 'study', label: '학습', description: '공부 계획, 기록, 집중 공간' },
+  { id: 'web-extension', label: '웹 확장', description: '브라우저 확장과 자동화 도구' },
+  { id: 'dev', label: '개발', description: '개발 기록, 배포, 알림 관리' },
+  { id: 'life', label: '생활', description: '일상 기록과 학교 정보' },
+  { id: 'finance-security', label: '금융·보안', description: '투자 연습과 보안 체험' },
+  { id: 'coming-soon', label: '준비 중', description: '나중에 열릴 기능' },
+];
+
 function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -227,6 +236,12 @@ function App() {
   const displayedApps = showFavOnly
     ? APPS.filter((a) => favorites.includes(a.id))
     : APPS;
+  const displayedGroups = APP_CATEGORIES
+    .map((category) => ({
+      ...category,
+      apps: displayedApps.filter((app) => app.category === category.id),
+    }))
+    .filter((category) => category.apps.length > 0);
 
   if (loading) {
     return (
@@ -384,42 +399,54 @@ function App() {
           </div>
         )}
 
-        <section className="apps-grid">
-          {displayedApps.map((app) => (
-            <a
-              key={app.id}
-              href={user && !app.disabled ? app.url : undefined}
-              className={`app-card ${app.disabled ? 'disabled' : ''} ${!user ? 'locked' : ''}`}
-              style={{ '--accent': app.color } as React.CSSProperties}
-              onClick={(e) => {
-                if (app.disabled) {
-                  e.preventDefault();
-                  return;
-                }
-                if (!user) {
-                  e.preventDefault();
-                  requestAppLogin(app);
-                }
-              }}
-            >
-              {/* 즐겨찾기 버튼 */}
-              <button
-                className={`fav-btn ${favorites.includes(app.id) ? 'favorited' : ''}`}
-                onClick={(e) => toggleFavorite(app.id, e)}
-                aria-label="즐겨찾기"
-                title={favorites.includes(app.id) ? '즐겨찾기 해제' : '즐겨찾기 추가'}
-              >
-                {favorites.includes(app.id) ? '⭐' : '☆'}
-              </button>
+        <div className="app-category-list">
+          {displayedGroups.map((group) => (
+            <section className="app-category" key={group.id}>
+              <div className="category-heading">
+                <div>
+                  <h2>{group.label}</h2>
+                  <p>{group.description}</p>
+                </div>
+                <span>{group.apps.length}</span>
+              </div>
+              <div className="apps-grid">
+                {group.apps.map((app) => (
+                  <a
+                    key={app.id}
+                    href={user && !app.disabled ? app.url : undefined}
+                    className={`app-card ${app.disabled ? 'disabled' : ''} ${!user ? 'locked' : ''}`}
+                    style={{ '--accent': app.color } as React.CSSProperties}
+                    onClick={(e) => {
+                      if (app.disabled) {
+                        e.preventDefault();
+                        return;
+                      }
+                      if (!user) {
+                        e.preventDefault();
+                        requestAppLogin(app);
+                      }
+                    }}
+                  >
+                    <button
+                      className={`fav-btn ${favorites.includes(app.id) ? 'favorited' : ''}`}
+                      onClick={(e) => toggleFavorite(app.id, e)}
+                      aria-label={favorites.includes(app.id) ? '즐겨찾기 해제' : '즐겨찾기 추가'}
+                      title={favorites.includes(app.id) ? '즐겨찾기 해제' : '즐겨찾기 추가'}
+                    >
+                      {favorites.includes(app.id) ? '★' : '☆'}
+                    </button>
 
-              <div className="app-emoji">{app.emoji}</div>
-              <h2 className="app-title">{app.title}</h2>
-              <p className="app-desc">{app.description}</p>
-              {!user && !app.disabled && <span className="lock-badge">🔒 로그인 필요</span>}
-              {app.disabled && <span className="lock-badge">🔜 준비 중</span>}
-            </a>
+                    <div className="app-emoji">{app.emoji}</div>
+                    <h3 className="app-title">{app.title}</h3>
+                    <p className="app-desc">{app.description}</p>
+                    {!user && !app.disabled && <span className="lock-badge">로그인 필요</span>}
+                    {app.disabled && <span className="lock-badge">준비 중</span>}
+                  </a>
+                ))}
+              </div>
+            </section>
           ))}
-        </section>
+        </div>
       </main>
 
       <footer className="footer">

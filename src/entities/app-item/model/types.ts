@@ -5,5 +5,6 @@ export interface AppItem {
   emoji: string;
   url: string;
   color: string;
+  category: 'study' | 'web-extension' | 'dev' | 'life' | 'finance-security' | 'coming-soon';
   disabled?: boolean;
 }
