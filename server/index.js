@@ -1166,6 +1166,12 @@ app.get('/apps/virtual-study-room/*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'apps', 'virtual-study-room', 'dist', 'index.html'));
 });
 
+// Virtual Avatar 앱
+app.use('/apps/virtual-avatar', express.static(path.join(__dirname, '..', 'apps', 'virtual-avatar', 'dist')));
+app.get('/apps/virtual-avatar/*', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'apps', 'virtual-avatar', 'dist', 'index.html'));
+});
+
 // Extension apps and guides
 app.use('/apps/site-macro-extension', express.static(path.join(__dirname, '..', 'apps', 'site-macro-extension')));
 app.use('/apps/site-macro-native-bridge', express.static(path.join(__dirname, '..', 'apps', 'site-macro-native-bridge')));

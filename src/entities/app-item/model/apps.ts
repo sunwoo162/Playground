@@ -29,6 +29,15 @@ export const APPS: AppItem[] = [
     category: 'study',
   },
   {
+    id: 'virtual-avatar',
+    title: '버츄얼 아바타',
+    description: '카메라 움직임으로 아바타를 움직이고 1~9 단축키로 표정을 바꿉니다.',
+    emoji: '🎭',
+    url: '/apps/virtual-avatar/',
+    color: '#b76cff',
+    category: 'web-extension',
+  },
+  {
     id: 'todo',
     title: 'Todo',
     description: '오늘 할 일을 계획하고 완료 여부를 빠르게 체크합니다.',
