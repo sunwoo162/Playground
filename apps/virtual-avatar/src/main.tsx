@@ -552,9 +552,10 @@ function VrmAvatar({ expression, motion, showRig }: { expression: Expression; mo
         const vrm = gltf.userData.vrm;
         vrmModule.VRMUtils?.removeUnnecessaryVertices?.(vrm.scene);
         vrmModule.VRMUtils?.removeUnnecessaryJoints?.(vrm.scene);
-        vrm.scene.rotation.y = Math.PI;
-        vrm.scene.position.set(0, -0.95, 0);
+        vrmModule.VRMUtils?.rotateVRM0?.(vrm);
+        vrm.scene.position.set(0, 0, 0);
         scene.add(vrm.scene);
+        frameVrmModel(THREE, vrm, camera);
 
         const clock = new THREE.Clock();
         const resize = () => {
@@ -608,6 +609,29 @@ function VrmAvatar({ expression, motion, showRig }: { expression: Expression; mo
       {showRig && <div className="vrm-source-label">VRoid sample VRM</div>}
     </div>
   );
+}
+
+function frameVrmModel(THREE: any, vrm: any, camera: any) {
+  vrm.scene.updateMatrixWorld(true);
+  const initialBox = new THREE.Box3().setFromObject(vrm.scene);
+  const initialSize = new THREE.Vector3();
+  initialBox.getSize(initialSize);
+
+  const targetHeight = 2.25;
+  const scale = initialSize.y > 0 ? targetHeight / initialSize.y : 1;
+  vrm.scene.scale.setScalar(scale);
+  vrm.scene.updateMatrixWorld(true);
+
+  const framedBox = new THREE.Box3().setFromObject(vrm.scene);
+  const center = new THREE.Vector3();
+  framedBox.getCenter(center);
+  vrm.scene.position.x -= center.x;
+  vrm.scene.position.y -= framedBox.min.y + 0.02;
+  vrm.scene.position.z -= center.z;
+
+  camera.position.set(0, 1.34, 3.15);
+  camera.lookAt(0, 1.18, 0);
+  camera.updateProjectionMatrix();
 }
 
 function applyVrmMotion(vrm: any, motion: Motion, expression: Expression) {
