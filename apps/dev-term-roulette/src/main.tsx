@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
 
@@ -16,6 +16,8 @@ type SpinResult = {
   final: string
   description: string
 }
+
+const TIMER_DURATION_MS = 15 * 60 * 1000
 
 const CATEGORIES: BuiltInCategory[] = [
   {
@@ -107,18 +109,67 @@ function parseCustomTerms(value: string) {
     .filter(Boolean)
 }
 
+function formatTimer(ms: number) {
+  const safeMs = Math.max(0, ms)
+  const totalSeconds = Math.ceil(safeMs / 1000)
+  const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, '0')
+  const seconds = (totalSeconds % 60).toString().padStart(2, '0')
+  return `${minutes}:${seconds}`
+}
+
+function requestNotificationPermission() {
+  if (!('Notification' in window)) return
+  if (Notification.permission === 'default') {
+    void Notification.requestPermission()
+  }
+}
+
+function notifyTimerDone(term: string) {
+  document.title = `15분 완료 - ${term}`
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification('개발 용어 15분 완료', {
+      body: `${term} 복습 시간이 끝났어요.`,
+      tag: 'dev-term-roulette-timer',
+    })
+  }
+}
+
 function App() {
   const [mode, setMode] = useState<'built-in' | 'custom'>('built-in')
   const [customText, setCustomText] = useState('React\nTypeScript\nAPI\nDocker\nSQL\nGit\n테스트\n배포')
   const [isSpinning, setIsSpinning] = useState(false)
   const [result, setResult] = useState<SpinResult>(() => makeBuiltInResult())
   const [history, setHistory] = useState<string[]>([])
+  const [timerEndAt, setTimerEndAt] = useState<number | null>(null)
+  const [timeLeft, setTimeLeft] = useState(0)
+  const [timerDoneTerm, setTimerDoneTerm] = useState('')
   const customTerms = useMemo(() => parseCustomTerms(customText), [customText])
+
+  useEffect(() => {
+    if (!timerEndAt) return
+
+    const updateTimer = () => {
+      const nextTimeLeft = Math.max(0, timerEndAt - Date.now())
+      setTimeLeft(nextTimeLeft)
+      if (nextTimeLeft === 0) {
+        setTimerEndAt(null)
+        setTimerDoneTerm(result.final)
+        notifyTimerDone(result.final)
+      }
+    }
+
+    updateTimer()
+    const timer = window.setInterval(updateTimer, 1000)
+    return () => window.clearInterval(timer)
+  }, [result.final, timerEndAt])
 
   const spin = () => {
     if (isSpinning) return
     if (mode === 'custom' && customTerms.length < 3) return
 
+    requestNotificationPermission()
+    setTimerDoneTerm('')
+    document.title = '개발 용어 룰렛'
     setIsSpinning(true)
     window.setTimeout(() => {
       const next = mode === 'built-in'
@@ -138,6 +189,8 @@ function App() {
           })()
       setResult(next)
       setHistory(prev => [next.final, ...prev.filter(item => item !== next.final)].slice(0, 12))
+      setTimerEndAt(Date.now() + TIMER_DURATION_MS)
+      setTimeLeft(TIMER_DURATION_MS)
       setIsSpinning(false)
     }, 1600)
   }
@@ -190,6 +243,17 @@ function App() {
             <button className="spin-button" onClick={spin} disabled={isSpinning || (mode === 'custom' && customTerms.length < 3)}>
               {isSpinning ? '룰렛 회전 중' : '레버 내리기'}
             </button>
+            <div className={`timer-card ${timerDoneTerm ? 'done' : ''}`}>
+              <span>15분 타이머</span>
+              <strong>{timerEndAt ? formatTimer(timeLeft) : '15:00'}</strong>
+              <p>
+                {timerDoneTerm
+                  ? `${timerDoneTerm} 복습 시간이 끝났습니다.`
+                  : timerEndAt
+                    ? `${result.final} 기준으로 진행 중`
+                    : '룰렛을 돌리면 시작됩니다.'}
+              </p>
+            </div>
             {mode === 'custom' && customTerms.length < 3 && <p className="hint">사용자 지정 게임은 단어 3개 이상이 필요합니다.</p>}
           </div>
         </div>

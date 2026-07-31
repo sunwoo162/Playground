@@ -99,6 +99,48 @@ h1 { font-size: 2rem; }
   font-weight: 800;
 }
 
+.timer-card {
+  width: 100%;
+  padding: 14px 12px;
+  border: 1px solid rgba(52, 211, 153, 0.34);
+  border-radius: 8px;
+  background: #101820;
+  text-align: center;
+}
+
+.timer-card span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.timer-card strong {
+  display: block;
+  margin-top: 6px;
+  color: var(--accent);
+  font-size: 1.7rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.timer-card p {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.timer-card.done {
+  border-color: rgba(251, 113, 133, 0.52);
+  background: rgba(251, 113, 133, 0.1);
+}
+
+.timer-card.done strong,
+.timer-card.done p {
+  color: #fda4af;
+}
+
 .machine-body {
   display: grid;
   grid-template-columns: 1fr 160px;
@@ -363,7 +405,8 @@ textarea:focus {
   }
 
   .lever-panel {
-    flex-direction: row;
+    display: grid;
+    grid-template-columns: auto 1fr;
     align-items: center;
   }
 
@@ -383,5 +426,9 @@ textarea:focus {
 
   .lever.pulled .lever-knob {
     transform: translate(18px, 48px);
+  }
+
+  .timer-card {
+    grid-column: 1 / -1;
   }
 }
