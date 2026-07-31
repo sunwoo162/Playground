@@ -18,6 +18,7 @@ type SpinResult = {
 }
 
 const TIMER_DURATION_MS = 15 * 60 * 1000
+const SEEN_TERMS_KEY_PREFIX = 'dev-term-roulette-seen'
 
 const CATEGORIES: BuiltInCategory[] = [
   {
@@ -85,28 +86,67 @@ const BUILT_IN_DESCRIPTIONS: Record<string, string> = {
   'Dynamic Programming': '작은 문제의 답을 저장해 중복 계산을 줄이는 알고리즘 기법입니다.',
 }
 
+const BUILT_IN_TERMS = Array.from(new Set(CATEGORIES.flatMap(category => category.terms)))
+
 function pick<T>(items: T[]): T {
   return items[Math.floor(Math.random() * items.length)]
 }
 
-function makeBuiltInResult(): SpinResult {
-  const [left, center, right] = CATEGORIES.map(category => pick(category.terms))
-  const terms = [left, center, right]
-  const final = pick(terms)
+function readJsonArray(key: string) {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || '[]')
+    return Array.isArray(parsed) ? parsed.filter(item => typeof item === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function getSeenKey(accountKey: string, mode: 'built-in' | 'custom', customSignature = '') {
+  return `${SEEN_TERMS_KEY_PREFIX}:${accountKey}:${mode}:${customSignature}`
+}
+
+function makeResult(final: string, displayTerms: string[], description: string): SpinResult {
+  const fallbackTerms = displayTerms.length >= 3 ? displayTerms : [final, final, final]
   return {
-    left,
-    center,
-    right,
+    left: fallbackTerms[0],
+    center: fallbackTerms[1],
+    right: fallbackTerms[2],
     final,
-    description: BUILT_IN_DESCRIPTIONS[final] || `${final}는 개발자가 자주 마주치는 핵심 개념입니다. 관련 예제와 실제 사용 상황을 같이 찾아보면 기억에 오래 남습니다.`,
+    description,
   }
 }
 
 function parseCustomTerms(value: string) {
-  return value
-    .split(/[\n,]/)
+  return Array.from(new Set(value.split(/[\n,]/)
     .map(term => term.trim())
-    .filter(Boolean)
+    .filter(Boolean)))
+}
+
+function createUniqueResult(
+  terms: string[],
+  seenTerms: string[],
+  descriptionFor: (term: string) => string,
+) {
+  const availableTerms = terms.filter(term => !seenTerms.includes(term))
+  const pool = availableTerms.length > 0 ? availableTerms : terms
+  const final = pick(pool)
+  const sidePool = terms.filter(term => term !== final)
+  const displayTerms = [final, ...Array.from({ length: 2 }, () => pick(sidePool.length > 0 ? sidePool : terms))]
+    .sort(() => Math.random() - 0.5)
+
+  return {
+    result: makeResult(final, displayTerms, descriptionFor(final)),
+    resetSeen: availableTerms.length === 0,
+  }
+}
+
+function makeBuiltInResult(): SpinResult {
+  const { result } = createUniqueResult(
+    BUILT_IN_TERMS,
+    [],
+    term => BUILT_IN_DESCRIPTIONS[term] || `${term}는 개발자가 자주 마주치는 핵심 개념입니다. 관련 예제와 실제 사용 상황을 같이 찾아보면 기억에 오래 남습니다.`,
+  )
+  return result
 }
 
 function formatTimer(ms: number) {
@@ -140,10 +180,30 @@ function App() {
   const [isSpinning, setIsSpinning] = useState(false)
   const [result, setResult] = useState<SpinResult>(() => makeBuiltInResult())
   const [history, setHistory] = useState<string[]>([])
+  const [accountKey, setAccountKey] = useState('guest')
+  const [seenTerms, setSeenTerms] = useState<string[]>([])
   const [timerEndAt, setTimerEndAt] = useState<number | null>(null)
   const [timeLeft, setTimeLeft] = useState(0)
   const [timerDoneTerm, setTimerDoneTerm] = useState('')
   const customTerms = useMemo(() => parseCustomTerms(customText), [customText])
+  const customSignature = useMemo(() => customTerms.join('|'), [customTerms])
+  const activeTerms = mode === 'built-in' ? BUILT_IN_TERMS : customTerms
+  const seenKey = getSeenKey(accountKey, mode, mode === 'custom' ? customSignature : '')
+  const remainingCount = Math.max(0, activeTerms.length - seenTerms.filter(term => activeTerms.includes(term)).length)
+
+  useEffect(() => {
+    fetch('/auth/me', { credentials: 'include' })
+      .then(response => response.json())
+      .then(data => {
+        const login = data?.user?.login
+        setAccountKey(login ? `user-${login}` : 'guest')
+      })
+      .catch(() => setAccountKey('guest'))
+  }, [])
+
+  useEffect(() => {
+    setSeenTerms(readJsonArray(seenKey).filter(term => activeTerms.includes(term)))
+  }, [activeTerms, seenKey])
 
   useEffect(() => {
     if (!timerEndAt) return
@@ -172,21 +232,17 @@ function App() {
     document.title = '개발 용어 룰렛'
     setIsSpinning(true)
     window.setTimeout(() => {
-      const next = mode === 'built-in'
-        ? makeBuiltInResult()
-        : (() => {
-            const left = pick(customTerms)
-            const center = pick(customTerms)
-            const right = pick(customTerms)
-            const final = pick([left, center, right])
-            return {
-              left,
-              center,
-              right,
-              final,
-              description: '사용자 지정 단어에서 뽑힌 결과입니다. 직접 만든 주제로 복습, 발표, 게임을 진행할 수 있습니다.',
-            }
-          })()
+      const terms = mode === 'built-in' ? BUILT_IN_TERMS : customTerms
+      const { result: next, resetSeen } = createUniqueResult(
+        terms,
+        seenTerms,
+        term => mode === 'built-in'
+          ? BUILT_IN_DESCRIPTIONS[term] || `${term}는 개발자가 자주 마주치는 핵심 개념입니다. 관련 예제와 실제 사용 상황을 같이 찾아보면 기억에 오래 남습니다.`
+          : '사용자 지정 단어에서 뽑힌 결과입니다. 직접 만든 주제로 복습, 발표, 게임을 진행할 수 있습니다.',
+      )
+      const nextSeenTerms = resetSeen ? [next.final] : [...seenTerms, next.final]
+      localStorage.setItem(seenKey, JSON.stringify(nextSeenTerms))
+      setSeenTerms(nextSeenTerms)
       setResult(next)
       setHistory(prev => [next.final, ...prev.filter(item => item !== next.final)].slice(0, 12))
       setTimerEndAt(Date.now() + TIMER_DURATION_MS)
@@ -204,7 +260,9 @@ function App() {
             <p className="eyebrow">Dev Term Roulette</p>
             <h1>개발 용어 룰렛</h1>
           </div>
-          <div className="term-count">{CATEGORIES.reduce((sum, item) => sum + item.terms.length, 0)}개 기본 용어</div>
+          <div className="term-count">
+            {mode === 'built-in' ? `${remainingCount}/${BUILT_IN_TERMS.length}개 남음` : `${remainingCount}/${customTerms.length}개 남음`}
+          </div>
         </div>
 
         <div className="mode-tabs" role="tablist" aria-label="게임 모드">
@@ -279,7 +337,7 @@ function App() {
                 onChange={event => setCustomText(event.target.value)}
                 placeholder="한 줄에 하나씩, 또는 쉼표로 구분해서 단어를 넣으세요."
               />
-              <p className="hint">현재 {customTerms.length}개 단어가 준비되었습니다.</p>
+              <p className="hint">현재 {customTerms.length}개 단어가 준비되었습니다. 같은 목록에서는 계정별로 중복 없이 나옵니다.</p>
             </>
           )}
         </article>
