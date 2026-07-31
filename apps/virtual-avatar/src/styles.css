@@ -1206,6 +1206,54 @@ input {
   font-weight: 700;
 }
 
+.model-url-row {
+  display: grid;
+  grid-template-columns: 1fr 58px;
+  gap: 8px;
+}
+
+.model-url-row input {
+  min-width: 0;
+  height: 36px;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 7px;
+  padding: 0 10px;
+  background: #121827;
+  color: #eef2ff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.model-url-row button,
+.model-actions button,
+.model-actions a {
+  min-height: 36px;
+  border: 0;
+  border-radius: 7px;
+  background: #2a3144;
+  color: #dbe4fb;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.model-url-row button {
+  background: #354266;
+}
+
+.model-actions {
+  display: grid;
+  grid-template-columns: 1fr 90px;
+  gap: 8px;
+}
+
+.model-actions a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .panel-card {
   display: flex;
   flex-direction: column;

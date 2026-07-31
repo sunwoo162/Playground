@@ -93,7 +93,7 @@ const BACKGROUNDS: Background[] = [
   { id: 'transparent', name: 'OBS 투명', className: 'bg-transparent' },
 ];
 
-const DEFAULT_VRM_URL = 'https://raw.githubusercontent.com/madjin/vrm-samples/master/Avatar_Orion.vrm';
+const RECOMMENDED_MODEL_PAGE = 'https://hub.vroid.com/characters/3131752290308902516/models/4850246315599773159';
 
 function App() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -113,6 +113,8 @@ function App() {
   const [expression, setExpression] = useState(EXPRESSIONS[0]);
   const [background, setBackground] = useState(BACKGROUNDS[1]);
   const [modelName, setModelName] = useState('일본 방송 스타일 기본 캐릭터');
+  const [vrmUrl, setVrmUrl] = useState('');
+  const [vrmUrlInput, setVrmUrlInput] = useState('');
   const [motion, setMotion] = useState<Motion>(EMPTY_MOTION);
   const [sensitivity, setSensitivity] = useState(1.05);
   const [smooth, setSmooth] = useState(0.66);
@@ -408,7 +410,29 @@ function App() {
 
   function uploadModel(file: File | undefined) {
     if (!file) return;
+    if (file.name.toLowerCase().endsWith('.vrm')) {
+      setVrmUrl((current) => {
+        if (current.startsWith('blob:')) URL.revokeObjectURL(current);
+        return URL.createObjectURL(file);
+      });
+    }
     setModelName(file.name);
+  }
+
+  function loadVrmUrl() {
+    const nextUrl = vrmUrlInput.trim();
+    if (!nextUrl) return;
+    setVrmUrl(nextUrl);
+    setModelName(nextUrl.split('/').pop() || '외부 VRM 모델');
+  }
+
+  function clearVrmModel() {
+    setVrmUrl((current) => {
+      if (current.startsWith('blob:')) URL.revokeObjectURL(current);
+      return '';
+    });
+    setVrmUrlInput('');
+    setModelName('일본 방송 스타일 기본 캐릭터');
   }
 
   return (
@@ -417,7 +441,9 @@ function App() {
         <div className="status-pill"><span />{status}</div>
         {showCamera && <video ref={videoRef} className="camera-preview" muted playsInline />}
         <canvas ref={canvasRef} hidden />
-        <VrmAvatar expression={expression} motion={motion} showRig={showRig} />
+        {vrmUrl
+          ? <VrmAvatar modelUrl={vrmUrl} expression={expression} motion={motion} showRig={showRig} />
+          : <BroadcastAvatar expression={expression} motion={motion} showRig={showRig} />}
       </section>
 
       <aside className="control-panel">
@@ -438,9 +464,21 @@ function App() {
         <section className="panel-card">
           <h2>2. 가상 모델</h2>
           <label className="file-button">
-            .model3.json / .vrm 업로드
+            .vrm 업로드
             <input type="file" accept=".json,.model3.json,.vrm" onChange={(event) => uploadModel(event.target.files?.[0])} />
           </label>
+          <div className="model-url-row">
+            <input
+              value={vrmUrlInput}
+              placeholder="직접 .vrm URL"
+              onChange={(event) => setVrmUrlInput(event.target.value)}
+            />
+            <button type="button" onClick={loadVrmUrl}>적용</button>
+          </div>
+          <div className="model-actions">
+            <a href={RECOMMENDED_MODEL_PAGE} target="_blank" rel="noreferrer">비슷한 트윈테일 모델</a>
+            <button type="button" onClick={clearVrmModel}>기본 이미지</button>
+          </div>
           <p className="model-name">{modelName}</p>
         </section>
 
@@ -501,7 +539,12 @@ function Slider({ label, value, min, max, step, onChange }: {
   );
 }
 
-function VrmAvatar({ expression, motion, showRig }: { expression: Expression; motion: Motion; showRig: boolean }) {
+function VrmAvatar({ modelUrl, expression, motion, showRig }: {
+  modelUrl: string;
+  expression: Expression;
+  motion: Motion;
+  showRig: boolean;
+}) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const motionRef = useRef(motion);
   const expressionRef = useRef(expression);
@@ -546,7 +589,7 @@ function VrmAvatar({ expression, motion, showRig }: { expression: Expression; mo
 
         const loader = new gltfModule.GLTFLoader();
         loader.register((parser: unknown) => new vrmModule.VRMLoaderPlugin(parser));
-        const gltf = await loader.loadAsync(DEFAULT_VRM_URL);
+        const gltf = await loader.loadAsync(modelUrl);
         if (disposed) return;
 
         const vrm = gltf.userData.vrm;
@@ -600,13 +643,13 @@ function VrmAvatar({ expression, motion, showRig }: { expression: Expression; mo
       cleanup?.();
       renderer?.dispose?.();
     };
-  }, []);
+  }, [modelUrl]);
 
   return (
     <div className="vrm-avatar-wrap">
       <canvas ref={canvasRef} className="vrm-canvas" />
       {failed && <BroadcastAvatar expression={expression} motion={motion} showRig={showRig} />}
-      {showRig && <div className="vrm-source-label">VRoid sample VRM</div>}
+      {showRig && <div className="vrm-source-label">Custom VRM</div>}
     </div>
   );
 }
