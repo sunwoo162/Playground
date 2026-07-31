@@ -1,6 +1,5 @@
 import { StrictMode, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import vtuberCharacter from './assets/vtuber-character.png';
 import './styles.css';
 
 type Expression = {
@@ -21,10 +20,31 @@ type Background = {
 type Motion = {
   headX: number;
   headY: number;
+  headRoll: number;
   body: number;
   leftArm: number;
   rightArm: number;
+  leftHandX: number;
+  rightHandX: number;
+  mouth: number;
+  blink: number;
+  breathe: number;
   energy: number;
+};
+
+const EMPTY_MOTION: Motion = {
+  headX: 0,
+  headY: 0,
+  headRoll: 0,
+  body: 0,
+  leftArm: 0,
+  rightArm: 0,
+  leftHandX: 0,
+  rightHandX: 0,
+  mouth: 0,
+  blink: 0,
+  breathe: 0,
+  energy: 0,
 };
 
 const EXPRESSIONS: Expression[] = [
@@ -52,15 +72,19 @@ function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rafRef = useRef<number | null>(null);
   const previousFrame = useRef<ImageData | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const audioDataRef = useRef<Uint8Array | null>(null);
+  const blinkRef = useRef({ next: performance.now() + 1400, until: 0 });
   const [cameraOn, setCameraOn] = useState(false);
   const [showCamera, setShowCamera] = useState(true);
   const [showRig, setShowRig] = useState(true);
   const [expression, setExpression] = useState(EXPRESSIONS[0]);
   const [background, setBackground] = useState(BACKGROUNDS[1]);
   const [modelName, setModelName] = useState('일본 방송 스타일 기본 캐릭터');
-  const [motion, setMotion] = useState<Motion>({ headX: 0, headY: 0, body: 0, leftArm: 0, rightArm: 0, energy: 0 });
-  const [sensitivity, setSensitivity] = useState(0.85);
-  const [smooth, setSmooth] = useState(0.72);
+  const [motion, setMotion] = useState<Motion>(EMPTY_MOTION);
+  const [sensitivity, setSensitivity] = useState(1.05);
+  const [smooth, setSmooth] = useState(0.66);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -85,11 +109,15 @@ function App() {
       stopCamera();
       return;
     }
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 360 }, audio: false });
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: 960, height: 540, facingMode: 'user' },
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    });
     if (videoRef.current) {
       videoRef.current.srcObject = stream;
       await videoRef.current.play();
     }
+    setupAudio(stream);
     setCameraOn(true);
     trackMotion();
   }
@@ -100,9 +128,26 @@ function App() {
     previousFrame.current = null;
     const stream = videoRef.current?.srcObject as MediaStream | null;
     stream?.getTracks().forEach((track) => track.stop());
+    audioContextRef.current?.close();
+    audioContextRef.current = null;
+    analyserRef.current = null;
+    audioDataRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
     setCameraOn(false);
-    setMotion({ headX: 0, headY: 0, body: 0, leftArm: 0, rightArm: 0, energy: 0 });
+    setMotion(EMPTY_MOTION);
+  }
+
+  function setupAudio(stream: MediaStream) {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+    const audioContext = new AudioContextClass();
+    const analyser = audioContext.createAnalyser();
+    analyser.fftSize = 512;
+    analyser.smoothingTimeConstant = 0.48;
+    audioContext.createMediaStreamSource(stream).connect(analyser);
+    audioContextRef.current = audioContext;
+    analyserRef.current = analyser;
+    audioDataRef.current = new Uint8Array(analyser.frequencyBinCount);
   }
 
   function trackMotion() {
@@ -111,8 +156,8 @@ function App() {
     const context = canvas?.getContext('2d', { willReadFrequently: true });
     if (!video || !canvas || !context) return;
 
-    const width = 96;
-    const height = 54;
+    const width = 144;
+    const height = 81;
     canvas.width = width;
     canvas.height = height;
 
@@ -124,42 +169,83 @@ function App() {
       context.drawImage(video, 0, 0, width, height);
       const frame = context.getImageData(0, 0, width, height);
       const last = previousFrame.current;
-      let left = 0;
-      let right = 0;
-      let top = 0;
-      let bottom = 0;
+      let faceLeft = 0;
+      let faceRight = 0;
+      let faceTop = 0;
+      let faceBottom = 0;
+      let torsoLeft = 0;
+      let torsoRight = 0;
+      let armLeft = 0;
+      let armRight = 0;
+      let leftHandX = 0;
+      let rightHandX = 0;
       let total = 0;
 
       if (last) {
-        for (let y = 0; y < height; y += 2) {
-          for (let x = 0; x < width; x += 2) {
+        for (let y = 0; y < height; y += 3) {
+          for (let x = 0; x < width; x += 3) {
             const index = (y * width + x) * 4;
             const diff = Math.abs(frame.data[index] - last.data[index])
               + Math.abs(frame.data[index + 1] - last.data[index + 1])
               + Math.abs(frame.data[index + 2] - last.data[index + 2]);
             const amount = diff / 765;
             total += amount;
-            if (x < width / 2) left += amount;
-            else right += amount;
-            if (y < height / 2) top += amount;
-            else bottom += amount;
+            const nx = x / width;
+            const ny = y / height;
+            if (ny < 0.52 && nx > 0.26 && nx < 0.74) {
+              if (nx < 0.5) faceLeft += amount;
+              else faceRight += amount;
+              if (ny < 0.28) faceTop += amount;
+              else faceBottom += amount;
+            } else if (ny >= 0.38 && nx > 0.3 && nx < 0.7) {
+              if (nx < 0.5) torsoLeft += amount;
+              else torsoRight += amount;
+            } else if (ny > 0.25 && nx <= 0.34) {
+              armLeft += amount;
+              leftHandX += amount * (1 - nx);
+            } else if (ny > 0.25 && nx >= 0.66) {
+              armRight += amount;
+              rightHandX += amount * nx;
+            }
           }
         }
       }
 
       previousFrame.current = frame;
-      const balanceX = clamp((right - left) * sensitivity * 1.8, -1, 1);
-      const balanceY = clamp((top - bottom) * sensitivity * 1.8, -1, 1);
-      const leftArm = clamp(left * sensitivity * 0.08, 0, 1);
-      const rightArm = clamp(right * sensitivity * 0.08, 0, 1);
-      const energy = clamp(total * sensitivity * 0.018, 0, 1);
+      const now = performance.now();
+      if (now > blinkRef.current.next) {
+        blinkRef.current.until = now + 130;
+        blinkRef.current.next = now + 1800 + Math.random() * 2600;
+      }
+      const analyser = analyserRef.current;
+      const audioData = audioDataRef.current;
+      let voice = 0;
+      if (analyser && audioData) {
+        analyser.getByteFrequencyData(audioData);
+        const speechBand = audioData.slice(2, 40).reduce((sum, value) => sum + value, 0) / 38;
+        voice = clamp((speechBand - 18) / 90, 0, 1);
+      }
+
+      const faceBalanceX = clamp((faceRight - faceLeft) * sensitivity * 2.8, -1, 1);
+      const faceBalanceY = clamp((faceTop - faceBottom) * sensitivity * 2.2, -1, 1);
+      const armLeftValue = clamp(armLeft * sensitivity * 0.1, 0, 1);
+      const armRightValue = clamp(armRight * sensitivity * 0.1, 0, 1);
+      const energy = clamp(total * sensitivity * 0.028, 0, 1);
+      const blink = now < blinkRef.current.until ? 1 : 0;
+      const breathe = (Math.sin(now / 820) + 1) / 2;
 
       setMotion((current) => ({
-        headX: mix(balanceX, current.headX, smooth),
-        headY: mix(balanceY, current.headY, smooth),
-        body: mix((right - left) * sensitivity * 0.4, current.body, smooth),
-        leftArm: mix(leftArm, current.leftArm, smooth),
-        rightArm: mix(rightArm, current.rightArm, smooth),
+        headX: mix(faceBalanceX, current.headX, smooth * 0.82),
+        headY: mix(faceBalanceY, current.headY, smooth * 0.82),
+        headRoll: mix((faceRight - faceLeft) * sensitivity * 0.62, current.headRoll, smooth * 0.78),
+        body: mix((torsoRight - torsoLeft) * sensitivity * 0.86, current.body, smooth),
+        leftArm: mix(armLeftValue, current.leftArm, smooth * 0.58),
+        rightArm: mix(armRightValue, current.rightArm, smooth * 0.58),
+        leftHandX: mix(clamp(leftHandX * sensitivity * 0.095, 0, 1), current.leftHandX, smooth * 0.48),
+        rightHandX: mix(clamp(rightHandX * sensitivity * 0.095, 0, 1), current.rightHandX, smooth * 0.48),
+        mouth: mix(Math.max(voice, energy * 0.42), current.mouth, 0.34),
+        blink: mix(blink, current.blink, 0.22),
+        breathe: mix(breathe, current.breathe, 0.86),
         energy: mix(energy, current.energy, smooth),
       }));
       rafRef.current = requestAnimationFrame(step);
@@ -264,39 +350,90 @@ function Slider({ label, value, min, max, step, onChange }: {
 }
 
 function BroadcastAvatar({ expression, motion, showRig }: { expression: Expression; motion: Motion; showRig: boolean }) {
-  const lean = motion.headX * 10;
-  const lift = -motion.energy * 16 + motion.headY * 8;
-  const scale = 1 + motion.energy * 0.025;
-  const hairShift = motion.headX * -8;
-  const handGlow = Math.max(motion.leftArm, motion.rightArm);
-  const eyeY = expression.eyes === 'happy' ? 4 : expression.eyes === 'sad' ? 8 : expression.eyes === 'sleepy' ? 7 : 0;
-  const mouthOpen = expression.mouth === 'open' || expression.mouth === 'shout' ? 1 : expression.mouth === 'smile' || expression.mouth === 'cat' ? 0.55 : 0.18;
+  const mouthBase = expression.mouth === 'open' || expression.mouth === 'shout' ? 0.55 : expression.mouth === 'smile' || expression.mouth === 'cat' ? 0.28 : 0.12;
+  const eyeOpen = expression.eyes === 'happy' || expression.eyes === 'sleepy' ? 0.28 : expression.eyes === 'wink' ? 0.56 : 1;
+  const blink = expression.eyes === 'wink' ? 0.8 : motion.blink;
 
   return (
     <div
-      className={`broadcast-avatar expression-${expression.key}`}
+      className={`rigged-avatar expression-${expression.key} eyes-${expression.eyes} mouth-${expression.mouth} brow-${expression.brow}`}
       style={{
-        '--avatar-lean': `${lean}deg`,
-        '--avatar-lift': `${lift}px`,
-        '--avatar-scale': scale,
-        '--hair-shift': `${hairShift}px`,
-        '--hand-glow': handGlow,
-        '--eye-y': `${eyeY}px`,
-        '--mouth-open': mouthOpen,
+        '--head-x': `${motion.headX * 26}px`,
+        '--head-y': `${motion.headY * 18 - motion.energy * 10}px`,
+        '--head-roll': `${motion.headRoll * 26}deg`,
+        '--body-roll': `${motion.body * 14}deg`,
+        '--left-arm': `${-20 - motion.leftArm * 118}deg`,
+        '--right-arm': `${20 + motion.rightArm * 118}deg`,
+        '--left-forearm': `${-26 - motion.leftHandX * 104}deg`,
+        '--right-forearm': `${26 + motion.rightHandX * 104}deg`,
+        '--left-hand-y': `${motion.leftArm * -82}px`,
+        '--right-hand-y': `${motion.rightArm * -82}px`,
+        '--left-hand-x': `${motion.leftHandX * -34}px`,
+        '--right-hand-x': `${motion.rightHandX * 34}px`,
+        '--mouth-open': mouthBase + motion.mouth * 0.92,
+        '--eye-open': Math.max(0.04, eyeOpen * (1 - blink)),
+        '--blink': blink,
+        '--breathe': motion.breathe,
+        '--hair-sway': `${motion.headX * -24}px`,
+        '--energy': motion.energy,
       } as React.CSSProperties}
     >
-      <div className="character-shadow" />
-      <div className="character-layer hair-echo" />
-      <img src={vtuberCharacter} alt="일본 방송 스타일 VTuber 캐릭터" className="character-img" />
-      <div className="face-rig">
-        <span className="rig-eye rig-eye-left" />
-        <span className="rig-eye rig-eye-right" />
-        <span className="rig-mouth" />
+      <div className="avatar-ground" />
+      <div className="torso-rig">
+        <div className="arm-rig left">
+          <span className="upper-arm" />
+          <span className="forearm" />
+          <span className="hand" />
+        </div>
+        <div className="arm-rig right">
+          <span className="upper-arm" />
+          <span className="forearm" />
+          <span className="hand" />
+        </div>
+        <div className="body-core">
+          <span className="jacket left" />
+          <span className="jacket right" />
+          <span className="shirt" />
+          <span className="tie" />
+          <span className="collar left" />
+          <span className="collar right" />
+        </div>
       </div>
-      <div className="hand-energy left" />
-      <div className="hand-energy right" />
+      <div className="head-rig">
+        <div className="hair-back-rig">
+          <span className="tail left" />
+          <span className="tail right" />
+        </div>
+        <div className="neck-rig" />
+        <div className="face-rigged">
+          <span className="ear left" />
+          <span className="ear right" />
+          <span className="face-base" />
+          <span className="bang bang-1" />
+          <span className="bang bang-2" />
+          <span className="bang bang-3" />
+          <span className="brow-line left" />
+          <span className="brow-line right" />
+          <span className="eye-socket left">
+            <i className="iris" />
+            <i className="lid" />
+          </span>
+          <span className="eye-socket right">
+            <i className="iris" />
+            <i className="lid" />
+          </span>
+          <span className="nose" />
+          <span className="mouth-rigged" />
+          {expression.blush && (
+            <>
+              <span className="cheek left" />
+              <span className="cheek right" />
+            </>
+          )}
+        </div>
+      </div>
       {showRig && (
-        <div className="image-rig-points">
+        <div className="image-rig-points live">
           <span className="head" />
           <span className="body" />
           <span className="hand-left" />
