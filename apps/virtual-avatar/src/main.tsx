@@ -1,5 +1,6 @@
 import { StrictMode, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import vtuberCharacter from './assets/vtuber-character.png';
 import './styles.css';
 
 type Expression = {
@@ -353,10 +354,11 @@ function BroadcastAvatar({ expression, motion, showRig }: { expression: Expressi
   const mouthBase = expression.mouth === 'open' || expression.mouth === 'shout' ? 0.55 : expression.mouth === 'smile' || expression.mouth === 'cat' ? 0.28 : 0.12;
   const eyeOpen = expression.eyes === 'happy' || expression.eyes === 'sleepy' ? 0.28 : expression.eyes === 'wink' ? 0.56 : 1;
   const blink = expression.eyes === 'wink' ? 0.8 : motion.blink;
+  const mouthOpen = mouthBase + motion.mouth * 0.92;
 
   return (
     <div
-      className={`rigged-avatar expression-${expression.key} eyes-${expression.eyes} mouth-${expression.mouth} brow-${expression.brow}`}
+      className={`hybrid-avatar expression-${expression.key} eyes-${expression.eyes} mouth-${expression.mouth} brow-${expression.brow}`}
       style={{
         '--head-x': `${motion.headX * 26}px`,
         '--head-y': `${motion.headY * 18 - motion.energy * 10}px`,
@@ -370,7 +372,7 @@ function BroadcastAvatar({ expression, motion, showRig }: { expression: Expressi
         '--right-hand-y': `${motion.rightArm * -82}px`,
         '--left-hand-x': `${motion.leftHandX * -34}px`,
         '--right-hand-x': `${motion.rightHandX * 34}px`,
-        '--mouth-open': mouthBase + motion.mouth * 0.92,
+        '--mouth-open': mouthOpen,
         '--eye-open': Math.max(0.04, eyeOpen * (1 - blink)),
         '--blink': blink,
         '--breathe': motion.breathe,
@@ -378,60 +380,25 @@ function BroadcastAvatar({ expression, motion, showRig }: { expression: Expressi
         '--energy': motion.energy,
       } as React.CSSProperties}
     >
-      <div className="avatar-ground" />
-      <div className="torso-rig">
-        <div className="arm-rig left">
-          <span className="upper-arm" />
-          <span className="forearm" />
-          <span className="hand" />
-        </div>
-        <div className="arm-rig right">
-          <span className="upper-arm" />
-          <span className="forearm" />
-          <span className="hand" />
-        </div>
-        <div className="body-core">
-          <span className="jacket left" />
-          <span className="jacket right" />
-          <span className="shirt" />
-          <span className="tie" />
-          <span className="collar left" />
-          <span className="collar right" />
-        </div>
+      <div className="character-shadow" />
+      <img src={vtuberCharacter} alt="일본 방송 스타일 VTuber 캐릭터" className="avatar-source base" />
+      <img src={vtuberCharacter} alt="" aria-hidden="true" className="avatar-source head-layer" />
+      <img src={vtuberCharacter} alt="" aria-hidden="true" className="avatar-source hair-layer" />
+      <img src={vtuberCharacter} alt="" aria-hidden="true" className="avatar-source arm-layer left" />
+      <img src={vtuberCharacter} alt="" aria-hidden="true" className="avatar-source arm-layer right" />
+      <div className="live-face-rig">
+        <span className="live-eye left"><i /></span>
+        <span className="live-eye right"><i /></span>
+        <span className="live-mouth" />
+        {expression.blush && (
+          <>
+            <span className="live-cheek left" />
+            <span className="live-cheek right" />
+          </>
+        )}
       </div>
-      <div className="head-rig">
-        <div className="hair-back-rig">
-          <span className="tail left" />
-          <span className="tail right" />
-        </div>
-        <div className="neck-rig" />
-        <div className="face-rigged">
-          <span className="ear left" />
-          <span className="ear right" />
-          <span className="face-base" />
-          <span className="bang bang-1" />
-          <span className="bang bang-2" />
-          <span className="bang bang-3" />
-          <span className="brow-line left" />
-          <span className="brow-line right" />
-          <span className="eye-socket left">
-            <i className="iris" />
-            <i className="lid" />
-          </span>
-          <span className="eye-socket right">
-            <i className="iris" />
-            <i className="lid" />
-          </span>
-          <span className="nose" />
-          <span className="mouth-rigged" />
-          {expression.blush && (
-            <>
-              <span className="cheek left" />
-              <span className="cheek right" />
-            </>
-          )}
-        </div>
-      </div>
+      <div className="hand-energy left" />
+      <div className="hand-energy right" />
       {showRig && (
         <div className="image-rig-points live">
           <span className="head" />

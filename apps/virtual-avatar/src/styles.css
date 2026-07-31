@@ -181,6 +181,202 @@ input {
   filter: drop-shadow(0 32px 38px rgba(0,0,0,.42));
 }
 
+.hybrid-avatar {
+  --head-x: 0px;
+  --head-y: 0px;
+  --head-roll: 0deg;
+  --body-roll: 0deg;
+  --left-hand-x: 0px;
+  --right-hand-x: 0px;
+  --left-hand-y: 0px;
+  --right-hand-y: 0px;
+  --mouth-open: .15;
+  --eye-open: 1;
+  --blink: 0;
+  --breathe: .5;
+  --hair-sway: 0px;
+  --energy: 0;
+  position: relative;
+  z-index: 2;
+  width: min(82vh, 760px);
+  min-width: 420px;
+  transform:
+    translateY(calc(38px - var(--energy) * 10px))
+    rotate(calc(var(--body-roll) * .28));
+  transform-origin: 51% 62%;
+  filter: drop-shadow(0 30px 38px rgba(0,0,0,.42));
+}
+
+.avatar-source {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  display: block;
+  user-select: none;
+  pointer-events: none;
+}
+
+.avatar-source.base {
+  position: relative;
+  z-index: 2;
+}
+
+.avatar-source.head-layer {
+  z-index: 5;
+  clip-path: polygon(21% 0, 82% 0, 80% 47%, 68% 56%, 31% 56%, 19% 47%);
+  transform:
+    translate(var(--head-x), var(--head-y))
+    rotate(var(--head-roll));
+  transform-origin: 52% 29%;
+  transition: transform .05s linear;
+}
+
+.avatar-source.hair-layer {
+  z-index: 6;
+  opacity: .9;
+  clip-path: polygon(0 0, 100% 0, 100% 41%, 74% 50%, 25% 50%, 0 42%);
+  transform:
+    translate(calc(var(--hair-sway) * .65), calc(var(--head-y) * .35))
+    rotate(calc(var(--head-roll) * .55));
+  transform-origin: 52% 20%;
+  transition: transform .08s linear;
+  mix-blend-mode: normal;
+}
+
+.avatar-source.arm-layer {
+  z-index: 4;
+  opacity: .95;
+  transition: transform .045s linear;
+}
+
+.avatar-source.arm-layer.left {
+  clip-path: polygon(0 26%, 30% 23%, 35% 88%, 0 100%);
+  transform:
+    translate(var(--left-hand-x), var(--left-hand-y))
+    rotate(calc(var(--left-arm) * .28));
+  transform-origin: 20% 45%;
+}
+
+.avatar-source.arm-layer.right {
+  clip-path: polygon(66% 20%, 100% 20%, 100% 76%, 72% 62%);
+  transform:
+    translate(var(--right-hand-x), var(--right-hand-y))
+    rotate(calc(var(--right-arm) * .28));
+  transform-origin: 78% 38%;
+}
+
+.live-face-rig {
+  position: absolute;
+  z-index: 8;
+  left: 44.3%;
+  top: 21.4%;
+  width: 17.4%;
+  height: 11.6%;
+  transform:
+    translate(var(--head-x), var(--head-y))
+    rotate(var(--head-roll));
+  transform-origin: 50% 52%;
+  pointer-events: none;
+  transition: transform .05s linear;
+}
+
+.live-eye {
+  position: absolute;
+  top: 24%;
+  width: 18%;
+  height: calc(22% * var(--eye-open));
+  min-height: 2px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255,255,255,.92);
+  box-shadow: inset 0 0 0 2px rgba(39, 24, 36, .55);
+  opacity: .72;
+}
+
+.live-eye.left {
+  left: 15%;
+}
+
+.live-eye.right {
+  right: 15%;
+}
+
+.live-eye i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 48%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 28%, #fff 0 12%, #f77ba9 14% 26%, #41305a 62%, #130c18 100%);
+  transform:
+    translate(-50%, -50%)
+    translate(calc(var(--head-x) * -.06), calc(var(--head-y) * -.08));
+}
+
+.eyes-happy .live-eye,
+.eyes-sleepy .live-eye {
+  height: 4px;
+  background: rgba(50, 30, 42, .5);
+  box-shadow: none;
+}
+
+.eyes-wink .live-eye.left {
+  height: 3px;
+}
+
+.eyes-angry .live-eye.left {
+  transform: rotate(-9deg);
+}
+
+.eyes-angry .live-eye.right {
+  transform: rotate(9deg);
+}
+
+.live-mouth {
+  position: absolute;
+  left: 50%;
+  top: 72%;
+  width: calc(12% + var(--mouth-open) * 12%);
+  height: calc(4px + var(--mouth-open) * 26px);
+  border-radius: 50%;
+  background: radial-gradient(ellipse at 50% 75%, #ff9ca5 0 20%, rgba(95, 25, 42, .72) 24% 100%);
+  transform: translateX(-50%);
+  opacity: .68;
+  transition: width .035s linear, height .035s linear;
+}
+
+.mouth-smile .live-mouth,
+.mouth-cat .live-mouth {
+  height: calc(4px + var(--mouth-open) * 13px);
+  border-top: 2px solid rgba(100, 35, 54, .5);
+  background: transparent;
+}
+
+.mouth-flat .live-mouth {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(96, 34, 48, .62);
+}
+
+.live-cheek {
+  position: absolute;
+  top: 58%;
+  width: 18%;
+  height: 12%;
+  border-radius: 50%;
+  background: rgba(255, 95, 135, .2);
+  filter: blur(2px);
+}
+
+.live-cheek.left {
+  left: 7%;
+}
+
+.live-cheek.right {
+  right: 7%;
+}
+
 .avatar-ground {
   position: absolute;
   left: 24%;
