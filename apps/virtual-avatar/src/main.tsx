@@ -33,6 +33,31 @@ type Motion = {
   energy: number;
 };
 
+type VisionBundle = {
+  FaceLandmarker: {
+    createFromOptions: (fileset: unknown, options: unknown) => Promise<VisionLandmarker>;
+  };
+  PoseLandmarker: {
+    createFromOptions: (fileset: unknown, options: unknown) => Promise<VisionLandmarker>;
+  };
+  FilesetResolver: {
+    forVisionTasks: (root: string) => Promise<unknown>;
+  };
+};
+
+type VisionLandmarker = {
+  detectForVideo: (video: HTMLVideoElement, timestamp: number) => {
+    faceLandmarks?: Landmark[][];
+    landmarks?: Landmark[][];
+  };
+};
+
+type Landmark = {
+  x: number;
+  y: number;
+  z?: number;
+};
+
 const EMPTY_MOTION: Motion = {
   headX: 0,
   headY: 0,
@@ -77,6 +102,9 @@ function App() {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const audioDataRef = useRef<Uint8Array | null>(null);
   const blinkRef = useRef({ next: performance.now() + 1400, until: 0 });
+  const faceLandmarkerRef = useRef<VisionLandmarker | null>(null);
+  const poseLandmarkerRef = useRef<VisionLandmarker | null>(null);
+  const visionLoadingRef = useRef(false);
   const [cameraOn, setCameraOn] = useState(false);
   const [showCamera, setShowCamera] = useState(true);
   const [showRig, setShowRig] = useState(true);
@@ -120,6 +148,7 @@ function App() {
     }
     setupAudio(stream);
     setCameraOn(true);
+    void setupVisionTracking();
     trackMotion();
   }
 
@@ -133,6 +162,8 @@ function App() {
     audioContextRef.current = null;
     analyserRef.current = null;
     audioDataRef.current = null;
+    faceLandmarkerRef.current = null;
+    poseLandmarkerRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
     setCameraOn(false);
     setMotion(EMPTY_MOTION);
@@ -151,6 +182,46 @@ function App() {
     audioDataRef.current = new Uint8Array(analyser.frequencyBinCount);
   }
 
+  async function setupVisionTracking() {
+    if (visionLoadingRef.current || faceLandmarkerRef.current || poseLandmarkerRef.current) return;
+    visionLoadingRef.current = true;
+    try {
+      const visionModuleUrl = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/vision_bundle.mjs';
+      const vision = await import(
+        /* @vite-ignore */
+        visionModuleUrl
+      ) as VisionBundle;
+      const fileset = await vision.FilesetResolver.forVisionTasks(
+        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm'
+      );
+      const [faceLandmarker, poseLandmarker] = await Promise.all([
+        vision.FaceLandmarker.createFromOptions(fileset, {
+          baseOptions: {
+            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task',
+            delegate: 'GPU',
+          },
+          runningMode: 'VIDEO',
+          numFaces: 1,
+          outputFaceBlendshapes: true,
+        }),
+        vision.PoseLandmarker.createFromOptions(fileset, {
+          baseOptions: {
+            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task',
+            delegate: 'GPU',
+          },
+          runningMode: 'VIDEO',
+          numPoses: 1,
+        }),
+      ]);
+      faceLandmarkerRef.current = faceLandmarker;
+      poseLandmarkerRef.current = poseLandmarker;
+    } catch (error) {
+      console.warn('MediaPipe tracking failed, using motion fallback.', error);
+    } finally {
+      visionLoadingRef.current = false;
+    }
+  }
+
   function trackMotion() {
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -164,6 +235,25 @@ function App() {
 
     const step = () => {
       if (!video.videoWidth) {
+        rafRef.current = requestAnimationFrame(step);
+        return;
+      }
+      const visionMotion = readVisionMotion(video);
+      if (visionMotion) {
+        setMotion((current) => ({
+          headX: mix(visionMotion.headX, current.headX, 0.62),
+          headY: mix(visionMotion.headY, current.headY, 0.62),
+          headRoll: mix(visionMotion.headRoll, current.headRoll, 0.58),
+          body: mix(visionMotion.body, current.body, 0.7),
+          leftArm: mix(visionMotion.leftArm, current.leftArm, 0.48),
+          rightArm: mix(visionMotion.rightArm, current.rightArm, 0.48),
+          leftHandX: mix(visionMotion.leftHandX, current.leftHandX, 0.44),
+          rightHandX: mix(visionMotion.rightHandX, current.rightHandX, 0.44),
+          mouth: mix(Math.max(visionMotion.mouth, readVoiceLevel()), current.mouth, 0.28),
+          blink: mix(visionMotion.blink, current.blink, 0.18),
+          breathe: mix(visionMotion.breathe, current.breathe, 0.86),
+          energy: mix(visionMotion.energy, current.energy, 0.68),
+        }));
         rafRef.current = requestAnimationFrame(step);
         return;
       }
@@ -218,14 +308,7 @@ function App() {
         blinkRef.current.until = now + 130;
         blinkRef.current.next = now + 1800 + Math.random() * 2600;
       }
-      const analyser = analyserRef.current;
-      const audioData = audioDataRef.current;
-      let voice = 0;
-      if (analyser && audioData) {
-        analyser.getByteFrequencyData(audioData);
-        const speechBand = audioData.slice(2, 40).reduce((sum, value) => sum + value, 0) / 38;
-        voice = clamp((speechBand - 18) / 90, 0, 1);
-      }
+      const voice = readVoiceLevel();
 
       const faceBalanceX = clamp((faceRight - faceLeft) * sensitivity * 2.8, -1, 1);
       const faceBalanceY = clamp((faceTop - faceBottom) * sensitivity * 2.2, -1, 1);
@@ -253,6 +336,72 @@ function App() {
     };
 
     rafRef.current = requestAnimationFrame(step);
+  }
+
+  function readVisionMotion(video: HTMLVideoElement): Motion | null {
+    const faceLandmarker = faceLandmarkerRef.current;
+    const poseLandmarker = poseLandmarkerRef.current;
+    if (!faceLandmarker || !poseLandmarker) return null;
+
+    const now = performance.now();
+    const face = faceLandmarker.detectForVideo(video, now).faceLandmarks?.[0];
+    const pose = poseLandmarker.detectForVideo(video, now).landmarks?.[0];
+    if (!face && !pose) return null;
+
+    const nose = face?.[1];
+    const chin = face?.[152];
+    const forehead = face?.[10];
+    const leftEyeTop = face?.[159];
+    const leftEyeBottom = face?.[145];
+    const rightEyeTop = face?.[386];
+    const rightEyeBottom = face?.[374];
+    const mouthTop = face?.[13];
+    const mouthBottom = face?.[14];
+    const mouthLeft = face?.[61];
+    const mouthRight = face?.[291];
+
+    const leftShoulder = pose?.[11];
+    const rightShoulder = pose?.[12];
+    const leftElbow = pose?.[13];
+    const rightElbow = pose?.[14];
+    const leftWrist = pose?.[15];
+    const rightWrist = pose?.[16];
+
+    const eyeGap = averageDistance(leftEyeTop, leftEyeBottom, rightEyeTop, rightEyeBottom);
+    const mouthHeight = distance(mouthTop, mouthBottom);
+    const mouthWidth = distance(mouthLeft, mouthRight);
+    const shoulderTilt = leftShoulder && rightShoulder ? rightShoulder.y - leftShoulder.y : 0;
+    const faceHeight = distance(forehead, chin) || 0.28;
+
+    const leftArmRaise = leftShoulder && leftWrist ? clamp((leftShoulder.y - leftWrist.y + 0.18) * 2.4, 0, 1) : 0;
+    const rightArmRaise = rightShoulder && rightWrist ? clamp((rightShoulder.y - rightWrist.y + 0.18) * 2.4, 0, 1) : 0;
+    const leftHandSide = leftShoulder && leftWrist ? clamp((leftShoulder.x - leftWrist.x + 0.28) * 1.8, 0, 1) : 0;
+    const rightHandSide = rightShoulder && rightWrist ? clamp((rightWrist.x - rightShoulder.x + 0.28) * 1.8, 0, 1) : 0;
+    const elbowEnergy = (distance(leftElbow, leftWrist) + distance(rightElbow, rightWrist)) * 0.7;
+
+    return {
+      headX: nose ? clamp((0.5 - nose.x) * 3.1, -1, 1) : 0,
+      headY: nose ? clamp((0.42 - nose.y) * 2.7, -1, 1) : 0,
+      headRoll: clamp(shoulderTilt * 3.8, -1, 1),
+      body: clamp(shoulderTilt * 2.6, -1, 1),
+      leftArm: leftArmRaise,
+      rightArm: rightArmRaise,
+      leftHandX: leftHandSide,
+      rightHandX: rightHandSide,
+      mouth: clamp((mouthHeight / Math.max(mouthWidth, 0.01)) * 2.2, 0, 1),
+      blink: clamp(1 - (eyeGap / faceHeight) * 18, 0, 1),
+      breathe: (Math.sin(now / 820) + 1) / 2,
+      energy: clamp(Math.max(leftArmRaise, rightArmRaise, elbowEnergy), 0, 1),
+    };
+  }
+
+  function readVoiceLevel() {
+    const analyser = analyserRef.current;
+    const audioData = audioDataRef.current;
+    if (!analyser || !audioData) return 0;
+    analyser.getByteFrequencyData(audioData);
+    const speechBand = audioData.slice(2, 40).reduce((sum, value) => sum + value, 0) / 38;
+    return clamp((speechBand - 18) / 90, 0, 1);
   }
 
   function uploadModel(file: File | undefined) {
@@ -491,6 +640,25 @@ function clamp(value: number, min: number, max: number) {
 
 function mix(next: number, current: number, smooth: number) {
   return current * smooth + next * (1 - smooth);
+}
+
+function distance(a: Landmark | undefined, b: Landmark | undefined) {
+  if (!a || !b) return 0;
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function averageDistance(
+  firstA: Landmark | undefined,
+  firstB: Landmark | undefined,
+  secondA: Landmark | undefined,
+  secondB: Landmark | undefined,
+) {
+  const first = distance(firstA, firstB);
+  const second = distance(secondA, secondB);
+  if (!first && !second) return 0;
+  if (!first) return second;
+  if (!second) return first;
+  return (first + second) / 2;
 }
 
 createRoot(document.getElementById('root')!).render(
