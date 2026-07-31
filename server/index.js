@@ -1088,6 +1088,12 @@ app.get('/apps/dev-action-hub/*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'apps', 'dev-action-hub', 'dist', 'index.html'));
 });
 
+// Dev Term Roulette 앱
+app.use('/apps/dev-term-roulette', express.static(path.join(__dirname, '..', 'apps', 'dev-term-roulette', 'dist')));
+app.get('/apps/dev-term-roulette/*', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'apps', 'dev-term-roulette', 'dist', 'index.html'));
+});
+
 // Study Planner 앱
 app.use('/apps/study-planner', express.static(path.join(__dirname, '..', 'apps', 'study-planner', 'dist')));
 app.get('/apps/study-planner/*', (req, res) => {

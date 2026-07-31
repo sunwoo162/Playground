@@ -101,6 +101,15 @@ export const APPS: AppItem[] = [
     category: 'dev',
   },
   {
+    id: 'dev-term-roulette',
+    title: '개발 용어 룰렛',
+    description: '수백 개 개발 용어를 카드 룰렛 머신처럼 돌리며 복습합니다.',
+    emoji: '🎰',
+    url: '/apps/dev-term-roulette/',
+    color: '#34d399',
+    category: 'dev',
+  },
+  {
     id: 'action-notifier',
     title: 'Action 알리미',
     description: 'GitHub Actions 완료 알림을 푸시로 받아봅니다.',
