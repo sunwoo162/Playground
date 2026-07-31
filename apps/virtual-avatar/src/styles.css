@@ -132,6 +132,35 @@ input {
   filter: drop-shadow(0 26px 32px rgba(0,0,0,.34));
 }
 
+.vrm-avatar-wrap {
+  position: relative;
+  z-index: 2;
+  width: min(88vh, 820px);
+  min-width: 420px;
+  height: min(96vh, 880px);
+  transform: translateY(18px);
+  filter: drop-shadow(0 32px 42px rgba(0,0,0,.42));
+}
+
+.vrm-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.vrm-source-label {
+  position: absolute;
+  right: 16px;
+  bottom: 18px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: rgba(7, 10, 18, .58);
+  color: rgba(238, 242, 255, .82);
+  font-size: 11px;
+  font-weight: 800;
+  backdrop-filter: blur(10px);
+}
+
 .broadcast-avatar {
   --avatar-lean: 0deg;
   --avatar-lift: 0px;

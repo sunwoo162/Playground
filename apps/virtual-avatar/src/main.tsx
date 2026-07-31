@@ -93,6 +93,8 @@ const BACKGROUNDS: Background[] = [
   { id: 'transparent', name: 'OBS 투명', className: 'bg-transparent' },
 ];
 
+const DEFAULT_VRM_URL = 'https://raw.githubusercontent.com/madjin/vrm-samples/master/Avatar_Orion.vrm';
+
 function App() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -415,7 +417,7 @@ function App() {
         <div className="status-pill"><span />{status}</div>
         {showCamera && <video ref={videoRef} className="camera-preview" muted playsInline />}
         <canvas ref={canvasRef} hidden />
-        <BroadcastAvatar expression={expression} motion={motion} showRig={showRig} />
+        <VrmAvatar expression={expression} motion={motion} showRig={showRig} />
       </section>
 
       <aside className="control-panel">
@@ -497,6 +499,152 @@ function Slider({ label, value, min, max, step, onChange }: {
       <input type="range" value={value} min={min} max={max} step={step} onChange={(event) => onChange(Number(event.target.value))} />
     </label>
   );
+}
+
+function VrmAvatar({ expression, motion, showRig }: { expression: Expression; motion: Motion; showRig: boolean }) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const motionRef = useRef(motion);
+  const expressionRef = useRef(expression);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    motionRef.current = motion;
+  }, [motion]);
+
+  useEffect(() => {
+    expressionRef.current = expression;
+  }, [expression]);
+
+  useEffect(() => {
+    let disposed = false;
+    let animationFrame = 0;
+    let renderer: any;
+
+    async function boot() {
+      try {
+        const threeUrl = 'https://esm.sh/three@0.180.0';
+        const gltfLoaderUrl = 'https://esm.sh/three@0.180.0/examples/jsm/loaders/GLTFLoader.js';
+        const threeVrmUrl = 'https://esm.sh/@pixiv/three-vrm@3.5.3?deps=three@0.180.0';
+        const [THREE, gltfModule, vrmModule] = await Promise.all([
+          import(/* @vite-ignore */ threeUrl),
+          import(/* @vite-ignore */ gltfLoaderUrl),
+          import(/* @vite-ignore */ threeVrmUrl),
+        ]);
+        if (disposed || !canvasRef.current) return;
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(28, 1, 0.1, 20);
+        camera.position.set(0, 1.34, 2.75);
+        renderer = new THREE.WebGLRenderer({ canvas: canvasRef.current, alpha: true, antialias: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+        const keyLight = new THREE.DirectionalLight(0xffffff, 2.2);
+        keyLight.position.set(1.4, 2.5, 2.8);
+        scene.add(keyLight);
+        scene.add(new THREE.AmbientLight(0xffffff, 1.9));
+
+        const loader = new gltfModule.GLTFLoader();
+        loader.register((parser: unknown) => new vrmModule.VRMLoaderPlugin(parser));
+        const gltf = await loader.loadAsync(DEFAULT_VRM_URL);
+        if (disposed) return;
+
+        const vrm = gltf.userData.vrm;
+        vrmModule.VRMUtils?.removeUnnecessaryVertices?.(vrm.scene);
+        vrmModule.VRMUtils?.removeUnnecessaryJoints?.(vrm.scene);
+        vrm.scene.rotation.y = Math.PI;
+        vrm.scene.position.set(0, -0.95, 0);
+        scene.add(vrm.scene);
+
+        const clock = new THREE.Clock();
+        const resize = () => {
+          if (!canvasRef.current || !renderer) return;
+          const rect = canvasRef.current.getBoundingClientRect();
+          renderer.setSize(rect.width, rect.height, false);
+          camera.aspect = rect.width / Math.max(rect.height, 1);
+          camera.updateProjectionMatrix();
+        };
+        resize();
+        window.addEventListener('resize', resize);
+
+        const animate = () => {
+          if (disposed) return;
+          const delta = clock.getDelta();
+          const currentMotion = motionRef.current;
+          const currentExpression = expressionRef.current;
+          applyVrmMotion(vrm, currentMotion, currentExpression);
+          vrm.update?.(delta);
+          renderer.render(scene, camera);
+          animationFrame = requestAnimationFrame(animate);
+        };
+        animate();
+
+        return () => {
+          window.removeEventListener('resize', resize);
+        };
+      } catch (error) {
+        console.error('Failed to load VRM avatar.', error);
+        setFailed(true);
+      }
+    }
+
+    let cleanup: (() => void) | undefined;
+    void boot().then((nextCleanup) => {
+      cleanup = nextCleanup;
+    });
+
+    return () => {
+      disposed = true;
+      cancelAnimationFrame(animationFrame);
+      cleanup?.();
+      renderer?.dispose?.();
+    };
+  }, []);
+
+  return (
+    <div className="vrm-avatar-wrap">
+      <canvas ref={canvasRef} className="vrm-canvas" />
+      {failed && <BroadcastAvatar expression={expression} motion={motion} showRig={showRig} />}
+      {showRig && <div className="vrm-source-label">VRoid sample VRM</div>}
+    </div>
+  );
+}
+
+function applyVrmMotion(vrm: any, motion: Motion, expression: Expression) {
+  const humanoid = vrm.humanoid;
+  rotateBone(humanoid, 'head', motion.headY * -0.42, motion.headX * 0.52, motion.headRoll * -0.38);
+  rotateBone(humanoid, 'neck', motion.headY * -0.18, motion.headX * 0.22, motion.headRoll * -0.16);
+  rotateBone(humanoid, 'spine', motion.breathe * 0.018, motion.body * 0.1, motion.body * -0.12);
+  rotateBone(humanoid, 'chest', motion.breathe * 0.024, motion.body * 0.16, motion.body * -0.18);
+  rotateBone(humanoid, 'leftUpperArm', -0.25 - motion.leftArm * 1.18, 0.18 + motion.leftHandX * 0.52, 0.38);
+  rotateBone(humanoid, 'leftLowerArm', -0.25 - motion.leftHandX * 1.26, 0.1, 0.16);
+  rotateBone(humanoid, 'rightUpperArm', -0.25 - motion.rightArm * 1.18, -0.18 - motion.rightHandX * 0.52, -0.38);
+  rotateBone(humanoid, 'rightLowerArm', -0.25 - motion.rightHandX * 1.26, -0.1, -0.16);
+
+  const expressions = vrm.expressionManager;
+  if (!expressions) return;
+  setExpressionValue(expressions, 'aa', Math.max(motion.mouth, expression.mouth === 'open' || expression.mouth === 'shout' ? 0.65 : 0));
+  setExpressionValue(expressions, 'blink', motion.blink);
+  setExpressionValue(expressions, 'happy', expression.eyes === 'happy' || expression.mouth === 'smile' ? 0.8 : 0);
+  setExpressionValue(expressions, 'angry', expression.eyes === 'angry' ? 0.85 : 0);
+  setExpressionValue(expressions, 'sad', expression.eyes === 'sad' ? 0.8 : 0);
+  setExpressionValue(expressions, 'surprised', expression.eyes === 'sparkle' ? 0.75 : 0);
+}
+
+function rotateBone(humanoid: any, boneName: string, x: number, y: number, z: number) {
+  const bone = humanoid?.getNormalizedBoneNode?.(boneName);
+  if (!bone) return;
+  bone.rotation.x = mix(x, bone.rotation.x, 0.58);
+  bone.rotation.y = mix(y, bone.rotation.y, 0.58);
+  bone.rotation.z = mix(z, bone.rotation.z, 0.58);
+}
+
+function setExpressionValue(manager: any, name: string, value: number) {
+  try {
+    manager.setValue(name, clamp(value, 0, 1));
+  } catch {
+    // Some VRM files do not include every preset expression.
+  }
 }
 
 function BroadcastAvatar({ expression, motion, showRig }: { expression: Expression; motion: Motion; showRig: boolean }) {
