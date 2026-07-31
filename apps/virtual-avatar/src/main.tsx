@@ -1,5 +1,6 @@
 import { StrictMode, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import vtuberCharacter from './assets/vtuber-character.png';
 import './styles.css';
 
 type Expression = {
@@ -56,7 +57,7 @@ function App() {
   const [showRig, setShowRig] = useState(true);
   const [expression, setExpression] = useState(EXPRESSIONS[0]);
   const [background, setBackground] = useState(BACKGROUNDS[1]);
-  const [modelName, setModelName] = useState('기본 아바타');
+  const [modelName, setModelName] = useState('일본 방송 스타일 기본 캐릭터');
   const [motion, setMotion] = useState<Motion>({ headX: 0, headY: 0, body: 0, leftArm: 0, rightArm: 0, energy: 0 });
   const [sensitivity, setSensitivity] = useState(0.85);
   const [smooth, setSmooth] = useState(0.72);
@@ -178,7 +179,7 @@ function App() {
         <div className="status-pill"><span />{status}</div>
         {showCamera && <video ref={videoRef} className="camera-preview" muted playsInline />}
         <canvas ref={canvasRef} hidden />
-        <Avatar expression={expression} motion={motion} showRig={showRig} />
+        <BroadcastAvatar expression={expression} motion={motion} showRig={showRig} />
       </section>
 
       <aside className="control-panel">
@@ -259,6 +260,50 @@ function Slider({ label, value, min, max, step, onChange }: {
       <span>{label}<strong>{value.toFixed(2)}</strong></span>
       <input type="range" value={value} min={min} max={max} step={step} onChange={(event) => onChange(Number(event.target.value))} />
     </label>
+  );
+}
+
+function BroadcastAvatar({ expression, motion, showRig }: { expression: Expression; motion: Motion; showRig: boolean }) {
+  const lean = motion.headX * 10;
+  const lift = -motion.energy * 16 + motion.headY * 8;
+  const scale = 1 + motion.energy * 0.025;
+  const hairShift = motion.headX * -8;
+  const handGlow = Math.max(motion.leftArm, motion.rightArm);
+  const eyeY = expression.eyes === 'happy' ? 4 : expression.eyes === 'sad' ? 8 : expression.eyes === 'sleepy' ? 7 : 0;
+  const mouthOpen = expression.mouth === 'open' || expression.mouth === 'shout' ? 1 : expression.mouth === 'smile' || expression.mouth === 'cat' ? 0.55 : 0.18;
+
+  return (
+    <div
+      className={`broadcast-avatar expression-${expression.key}`}
+      style={{
+        '--avatar-lean': `${lean}deg`,
+        '--avatar-lift': `${lift}px`,
+        '--avatar-scale': scale,
+        '--hair-shift': `${hairShift}px`,
+        '--hand-glow': handGlow,
+        '--eye-y': `${eyeY}px`,
+        '--mouth-open': mouthOpen,
+      } as React.CSSProperties}
+    >
+      <div className="character-shadow" />
+      <div className="character-layer hair-echo" />
+      <img src={vtuberCharacter} alt="일본 방송 스타일 VTuber 캐릭터" className="character-img" />
+      <div className="face-rig">
+        <span className="rig-eye rig-eye-left" />
+        <span className="rig-eye rig-eye-right" />
+        <span className="rig-mouth" />
+      </div>
+      <div className="hand-energy left" />
+      <div className="hand-energy right" />
+      {showRig && (
+        <div className="image-rig-points">
+          <span className="head" />
+          <span className="body" />
+          <span className="hand-left" />
+          <span className="hand-right" />
+        </div>
+      )}
+    </div>
   );
 }
 
