@@ -45,7 +45,7 @@ jobs:
       - name: Clean npm cache and rebuild all apps
         run: |
           npm cache clean --force
-          for app in apps/life-tracker apps/dev-notes apps/dev-action-hub apps/study-planner apps/focus-room apps/virtual-study-room apps/virtual-avatar apps/todo apps/day-schedule apps/cornell-notes apps/coding-log apps/school-meal apps/mock-invest apps/action-notifier apps/code-run-visualizer; do
+          for app in apps/life-tracker apps/dev-notes apps/dev-action-hub apps/study-planner apps/focus-room apps/virtual-study-room apps/virtual-avatar apps/voice-studio apps/todo apps/day-schedule apps/cornell-notes apps/coding-log apps/school-meal apps/mock-invest apps/action-notifier apps/code-run-visualizer; do
             echo "Cleaning $app..."
             cd $app
             rm -rf node_modules package-lock.json
@@ -58,9 +58,11 @@ jobs:
           npm run build:all
           npm run build --prefix apps/virtual-study-room
           npm run build --prefix apps/virtual-avatar
+          npm run build --prefix apps/voice-studio
           npm run build --prefix apps/code-run-visualizer
           test -f apps/virtual-study-room/dist/index.html
           test -f apps/virtual-avatar/dist/index.html
+          test -f apps/voice-studio/dist/index.html
           test -f apps/code-run-visualizer/dist/index.html
 
       - name: Build Spring Boot JAR
@@ -107,9 +109,11 @@ jobs:
             npm run build:all
             npm run build --prefix apps/virtual-study-room
             npm run build --prefix apps/virtual-avatar
+            npm run build --prefix apps/voice-studio
             npm run build --prefix apps/code-run-visualizer
             test -f apps/virtual-study-room/dist/index.html
             test -f apps/virtual-avatar/dist/index.html
+            test -f apps/voice-studio/dist/index.html
             test -f apps/code-run-visualizer/dist/index.html
 
             # playground (Node.js) 재시작 - ecosystem으로 환경변수 포함
