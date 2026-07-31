@@ -23,6 +23,10 @@ type NoteInfo = {
 
 const PRESETS: VoicePreset[] = [
   { id: 'clean', name: '클린', tone: '원본에 가까운 방송 목소리', pitch: 1, rate: 1, filter: 'highpass', frequency: 90, distortion: 0, delay: 0, tremolo: 0 },
+  { id: 'streamer-warm', name: '방송인 웜톤', tone: '변조 티가 적은 따뜻한 진행자 톤', pitch: 0.97, rate: 0.98, filter: 'lowshelf', frequency: 180, distortion: 1, delay: 0.008, tremolo: 0 },
+  { id: 'streamer-clear', name: '방송인 선명톤', tone: '말이 또렷하게 들리는 자연스러운 톤', pitch: 1.02, rate: 1.02, filter: 'highshelf', frequency: 2800, distortion: 0.5, delay: 0.006, tremolo: 0 },
+  { id: 'streamer-soft', name: '편안한 라디오', tone: '오래 들어도 피곤하지 않은 부드러운 톤', pitch: 0.94, rate: 0.96, filter: 'lowpass', frequency: 3400, distortion: 0.8, delay: 0.035, tremolo: 0 },
+  { id: 'streamer-bright', name: '상큼한 진행자', tone: '밝지만 과하지 않은 라이브 진행 톤', pitch: 1.08, rate: 1.04, filter: 'highshelf', frequency: 3600, distortion: 0.6, delay: 0.004, tremolo: 0.02 },
   { id: 'deep', name: '저음 아나운서', tone: '낮고 단단한 톤', pitch: 0.68, rate: 0.92, filter: 'lowshelf', frequency: 260, distortion: 6, delay: 0.02, tremolo: 0 },
   { id: 'bright', name: '밝은 아이돌', tone: '가볍고 선명한 톤', pitch: 1.34, rate: 1.08, filter: 'highshelf', frequency: 2400, distortion: 2, delay: 0.01, tremolo: 0.08 },
   { id: 'robot', name: '로봇', tone: '금속성 기계음', pitch: 0.9, rate: 0.95, filter: 'bandpass', frequency: 860, distortion: 36, delay: 0.035, tremolo: 0.78 },
