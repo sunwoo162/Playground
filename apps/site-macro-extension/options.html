@@ -30,6 +30,30 @@
         <span>최소 간격 3초, 작업당 액션 최대 20개, 비밀번호/로그인 폼 자동 입력 차단, 사이트 권한 허용 필요.</span>
       </section>
 
+      <section class="connection-panel" aria-labelledby="velogConnectionTitle">
+        <div>
+          <p class="eyebrow">Velog Connection</p>
+          <h2 id="velogConnectionTitle">Velog 연결</h2>
+          <p>열려 있는 velog.io 로그인 탭에서 access token 후보를 읽어 저장합니다.</p>
+        </div>
+        <div class="connection-actions">
+          <button id="openVelog" type="button">Velog 열기</button>
+          <button id="connectVelog" type="button" class="primary">Velog 연결</button>
+        </div>
+        <div id="velogStatus" class="connection-status">연결 안됨</div>
+      </section>
+
+      <section class="error-help" aria-labelledby="errorHelpTitle">
+        <div class="error-help-head">
+          <div>
+            <p class="eyebrow">Error Guide</p>
+            <h2 id="errorHelpTitle">에러 해결방법</h2>
+          </div>
+          <span id="latestErrorSummary" class="latest-error">최근 에러 없음</span>
+        </div>
+        <div id="errorHelpList" class="error-help-list"></div>
+      </section>
+
       <section id="jobEditorList" class="job-editor-list"></section>
     </main>
 

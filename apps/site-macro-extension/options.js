@@ -1,11 +1,15 @@
 const STORAGE_KEY = 'siteMacroJobs';
 const LOG_KEY = 'siteMacroLogs';
 const THEME_KEY = 'siteMacroTheme';
+const VELOG_CONNECTION_KEY = 'siteMacroVelogConnection';
 const MIN_INTERVAL_SECONDS = 2;
 const DEFAULT_APP_BASE_URL = 'https://playground.https.gsmsv.site';
+const VELOG_WRITE_URL = 'https://velog.io/write';
 const TRACKER_URL = 'http://localhost:7421';
 const TRACKER_TIMEOUT_MS = 3000;
 const TERMINAL_JOB_ID = 'terminal-automation-enter-3s';
+const CHATGPT_JOB_ID = 'chatgpt-enter-mock';
+const CHATGPT_MOCK_TEXT = '매크로 실행 테스트용 mock 데이터입니다. Enter 전송까지 정상 동작하는지 확인합니다.';
 const HOTKEY_API = 'http://127.0.0.1:18765';
 const AREA_SELECTORS = {
   main: 'main',
@@ -23,11 +27,17 @@ const appPickerModal = document.querySelector('#appPickerModal');
 const closeAppPickerButton = document.querySelector('#closeAppPicker');
 const webPickerGrid = document.querySelector('#webPickerGrid');
 const nativePickerGrid = document.querySelector('#nativePickerGrid');
+const latestErrorSummary = document.querySelector('#latestErrorSummary');
+const errorHelpList = document.querySelector('#errorHelpList');
+const openVelogButton = document.querySelector('#openVelog');
+const connectVelogButton = document.querySelector('#connectVelog');
+const velogStatus = document.querySelector('#velogStatus');
 let nativeWindows = [];
 let activePickerJobId = '';
 
 initTheme();
 seedMockJobs();
+renderVelogStatus();
 
 addJobButton.addEventListener('click', async () => {
   const jobs = await getJobs();
@@ -35,6 +45,9 @@ addJobButton.addEventListener('click', async () => {
   await setJobs(jobs);
   render();
 });
+
+openVelogButton?.addEventListener('click', openVelogEditor);
+connectVelogButton?.addEventListener('click', connectVelog);
 
 async function initTheme() {
   const result = await chrome.storage.local.get(THEME_KEY);
@@ -61,7 +74,8 @@ async function seedMockJobs() {
   let jobs = await getJobs();
   const originalLength = jobs.length;
   jobs = jobs.filter((job) => job.id !== 'mock-vscode-enter-3s');
-  const sample = createJob({
+  const samples = [
+  createJob({
     id: 'terminal-automation-enter-3s',
     name: '터미널 자동화',
     enabled: false,
@@ -73,23 +87,48 @@ async function seedMockJobs() {
     actions: [
       { type: 'key', selector: '', value: 'Enter', ms: 1000, x: 0, y: 0, once: false },
     ],
-  });
+  }),
+  createJob({
+    id: CHATGPT_JOB_ID,
+    name: 'ChatGPT Enter 테스트',
+    enabled: false,
+    targetKind: 'web',
+    appBaseUrl: 'https://chatgpt.com',
+    targetApp: '',
+    customAppPath: '',
+    urlPattern: 'https://chatgpt.com/*',
+    startUrl: 'https://chatgpt.com/',
+    openIfMissing: false,
+    backgroundTab: false,
+    scheduleType: 'interval',
+    intervalSeconds: 2,
+    actions: [
+      { type: 'type', selector: '#prompt-textarea, [contenteditable="true"], textarea', value: CHATGPT_MOCK_TEXT, ms: 1000, x: 0, y: 0, once: false },
+      { type: 'wait', selector: '', value: '', ms: 300, x: 0, y: 0, once: false },
+      { type: 'key', selector: '#prompt-textarea, [contenteditable="true"], textarea', value: 'Enter', ms: 1000, x: 0, y: 0, once: false },
+    ],
+  }),
+  ];
   let changed = jobs.length !== originalLength;
-  const existingIndex = jobs.findIndex((job) => job.id === sample.id);
-  if (existingIndex >= 0) {
-    const existing = jobs[existingIndex];
-    const next = {
-      ...sample,
-      enabled: Boolean(existing.enabled),
-      nativeWindowTitle: existing.nativeWindowTitle || '',
-      intervalSeconds: 2,
-      actions: sample.actions,
-    };
-    changed = JSON.stringify(jobs[existingIndex]) !== JSON.stringify(next);
-    jobs[existingIndex] = next;
-  } else {
-    jobs.unshift(sample);
-    changed = true;
+  for (const sample of samples) {
+    const existingIndex = jobs.findIndex((job) => job.id === sample.id);
+    if (existingIndex >= 0) {
+      const existing = jobs[existingIndex];
+      const next = {
+        ...sample,
+        enabled: Boolean(existing.enabled),
+        nativeWindowTitle: existing.nativeWindowTitle || '',
+        selectedTabId: existing.selectedTabId || null,
+        actions: sample.actions,
+      };
+      changed = changed || JSON.stringify(jobs[existingIndex]) !== JSON.stringify(next);
+      jobs[existingIndex] = next;
+    } else {
+      const terminalIndex = jobs.findIndex((job) => job.id === TERMINAL_JOB_ID);
+      const insertIndex = sample.id === CHATGPT_JOB_ID && terminalIndex >= 0 ? terminalIndex + 1 : 0;
+      jobs.splice(insertIndex, 0, sample);
+      changed = true;
+    }
   }
   if (changed) await setJobs(jobs);
   render();
@@ -155,7 +194,10 @@ document.querySelectorAll('[data-picker-tab]').forEach((button) => {
 });
 
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && changes[LOG_KEY]) updateStatusBadges();
+  if (area === 'local' && changes[LOG_KEY]) {
+    updateStatusBadges();
+    renderErrorHelp();
+  }
   if (area === 'sync' && changes[STORAGE_KEY]) render();
 });
 
@@ -211,6 +253,134 @@ async function requestPermission(job) {
   alert(granted ? '사이트 권한을 허용했습니다.' : '사이트 권한이 거부되었습니다.');
 }
 
+async function requestVelogPermission() {
+  const granted = await chrome.permissions.request({ origins: ['https://velog.io/*'] });
+  if (!granted) throw new Error('velog.io 사이트 권한이 거부되었습니다.');
+}
+
+async function openVelogEditor() {
+  await requestVelogPermission();
+  await chrome.tabs.create({ url: VELOG_WRITE_URL, active: true });
+}
+
+async function connectVelog() {
+  setVelogStatus('Velog 탭을 확인하는 중...', 'running');
+  try {
+    await requestVelogPermission();
+    const tab = await getVelogTab();
+    if (!tab?.id) {
+      await chrome.tabs.create({ url: VELOG_WRITE_URL, active: true });
+      throw new Error('Velog 탭을 열었습니다. 로그인한 뒤 다시 Velog 연결을 누르세요.');
+    }
+    await chrome.tabs.update(tab.id, { active: true });
+    await waitForTabReady(tab.id);
+    const [{ result }] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: readVelogConnectionFromPage,
+      world: 'MAIN',
+    });
+    if (!result?.ok) throw new Error(result?.message || 'Velog 토큰을 찾지 못했습니다.');
+    const connection = {
+      connectedAt: new Date().toISOString(),
+      origin: 'https://velog.io',
+      tokenKey: result.tokenKey,
+      accessToken: result.accessToken,
+      username: result.username || '',
+    };
+    await chrome.storage.local.set({ [VELOG_CONNECTION_KEY]: connection });
+    setVelogStatus(formatVelogConnection(connection), 'success');
+    alert('Velog 연결을 저장했습니다.');
+  } catch (error) {
+    const message = error.message || String(error);
+    setVelogStatus(message, 'failed');
+    alert(message);
+  }
+}
+
+async function getVelogTab() {
+  const tabs = await chrome.tabs.query({});
+  return tabs.find((tab) => /^https:\/\/velog\.io\//.test(tab.url || '')) || null;
+}
+
+async function renderVelogStatus() {
+  const result = await chrome.storage.local.get(VELOG_CONNECTION_KEY);
+  const connection = result[VELOG_CONNECTION_KEY];
+  if (!connection?.accessToken) {
+    setVelogStatus('연결 안됨', 'idle');
+    return;
+  }
+  setVelogStatus(formatVelogConnection(connection), 'success');
+}
+
+function setVelogStatus(message, status = 'idle') {
+  if (!velogStatus) return;
+  velogStatus.className = `connection-status ${status}`;
+  velogStatus.textContent = message;
+  velogStatus.title = message;
+}
+
+function formatVelogConnection(connection) {
+  const date = connection.connectedAt ? new Date(connection.connectedAt).toLocaleString('ko-KR') : '시간 알 수 없음';
+  const user = connection.username ? `${connection.username} · ` : '';
+  return `${user}${connection.tokenKey || 'access token'} 저장됨 · ${date}`;
+}
+
+function readVelogConnectionFromPage() {
+  const tokenNames = [
+    'access_token',
+    'accessToken',
+    'ACCESS_TOKEN',
+    'velog_access_token',
+    'v2_access_token',
+    'token',
+  ];
+  const candidates = [];
+  const collectStorage = (storage, source) => {
+    for (let index = 0; index < storage.length; index += 1) {
+      const key = storage.key(index);
+      const value = key ? storage.getItem(key) : '';
+      if (!key || !value) continue;
+      const lower = key.toLowerCase();
+      if (tokenNames.some((name) => lower.includes(name.toLowerCase())) || /access.*token|token.*access/.test(lower)) {
+        candidates.push({ key: `${source}:${key}`, value });
+      }
+      try {
+        const parsed = JSON.parse(value);
+        for (const name of tokenNames) {
+          if (typeof parsed?.[name] === 'string') candidates.push({ key: `${source}:${key}.${name}`, value: parsed[name] });
+        }
+      } catch {}
+    }
+  };
+  collectStorage(window.localStorage, 'localStorage');
+  collectStorage(window.sessionStorage, 'sessionStorage');
+  for (const cookie of document.cookie.split(';')) {
+    const [rawKey, ...rawValue] = cookie.trim().split('=');
+    const value = rawValue.join('=');
+    if (!rawKey || !value) continue;
+    const lower = rawKey.toLowerCase();
+    if (tokenNames.some((name) => lower.includes(name.toLowerCase())) || /access.*token|token.*access/.test(lower)) {
+      candidates.push({ key: `cookie:${rawKey}`, value: decodeURIComponent(value) });
+    }
+  }
+  const token = candidates.find((item) => typeof item.value === 'string' && item.value.length >= 20);
+  const username = window.__APOLLO_STATE__
+    ? Object.values(window.__APOLLO_STATE__).find((item) => item?.username)?.username
+    : '';
+  if (!token) {
+    return {
+      ok: false,
+      message: 'Velog access token 후보를 찾지 못했습니다. velog.io에 로그인되어 있는지 확인하세요. HttpOnly 쿠키 방식이면 브라우저 보안상 직접 읽을 수 없습니다.',
+    };
+  }
+  return {
+    ok: true,
+    tokenKey: token.key,
+    accessToken: token.value,
+    username: typeof username === 'string' ? username : '',
+  };
+}
+
 async function runJobNow(jobId) {
   if (jobId === TERMINAL_JOB_ID) {
     await toggleGlobalTerminalAutomation();
@@ -222,12 +392,23 @@ async function runJobNow(jobId) {
     const response = await chrome.runtime.sendMessage({ type: 'run-job-now', jobId });
     if (response?.result) {
       setJobStatus(jobId, response.result.status, response.result.message);
-      if (response.result.status === 'blocked') alert(response.result.message);
+      if (['failed', 'blocked', 'skipped'].includes(response.result.status)) {
+        alert(`${response.result.message}\n\n설정 화면의 "에러 해결방법"에서 대응 방법을 확인하세요.`);
+        await renderErrorHelp();
+      }
       return;
     }
-    if (!response?.ok) setJobStatus(jobId, 'failed', response?.message || '실행하지 못했습니다.');
+    if (!response?.ok) {
+      const message = response?.message || '실행하지 못했습니다.';
+      setJobStatus(jobId, 'failed', message);
+      alert(`${message}\n\n설정 화면의 "에러 해결방법"에서 대응 방법을 확인하세요.`);
+      await renderErrorHelp();
+    }
   } catch (error) {
-    setJobStatus(jobId, 'failed', error.message || String(error));
+    const message = error.message || String(error);
+    setJobStatus(jobId, 'failed', message);
+    alert(`${message}\n\n설정 화면의 "에러 해결방법"에서 대응 방법을 확인하세요.`);
+    await renderErrorHelp();
   }
 }
 
@@ -965,9 +1146,11 @@ async function toggleGlobalTerminalAutomation() {
 
 function applyStatusBadge(badge, log, job = null, globalStatus = null) {
   if (!badge) return;
-  const status = job?.id === TERMINAL_JOB_ID
+  const visibleLogStatuses = ['running', 'success', 'failed', 'blocked', 'skipped'];
+  const logStatus = log?.status && visibleLogStatuses.includes(log.status) ? log.status : '';
+  const status = logStatus || (job?.id === TERMINAL_JOB_ID
     ? globalStatus?.disconnected ? 'blocked' : globalStatus?.running ? 'active' : 'idle'
-    : job?.enabled ? 'active' : log?.status || 'idle';
+    : job?.enabled ? 'active' : 'idle');
   const labels = {
     idle: '대기',
     active: '작동중',
@@ -978,7 +1161,7 @@ function applyStatusBadge(badge, log, job = null, globalStatus = null) {
     blocked: '차단됨',
   };
   badge.className = `status-badge ${status}`;
-  if (job?.id === TERMINAL_JOB_ID) {
+  if (job?.id === TERMINAL_JOB_ID && !logStatus) {
     badge.textContent = globalStatus?.disconnected ? '연결 안됨' : globalStatus?.running ? '작동중' : '대기';
     badge.title = globalStatus?.disconnected ? '전역 단축키 연결 프로그램이 꺼져 있습니다.' : '';
     return;
@@ -989,4 +1172,71 @@ function applyStatusBadge(badge, log, job = null, globalStatus = null) {
   badge.title = log?.message || '';
 }
 
+async function renderErrorHelp() {
+  if (!errorHelpList || !latestErrorSummary) return;
+  const result = await chrome.storage.local.get(LOG_KEY);
+  const logs = Array.isArray(result[LOG_KEY]) ? result[LOG_KEY] : [];
+  const latestError = logs.find((log) => ['failed', 'blocked', 'skipped'].includes(log.status));
+  latestErrorSummary.textContent = latestError
+    ? `${latestError.jobName}: ${latestError.message}`
+    : '최근 에러 없음';
+
+  const guides = latestError ? [latestError, ...commonErrorGuides()] : commonErrorGuides();
+  errorHelpList.innerHTML = guides.map((item, index) => renderErrorGuide(item, index === 0 && latestError)).join('');
+}
+
+function commonErrorGuides() {
+  return [
+    { message: '사이트 권한이 없어 실행하지 않았습니다.' },
+    { message: '조건에 맞는 탭을 찾지 못했습니다.' },
+    { message: '요소를 찾지 못했습니다.' },
+    { message: '대상 구역을 찾지 못했습니다.' },
+    { message: '로컬 브리지를 실행하지 못했습니다.' },
+    { message: 'VS Code 창을 앱 선택하기에서 먼저 지정해야 실행됩니다.' },
+    { message: '전역 단축키 연결 프로그램이 꺼져 있습니다.' },
+  ];
+}
+
+function renderErrorGuide(log, isLatest) {
+  const guide = getErrorGuide(log.message || '');
+  return `
+    <article class="error-guide-card ${isLatest ? 'latest' : ''}">
+      <div>
+        <strong>${isLatest ? '최근 에러' : guide.title}</strong>
+        <p>${escapeHtml(log.message || guide.title)}</p>
+      </div>
+      <ol>
+        ${guide.steps.map((step) => `<li>${escapeHtml(step)}</li>`).join('')}
+      </ol>
+    </article>
+  `;
+}
+
+function getErrorGuide(message) {
+  const text = String(message || '');
+  if (text.includes('사이트 권한')) {
+    return { title: '사이트 권한 필요', steps: ['작업 카드의 URL 패턴이 https://example.com/* 형식인지 확인합니다.', '사이트 권한 허용 버튼을 누르고 Chrome 권한 요청을 승인합니다.', '권한 승인 후 지금 실행을 다시 누릅니다.'] };
+  }
+  if (text.includes('조건에 맞는 탭')) {
+    return { title: '실행할 탭 없음', steps: ['대상 사이트 탭을 먼저 열어 둡니다.', 'URL 패턴이 열린 탭 주소와 일치하는지 확인합니다.', '앱 선택하기에서 현재 탭을 다시 선택합니다.'] };
+  }
+  if (text.includes('요소를 찾지 못했습니다') || text.includes('selector')) {
+    return { title: 'CSS 선택자 오류', steps: ['사이트 화면이 완전히 열린 뒤 실행합니다.', '화면 선택 버튼으로 대상 요소를 다시 지정합니다.', '버튼이나 입력칸이 구역 CSS 선택자 안에 있는지 확인합니다.'] };
+  }
+  if (text.includes('대상 구역')) {
+    return { title: '대상 구역 오류', steps: ['대상 구역을 전체 화면으로 바꿔 테스트합니다.', '구역 선택 버튼으로 영역을 다시 지정합니다.', '화면 변경 후 사라지는 영역이면 더 안정적인 상위 영역을 선택합니다.'] };
+  }
+  if (text.includes('로컬 브리지')) {
+    return { title: 'Windows 브리지 연결 실패', steps: ['apps\\site-macro-native-bridge\\build.ps1로 브리지를 빌드합니다.', 'install-chrome-host.ps1 -ExtensionId 확장ID를 다시 실행합니다.', 'Chrome을 재시작한 뒤 Windows 앱 작업을 다시 실행합니다.'] };
+  }
+  if (text.includes('VS Code 창')) {
+    return { title: 'Windows 창 미지정', steps: ['앱 선택하기를 열고 Windows 앱 탭으로 이동합니다.', '현재 실행 중인 VS Code 창을 선택합니다.', '저장된 창 제목을 확인한 뒤 다시 실행합니다.'] };
+  }
+  if (text.includes('전역 단축키')) {
+    return { title: '전역 단축키 연결 실패', steps: ['scripts\\start-terminal-automation-hotkey.ps1를 실행합니다.', '방화벽이나 보안 프로그램이 127.0.0.1:18765 연결을 막지 않는지 확인합니다.', '상태가 연결 안됨에서 대기로 바뀐 뒤 다시 시도합니다.'] };
+  }
+  return { title: '일반 실행 오류', steps: ['최근 에러 메시지의 작업 이름과 액션 순서를 확인합니다.', '지금 실행으로 한 번 테스트하고 상태 배지의 메시지를 확인합니다.', '사이트 권한, 탭 선택, CSS 선택자, Windows 브리지 설정을 차례로 점검합니다.'] };
+}
+
 render();
+renderErrorHelp();

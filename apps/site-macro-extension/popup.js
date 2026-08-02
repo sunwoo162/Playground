@@ -3,6 +3,8 @@ const LOG_KEY = 'siteMacroLogs';
 const THEME_KEY = 'siteMacroTheme';
 const MIN_INTERVAL_SECONDS = 2;
 const TERMINAL_JOB_ID = 'terminal-automation-enter-3s';
+const CHATGPT_JOB_ID = 'chatgpt-enter-mock';
+const CHATGPT_MOCK_TEXT = '매크로 실행 테스트용 mock 데이터입니다. Enter 전송까지 정상 동작하는지 확인합니다.';
 const HOTKEY_API = 'http://127.0.0.1:18765';
 
 const jobList = document.querySelector('#jobList');
@@ -58,8 +60,23 @@ async function runNow(jobId) {
     return;
   }
   setJobStatus(jobId, 'running', '실행중');
-  const response = await chrome.runtime.sendMessage({ type: 'run-job-now', jobId });
-  if (response?.result) setJobStatus(jobId, response.result.status, response.result.message);
+  try {
+    const response = await chrome.runtime.sendMessage({ type: 'run-job-now', jobId });
+    if (response?.result) {
+      setJobStatus(jobId, response.result.status, response.result.message);
+      if (['failed', 'blocked', 'skipped'].includes(response.result.status)) {
+        alert(`${response.result.message}\n\n확장 > 설정 > 에러 해결방법을 확인하세요.`);
+      }
+    } else if (!response?.ok) {
+      const message = response?.message || '실행하지 못했습니다.';
+      setJobStatus(jobId, 'failed', message);
+      alert(`${message}\n\n확장 > 설정 > 에러 해결방법을 확인하세요.`);
+    }
+  } catch (error) {
+    const message = error.message || String(error);
+    setJobStatus(jobId, 'failed', message);
+    alert(`${message}\n\n확장 > 설정 > 에러 해결방법을 확인하세요.`);
+  }
   setTimeout(render, 250);
 }
 
@@ -112,7 +129,7 @@ async function syncTerminalJob() {
   let jobs = await getJobs();
   const originalLength = jobs.length;
   jobs = jobs.filter((job) => job.id !== 'mock-vscode-enter-3s');
-  const sample = {
+  const samples = [{
     id: TERMINAL_JOB_ID,
     name: '터미널 자동화',
     enabled: false,
@@ -122,25 +139,52 @@ async function syncTerminalJob() {
     scheduleType: 'interval',
     intervalSeconds: MIN_INTERVAL_SECONDS,
     actions: [{ type: 'key', selector: '', value: 'Enter', ms: 1000, x: 0, y: 0, once: false }],
-  };
+  }, {
+    id: CHATGPT_JOB_ID,
+    name: 'ChatGPT Enter 테스트',
+    enabled: false,
+    targetKind: 'web',
+    appBaseUrl: 'https://chatgpt.com',
+    targetApp: '',
+    customAppPath: '',
+    nativeProcess: '',
+    nativeWindowTitle: '',
+    selectedTabId: null,
+    targetArea: '',
+    areaSelector: '',
+    urlPattern: 'https://chatgpt.com/*',
+    startUrl: 'https://chatgpt.com/',
+    openIfMissing: false,
+    backgroundTab: false,
+    scheduleType: 'interval',
+    intervalSeconds: MIN_INTERVAL_SECONDS,
+    timeOfDay: '12:00',
+    actions: [
+      { type: 'type', selector: '#prompt-textarea, [contenteditable="true"], textarea', value: CHATGPT_MOCK_TEXT, ms: 1000, x: 0, y: 0, once: false },
+      { type: 'wait', selector: '', value: '', ms: 300, x: 0, y: 0, once: false },
+      { type: 'key', selector: '#prompt-textarea, [contenteditable="true"], textarea', value: 'Enter', ms: 1000, x: 0, y: 0, once: false },
+    ],
+  }];
   let changed = jobs.length !== originalLength;
-  const existingIndex = jobs.findIndex((job) => job.id === sample.id);
-  if (existingIndex >= 0) {
-    const existing = jobs[existingIndex];
-    const next = {
-      ...existing,
-      name: sample.name,
-      targetKind: 'native',
-      nativeProcess: existing.nativeProcess || 'Code',
-      scheduleType: 'interval',
-      intervalSeconds: MIN_INTERVAL_SECONDS,
-      actions: sample.actions,
-    };
-    changed = changed || JSON.stringify(existing) !== JSON.stringify(next);
-    jobs[existingIndex] = next;
-  } else {
-    jobs.unshift(sample);
-    changed = true;
+  for (const sample of samples) {
+    const existingIndex = jobs.findIndex((job) => job.id === sample.id);
+    if (existingIndex >= 0) {
+      const existing = jobs[existingIndex];
+      const next = {
+        ...existing,
+        ...sample,
+        enabled: Boolean(existing.enabled),
+        nativeWindowTitle: existing.nativeWindowTitle || '',
+        selectedTabId: existing.selectedTabId || null,
+      };
+      changed = changed || JSON.stringify(existing) !== JSON.stringify(next);
+      jobs[existingIndex] = next;
+    } else {
+      const terminalIndex = jobs.findIndex((job) => job.id === TERMINAL_JOB_ID);
+      const insertIndex = sample.id === CHATGPT_JOB_ID && terminalIndex >= 0 ? terminalIndex + 1 : 0;
+      jobs.splice(insertIndex, 0, sample);
+      changed = true;
+    }
   }
   if (changed) await setJobs(jobs);
   await render();
@@ -184,19 +228,24 @@ async function toggleGlobalTerminalAutomation() {
 }
 
 function statusClass(job, log, globalStatus = null) {
+  const visibleLogStatuses = ['running', 'success', 'failed', 'blocked', 'skipped'];
+  const logStatus = log?.status && visibleLogStatuses.includes(log.status) ? log.status : '';
+  if (logStatus) return logStatus;
   if (job?.id === TERMINAL_JOB_ID) {
     if (globalStatus?.disconnected) return 'blocked';
     return globalStatus?.running ? 'active' : 'idle';
   }
-  return job?.enabled ? 'active' : log?.status || 'idle';
+  return job?.enabled ? 'active' : 'idle';
 }
 
 function statusLabel(job, log, globalStatus = null) {
-  if (job?.id === TERMINAL_JOB_ID) {
+  const visibleLogStatuses = ['running', 'success', 'failed', 'blocked', 'skipped'];
+  const logStatus = log?.status && visibleLogStatuses.includes(log.status) ? log.status : '';
+  if (!logStatus && job?.id === TERMINAL_JOB_ID) {
     if (globalStatus?.disconnected) return '연결 안됨';
     return globalStatus?.running ? '작동중' : '대기';
   }
-  const status = job?.enabled ? 'active' : log?.status || 'idle';
+  const status = logStatus || (job?.enabled ? 'active' : 'idle');
   const labels = {
     idle: '대기',
     active: '작동중',

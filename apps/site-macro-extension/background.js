@@ -6,10 +6,13 @@ const MAX_LOGS = 80;
 const ONCE_STATE_KEY = 'siteMacroOnceState';
 const OFFSCREEN_URL = 'offscreen.html';
 const TERMINAL_JOB_ID = 'terminal-automation-enter-3s';
+const CHATGPT_JOB_ID = 'chatgpt-enter-mock';
+const CHATGPT_MOCK_TEXT = '매크로 실행 테스트용 mock 데이터입니다. Enter 전송까지 정상 동작하는지 확인합니다.';
 
 chrome.runtime.onInstalled.addListener(async () => {
   await disableMockJob();
   await ensureTerminalAutomationJob();
+  await ensureChatGptMockJob();
   await refreshAlarms();
   await refreshFastTimers();
 });
@@ -17,6 +20,7 @@ chrome.runtime.onInstalled.addListener(async () => {
 chrome.runtime.onStartup.addListener(async () => {
   await disableMockJob();
   await ensureTerminalAutomationJob();
+  await ensureChatGptMockJob();
   await refreshAlarms();
   await refreshFastTimers();
 });
@@ -125,6 +129,56 @@ async function ensureTerminalAutomationJob() {
   return jobs.find((job) => job.id === TERMINAL_JOB_ID) || sample;
 }
 
+async function ensureChatGptMockJob() {
+  const sample = {
+    id: CHATGPT_JOB_ID,
+    name: 'ChatGPT Enter 테스트',
+    enabled: false,
+    targetKind: 'web',
+    appBaseUrl: 'https://chatgpt.com',
+    targetApp: '',
+    customAppPath: '',
+    nativeProcess: '',
+    nativeWindowTitle: '',
+    selectedTabId: null,
+    targetArea: '',
+    areaSelector: '',
+    urlPattern: 'https://chatgpt.com/*',
+    startUrl: 'https://chatgpt.com/',
+    openIfMissing: false,
+    backgroundTab: false,
+    scheduleType: 'interval',
+    intervalSeconds: MIN_INTERVAL_SECONDS,
+    timeOfDay: '12:00',
+    actions: [
+      { type: 'type', selector: '#prompt-textarea, [contenteditable="true"], textarea', value: CHATGPT_MOCK_TEXT, ms: 1000, x: 0, y: 0, once: false },
+      { type: 'wait', selector: '', value: '', ms: 300, x: 0, y: 0, once: false },
+      { type: 'key', selector: '#prompt-textarea, [contenteditable="true"], textarea', value: 'Enter', ms: 1000, x: 0, y: 0, once: false },
+    ],
+  };
+  const jobs = await getJobs();
+  const index = jobs.findIndex((job) => job.id === CHATGPT_JOB_ID);
+  if (index >= 0) {
+    const existing = jobs[index];
+    const nextJob = {
+      ...existing,
+      ...sample,
+      enabled: Boolean(existing.enabled),
+      selectedTabId: existing.selectedTabId || null,
+    };
+    if (JSON.stringify(existing) !== JSON.stringify(nextJob)) {
+      const next = jobs.map((job, jobIndex) => jobIndex === index ? nextJob : job);
+      await chrome.storage.sync.set({ [STORAGE_KEY]: next });
+    }
+    return nextJob;
+  }
+  const terminalIndex = jobs.findIndex((job) => job.id === TERMINAL_JOB_ID);
+  const next = [...jobs];
+  next.splice(terminalIndex >= 0 ? terminalIndex + 1 : 0, 0, sample);
+  await chrome.storage.sync.set({ [STORAGE_KEY]: next });
+  return sample;
+}
+
 async function toggleTerminalAutomation() {
   await ensureTerminalAutomationJob();
   const jobs = await getJobs();
@@ -162,7 +216,27 @@ async function addLog(job, status, message) {
   };
   logs.unshift(entry);
   await setLogs(logs);
+  await notifyIfActionRequired(entry);
   return entry;
+}
+
+async function notifyIfActionRequired(entry) {
+  if (!['failed', 'blocked', 'skipped'].includes(entry.status)) return;
+  const titleMap = {
+    failed: '매크로 실행 실패',
+    blocked: '매크로 실행 차단',
+    skipped: '매크로 실행 안됨',
+  };
+  try {
+    await chrome.notifications.create({
+      type: 'basic',
+      iconUrl: 'icons/icon.svg',
+      title: titleMap[entry.status] || '사이트 액션 매크로',
+      message: `${entry.jobName}: ${entry.message} 설정 > 에러 해결방법을 확인하세요.`,
+    });
+  } catch {
+    // Notifications can be unavailable in some extension contexts.
+  }
 }
 
 async function refreshAlarms() {
@@ -460,9 +534,42 @@ async function executeActions(actions, areaSelector) {
     return aliases[key.toLowerCase()] || key;
   };
   const dispatchKey = (target, key) => {
-    const eventInit = { key, code: key === ' ' ? 'Space' : key, bubbles: true, cancelable: true };
+    const eventInit = {
+      key,
+      code: key === ' ' ? 'Space' : key,
+      keyCode: key === 'Enter' ? 13 : undefined,
+      which: key === 'Enter' ? 13 : undefined,
+      bubbles: true,
+      cancelable: true,
+    };
     target.dispatchEvent(new KeyboardEvent('keydown', eventInit));
     target.dispatchEvent(new KeyboardEvent('keyup', eventInit));
+  };
+  const setInputValue = (element, value) => {
+    const text = String(value || '').slice(0, 1000);
+    if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+      const descriptor = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(element), 'value');
+      descriptor?.set ? descriptor.set.call(element, text) : element.value = text;
+      element.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
+      element.dispatchEvent(new Event('change', { bubbles: true }));
+      return;
+    }
+    if (element instanceof HTMLElement && element.isContentEditable) {
+      element.focus();
+      document.execCommand('selectAll', false, null);
+      const inserted = document.execCommand('insertText', false, text);
+      if (!inserted || !element.textContent?.includes(text)) element.textContent = text;
+      element.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
+      element.dispatchEvent(new Event('change', { bubbles: true }));
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      range.collapse(false);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      return;
+    }
+    throw new Error('입력할 수 있는 요소가 아닙니다.');
   };
   const assertSafeInput = (element) => {
     const type = String(element.getAttribute('type') || '').toLowerCase();
@@ -485,9 +592,7 @@ async function executeActions(actions, areaSelector) {
         const element = getElement(action.selector);
         assertSafeInput(element);
         element.focus();
-        element.value = String(action.value || '').slice(0, 1000);
-        element.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: element.value }));
-        element.dispatchEvent(new Event('change', { bubbles: true }));
+        setInputValue(element, action.value);
       }
       if (action.type === 'key') {
         const element = getOptionalElement(action.selector);
