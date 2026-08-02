@@ -5,6 +5,8 @@ const MIN_INTERVAL_SECONDS = 2;
 const TERMINAL_JOB_ID = 'terminal-automation-enter-3s';
 const CHATGPT_JOB_ID = 'chatgpt-enter-mock';
 const CHATGPT_MOCK_TEXT = '매크로 실행 테스트용 mock 데이터입니다. Enter 전송까지 정상 동작하는지 확인합니다.';
+const CHATGPT_PROMPT_SELECTOR = '#prompt-textarea, [contenteditable="true"], textarea';
+const CHATGPT_SEND_SELECTOR = '[data-testid="send-button"], button[aria-label="Send prompt"], button[aria-label="Send message"], button[type="submit"]';
 const HOTKEY_API = 'http://127.0.0.1:18765';
 
 const jobList = document.querySelector('#jobList');
@@ -160,9 +162,9 @@ async function syncTerminalJob() {
     intervalSeconds: MIN_INTERVAL_SECONDS,
     timeOfDay: '12:00',
     actions: [
-      { type: 'type', selector: '#prompt-textarea, [contenteditable="true"], textarea', value: CHATGPT_MOCK_TEXT, ms: 1000, x: 0, y: 0, once: false },
-      { type: 'wait', selector: '', value: '', ms: 300, x: 0, y: 0, once: false },
-      { type: 'key', selector: '#prompt-textarea, [contenteditable="true"], textarea', value: 'Enter', ms: 1000, x: 0, y: 0, once: false },
+      { type: 'type', selector: CHATGPT_PROMPT_SELECTOR, value: CHATGPT_MOCK_TEXT, ms: 1000, x: 0, y: 0, once: false },
+      { type: 'wait', selector: '', value: '', ms: 800, x: 0, y: 0, once: false },
+      { type: 'click', selector: CHATGPT_SEND_SELECTOR, value: '', ms: 1000, x: 0, y: 0, once: false },
     ],
   }];
   let changed = jobs.length !== originalLength;

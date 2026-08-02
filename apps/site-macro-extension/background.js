@@ -8,6 +8,8 @@ const OFFSCREEN_URL = 'offscreen.html';
 const TERMINAL_JOB_ID = 'terminal-automation-enter-3s';
 const CHATGPT_JOB_ID = 'chatgpt-enter-mock';
 const CHATGPT_MOCK_TEXT = '매크로 실행 테스트용 mock 데이터입니다. Enter 전송까지 정상 동작하는지 확인합니다.';
+const CHATGPT_PROMPT_SELECTOR = '#prompt-textarea, [contenteditable="true"], textarea';
+const CHATGPT_SEND_SELECTOR = '[data-testid="send-button"], button[aria-label="Send prompt"], button[aria-label="Send message"], button[type="submit"]';
 
 chrome.runtime.onInstalled.addListener(async () => {
   await disableMockJob();
@@ -151,9 +153,9 @@ async function ensureChatGptMockJob() {
     intervalSeconds: MIN_INTERVAL_SECONDS,
     timeOfDay: '12:00',
     actions: [
-      { type: 'type', selector: '#prompt-textarea, [contenteditable="true"], textarea', value: CHATGPT_MOCK_TEXT, ms: 1000, x: 0, y: 0, once: false },
-      { type: 'wait', selector: '', value: '', ms: 300, x: 0, y: 0, once: false },
-      { type: 'key', selector: '#prompt-textarea, [contenteditable="true"], textarea', value: 'Enter', ms: 1000, x: 0, y: 0, once: false },
+      { type: 'type', selector: CHATGPT_PROMPT_SELECTOR, value: CHATGPT_MOCK_TEXT, ms: 1000, x: 0, y: 0, once: false },
+      { type: 'wait', selector: '', value: '', ms: 800, x: 0, y: 0, once: false },
+      { type: 'click', selector: CHATGPT_SEND_SELECTOR, value: '', ms: 1000, x: 0, y: 0, once: false },
     ],
   };
   const jobs = await getJobs();
@@ -520,7 +522,7 @@ async function executeActions(actions, areaSelector) {
   const getElement = (selector) => {
     if (!selector || selector.length > 600) throw new Error('selector가 비어있거나 너무 깁니다.');
     const scope = getScope();
-    const element = scope.querySelector(selector);
+    const element = Array.from(scope.querySelectorAll(selector)).find(visible);
     if (!visible(element)) throw new Error(`요소를 찾지 못했습니다: ${selector}`);
     return element;
   };
@@ -584,6 +586,9 @@ async function executeActions(actions, areaSelector) {
       }
       if (action.type === 'click') {
         const element = getElement(action.selector);
+        if (element.disabled || element.getAttribute('aria-disabled') === 'true') {
+          throw new Error(`클릭 대상이 아직 비활성 상태입니다: ${action.selector}`);
+        }
         element.scrollIntoView({ block: 'center', inline: 'center' });
         await sleep(80);
         element.click();
