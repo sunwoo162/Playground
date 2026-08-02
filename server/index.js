@@ -1094,6 +1094,12 @@ app.get('/apps/dev-term-roulette/*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'apps', 'dev-term-roulette', 'dist', 'index.html'));
 });
 
+// Idea Mixer 앱
+app.use('/apps/idea-mixer', express.static(path.join(__dirname, '..', 'apps', 'idea-mixer', 'dist')));
+app.get('/apps/idea-mixer/*', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'apps', 'idea-mixer', 'dist', 'index.html'));
+});
+
 // Study Planner 앱
 app.use('/apps/study-planner', express.static(path.join(__dirname, '..', 'apps', 'study-planner', 'dist')));
 app.get('/apps/study-planner/*', (req, res) => {

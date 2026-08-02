@@ -110,6 +110,15 @@ export const APPS: AppItem[] = [
     category: 'dev',
   },
   {
+    id: 'idea-mixer',
+    title: '아이디어 믹서',
+    description: '단어 두 개를 조합해 제품, 서비스, 콘텐츠 아이디어를 빠르게 추천합니다.',
+    emoji: '💡',
+    url: '/apps/idea-mixer/',
+    color: '#f0b84a',
+    category: 'dev',
+  },
+  {
     id: 'action-notifier',
     title: 'Action 알리미',
     description: 'GitHub Actions 완료 알림을 푸시로 받아봅니다.',
