@@ -9,6 +9,7 @@ const TRACKER_URL = 'http://localhost:7421';
 const TRACKER_TIMEOUT_MS = 3000;
 const TERMINAL_JOB_ID = 'terminal-automation-enter-3s';
 const CHATGPT_JOB_ID = 'chatgpt-enter-mock';
+const CHATGPT_ENTER_JOB_ID = 'chatgpt-enter-repeat';
 const CHATGPT_MOCK_TEXT = '매크로 실행 테스트용 mock 데이터입니다. Enter 전송까지 정상 동작하는지 확인합니다.';
 const CHATGPT_PROMPT_SELECTOR = '#prompt-textarea, [contenteditable="true"], textarea';
 const CHATGPT_SEND_SELECTOR = '[data-testid="send-button"], button[aria-label="Send prompt"], button[aria-label="Send message"], button[type="submit"]';
@@ -110,6 +111,24 @@ async function seedMockJobs() {
       { type: 'click', selector: CHATGPT_SEND_SELECTOR, value: '', ms: 1000, x: 0, y: 0, once: false },
     ],
   }),
+  createJob({
+    id: CHATGPT_ENTER_JOB_ID,
+    name: 'ChatGPT Enter 반복',
+    enabled: false,
+    targetKind: 'web',
+    appBaseUrl: 'https://chatgpt.com',
+    targetApp: '',
+    customAppPath: '',
+    urlPattern: 'https://chatgpt.com/*',
+    startUrl: 'https://chatgpt.com/',
+    openIfMissing: false,
+    backgroundTab: false,
+    scheduleType: 'interval',
+    intervalSeconds: 2,
+    actions: [
+      { type: 'key', selector: CHATGPT_PROMPT_SELECTOR, value: 'Enter', ms: 1000, x: 0, y: 0, once: false },
+    ],
+  }),
   ];
   let changed = jobs.length !== originalLength;
   for (const sample of samples) {
@@ -127,7 +146,10 @@ async function seedMockJobs() {
       jobs[existingIndex] = next;
     } else {
       const terminalIndex = jobs.findIndex((job) => job.id === TERMINAL_JOB_ID);
-      const insertIndex = sample.id === CHATGPT_JOB_ID && terminalIndex >= 0 ? terminalIndex + 1 : 0;
+      const mockIndex = jobs.findIndex((job) => job.id === CHATGPT_JOB_ID);
+      const insertIndex = sample.id === CHATGPT_ENTER_JOB_ID && mockIndex >= 0
+        ? mockIndex + 1
+        : sample.id === CHATGPT_JOB_ID && terminalIndex >= 0 ? terminalIndex + 1 : 0;
       jobs.splice(insertIndex, 0, sample);
       changed = true;
     }

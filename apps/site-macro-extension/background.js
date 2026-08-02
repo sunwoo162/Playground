@@ -7,6 +7,7 @@ const ONCE_STATE_KEY = 'siteMacroOnceState';
 const OFFSCREEN_URL = 'offscreen.html';
 const TERMINAL_JOB_ID = 'terminal-automation-enter-3s';
 const CHATGPT_JOB_ID = 'chatgpt-enter-mock';
+const CHATGPT_ENTER_JOB_ID = 'chatgpt-enter-repeat';
 const CHATGPT_MOCK_TEXT = '매크로 실행 테스트용 mock 데이터입니다. Enter 전송까지 정상 동작하는지 확인합니다.';
 const CHATGPT_PROMPT_SELECTOR = '#prompt-textarea, [contenteditable="true"], textarea';
 const CHATGPT_SEND_SELECTOR = '[data-testid="send-button"], button[aria-label="Send prompt"], button[aria-label="Send message"], button[type="submit"]';
@@ -15,6 +16,7 @@ chrome.runtime.onInstalled.addListener(async () => {
   await disableMockJob();
   await ensureTerminalAutomationJob();
   await ensureChatGptMockJob();
+  await ensureChatGptEnterJob();
   await refreshAlarms();
   await refreshFastTimers();
 });
@@ -23,6 +25,7 @@ chrome.runtime.onStartup.addListener(async () => {
   await disableMockJob();
   await ensureTerminalAutomationJob();
   await ensureChatGptMockJob();
+  await ensureChatGptEnterJob();
   await refreshAlarms();
   await refreshFastTimers();
 });
@@ -177,6 +180,53 @@ async function ensureChatGptMockJob() {
   const terminalIndex = jobs.findIndex((job) => job.id === TERMINAL_JOB_ID);
   const next = [...jobs];
   next.splice(terminalIndex >= 0 ? terminalIndex + 1 : 0, 0, sample);
+  await chrome.storage.sync.set({ [STORAGE_KEY]: next });
+  return sample;
+}
+
+async function ensureChatGptEnterJob() {
+  const sample = {
+    id: CHATGPT_ENTER_JOB_ID,
+    name: 'ChatGPT Enter 반복',
+    enabled: false,
+    targetKind: 'web',
+    appBaseUrl: 'https://chatgpt.com',
+    targetApp: '',
+    customAppPath: '',
+    nativeProcess: '',
+    nativeWindowTitle: '',
+    selectedTabId: null,
+    targetArea: '',
+    areaSelector: '',
+    urlPattern: 'https://chatgpt.com/*',
+    startUrl: 'https://chatgpt.com/',
+    openIfMissing: false,
+    backgroundTab: false,
+    scheduleType: 'interval',
+    intervalSeconds: MIN_INTERVAL_SECONDS,
+    timeOfDay: '12:00',
+    actions: [{ type: 'key', selector: CHATGPT_PROMPT_SELECTOR, value: 'Enter', ms: 1000, x: 0, y: 0, once: false }],
+  };
+  const jobs = await getJobs();
+  const index = jobs.findIndex((job) => job.id === CHATGPT_ENTER_JOB_ID);
+  if (index >= 0) {
+    const existing = jobs[index];
+    const nextJob = {
+      ...existing,
+      ...sample,
+      enabled: Boolean(existing.enabled),
+      selectedTabId: existing.selectedTabId || null,
+    };
+    if (JSON.stringify(existing) !== JSON.stringify(nextJob)) {
+      const next = jobs.map((job, jobIndex) => jobIndex === index ? nextJob : job);
+      await chrome.storage.sync.set({ [STORAGE_KEY]: next });
+    }
+    return nextJob;
+  }
+  const mockIndex = jobs.findIndex((job) => job.id === CHATGPT_JOB_ID);
+  const terminalIndex = jobs.findIndex((job) => job.id === TERMINAL_JOB_ID);
+  const next = [...jobs];
+  next.splice(mockIndex >= 0 ? mockIndex + 1 : terminalIndex >= 0 ? terminalIndex + 2 : 0, 0, sample);
   await chrome.storage.sync.set({ [STORAGE_KEY]: next });
   return sample;
 }
