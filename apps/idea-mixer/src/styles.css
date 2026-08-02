@@ -13,7 +13,8 @@ body {
 }
 
 button,
-input {
+input,
+textarea {
   font: inherit;
 }
 
@@ -56,146 +57,192 @@ h1 {
   line-height: 1.6;
 }
 
-.mixer-panel {
+.draw-board {
   margin-top: 36px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr) auto;
   gap: 12px;
-  align-items: end;
+  align-items: stretch;
   max-width: 980px;
 }
 
-label {
+.word-card {
+  min-height: 190px;
   display: grid;
-  gap: 8px;
-  color: #425149;
-  font-size: 13px;
-  font-weight: 800;
-}
-
-input {
-  width: 100%;
-  min-height: 58px;
-  border: 1px solid rgba(24, 32, 28, 0.18);
-  border-radius: 8px;
-  padding: 0 18px;
-  color: #18201c;
-  background: rgba(255, 255, 255, 0.9);
-  font-size: 20px;
-  font-weight: 800;
-  outline: none;
-}
-
-input:focus {
-  border-color: #2e7d5c;
-  box-shadow: 0 0 0 4px rgba(46, 125, 92, 0.16);
-}
-
-.icon-button,
-.sample-button,
-.card-top button,
-.mode-tabs button {
-  border: 0;
-  cursor: pointer;
-}
-
-.icon-button {
-  width: 48px;
-  height: 58px;
-  border-radius: 8px;
-  background: #18201c;
-  color: white;
-  font-size: 24px;
-}
-
-.sample-button {
-  min-height: 58px;
-  border-radius: 8px;
-  padding: 0 18px;
-  background: #f0b84a;
-  color: #1d1607;
-  font-weight: 900;
-  white-space: nowrap;
-}
-
-.mode-tabs {
-  margin: 22px 0 28px;
-  display: inline-grid;
-  grid-template-columns: repeat(4, 1fr);
-  border: 1px solid rgba(24, 32, 28, 0.16);
-  border-radius: 8px;
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.72);
-}
-
-.mode-tabs button {
-  min-width: 94px;
-  padding: 12px 14px;
-  background: transparent;
-  color: #35473e;
-  font-weight: 800;
-}
-
-.mode-tabs .active {
-  background: #2e7d5c;
-  color: white;
-}
-
-.idea-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-content: space-between;
   gap: 16px;
-}
-
-.idea-card {
-  min-height: 260px;
   border: 1px solid rgba(24, 32, 28, 0.12);
   border-radius: 8px;
   padding: 20px;
-  background: rgba(255, 255, 255, 0.88);
+  background: rgba(255, 255, 255, 0.9);
   box-shadow: 0 18px 45px rgba(17, 24, 20, 0.1);
 }
 
-.card-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-}
-
-.card-top span {
+.word-card span,
+.prompt-line span,
+.idea-card span {
   color: #2e7d5c;
   font-size: 13px;
   font-weight: 900;
 }
 
-.card-top button {
-  width: 32px;
-  height: 32px;
-  border-radius: 999px;
-  background: #18201c;
-  color: white;
-  font-size: 20px;
+.word-card strong {
+  color: #18201c;
+  font-size: clamp(42px, 6vw, 72px);
   line-height: 1;
+  overflow-wrap: anywhere;
 }
 
-.idea-card h2 {
-  margin: 20px 0 12px;
+.word-card button,
+.draw-button,
+.writer-actions button,
+.note-card button {
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.word-card button {
+  min-height: 42px;
+  background: #e7eee8;
+  color: #20352b;
+}
+
+.plus-mark {
+  display: grid;
+  place-items: center;
   color: #18201c;
+  font-size: 34px;
+  font-weight: 900;
+}
+
+.draw-button {
+  min-width: 138px;
+  background: #f0b84a;
+  color: #1d1607;
+  padding: 0 18px;
+}
+
+.writing-zone,
+.example-zone {
+  max-width: 980px;
+}
+
+.writing-zone {
+  margin-top: 18px;
+  border: 1px solid rgba(24, 32, 28, 0.12);
+  border-radius: 8px;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 18px 45px rgba(17, 24, 20, 0.08);
+}
+
+.prompt-line {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.prompt-line p {
+  margin: 0;
+  color: #304238;
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+textarea {
+  width: 100%;
+  min-height: 260px;
+  resize: vertical;
+  border: 1px solid rgba(24, 32, 28, 0.18);
+  border-radius: 8px;
+  padding: 18px;
+  color: #18201c;
+  background: #fbfdfb;
+  font-size: 17px;
+  line-height: 1.65;
+  outline: none;
+}
+
+textarea:focus {
+  border-color: #2e7d5c;
+  box-shadow: 0 0 0 4px rgba(46, 125, 92, 0.16);
+}
+
+.writer-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  color: #63736a;
+  font-weight: 800;
+}
+
+.writer-actions button {
+  min-height: 46px;
+  padding: 0 18px;
+  background: #18201c;
+  color: white;
+}
+
+.writer-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.example-zone {
+  margin-top: 28px;
+}
+
+.section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 20px;
+  margin-bottom: 12px;
+}
+
+.section-heading h2 {
+  margin: 0;
   font-size: 24px;
-  line-height: 1.18;
+}
+
+.section-heading p {
+  margin: 0;
+  max-width: 440px;
+  color: #516258;
+  line-height: 1.5;
+}
+
+.idea-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.idea-card {
+  min-height: 170px;
+  border: 1px solid rgba(24, 32, 28, 0.12);
+  border-radius: 8px;
+  padding: 18px;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.idea-card h3 {
+  margin: 14px 0 10px;
+  color: #18201c;
+  font-size: 18px;
+  line-height: 1.35;
   letter-spacing: 0;
 }
 
-.idea-card strong {
-  display: block;
-  color: #34443b;
-  line-height: 1.45;
-}
-
 .idea-card p {
+  margin: 0;
   color: #58685f;
-  line-height: 1.6;
+  line-height: 1.5;
 }
 
 .side-panel {
@@ -245,10 +292,43 @@ input:focus {
   line-height: 1.65;
 }
 
-ul {
-  margin: 0;
-  padding-left: 18px;
-  line-height: 1.8;
+.note-list {
+  display: grid;
+  gap: 12px;
+}
+
+.note-card {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.note-card div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+}
+
+.note-card div strong {
+  color: white;
+  font-size: 14px;
+}
+
+.note-card p {
+  margin: 10px 0 12px;
+  color: rgba(255, 255, 255, 0.84);
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.note-card button {
+  min-height: 32px;
+  padding: 0 10px;
+  background: rgba(255, 255, 255, 0.14);
+  color: white;
 }
 
 @media (max-width: 1080px) {
@@ -274,18 +354,21 @@ ul {
     font-size: 46px;
   }
 
-  .mixer-panel {
+  .draw-board {
     grid-template-columns: 1fr;
   }
 
-  .icon-button,
-  .sample-button {
+  .draw-button {
     width: 100%;
+    min-height: 58px;
   }
 
-  .mode-tabs {
-    width: 100%;
-    grid-template-columns: repeat(2, 1fr);
+  .plus-mark {
+    min-height: 30px;
+  }
+
+  .section-heading {
+    display: grid;
   }
 
   .idea-grid {
