@@ -2,33 +2,47 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import ReactDOM from 'react-dom/client'
 import './styles.css'
 
-type StopType = 'subway' | 'bus'
+type Mode = 'subway' | 'bus'
 
-type Stop = {
-  id: string
-  name: string
-  line: string
-  type: StopType
-  lat: number
-  lng: number
+type ApiConfig = {
+  subway: boolean
+  bus: boolean
+  required: {
+    subway: string
+    bus: string
+  }
 }
 
-const STOPS: Stop[] = [
-  { id: 'gangnam', name: '강남역', line: '2호선/신분당선', type: 'subway', lat: 37.497952, lng: 127.027619 },
-  { id: 'sadang', name: '사당역', line: '2호선/4호선', type: 'subway', lat: 37.47653, lng: 126.981685 },
-  { id: 'seoul-station', name: '서울역', line: '1호선/4호선/공항철도', type: 'subway', lat: 37.554678, lng: 126.970606 },
-  { id: 'hongdae', name: '홍대입구역', line: '2호선/경의중앙/공항철도', type: 'subway', lat: 37.55679, lng: 126.923708 },
-  { id: 'jamsil', name: '잠실역', line: '2호선/8호선', type: 'subway', lat: 37.513305, lng: 127.100129 },
-  { id: 'gwanghwamun', name: '광화문역', line: '5호선', type: 'subway', lat: 37.571607, lng: 126.97691 },
-  { id: 'suwon', name: '수원역', line: '1호선/수인분당', type: 'subway', lat: 37.265974, lng: 126.999874 },
-  { id: 'pangyo', name: '판교역', line: '신분당선/경강선', type: 'subway', lat: 37.394761, lng: 127.111217 },
-  { id: 'gangnam-bus', name: '강남역 중앙차로', line: '서울 버스 정류장', type: 'bus', lat: 37.500626, lng: 127.026616 },
-  { id: 'seoul-bus', name: '서울역버스환승센터', line: '서울 버스 정류장', type: 'bus', lat: 37.55595, lng: 126.972317 },
-  { id: 'hongdae-bus', name: '홍대입구역 정류장', line: '서울 버스 정류장', type: 'bus', lat: 37.557192, lng: 126.923697 },
-  { id: 'jamsil-bus', name: '잠실역 정류장', line: '서울 버스 정류장', type: 'bus', lat: 37.513788, lng: 127.100557 },
-]
+type TransitTarget = {
+  id: string
+  type: Mode
+  name: string
+  line?: string
+  stationCode?: string
+  arsId?: string
+  lat: number
+  lng: number
+  distance?: number
+}
 
-const STORAGE_KEY = 'commute-alarm-settings'
+type SubwayArrival = {
+  trainLine: string
+  message: string
+  status: string
+  upDown: string
+  destination: string
+  updatedAt: string
+}
+
+type BusArrival = {
+  routeId: string
+  routeName: string
+  direction: string
+  firstArrival: string
+  secondArrival: string
+}
+
+const STORAGE_KEY = 'commute-alarm-v2'
 
 function distanceMeters(aLat: number, aLng: number, bLat: number, bLng: number) {
   const earthRadius = 6371000
@@ -41,42 +55,68 @@ function distanceMeters(aLat: number, aLng: number, bLat: number, bLng: number) 
   return 2 * earthRadius * Math.asin(Math.sqrt(h))
 }
 
+async function getJson<T>(url: string): Promise<T> {
+  const response = await fetch(url)
+  const data = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new Error(data?.message || data?.error || `요청 실패: ${response.status}`)
+  }
+  return data as T
+}
+
 function App() {
   const saved = useMemo(() => {
     try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') as Partial<{ targetId: string; alertDistance: number }>
+      return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') as Partial<{ alertDistance: number; target: TransitTarget }>
     } catch {
       return {}
     }
   }, [])
 
+  const [mode, setMode] = useState<Mode>('subway')
   const [query, setQuery] = useState('')
-  const [targetId, setTargetId] = useState(saved.targetId || STOPS[0].id)
   const [alertDistance, setAlertDistance] = useState(saved.alertDistance || 700)
-  const [tracking, setTracking] = useState(false)
+  const [target, setTarget] = useState<TransitTarget | null>(saved.target || null)
+  const [config, setConfig] = useState<ApiConfig | null>(null)
   const [position, setPosition] = useState<GeolocationPosition | null>(null)
-  const [status, setStatus] = useState('목표 정류장이나 역을 고른 뒤 시작하세요.')
-  const [permission, setPermission] = useState(Notification.permission)
+  const [tracking, setTracking] = useState(false)
   const [alarmed, setAlarmed] = useState(false)
+  const [status, setStatus] = useState('내 위치를 켜고 지하철역을 검색하거나 주변 버스 정류장을 불러오세요.')
+  const [permission, setPermission] = useState(Notification.permission)
+  const [results, setResults] = useState<TransitTarget[]>([])
+  const [subwayArrivals, setSubwayArrivals] = useState<SubwayArrival[]>([])
+  const [busArrivals, setBusArrivals] = useState<BusArrival[]>([])
+  const [loading, setLoading] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const watchIdRef = useRef<number | null>(null)
 
-  const target = STOPS.find((stop) => stop.id === targetId) || STOPS[0]
-  const filteredStops = STOPS.filter((stop) => {
-    const value = `${stop.name} ${stop.line}`.toLowerCase()
-    return value.includes(query.trim().toLowerCase())
-  })
-  const distance = position ? Math.round(distanceMeters(position.coords.latitude, position.coords.longitude, target.lat, target.lng)) : null
+  const distance = position && target?.lat && target?.lng
+    ? Math.round(distanceMeters(position.coords.latitude, position.coords.longitude, target.lat, target.lng))
+    : null
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ targetId, alertDistance }))
-  }, [targetId, alertDistance])
+    getJson<ApiConfig>('/commute-api/config')
+      .then(setConfig)
+      .catch((error) => setStatus(error.message))
+  }, [])
 
   useEffect(() => {
-    if (!tracking || distance === null || alarmed || distance > alertDistance) return
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ alertDistance, target }))
+  }, [alertDistance, target])
+
+  useEffect(() => {
+    if (!tracking || !target || distance === null || alarmed || distance > alertDistance) return
     setAlarmed(true)
     setStatus(`${target.name}까지 약 ${distance.toLocaleString()}m 남았습니다. 내릴 준비를 하세요.`)
     triggerAlarm(target.name, distance)
-  }, [tracking, distance, alertDistance, alarmed, target.name])
+  }, [tracking, target, distance, alertDistance, alarmed])
+
+  useEffect(() => {
+    if (!target) return
+    refreshArrivals(target)
+    const id = window.setInterval(() => refreshArrivals(target, true), 30000)
+    return () => window.clearInterval(id)
+  }, [target?.id, target?.type])
 
   const requestNotification = async () => {
     if (!('Notification' in window)) {
@@ -87,19 +127,36 @@ function App() {
     setPermission(result)
   }
 
+  const locateMe = () => {
+    if (!navigator.geolocation) {
+      setStatus('이 브라우저는 위치 API를 지원하지 않습니다.')
+      return
+    }
+    setStatus('현재 위치를 확인하는 중입니다.')
+    navigator.geolocation.getCurrentPosition(
+      (next) => {
+        setPosition(next)
+        setStatus('현재 위치를 가져왔습니다.')
+      },
+      (error) => setStatus(error.message || '위치 권한을 확인해주세요.'),
+      { enableHighAccuracy: true, maximumAge: 3000, timeout: 12000 },
+    )
+  }
+
   const startTracking = () => {
+    if (!target) {
+      setStatus('먼저 내릴 역이나 정류장을 선택하세요.')
+      return
+    }
     if (!navigator.geolocation) {
       setStatus('이 브라우저는 위치 API를 지원하지 않습니다.')
       return
     }
     setAlarmed(false)
     setTracking(true)
-    setStatus('현재 위치를 확인하는 중입니다. 화면을 켜둔 상태가 가장 정확합니다.')
+    setStatus('실시간 위치 추적 중입니다. 목표 지점에 가까워지면 알람을 울립니다.')
     watchIdRef.current = navigator.geolocation.watchPosition(
-      (next) => {
-        setPosition(next)
-        setStatus('이동 중입니다. 목표 지점에 가까워지면 알람을 울립니다.')
-      },
+      (next) => setPosition(next),
       (error) => {
         setTracking(false)
         setStatus(error.message || '위치 권한을 확인해주세요.')
@@ -117,42 +174,138 @@ function App() {
     setStatus('알람을 중지했습니다.')
   }
 
+  const searchSubway = async () => {
+    const text = query.trim()
+    if (!text) {
+      setStatus('검색할 역 이름을 입력하세요.')
+      return
+    }
+    setMode('subway')
+    setLoading(true)
+    setStatus('서울 열린데이터 지하철 역 정보를 검색하는 중입니다.')
+    try {
+      const stations = await getJson<Array<Omit<TransitTarget, 'type'>>>(`/commute-api/subway/search?q=${encodeURIComponent(text)}`)
+      setResults(stations.map((station) => ({ ...station, type: 'subway' })))
+      setStatus(stations.length ? `${stations.length}개 역을 찾았습니다.` : '검색 결과가 없습니다.')
+    } catch (error) {
+      setResults([])
+      setStatus(error instanceof Error ? error.message : '지하철 검색에 실패했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadNearbyBusStops = async () => {
+    setMode('bus')
+    const current = position
+    if (!current) {
+      setStatus('먼저 내 위치를 가져오세요.')
+      locateMe()
+      return
+    }
+    setLoading(true)
+    setStatus('서울 버스 API로 주변 정류장을 불러오는 중입니다.')
+    try {
+      const stops = await getJson<Array<Omit<TransitTarget, 'type'>>>(`/commute-api/bus/nearby?lat=${current.coords.latitude}&lng=${current.coords.longitude}&radius=700`)
+      setResults(stops.map((stop) => ({ ...stop, type: 'bus' })))
+      setStatus(stops.length ? `주변 정류장 ${stops.length}개를 찾았습니다.` : '주변 정류장을 찾지 못했습니다.')
+    } catch (error) {
+      setResults([])
+      setStatus(error instanceof Error ? error.message : '주변 버스 정류장 조회에 실패했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const selectTarget = (next: TransitTarget) => {
+    setTarget(next)
+    setAlarmed(false)
+    setMode(next.type)
+    setSubwayArrivals([])
+    setBusArrivals([])
+    setStatus(`${next.name}을 목표로 설정했습니다.`)
+  }
+
+  const refreshArrivals = async (selected = target, quiet = false) => {
+    if (!selected) return
+    setRefreshing(true)
+    if (!quiet) setStatus('실시간 도착 정보를 불러오는 중입니다.')
+    try {
+      if (selected.type === 'subway') {
+        const arrivals = await getJson<SubwayArrival[]>(`/commute-api/subway/arrivals?station=${encodeURIComponent(selected.name.replace(/역$/, ''))}`)
+        setSubwayArrivals(arrivals)
+      } else {
+        const arrivals = await getJson<BusArrival[]>(`/commute-api/bus/arrivals?stationId=${encodeURIComponent(selected.id)}`)
+        setBusArrivals(arrivals)
+      }
+      if (!quiet) setStatus('실시간 도착 정보를 업데이트했습니다.')
+    } catch (error) {
+      if (!quiet) setStatus(error instanceof Error ? error.message : '도착 정보 조회에 실패했습니다.')
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  const missingKey = mode === 'subway' ? config && !config.subway : config && !config.bus
+
   return (
     <main className="commute-app">
       <section className="hero">
         <a className="back-link" href="/">← 놀이터로 돌아가기</a>
         <div>
-          <span className="eyebrow">GPS 하차 알람</span>
-          <h1>버스나 지하철에서 졸아도 내리기 전에 깨워요</h1>
-          <p>도착할 역이나 정류장을 고르고 알림 거리를 정하면, 휴대폰 위치가 가까워졌을 때 알림과 소리로 알려줍니다.</p>
+          <span className="eyebrow">실시간 대중교통 하차 알람</span>
+          <h1>내 위치와 실제 지하철·버스 정보로 내리기 전에 깨워요</h1>
+          <p>GPS 위치를 추적하고 서울 지하철·버스 실시간 API를 불러와 목표 지점 접근 알림과 도착 정보를 함께 보여줍니다.</p>
         </div>
         <div className="live-card">
           <span>목표까지</span>
           <strong>{distance === null ? '--' : `${distance.toLocaleString()}m`}</strong>
-          <p>{target.name}</p>
+          <p>{target ? target.name : '목표 미선택'}</p>
         </div>
       </section>
 
       <section className="workspace">
         <div className="control-panel">
-          <label>
-            역/정류장 검색
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="예: 강남, 잠실, 서울역" />
-          </label>
+          <div className="mode-tabs">
+            <button className={mode === 'subway' ? 'active' : ''} onClick={() => setMode('subway')}>지하철</button>
+            <button className={mode === 'bus' ? 'active' : ''} onClick={() => setMode('bus')}>버스</button>
+          </div>
+
+          {missingKey && (
+            <div className="api-warning">
+              서버에 {mode === 'subway' ? config?.required.subway : config?.required.bus} 환경변수가 필요합니다.
+            </div>
+          )}
+
+          <div className="action-row">
+            <button className="secondary-button" onClick={locateMe}>내 위치</button>
+            <button className="secondary-button" onClick={requestNotification}>알림 허용</button>
+          </div>
+
+          {mode === 'subway' ? (
+            <form className="search-row" onSubmit={(event) => { event.preventDefault(); searchSubway() }}>
+              <label>
+                지하철역 검색
+                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="예: 강남, 홍대입구, 서울" />
+              </label>
+              <button className="primary-button" disabled={loading}>검색</button>
+            </form>
+          ) : (
+            <button className="primary-button" onClick={loadNearbyBusStops} disabled={loading}>
+              주변 버스 정류장 불러오기
+            </button>
+          )}
 
           <div className="stop-list" role="listbox" aria-label="목표 선택">
-            {filteredStops.map((stop) => (
+            {results.map((item) => (
               <button
-                key={stop.id}
-                className={stop.id === targetId ? 'active' : ''}
-                onClick={() => {
-                  setTargetId(stop.id)
-                  setAlarmed(false)
-                }}
+                key={`${item.type}-${item.id}`}
+                className={target?.id === item.id && target.type === item.type ? 'active' : ''}
+                onClick={() => selectTarget(item)}
               >
-                <span>{stop.type === 'subway' ? 'SUB' : 'BUS'}</span>
-                <strong>{stop.name}</strong>
-                <small>{stop.line}</small>
+                <span>{item.type === 'subway' ? 'SUB' : 'BUS'}</span>
+                <strong>{item.name}</strong>
+                <small>{item.type === 'subway' ? item.line : `${item.arsId || '정류장'} · ${item.distance ? `${Math.round(item.distance)}m` : '주변'}`}</small>
               </button>
             ))}
           </div>
@@ -161,7 +314,7 @@ function App() {
             알림 거리: {alertDistance.toLocaleString()}m 전
             <input
               type="range"
-              min="300"
+              min="200"
               max="2000"
               step="100"
               value={alertDistance}
@@ -170,14 +323,14 @@ function App() {
           </label>
 
           <div className="action-row">
-            <button className="secondary-button" onClick={requestNotification}>
-              알림 허용
-            </button>
             {tracking ? (
-              <button className="primary-button stop" onClick={stopTracking}>중지</button>
+              <button className="primary-button stop" onClick={stopTracking}>추적 중지</button>
             ) : (
-              <button className="primary-button" onClick={startTracking}>시작</button>
+              <button className="primary-button" onClick={startTracking}>하차 알람 시작</button>
             )}
+            <button className="secondary-button" onClick={() => target && refreshArrivals(target)} disabled={!target || refreshing}>
+              도착 새로고침
+            </button>
           </div>
         </div>
 
@@ -185,15 +338,48 @@ function App() {
           <div className="route-line">
             <span className={tracking ? 'moving' : ''} />
           </div>
-          <h2>{target.name}</h2>
-          <p className="target-meta">{target.line} · {target.type === 'subway' ? '지하철역' : '버스 정류장'}</p>
+          <h2>{target ? target.name : '목표를 선택하세요'}</h2>
+          <p className="target-meta">
+            {target ? `${target.type === 'subway' ? '지하철역' : '버스 정류장'} · ${target.line || target.arsId || '실시간 정보'}` : 'GPS와 교통 API를 연결해 알람을 준비합니다.'}
+          </p>
           <div className="metric-grid">
             <div><span>알림 상태</span><strong>{alarmed ? '울림' : tracking ? '대기 중' : '꺼짐'}</strong></div>
             <div><span>브라우저 알림</span><strong>{permission === 'granted' ? '허용됨' : '미허용'}</strong></div>
             <div><span>위치 정확도</span><strong>{position ? `±${Math.round(position.coords.accuracy)}m` : '--'}</strong></div>
           </div>
+
+          <section className="arrival-panel">
+            <div className="panel-heading">
+              <h3>실시간 도착 정보</h3>
+              <span>{refreshing ? '업데이트 중' : '30초 자동 갱신'}</span>
+            </div>
+            {target?.type === 'subway' && subwayArrivals.length > 0 && (
+              <ul className="arrival-list">
+                {subwayArrivals.slice(0, 8).map((arrival, index) => (
+                  <li key={`${arrival.trainLine}-${arrival.message}-${index}`}>
+                    <strong>{arrival.trainLine || arrival.upDown}</strong>
+                    <span>{arrival.message || arrival.status}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {target?.type === 'bus' && busArrivals.length > 0 && (
+              <ul className="arrival-list">
+                {busArrivals.slice(0, 10).map((arrival) => (
+                  <li key={arrival.routeId || arrival.routeName}>
+                    <strong>{arrival.routeName}</strong>
+                    <span>{arrival.firstArrival} {arrival.secondArrival ? `/ ${arrival.secondArrival}` : ''}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {target && subwayArrivals.length === 0 && busArrivals.length === 0 && !refreshing && (
+              <p className="empty-arrivals">아직 표시할 도착 정보가 없습니다.</p>
+            )}
+          </section>
+
           <p className="status-text">{status}</p>
-          <button className="test-button" onClick={() => triggerAlarm(target.name, distance || alertDistance)}>
+          <button className="test-button" onClick={() => target && triggerAlarm(target.name, distance || alertDistance)} disabled={!target}>
             알람 테스트
           </button>
         </div>
@@ -208,7 +394,9 @@ function triggerAlarm(stopName: string, distance: number) {
     new Notification('하차 알람', { body: message, tag: 'commute-alarm' })
   }
   navigator.vibrate?.([700, 250, 700, 250, 1000])
-  const context = new AudioContext()
+  const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+  if (!AudioContextClass) return
+  const context = new AudioContextClass()
   const playTone = (start: number, frequency: number) => {
     const oscillator = context.createOscillator()
     const gain = context.createGain()

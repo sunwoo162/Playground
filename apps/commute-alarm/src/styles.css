@@ -123,6 +123,43 @@ button {
   gap: 16px;
 }
 
+.mode-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.mode-tabs button {
+  min-height: 42px;
+  border: 1px solid #c9d2cc;
+  border-radius: 8px;
+  background: #fff;
+  color: #25382f;
+  font-weight: 950;
+}
+
+.mode-tabs button.active {
+  border-color: #0d7c66;
+  background: #0d7c66;
+  color: #fff;
+}
+
+.api-warning {
+  border: 1px solid #f3c37a;
+  border-radius: 8px;
+  background: #fff7e8;
+  color: #8a4b06;
+  padding: 12px;
+  font-size: .86rem;
+  font-weight: 850;
+  line-height: 1.5;
+}
+
+.search-row {
+  display: grid;
+  gap: 10px;
+}
+
 label {
   display: grid;
   gap: 8px;
@@ -150,7 +187,7 @@ input:focus {
 .stop-list {
   display: grid;
   gap: 8px;
-  max-height: 340px;
+  max-height: 320px;
   overflow: auto;
 }
 
@@ -220,6 +257,13 @@ input:focus {
   color: #25382f;
 }
 
+.primary-button:disabled,
+.secondary-button:disabled,
+.test-button:disabled {
+  cursor: not-allowed;
+  opacity: .48;
+}
+
 .status-panel {
   min-height: 520px;
 }
@@ -287,6 +331,72 @@ input:focus {
   margin-top: 10px;
   color: #17221c;
   font-size: 1.05rem;
+}
+
+.arrival-panel {
+  margin-top: 10px;
+  border: 1px solid #d4ddd6;
+  border-radius: 8px;
+  background: #fff;
+  padding: 14px;
+}
+
+.panel-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.panel-heading h3 {
+  margin: 0;
+  color: #17221c;
+  font-size: 1rem;
+}
+
+.panel-heading span {
+  color: #68796f;
+  font-size: .78rem;
+  font-weight: 900;
+}
+
+.arrival-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.arrival-list li {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid #edf1ee;
+  border-radius: 8px;
+  background: #f8faf8;
+}
+
+.arrival-list strong {
+  color: #17221c;
+  font-size: .92rem;
+}
+
+.arrival-list span,
+.empty-arrivals {
+  color: #52645b;
+  font-size: .88rem;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.empty-arrivals {
+  margin: 0;
+  padding: 18px 0;
+  text-align: center;
 }
 
 .test-button {

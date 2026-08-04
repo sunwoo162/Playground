@@ -168,6 +168,166 @@ function proxyToBackend(req, res) {
   }
 }
 
+// ============================================
+// Commute Alarm transit API proxy
+// ============================================
+
+const SEOUL_OPEN_API_KEY = process.env.SEOUL_OPEN_API_KEY || process.env.SEOUL_SUBWAY_API_KEY || '';
+const SEOUL_BUS_API_KEY = process.env.SEOUL_BUS_API_KEY || '';
+const SEOUL_SUBWAY_BASE = 'http://openapi.seoul.go.kr:8088';
+const SEOUL_SUBWAY_REALTIME_BASE = 'http://swopenapi.seoul.go.kr/api/subway';
+const SEOUL_BUS_BASE = 'http://ws.bus.go.kr/api/rest';
+
+async function fetchJson(url) {
+  const response = await fetch(url);
+  const text = await response.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(text.slice(0, 200) || 'Invalid JSON response');
+  }
+  if (!response.ok) {
+    throw new Error(data?.message || data?.RESULT?.MESSAGE || `HTTP ${response.status}`);
+  }
+  return data;
+}
+
+async function fetchText(url) {
+  const response = await fetch(url);
+  const text = await response.text();
+  if (!response.ok) throw new Error(text.slice(0, 200) || `HTTP ${response.status}`);
+  return text;
+}
+
+function xmlValue(block, tag) {
+  const match = block.match(new RegExp(`<${tag}>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?</${tag}>`));
+  return match ? match[1].trim() : '';
+}
+
+function xmlItems(xml) {
+  return Array.from(xml.matchAll(/<itemList>([\s\S]*?)<\/itemList>/g)).map((match) => match[1]);
+}
+
+function requireKey(res, key, label) {
+  if (key) return false;
+  res.status(503).json({
+    error: 'missing_api_key',
+    message: `${label} 환경변수가 서버에 설정되어 있지 않습니다.`,
+  });
+  return true;
+}
+
+app.get('/commute-api/config', (req, res) => {
+  res.json({
+    subway: Boolean(SEOUL_OPEN_API_KEY),
+    bus: Boolean(SEOUL_BUS_API_KEY),
+    required: {
+      subway: 'SEOUL_OPEN_API_KEY',
+      bus: 'SEOUL_BUS_API_KEY',
+    },
+  });
+});
+
+app.get('/commute-api/subway/search', async (req, res) => {
+  if (requireKey(res, SEOUL_OPEN_API_KEY, 'SEOUL_OPEN_API_KEY')) return;
+  const query = String(req.query.q || '').trim();
+  if (!query) return res.status(400).json({ error: 'q required' });
+
+  try {
+    const url = `${SEOUL_SUBWAY_BASE}/${encodeURIComponent(SEOUL_OPEN_API_KEY)}/json/SearchInfoBySubwayNameService/1/20/${encodeURIComponent(query)}`;
+    const data = await fetchJson(url);
+    const rows = data?.SearchInfoBySubwayNameService?.row || [];
+    res.json(rows.map((row) => ({
+      id: `${row.STATION_CD || row.STATION_NM}-${row.LINE_NUM}`,
+      stationCode: row.STATION_CD || '',
+      name: row.STATION_NM || '',
+      line: row.LINE_NUM || '',
+      lat: Number(row.YPOINT_WGS || row.YPOINT || 0),
+      lng: Number(row.XPOINT_WGS || row.XPOINT || 0),
+    })).filter((station) => station.name));
+  } catch (error) {
+    res.status(502).json({ error: 'subway_search_failed', message: error.message });
+  }
+});
+
+app.get('/commute-api/subway/arrivals', async (req, res) => {
+  if (requireKey(res, SEOUL_OPEN_API_KEY, 'SEOUL_OPEN_API_KEY')) return;
+  const station = String(req.query.station || '').trim().replace(/역$/, '');
+  if (!station) return res.status(400).json({ error: 'station required' });
+
+  try {
+    const url = `${SEOUL_SUBWAY_REALTIME_BASE}/${encodeURIComponent(SEOUL_OPEN_API_KEY)}/json/realtimeStationArrival/0/20/${encodeURIComponent(station)}`;
+    const data = await fetchJson(url);
+    const rows = data?.realtimeArrivalList || [];
+    res.json(rows.map((row) => ({
+      line: row.subwayId || '',
+      trainLine: row.trainLineNm || '',
+      message: row.arvlMsg2 || '',
+      status: row.arvlMsg3 || '',
+      upDown: row.updnLine || '',
+      destination: row.bstatnNm || '',
+      updatedAt: row.recptnDt || '',
+    })));
+  } catch (error) {
+    res.status(502).json({ error: 'subway_arrivals_failed', message: error.message });
+  }
+});
+
+app.get('/commute-api/bus/nearby', async (req, res) => {
+  if (requireKey(res, SEOUL_BUS_API_KEY, 'SEOUL_BUS_API_KEY')) return;
+  const lat = Number(req.query.lat);
+  const lng = Number(req.query.lng);
+  const radius = Math.min(Math.max(Number(req.query.radius || 500), 100), 1000);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return res.status(400).json({ error: 'lat,lng required' });
+
+  try {
+    const params = new URLSearchParams({
+      serviceKey: SEOUL_BUS_API_KEY,
+      tmX: String(lng),
+      tmY: String(lat),
+      radius: String(radius),
+    });
+    const xml = await fetchText(`${SEOUL_BUS_BASE}/stationinfo/getStationByPos?${params.toString()}`);
+    const items = xmlItems(xml);
+    res.json(items.map((item) => ({
+      id: xmlValue(item, 'stationId'),
+      arsId: xmlValue(item, 'arsId'),
+      name: xmlValue(item, 'stationNm'),
+      lat: Number(xmlValue(item, 'gpsY')),
+      lng: Number(xmlValue(item, 'gpsX')),
+      distance: Number(xmlValue(item, 'dist')),
+    })).filter((station) => station.id && station.name));
+  } catch (error) {
+    res.status(502).json({ error: 'bus_nearby_failed', message: error.message });
+  }
+});
+
+app.get('/commute-api/bus/arrivals', async (req, res) => {
+  if (requireKey(res, SEOUL_BUS_API_KEY, 'SEOUL_BUS_API_KEY')) return;
+  const stationId = String(req.query.stationId || '').trim();
+  if (!stationId) return res.status(400).json({ error: 'stationId required' });
+
+  try {
+    const params = new URLSearchParams({
+      serviceKey: SEOUL_BUS_API_KEY,
+      stId: stationId,
+    });
+    const xml = await fetchText(`${SEOUL_BUS_BASE}/arrive/getLowArrInfoByStId?${params.toString()}`);
+    const items = xmlItems(xml);
+    res.json(items.map((item) => ({
+      routeId: xmlValue(item, 'busRouteId'),
+      routeName: xmlValue(item, 'rtNm'),
+      direction: xmlValue(item, 'adirection'),
+      firstArrival: xmlValue(item, 'arrmsg1'),
+      secondArrival: xmlValue(item, 'arrmsg2'),
+      stationOrder: xmlValue(item, 'staOrd'),
+    })).filter((arrival) => arrival.routeName));
+  } catch (error) {
+    res.status(502).json({ error: 'bus_arrivals_failed', message: error.message });
+  }
+});
+
 app.use(['/api'], proxyToBackend);
 
 // ============================================
