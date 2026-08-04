@@ -113,6 +113,8 @@ jobs:
             npm run build --prefix apps/virtual-avatar
             npm run build --prefix apps/voice-studio
             npm run build --prefix apps/code-run-visualizer
+            npm install --no-audit --fund=false --prefix apps/commute-alarm
+            npm run build --prefix apps/commute-alarm
             test -f apps/idea-mixer/dist/index.html
             test -f apps/virtual-study-room/dist/index.html
             test -f apps/virtual-avatar/dist/index.html
