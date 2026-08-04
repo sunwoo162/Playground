@@ -1148,6 +1148,18 @@ app.get('/apps/school-meal/*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'apps', 'school-meal', 'dist', 'index.html'));
 });
 
+// Commute Alarm 앱
+app.use('/apps/commute-alarm', express.static(path.join(__dirname, '..', 'apps', 'commute-alarm', 'dist'), {
+  setHeaders: (res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  },
+}));
+app.get('/apps/commute-alarm/*', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'apps', 'commute-alarm', 'dist', 'index.html'));
+});
+
 // Mock Invest 앱
 app.use('/apps/mock-invest', express.static(path.join(__dirname, '..', 'apps', 'mock-invest', 'dist')));
 app.get('/apps/mock-invest/*', (req, res) => {
