@@ -173,6 +173,15 @@ export const APPS: AppItem[] = [
     category: 'life',
   },
   {
+    id: 'commute-alarm',
+    title: '하차 알람',
+    description: '버스나 지하철에서 잠들어도 목적지 전에 위치 알림으로 깨워줍니다.',
+    emoji: '🚇',
+    url: '/apps/commute-alarm/',
+    color: '#0d7c66',
+    category: 'life',
+  },
+  {
     id: 'life-tracker',
     title: 'Life Tracker',
     description: '실패, 버린 시간, 작은 성공을 기록하는 자기 이해 트래커입니다.',
