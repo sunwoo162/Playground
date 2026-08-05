@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
+import type { ChangeEvent } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
 
@@ -40,7 +41,8 @@ function App() {
   const [runs, setRuns] = useState<Run[]>([])
   const [status, setStatus] = useState('')
   const [pushEnabled, setPushEnabled] = useState(false)
-  const selected = useMemo(() => watches.find((watch) => watch.id === selectedId) || watches[0], [watches, selectedId])
+  const importRef = useRef<HTMLInputElement | null>(null)
+  const selected = watches.find((watch) => watch.id === selectedId) || watches[0]
 
   useEffect(() => {
     loadWatches()
@@ -109,9 +111,14 @@ function App() {
   }
 
   async function deleteRepo(id: number) {
-    await request(`/api/action-notifier/repos/${id}`, { method: 'DELETE' })
-    setSelectedId(null)
-    await loadWatches()
+    try {
+      await request(`/api/action-notifier/repos/${id}`, { method: 'DELETE' })
+      setSelectedId(null)
+      await loadWatches()
+      setStatus('레포 연결을 삭제했어요.')
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : '레포 삭제에 실패했어요.')
+    }
   }
 
   async function toggleRepoNotification(id: number, enabled: boolean) {
@@ -132,10 +139,14 @@ function App() {
       setStatus('이 브라우저는 백그라운드 알림을 지원하지 않아요.')
       return
     }
-    await navigator.serviceWorker.register(`${APP_PATH}sw.js`)
-    const registration = await navigator.serviceWorker.ready
-    const existing = await registration.pushManager.getSubscription()
-    setPushEnabled(Boolean(existing))
+    try {
+      await navigator.serviceWorker.register(`${APP_PATH}sw.js`)
+      const registration = await navigator.serviceWorker.ready
+      const existing = await registration.pushManager.getSubscription()
+      setPushEnabled(Boolean(existing))
+    } catch (error) {
+      setStatus(error instanceof Error ? `서비스워커 등록 실패: ${error.message}` : '서비스워커 등록에 실패했어요.')
+    }
   }
 
   async function enablePush() {
@@ -195,6 +206,7 @@ function App() {
 
   function playBeep() {
     const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+    if (!AudioContextClass) return
     const context = new AudioContextClass()
     const oscillator = context.createOscillator()
     const gain = context.createGain()
@@ -207,6 +219,57 @@ function App() {
     gain.connect(context.destination)
     oscillator.start()
     oscillator.stop(context.currentTime + 0.38)
+  }
+
+  function exportWatches() {
+    const payload = {
+      app: 'action-notifier',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      repositories: watches.map((watch) => ({ repository: watch.fullName, enabled: watch.enabled })),
+    }
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `action-notifier-watches-${new Date().toISOString().slice(0, 10)}.json`
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    URL.revokeObjectURL(url)
+    setStatus('감시 목록을 내보냈어요.')
+  }
+
+  async function importWatches(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    if (!file) return
+    try {
+      const payload = JSON.parse(await file.text())
+      if (payload?.app !== 'action-notifier' || payload?.version !== 1 || !Array.isArray(payload.repositories)) {
+        throw new Error('action-notifier 감시 목록 파일이 아닙니다.')
+      }
+      let imported = 0
+      for (const item of payload.repositories as Array<{ repository?: string; enabled?: boolean }>) {
+        if (!item.repository) continue
+        const watch = await request<Watch>('/api/action-notifier/repos', {
+          method: 'POST',
+          body: JSON.stringify({ repository: item.repository }),
+        })
+        if (typeof item.enabled === 'boolean' && watch.enabled !== item.enabled) {
+          await request<Watch>(`/api/action-notifier/repos/${watch.id}/notification`, {
+            method: 'PATCH',
+            body: JSON.stringify({ enabled: item.enabled }),
+          })
+        }
+        imported += 1
+      }
+      await loadWatches()
+      setStatus(`${imported}개 레포 감시 설정을 불러왔어요.`)
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : '감시 목록을 불러오지 못했어요.')
+    } finally {
+      if (importRef.current) importRef.current.value = ''
+    }
   }
 
   return (
@@ -236,6 +299,14 @@ function App() {
               <button className="btn primary" type="submit">연결</button>
             </div>
           </form>
+
+          <div className="backup-row">
+            <button className="btn muted" onClick={exportWatches}>목록 내보내기</button>
+            <label className="btn muted import-button">
+              목록 불러오기
+              <input ref={importRef} type="file" accept="application/json,.json" onChange={importWatches} />
+            </label>
+          </div>
 
           <div className="watch-list">
             {watches.length === 0 ? (
