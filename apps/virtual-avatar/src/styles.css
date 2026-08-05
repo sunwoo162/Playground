@@ -1206,6 +1206,18 @@ input {
   font-weight: 700;
 }
 
+.panel-notice {
+  margin: -8px 0 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(121, 143, 255, .28);
+  border-radius: 8px;
+  background: rgba(121, 143, 255, .1);
+  color: #c8d1f2;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
 .model-url-row {
   display: grid;
   grid-template-columns: 1fr 58px;
@@ -1252,6 +1264,36 @@ input {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.preset-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.preset-actions button,
+.preset-actions label {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 8px;
+  background: rgba(255,255,255,.08);
+  color: #eef2ff;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.preset-actions input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
 }
 
 .panel-card {

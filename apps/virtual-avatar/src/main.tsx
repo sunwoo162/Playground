@@ -1,4 +1,5 @@
 import { StrictMode, useEffect, useMemo, useRef, useState } from 'react';
+import type { ChangeEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import vtuberCharacter from './assets/vtuber-character.png';
 import './styles.css';
@@ -94,10 +95,12 @@ const BACKGROUNDS: Background[] = [
 ];
 
 const RECOMMENDED_MODEL_PAGE = 'https://hub.vroid.com/characters/3131752290308902516/models/4850246315599773159';
+const PRESET_KEY = 'virtual-avatar-preset';
 
 function App() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const presetInputRef = useRef<HTMLInputElement | null>(null);
   const rafRef = useRef<number | null>(null);
   const previousFrame = useRef<ImageData | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -118,6 +121,7 @@ function App() {
   const [motion, setMotion] = useState<Motion>(EMPTY_MOTION);
   const [sensitivity, setSensitivity] = useState(1.05);
   const [smooth, setSmooth] = useState(0.66);
+  const [notice, setNotice] = useState('');
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -132,6 +136,44 @@ function App() {
     return () => stopCamera();
   }, []);
 
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(PRESET_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      const nextExpression = EXPRESSIONS.find((item) => item.key === saved.expressionKey);
+      const nextBackground = BACKGROUNDS.find((item) => item.id === saved.backgroundId);
+      if (nextExpression) setExpression(nextExpression);
+      if (nextBackground) setBackground(nextBackground);
+      if (typeof saved.showCamera === 'boolean') setShowCamera(saved.showCamera);
+      if (typeof saved.showRig === 'boolean') setShowRig(saved.showRig);
+      if (typeof saved.sensitivity === 'number') setSensitivity(clamp(saved.sensitivity, 0.3, 1.6));
+      if (typeof saved.smooth === 'number') setSmooth(clamp(saved.smooth, 0.2, 0.92));
+      if (typeof saved.vrmUrl === 'string' && !saved.vrmUrl.startsWith('blob:')) {
+        setVrmUrl(saved.vrmUrl);
+        setVrmUrlInput(saved.vrmUrl);
+      }
+      if (typeof saved.modelName === 'string') setModelName(saved.modelName);
+      setNotice('저장된 프리셋을 불러왔습니다.');
+    } catch {
+      setNotice('저장된 프리셋을 읽지 못했습니다.');
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(PRESET_KEY, JSON.stringify({
+      expressionKey: expression.key,
+      backgroundId: background.id,
+      showCamera,
+      showRig,
+      sensitivity,
+      smooth,
+      vrmUrl: vrmUrl.startsWith('blob:') ? '' : vrmUrl,
+      modelName,
+      updatedAt: new Date().toISOString(),
+    }));
+  }, [background.id, expression.key, modelName, sensitivity, showCamera, showRig, smooth, vrmUrl]);
+
   const status = useMemo(() => {
     if (!cameraOn) return '카메라 대기';
     return `트래킹 중 ${Math.round(motion.energy * 100)}%`;
@@ -142,18 +184,23 @@ function App() {
       stopCamera();
       return;
     }
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: 960, height: 540, facingMode: 'user' },
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-    });
-    if (videoRef.current) {
-      videoRef.current.srcObject = stream;
-      await videoRef.current.play();
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 960, height: 540, facingMode: 'user' },
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+      setupAudio(stream);
+      setCameraOn(true);
+      setNotice('카메라 트래킹을 시작했습니다.');
+      void setupVisionTracking();
+      trackMotion();
+    } catch (error) {
+      setNotice(error instanceof Error ? `카메라 시작 실패: ${error.message}` : '카메라 권한을 확인해주세요.');
     }
-    setupAudio(stream);
-    setCameraOn(true);
-    void setupVisionTracking();
-    trackMotion();
   }
 
   function stopCamera() {
@@ -417,6 +464,7 @@ function App() {
       });
     }
     setModelName(file.name);
+    setNotice('.vrm 파일을 불러왔습니다. 로컬 파일은 백업에 포함되지 않습니다.');
   }
 
   function loadVrmUrl() {
@@ -424,6 +472,7 @@ function App() {
     if (!nextUrl) return;
     setVrmUrl(nextUrl);
     setModelName(nextUrl.split('/').pop() || '외부 VRM 모델');
+    setNotice('외부 VRM URL을 적용했습니다.');
   }
 
   function clearVrmModel() {
@@ -433,6 +482,62 @@ function App() {
     });
     setVrmUrlInput('');
     setModelName('일본 방송 스타일 기본 캐릭터');
+    setNotice('기본 이미지 모델로 되돌렸습니다.');
+  }
+
+  function exportPreset() {
+    const payload = {
+      app: 'virtual-avatar',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      expressionKey: expression.key,
+      backgroundId: background.id,
+      showCamera,
+      showRig,
+      sensitivity,
+      smooth,
+      vrmUrl: vrmUrl.startsWith('blob:') ? '' : vrmUrl,
+      modelName,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `virtual-avatar-preset-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    setNotice('프리셋을 내보냈습니다. 로컬 VRM 파일은 포함하지 않았습니다.');
+  }
+
+  async function importPreset(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const payload = JSON.parse(await file.text());
+      if (payload?.app !== 'virtual-avatar' || payload?.version !== 1) {
+        throw new Error('virtual-avatar 프리셋 파일이 아닙니다.');
+      }
+      const nextExpression = EXPRESSIONS.find((item) => item.key === payload.expressionKey);
+      const nextBackground = BACKGROUNDS.find((item) => item.id === payload.backgroundId);
+      if (nextExpression) setExpression(nextExpression);
+      if (nextBackground) setBackground(nextBackground);
+      if (typeof payload.showCamera === 'boolean') setShowCamera(payload.showCamera);
+      if (typeof payload.showRig === 'boolean') setShowRig(payload.showRig);
+      if (typeof payload.sensitivity === 'number') setSensitivity(clamp(payload.sensitivity, 0.3, 1.6));
+      if (typeof payload.smooth === 'number') setSmooth(clamp(payload.smooth, 0.2, 0.92));
+      if (typeof payload.vrmUrl === 'string' && !payload.vrmUrl.startsWith('blob:')) {
+        setVrmUrl(payload.vrmUrl);
+        setVrmUrlInput(payload.vrmUrl);
+      }
+      if (typeof payload.modelName === 'string') setModelName(payload.modelName);
+      setNotice('프리셋을 불러왔습니다.');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : '프리셋을 불러오지 못했습니다.');
+    } finally {
+      if (presetInputRef.current) presetInputRef.current.value = '';
+    }
   }
 
   return (
@@ -451,6 +556,7 @@ function App() {
           <h1>Levenant</h1>
           <p>Virtual Avatar Studio</p>
         </div>
+        {notice && <p className="panel-notice">{notice}</p>}
 
         <section className="panel-card">
           <h2>1. 카메라</h2>
@@ -480,6 +586,17 @@ function App() {
             <button type="button" onClick={clearVrmModel}>기본 이미지</button>
           </div>
           <p className="model-name">{modelName}</p>
+        </section>
+
+        <section className="panel-card">
+          <h2>프리셋</h2>
+          <div className="preset-actions">
+            <button type="button" onClick={exportPreset}>내보내기</button>
+            <label>
+              불러오기
+              <input ref={presetInputRef} type="file" accept="application/json,.json" onChange={importPreset} />
+            </label>
+          </div>
         </section>
 
         <section className="panel-card">
