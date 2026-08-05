@@ -10,6 +10,7 @@ import { Stats } from '../features/stats';
 import { CalendarView } from '../features/calendar';
 import { Subjects } from '../features/subjects';
 import { Group } from '../features/group';
+import { Settings } from '../features/settings';
 import { TabNav } from '../widgets/tab-nav';
 import { MiniTimer } from '../widgets/mini-timer';
 import { StopModal } from '../widgets/stop-modal/StopModal';
@@ -108,30 +109,39 @@ function App() {
     localStorage.removeItem(THEME_KEY);
   }, []);
 
+  const loadAppData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [subs, sess, goal] = await Promise.all([getSubjectsAsync(), getSessionsAsync(), getDailyGoalAsync()]);
+      setSubjects(subs);
+      setSessions(sess);
+      setDailyGoalMinutes(goal.totalMinutes);
+
+      const saved = loadTimerState();
+      if (saved) {
+        const elapsed = Math.floor((Date.now() - saved.startTime.getTime()) / 1000);
+        setStartTime(saved.startTime);
+        setElapsed(elapsed);
+        elapsedRef.current = elapsed;
+        setSelectedSubjectId(saved.subjectId || (subs.length > 0 ? subs[0].id : ''));
+        setRunning(true);
+      } else {
+        setStartTime(null);
+        setElapsed(0);
+        elapsedRef.current = 0;
+        setRunning(false);
+        setSelectedSubjectId(subs.length > 0 ? subs[0].id : '');
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   // 초기 데이터 로드
   useEffect(() => {
     requestNotificationPermission();
-    Promise.all([getSubjectsAsync(), getSessionsAsync(), getDailyGoalAsync()])
-      .then(([subs, sess, goal]) => {
-        setSubjects(subs);
-        setSessions(sess);
-        setDailyGoalMinutes(goal.totalMinutes);
-
-        // 타이머 복원
-        const saved = loadTimerState();
-        if (saved) {
-          const elapsed = Math.floor((Date.now() - saved.startTime.getTime()) / 1000);
-          setStartTime(saved.startTime);
-          setElapsed(elapsed);
-          elapsedRef.current = elapsed;
-          setSelectedSubjectId(saved.subjectId || (subs.length > 0 ? subs[0].id : ''));
-          setRunning(true);
-        } else if (subs.length > 0) {
-          setSelectedSubjectId(subs[0].id);
-        }
-      })
-      .finally(() => setLoading(false));
-  }, []);
+    loadAppData();
+  }, [loadAppData]);
 
   useEffect(() => {
     let reminderTimer: ReturnType<typeof setTimeout> | null = null;
@@ -306,6 +316,15 @@ function App() {
           />
         )}
         {activeTab === 'group' && <Group />}
+        {activeTab === 'settings' && (
+          <Settings
+            subjects={subjects}
+            sessions={sessions}
+            dailyGoalMinutes={dailyGoalMinutes}
+            running={running}
+            onDataImported={loadAppData}
+          />
+        )}
       </main>
       {modalStep > 0 && (
         <StopModal

@@ -12,6 +12,7 @@ const TABS: Tab[] = [
   { key: 'calendar', label: '달력', icon: '📅' },
   { key: 'subjects', label: '과목', icon: '📚' },
   { key: 'group', label: '그룹', icon: '👥' },
+  { key: 'settings', label: '설정', icon: '⚙️' },
 ];
 
 interface Props {
