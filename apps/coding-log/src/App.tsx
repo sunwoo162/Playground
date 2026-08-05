@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { ChangeEvent } from 'react';
 import type { CodingLog, Platform, Status, Language, Comment, VelogSettings } from './types';
 import { getMyLogs, getPublicLogs, createLog, updateLog, deleteLog, generateId, getTodayStr, parseUrlParams, getLike, toggleLike, getComments, addComment, deleteComment, fetchCodeFromCommit, getVelogSettings, saveVelogSettings } from './storage';
 import { useAuth } from './useAuth';
@@ -82,6 +83,8 @@ export default function App() {
   const [velogDraft, setVelogDraft] = useState<VelogSettings>(() => getVelogSettings());
   const [publishingVelog, setPublishingVelog] = useState(false);
   const [velogResult, setVelogResult] = useState<{ url?: string; error?: string } | null>(null);
+  const [syncStatus, setSyncStatus] = useState('');
+  const backupInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     document.documentElement.dataset.theme = 'dark';
@@ -90,8 +93,15 @@ export default function App() {
 
   useEffect(() => {
     if (!authed) return;
-    getMyLogs().then(setLogs).catch(() => {});
-    getPublicLogs().then(setPublicLogs).catch(() => {});
+    Promise.all([getMyLogs(), getPublicLogs()])
+      .then(([my, publicList]) => {
+        setLogs(my);
+        setPublicLogs(publicList);
+        setSyncStatus('');
+      })
+      .catch(() => {
+        setSyncStatus('서버에서 일지를 불러오지 못했습니다. 로그인 상태와 API 연결을 확인해주세요.');
+      });
     const params = parseUrlParams();
     if (params.title) {
       const initial = emptyLog();
@@ -139,16 +149,24 @@ export default function App() {
       setPublicLogs(await getPublicLogs());
       openViewer(saved);
       setIsNew(false);
+      setSyncStatus('저장했습니다.');
+    } catch (e) {
+      setSyncStatus(e instanceof Error ? `저장 실패: ${e.message}` : '저장에 실패했습니다.');
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    await deleteLog(id);
-    setLogs(await getMyLogs());
-    setPublicLogs(await getPublicLogs());
-    setSelected(null); setView('list');
+    try {
+      await deleteLog(id);
+      setLogs(await getMyLogs());
+      setPublicLogs(await getPublicLogs());
+      setSelected(null); setView('list');
+      setSyncStatus('삭제했습니다.');
+    } catch (e) {
+      setSyncStatus(e instanceof Error ? `삭제 실패: ${e.message}` : '삭제에 실패했습니다.');
+    }
   };
 
   const addTag = (tag: string) => {
@@ -222,6 +240,65 @@ export default function App() {
     setVelogDraft(updated);
     saveVelogSettings(updated);
     setVelogResult(null);
+    setSyncStatus('Velog 설정을 저장했습니다.');
+  };
+
+  const exportBackup = () => {
+    const safeVelogSettings = { ...getVelogSettings(), accessToken: '' };
+    const payload = {
+      app: 'coding-log',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      logs,
+      velogSettings: safeVelogSettings,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `coding-log-backup-${getTodayStr()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    setSyncStatus('백업 파일을 만들었습니다. Velog 토큰은 포함하지 않았습니다.');
+  };
+
+  const importBackup = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const payload = JSON.parse(await file.text());
+      if (payload?.app !== 'coding-log' || payload?.version !== 1 || !Array.isArray(payload?.logs)) {
+        throw new Error('coding-log 백업 파일이 아닙니다.');
+      }
+      const restored: CodingLog[] = [];
+      for (const log of payload.logs as CodingLog[]) {
+        const now = new Date().toISOString();
+        const cleanLog: CodingLog = {
+          ...emptyLog(),
+          ...log,
+          id: generateId(),
+          userId: undefined,
+          userLogin: undefined,
+          userAvatarUrl: undefined,
+          tags: Array.isArray(log.tags) ? log.tags : [],
+          problemTitle: String(log.problemTitle || '').trim() || '제목 없는 풀이',
+          createdAt: now,
+          updatedAt: now,
+        };
+        restored.push(await createLog(cleanLog));
+      }
+      setLogs(await getMyLogs());
+      setPublicLogs(await getPublicLogs());
+      setSelected(restored[0] ?? null);
+      setView('list');
+      setSyncStatus(`${restored.length}개 일지를 복원했습니다.`);
+    } catch (e) {
+      setSyncStatus(e instanceof Error ? `복원 실패: ${e.message}` : '복원에 실패했습니다.');
+    } finally {
+      if (backupInputRef.current) backupInputRef.current.value = '';
+    }
   };
 
   const handlePublishVelog = async () => {
@@ -297,6 +374,11 @@ export default function App() {
         </div>
         {view === 'list' && (
           <div className="header-actions">
+            <button className="btn-ghost" onClick={exportBackup}>백업</button>
+            <label className="btn-ghost backup-import">
+              복원
+              <input ref={backupInputRef} type="file" accept="application/json,.json" onChange={importBackup} />
+            </label>
             <button className="btn-ghost" onClick={() => setView('settings')}>⚙️ 코딩테스트 설정</button>
             <button className="btn-primary" onClick={handleNew}>+ 새 일지</button>
           </div>
@@ -321,6 +403,7 @@ export default function App() {
               {STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
             </select>
           </div>
+          {syncStatus && <p className="sync-status">{syncStatus}</p>}
           {filtered.length === 0 ? (
             <div className="empty-state">
               <p className="empty-icon">💻</p>
