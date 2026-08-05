@@ -38,6 +38,7 @@ body {
   color: var(--text);
   min-height: 100vh;
   transition: background-color 0.25s, color 0.25s;
+  overflow-x: hidden;
 }
 
 .app {
@@ -491,12 +492,14 @@ body {
   font-size: 1.2rem;
   font-weight: 600;
   margin-bottom: 8px;
+  overflow-wrap: anywhere;
 }
 
 .app-desc {
   font-size: 0.85rem;
   color: var(--text-muted);
   line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .lock-badge {
@@ -1383,6 +1386,48 @@ body {
 }
 
 @media (max-width: 760px) {
+  .app {
+    padding: 16px;
+  }
+
+  .header,
+  .category-heading,
+  .notice-section-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .header-right,
+  .notice-header-actions {
+    justify-content: flex-start;
+  }
+
+  .logo,
+  .tagline,
+  .notice-title,
+  .notice-detail h3,
+  .notice-detail p {
+    overflow-wrap: anywhere;
+  }
+
+  .apps-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .app-card {
+    padding: 22px 18px;
+  }
+
+  .notice-featured,
+  .notice-modal-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .notice-date {
+    width: fit-content;
+    white-space: normal;
+  }
+
   .github-summary,
   .commit-row,
   .github-details div {
