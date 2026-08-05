@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
+import type { ChangeEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 
@@ -96,6 +97,8 @@ function App() {
   const [second, setSecond] = useState(initialPair.second);
   const [draft, setDraft] = useState('');
   const [notes, setNotes] = useState<IdeaNote[]>(loadSavedNotes);
+  const [boardStatus, setBoardStatus] = useState('');
+  const importRef = useRef<HTMLInputElement | null>(null);
 
   const starter = useMemo(() => randomItem(STARTERS), [first, second]);
   const examples = useMemo(() => EXAMPLE_PATTERNS.map((pattern) => pattern.create(first, second)), [first, second]);
@@ -138,6 +141,50 @@ function App() {
 
   const removeNote = (id: string) => {
     saveNotes(notes.filter((note) => note.id !== id));
+    setBoardStatus('아이디어를 삭제했습니다.');
+  };
+
+  const exportBoard = () => {
+    const payload = {
+      app: 'idea-mixer',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      notes,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `idea-mixer-board-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    setBoardStatus('아이디어 보드를 내보냈습니다.');
+  };
+
+  const importBoard = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const payload = JSON.parse(await file.text());
+      if (payload?.app !== 'idea-mixer' || payload?.version !== 1 || !Array.isArray(payload.notes)) {
+        throw new Error('idea-mixer 보드 파일이 아닙니다.');
+      }
+      const restored = payload.notes.map((note: Partial<IdeaNote>) => ({
+        id: crypto.randomUUID(),
+        first: String(note.first || '단어 A'),
+        second: String(note.second || '단어 B'),
+        text: String(note.text || '').trim(),
+        createdAt: String(note.createdAt || new Date().toLocaleString('ko-KR')),
+      })).filter((note: IdeaNote) => note.text);
+      saveNotes(restored);
+      setBoardStatus(`${restored.length}개 아이디어를 불러왔습니다.`);
+    } catch (error) {
+      setBoardStatus(error instanceof Error ? error.message : '아이디어 보드를 불러오지 못했습니다.');
+    } finally {
+      if (importRef.current) importRef.current.value = '';
+    }
   };
 
   return (
@@ -208,7 +255,17 @@ function App() {
           <span>{second}</span>
         </div>
         <div className="saved-box">
-          <h2>아이디어 보드</h2>
+          <div className="board-heading">
+            <h2>아이디어 보드</h2>
+            <div>
+              <button type="button" onClick={exportBoard} disabled={notes.length === 0}>내보내기</button>
+              <label>
+                불러오기
+                <input ref={importRef} type="file" accept="application/json,.json" onChange={importBoard} />
+              </label>
+            </div>
+          </div>
+          {boardStatus && <p className="board-status">{boardStatus}</p>}
           {notes.length === 0 ? (
             <p className="empty">랜덤 단어를 보고 떠오른 생각을 적으면 여기에 저장됩니다.</p>
           ) : (

@@ -285,6 +285,61 @@ textarea:focus {
   font-size: 18px;
 }
 
+.board-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.board-heading h2 {
+  margin: 0;
+}
+
+.board-heading div {
+  display: flex;
+  gap: 6px;
+}
+
+.board-heading button,
+.board-heading label {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  padding: 0 9px;
+  background: rgba(255, 255, 255, 0.12);
+  color: white;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.board-heading input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.board-heading button:disabled {
+  opacity: .45;
+  cursor: default;
+}
+
+.board-status {
+  margin: 0 0 12px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
 .prompt-box p,
 .empty {
   margin: 0;
