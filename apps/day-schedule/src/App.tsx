@@ -38,8 +38,8 @@ function dateKey(date: Date) {
   return date.toISOString().slice(0, 10)
 }
 
-function weekDays() {
-  const monday = getMonday()
+function weekDays(selectedDate: string) {
+  const monday = getMonday(new Date(`${selectedDate}T00:00:00`))
   return Array.from({ length: 7 }, (_, index) => {
     const date = new Date(monday)
     date.setDate(monday.getDate() + index)
@@ -115,7 +115,7 @@ function App() {
   const [category, setCategory] = useState<Category>('study')
   const [error, setError] = useState('')
 
-  const days = useMemo(weekDays, [])
+  const days = useMemo(() => weekDays(selectedDate), [selectedDate])
   const dayBlocks = blocks.filter((block) => block.date === selectedDate)
   const sortedBlocks = useMemo(
     () => [...dayBlocks].sort((a, b) => toMinutes(a.start) - toMinutes(b.start)),
@@ -191,7 +191,7 @@ function App() {
         </div>
         <section className="summary">
           <strong>{progress}%</strong>
-          <small>{doneCount}/{blocks.length} 완료 · {Math.round(totalMinutes / 60 * 10) / 10}시간 계획</small>
+          <small>{doneCount}/{dayBlocks.length} 완료 · {Math.round(totalMinutes / 60 * 10) / 10}시간 계획</small>
           <div><i style={{ width: `${progress}%` }} /></div>
         </section>
       </header>
