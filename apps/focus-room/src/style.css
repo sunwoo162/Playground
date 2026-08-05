@@ -351,6 +351,7 @@ button {
   height: 100%;
   border: 0;
   background: #f8fafc;
+  pointer-events: none;
 }
 
 .web-page header {
@@ -393,10 +394,84 @@ button {
   position: absolute;
   right: 12px;
   bottom: 12px;
+  z-index: 5;
   padding: 7px 11px;
   background: #111827;
   color: #fff;
   font-size: .78rem;
+}
+
+.laptop-open-button {
+  left: 50%;
+  right: auto;
+  bottom: 12px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.planner-workspace {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 22px;
+  background: rgba(3,4,5,.72);
+  backdrop-filter: blur(10px);
+}
+
+.planner-window {
+  width: min(1180px, 100%);
+  height: min(780px, calc(100vh - 44px));
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 8px;
+  background: #f8fafc;
+  box-shadow: 0 22px 80px rgba(0,0,0,.48);
+}
+
+.planner-window-top {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 12px 0 16px;
+  background: #0f172a;
+  color: #f8fafc;
+}
+
+.planner-window-top strong {
+  font-size: .95rem;
+}
+
+.planner-window-top div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.planner-window-top a,
+.planner-window-top button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 8px;
+  background: rgba(255,255,255,.08);
+  color: #f8fafc;
+  text-decoration: none;
+  font-weight: 900;
+}
+
+.planner-window-top button {
+  cursor: pointer;
+}
+
+.planner-workspace-frame {
+  width: 100%;
+  height: calc(100% - 48px);
+  border: 0;
+  background: #f8fafc;
 }
 
 .cursor {

@@ -70,6 +70,7 @@ function App() {
   const [entered, setEntered] = useState(false)
   const [locked, setLocked] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [plannerOpen, setPlannerOpen] = useState(false)
   const [yaw, setYaw] = useState(0)
   const [pitch, setPitch] = useState(0)
   const [viewYaw, setViewYaw] = useState(0)
@@ -144,7 +145,7 @@ function App() {
   }, [secondsLeft])
 
   const onPointerDown = (event: React.PointerEvent<HTMLElement>) => {
-    if (event.target instanceof HTMLElement && event.target.closest('.hud, .screen-overlay')) return
+    if (event.target instanceof HTMLElement && event.target.closest('.hud, .screen-overlay, .planner-workspace')) return
     if (document.pointerLockElement !== event.currentTarget) {
       event.currentTarget.requestPointerLock?.()
     }
@@ -178,6 +179,13 @@ function App() {
   const leaveRoom = () => {
     setEntered(false)
     setRunning(false)
+    setPlannerOpen(false)
+  }
+
+  const openPlanner = () => {
+    setScreenId('planner')
+    setPlannerOpen(true)
+    document.exitPointerLock?.()
   }
 
   return (
@@ -245,11 +253,14 @@ function App() {
                   </div>
                   <div className="web-page">
                     {screenId === 'planner' ? (
-                      <iframe
-                        className="planner-frame"
-                        src="/apps/study-planner/"
-                        title="스터디 플래너"
-                      />
+                      <>
+                        <iframe
+                          className="planner-frame"
+                          src="/apps/study-planner/"
+                          title="스터디 플래너 미리보기"
+                        />
+                        <button className="laptop-open-button" onClick={openPlanner}>플래너 열기</button>
+                      </>
                     ) : (
                       <>
                         <div className="cursor" />
@@ -260,7 +271,7 @@ function App() {
                         <div className="screen-list">
                           {screen.items.map((item) => <span key={item}>{item}</span>)}
                         </div>
-                        <button onClick={leaveRoom}>나가기</button>
+                        <button onClick={openPlanner}>플래너 열기</button>
                       </>
                     )}
                   </div>
@@ -300,6 +311,25 @@ function App() {
               <strong>{timeText}</strong>
             </button>
           </aside>
+
+          {plannerOpen && (
+            <section className="planner-workspace" aria-label="스터디 플래너 작업 화면">
+              <div className="planner-window">
+                <div className="planner-window-top">
+                  <strong>스터디 플래너</strong>
+                  <div>
+                    <a href="/apps/study-planner/" target="_blank" rel="noreferrer">새 창</a>
+                    <button onClick={() => setPlannerOpen(false)}>닫기</button>
+                  </div>
+                </div>
+                <iframe
+                  className="planner-workspace-frame"
+                  src="/apps/study-planner/"
+                  title="스터디 플래너"
+                />
+              </div>
+            </section>
+          )}
         </>
       )}
     </main>
