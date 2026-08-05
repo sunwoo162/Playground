@@ -9,6 +9,8 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "mock_invest_watchlist", uniqueConstraints = {
         @UniqueConstraint(name = "uk_mock_watch_user_symbol", columnNames = {"user_id", "symbol"})
+}, indexes = {
+        @Index(name = "idx_mock_watch_user_created", columnList = "user_id, created_at")
 })
 @Getter
 @Setter
@@ -26,7 +28,7 @@ public class MockInvestWatchlist {
     @Column(nullable = false, length = 20)
     private String symbol;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 160)
     private String name;
 
     @CreationTimestamp

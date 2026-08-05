@@ -7,7 +7,10 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "mock_invest_stock_requests")
+@Table(name = "mock_invest_stock_requests", indexes = {
+        @Index(name = "idx_mock_stock_request_user_created", columnList = "user_id, created_at"),
+        @Index(name = "idx_mock_stock_request_status_created", columnList = "status, created_at")
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -24,7 +27,7 @@ public class MockInvestStockRequest {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
+    @Column(name = "user_id", nullable = false, length = 64)
     private String userId;
 
     @Column(nullable = false, length = 120)

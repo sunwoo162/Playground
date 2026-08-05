@@ -8,7 +8,10 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "mock_invest_journals")
+@Table(name = "mock_invest_journals", indexes = {
+        @Index(name = "idx_mock_journal_user_created", columnList = "user_id, created_at"),
+        @Index(name = "idx_mock_journal_user_symbol", columnList = "user_id, symbol")
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -25,10 +28,10 @@ public class MockInvestJournal {
     @Column(nullable = false, length = 20)
     private String symbol;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 160)
     private String name;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 180)
     private String title;
 
     @Lob

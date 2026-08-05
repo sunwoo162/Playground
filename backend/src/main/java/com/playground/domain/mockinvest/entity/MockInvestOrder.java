@@ -8,7 +8,10 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "mock_invest_orders")
+@Table(name = "mock_invest_orders", indexes = {
+        @Index(name = "idx_mock_order_user_created", columnList = "user_id, created_at"),
+        @Index(name = "idx_mock_order_user_symbol_created", columnList = "user_id, symbol, created_at")
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -31,7 +34,7 @@ public class MockInvestOrder {
     @Column(nullable = false, length = 20)
     private String symbol;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 160)
     private String name;
 
     @Column(nullable = false)

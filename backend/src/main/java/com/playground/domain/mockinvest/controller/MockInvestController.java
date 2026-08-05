@@ -166,4 +166,9 @@ public class MockInvestController {
     public ResponseEntity<Map<String, String>> stockProviderError(StockProviderException e) {
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of("error", e.getMessage()));
     }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Map<String, String>> badRequest(IllegalArgumentException e) {
+        return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+    }
 }

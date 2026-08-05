@@ -52,7 +52,7 @@ public class MockInvestService {
 
     @Transactional
     public MockInvestDto.OrderResponse buy(String userId, MockInvestDto.TradeRequest req) {
-        if (req.getQuantity() == null || req.getQuantity() < 1) throw new IllegalArgumentException("quantity must be greater than zero");
+        validateTradeRequest(req);
         MockInvestAccount account = ensureAccount(userId);
         MockInvestDto.StockResponse stock = stockClient.quote(req.getSymbol());
         BigDecimal cost = stock.getPrice().multiply(BigDecimal.valueOf(req.getQuantity()));
@@ -80,7 +80,7 @@ public class MockInvestService {
 
     @Transactional
     public MockInvestDto.OrderResponse sell(String userId, MockInvestDto.TradeRequest req) {
-        if (req.getQuantity() == null || req.getQuantity() < 1) throw new IllegalArgumentException("quantity must be greater than zero");
+        validateTradeRequest(req);
         MockInvestAccount account = ensureAccount(userId);
         MockInvestDto.StockResponse stock = stockClient.quote(req.getSymbol());
         MockInvestHolding holding = holdingRepository.findByUserIdAndSymbol(userId, stock.getSymbol())
@@ -126,6 +126,9 @@ public class MockInvestService {
 
     @Transactional
     public void addWatch(String userId, MockInvestDto.WatchRequest req) {
+        if (req == null || req.getSymbol() == null || req.getSymbol().isBlank()) {
+            throw new IllegalArgumentException("symbol is required");
+        }
         MockInvestDto.StockResponse stock = stockClient.quote(req.getSymbol());
         watchlistRepository.findByUserIdAndSymbol(userId, stock.getSymbol()).orElseGet(() ->
                 watchlistRepository.save(MockInvestWatchlist.builder()
@@ -146,30 +149,34 @@ public class MockInvestService {
 
     @Transactional
     public MockInvestDto.JournalResponse createJournal(String userId, MockInvestDto.JournalRequest req) {
+        validateJournalRequest(req);
         MockInvestDto.StockResponse stock = stockClient.quote(req.getSymbol());
         MockInvestJournal journal = journalRepository.save(MockInvestJournal.builder()
                 .userId(userId)
                 .symbol(stock.getSymbol())
                 .name(stock.getName())
-                .title(req.getTitle())
-                .content(req.getContent())
-                .result(req.getResult())
+                .title(clean(req.getTitle(), 180))
+                .content(cleanText(req.getContent()))
+                .result(cleanNullableText(req.getResult()))
                 .build());
         return toJournal(journal);
     }
 
     @Transactional
     public MockInvestDto.JournalResponse updateJournal(String userId, Long id, MockInvestDto.JournalRequest req) {
-        MockInvestJournal journal = journalRepository.findByIdAndUserId(id, userId).orElseThrow();
-        journal.setTitle(req.getTitle());
-        journal.setContent(req.getContent());
-        journal.setResult(req.getResult());
+        validateJournalRequest(req);
+        MockInvestJournal journal = journalRepository.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new IllegalArgumentException("journal not found"));
+        journal.setTitle(clean(req.getTitle(), 180));
+        journal.setContent(cleanText(req.getContent()));
+        journal.setResult(cleanNullableText(req.getResult()));
         return toJournal(journal);
     }
 
     @Transactional
     public void deleteJournal(String userId, Long id) {
-        MockInvestJournal journal = journalRepository.findByIdAndUserId(id, userId).orElseThrow();
+        MockInvestJournal journal = journalRepository.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new IllegalArgumentException("journal not found"));
         journalRepository.delete(journal);
     }
 
@@ -203,9 +210,9 @@ public class MockInvestService {
         }
         MockInvestStockRequest stockRequest = stockRequestRepository.save(MockInvestStockRequest.builder()
                 .userId(userId)
-                .company(req.getCompany().trim())
-                .symbol(normalizeNullable(req.getSymbol()))
-                .memo(normalizeNullable(req.getMemo()))
+                .company(clean(req.getCompany(), 120))
+                .symbol(cleanNullable(req.getSymbol(), 30))
+                .memo(cleanNullable(req.getMemo(), 1000))
                 .status(MockInvestStockRequest.RequestStatus.PENDING)
                 .build());
         return toStockRequest(stockRequest);
@@ -253,6 +260,9 @@ public class MockInvestService {
     }
 
     private MockInvestAccount ensureAccount(String userId) {
+        if (userId == null || userId.isBlank()) {
+            throw new IllegalArgumentException("userId is required");
+        }
         return accountRepository.findById(userId).orElseGet(() -> accountRepository.save(MockInvestAccount.builder()
                 .userId(userId)
                 .cash(INITIAL_CASH)
@@ -282,6 +292,33 @@ public class MockInvestService {
                 .quantity(quantity)
                 .price(stock.getPrice())
                 .build());
+    }
+
+    private void validateTradeRequest(MockInvestDto.TradeRequest req) {
+        if (req == null) {
+            throw new IllegalArgumentException("request body is required");
+        }
+        if (req.getSymbol() == null || req.getSymbol().isBlank()) {
+            throw new IllegalArgumentException("symbol is required");
+        }
+        if (req.getQuantity() == null || req.getQuantity() < 1) {
+            throw new IllegalArgumentException("quantity must be greater than zero");
+        }
+    }
+
+    private void validateJournalRequest(MockInvestDto.JournalRequest req) {
+        if (req == null) {
+            throw new IllegalArgumentException("request body is required");
+        }
+        if (req.getSymbol() == null || req.getSymbol().isBlank()) {
+            throw new IllegalArgumentException("symbol is required");
+        }
+        if (req.getTitle() == null || req.getTitle().isBlank()) {
+            throw new IllegalArgumentException("title is required");
+        }
+        if (req.getContent() == null || req.getContent().isBlank()) {
+            throw new IllegalArgumentException("content is required");
+        }
     }
 
     private MockInvestDto.HoldingResponse toHolding(MockInvestHolding h) {
@@ -409,6 +446,25 @@ public class MockInvestService {
 
     private String normalizeNullable(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private String clean(String value, int maxLength) {
+        String cleaned = value.trim();
+        return cleaned.length() > maxLength ? cleaned.substring(0, maxLength) : cleaned;
+    }
+
+    private String cleanNullable(String value, int maxLength) {
+        String cleaned = normalizeNullable(value);
+        if (cleaned == null) return null;
+        return cleaned.length() > maxLength ? cleaned.substring(0, maxLength) : cleaned;
+    }
+
+    private String cleanText(String value) {
+        return value.trim();
+    }
+
+    private String cleanNullableText(String value) {
+        return normalizeNullable(value);
     }
 
     private BigDecimal rate(BigDecimal profit, BigDecimal base) {
