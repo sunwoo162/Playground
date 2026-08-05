@@ -25,6 +25,17 @@ type RecentSession = {
   createdAt: string
 }
 
+type TrainingReport = {
+  app: 'voice-phishing'
+  version: 1
+  exportedAt: string
+  riskScore: number
+  riskLabel: string
+  choicesCount: number
+  incidents: Incident[]
+  durationSeconds: number
+}
+
 const STEPS: Step[] = [
   {
     speaker: '서울중앙지검 수사관',
@@ -89,12 +100,17 @@ const EXPLANATIONS = [
 ]
 
 function speak(text: string) {
+  if (!('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) return
   window.speechSynthesis.cancel()
   const utterance = new SpeechSynthesisUtterance(text)
   utterance.lang = 'ko-KR'
   utterance.rate = 1.05
   utterance.pitch = 0.82
-  window.speechSynthesis.speak(utterance)
+  try {
+    window.speechSynthesis.speak(utterance)
+  } catch {
+    // Voice playback is optional; the transcript remains visible.
+  }
 }
 
 function App() {
@@ -107,6 +123,7 @@ function App() {
   const [startedAt, setStartedAt] = useState<number | null>(null)
   const [saveState, setSaveState] = useState<SaveState>('idle')
   const [recentSessions, setRecentSessions] = useState<RecentSession[]>([])
+  const [reportStatus, setReportStatus] = useState('')
 
   const step = STEPS[stepIndex]
   const latestIncident = lastIncident ?? incidents.at(-1) ?? 'remote-app'
@@ -152,7 +169,7 @@ function App() {
   }, [choicesCount, incidents, phase, risk, saveState, startedAt])
 
   const start = () => {
-    window.speechSynthesis.cancel()
+    window.speechSynthesis?.cancel()
     setPhase('incoming')
     setStepIndex(0)
     setRisk(0)
@@ -162,6 +179,7 @@ function App() {
     setStartedAt(Date.now())
     setSaveState('idle')
     setRecentSessions([])
+    setReportStatus('')
   }
 
   const answerCall = () => {
@@ -169,7 +187,7 @@ function App() {
   }
 
   const choose = (choice: Choice) => {
-    window.speechSynthesis.cancel()
+    window.speechSynthesis?.cancel()
     setChoicesCount((current) => current + 1)
     setRisk((current) => Math.min(100, current + choice.risk))
     if (choice.incident) {
@@ -189,6 +207,31 @@ function App() {
     }
     setStepIndex(next)
     setPhase('call')
+  }
+
+  const durationSeconds = startedAt ? Math.max(0, Math.round((Date.now() - startedAt) / 1000)) : 0
+
+  const exportReport = () => {
+    const report: TrainingReport = {
+      app: 'voice-phishing',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      riskScore: risk,
+      riskLabel,
+      choicesCount,
+      incidents,
+      durationSeconds,
+    }
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `voice-phishing-report-${new Date().toISOString().slice(0, 10)}.json`
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    URL.revokeObjectURL(url)
+    setReportStatus('체험 리포트를 내보냈습니다.')
   }
 
   return (
@@ -228,9 +271,11 @@ function App() {
             </p>
             <div className="final-actions">
               <button className="start-button" onClick={start}>다시 체험하기</button>
+              <button className="outline-link report-button" onClick={exportReport}>리포트 저장</button>
               <a className="outline-link" href="tel:112">112 신고</a>
               <a className="outline-link" href="tel:1332">1332 금융상담</a>
             </div>
+            {reportStatus && <p className="report-status">{reportStatus}</p>}
           </div>
           <div className="explain-panel">
             <h2>해설과 대처법</h2>

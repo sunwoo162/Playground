@@ -112,6 +112,17 @@ p {
   color: var(--text);
 }
 
+.report-button {
+  cursor: pointer;
+}
+
+.report-status {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: .92rem;
+  font-weight: 800;
+}
+
 .phone-stage {
   width: min(420px, 100%);
 }
