@@ -8,7 +8,11 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "project_shares",
-    uniqueConstraints = @UniqueConstraint(columnNames = {"project_id", "user_id"}))
+    uniqueConstraints = @UniqueConstraint(columnNames = {"project_id", "user_id"}),
+    indexes = {
+        @Index(name = "idx_project_share_user_status", columnList = "user_id, status"),
+        @Index(name = "idx_project_share_project_status", columnList = "project_id, status")
+    })
 @Getter
 @Setter
 @NoArgsConstructor
@@ -26,11 +30,11 @@ public class ProjectShare {
     @JoinColumn(name = "project_id", nullable = false)
     private Project project;
 
-    @Column(name = "user_id", nullable = false)
+    @Column(name = "user_id", nullable = false, length = 64)
     private String userId; // 공유받은 유저 ID
 
     @Enumerated(EnumType.STRING)
-    @Column
+    @Column(nullable = false, length = 20)
     @Builder.Default
     private Status status = Status.ACCEPTED;
 

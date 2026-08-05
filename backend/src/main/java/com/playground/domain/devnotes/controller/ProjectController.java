@@ -4,6 +4,7 @@ import com.playground.config.JwtAuthenticationToken;
 import com.playground.domain.devnotes.dto.ProjectDto;
 import com.playground.domain.devnotes.service.ProjectService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -101,5 +102,15 @@ public class ProjectController {
             @PathVariable Long id,
             @AuthenticationPrincipal JwtAuthenticationToken auth) {
         return ResponseEntity.ok(projectService.getSharedUsers(id, auth.getUserId()));
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Map<String, String>> badRequest(IllegalArgumentException e) {
+        return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+    }
+
+    @ExceptionHandler(RuntimeException.class)
+    public ResponseEntity<Map<String, String>> notFound(RuntimeException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
     }
 }

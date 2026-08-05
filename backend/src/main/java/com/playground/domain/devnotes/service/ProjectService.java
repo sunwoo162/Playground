@@ -55,10 +55,11 @@ public class ProjectService {
     // ── 생성 ───────────────────────────────────────────────
     @Transactional
     public ProjectDto.Response createProject(String userId, ProjectDto.Request req) {
+        validateProjectRequest(userId, req);
         Project project = Project.builder()
                 .userId(userId)
-                .title(req.getTitle())
-                .description(req.getDescription())
+                .title(clean(req.getTitle(), 180))
+                .description(cleanNullableText(req.getDescription()))
                 .overview(req.getOverview())
                 .build();
         return toResponse(projectRepository.save(project), userId);
@@ -67,10 +68,11 @@ public class ProjectService {
     // ── 수정 (소유자 + 공유 팀원 모두 가능) ───────────────────
     @Transactional
     public ProjectDto.Response updateProject(Long id, String userId, ProjectDto.Request req) {
+        validateProjectRequest(userId, req);
         Project project = getAccessibleProject(id, userId);
 
-        project.setTitle(req.getTitle());
-        project.setDescription(req.getDescription());
+        project.setTitle(clean(req.getTitle(), 180));
+        project.setDescription(cleanNullableText(req.getDescription()));
         project.setOverview(req.getOverview());
 
         project.getFeatureSpecs().clear();
@@ -78,10 +80,10 @@ public class ProjectService {
             req.getSpec().forEach(s -> project.getFeatureSpecs().add(
                 FeatureSpec.builder()
                     .project(project)
-                    .title(s.getTitle())
-                    .description(s.getDescription())
-                    .priority(FeatureSpec.Priority.valueOf(s.getPriority()))
-                    .status(FeatureSpec.Status.valueOf(s.getStatus().replace("-", "_")))
+                    .title(clean(s.getTitle(), 180))
+                    .description(cleanNullableText(s.getDescription()))
+                    .priority(parsePriority(s.getPriority()))
+                    .status(parseFeatureStatus(s.getStatus()))
                     .build()
             ));
         }
@@ -91,9 +93,9 @@ public class ProjectService {
             req.getApi().forEach(a -> project.getApiSpecs().add(
                 ApiSpec.builder()
                     .project(project)
-                    .method(ApiSpec.HttpMethod.valueOf(a.getMethod()))
-                    .endpoint(a.getEndpoint())
-                    .description(a.getDescription())
+                    .method(parseHttpMethod(a.getMethod()))
+                    .endpoint(clean(a.getEndpoint(), 240))
+                    .description(cleanNullableText(a.getDescription()))
                     .headers(a.getHeaders())
                     .queryParams(a.getQueryParams())
                     .requestBody(a.getRequestBody())
@@ -107,9 +109,9 @@ public class ProjectService {
             req.getUsers().forEach(u -> project.getUserAnalyses().add(
                 UserAnalysis.builder()
                     .project(project)
-                    .persona(u.getPersona())
-                    .goal(u.getGoal())
-                    .painPoint(u.getPainPoint())
+                    .persona(cleanNullableText(u.getPersona()))
+                    .goal(cleanNullableText(u.getGoal()))
+                    .painPoint(cleanNullableText(u.getPainPoint()))
                     .build()
             ));
         }
@@ -131,6 +133,8 @@ public class ProjectService {
     // ── 공유 추가 ──────────────────────────────────────────
     @Transactional
     public void shareProject(Long projectId, String ownerId, String targetUserId) {
+        requireUserId(ownerId);
+        targetUserId = clean(targetUserId, 64);
         Project project = projectRepository.findByIdAndUserId(projectId, ownerId)
                 .orElseThrow(() -> new RuntimeException("Project not found or no permission"));
 
@@ -247,10 +251,80 @@ public class ProjectService {
 
     // ── 접근 가능한 프로젝트 조회 (소유자 or 공유받은 사람) ──
     private Project getAccessibleProject(Long id, String userId) {
+        requireUserId(userId);
         return projectRepository.findById(id)
             .filter(p -> p.getUserId().equals(userId) ||
                         projectShareRepository.existsAcceptedByProjectIdAndUserId(id, userId, ProjectShare.Status.ACCEPTED))
             .orElseThrow(() -> new RuntimeException("Project not found or no permission"));
+    }
+
+    private void validateProjectRequest(String userId, ProjectDto.Request req) {
+        requireUserId(userId);
+        if (req == null) {
+            throw new IllegalArgumentException("요청 본문이 필요합니다.");
+        }
+        if (req.getTitle() == null || req.getTitle().isBlank()) {
+            throw new IllegalArgumentException("프로젝트 제목을 입력해주세요.");
+        }
+        if (req.getSpec() != null) {
+            req.getSpec().forEach(spec -> {
+                if (spec.getTitle() == null || spec.getTitle().isBlank()) {
+                    throw new IllegalArgumentException("기능 제목을 입력해주세요.");
+                }
+                parsePriority(spec.getPriority());
+                parseFeatureStatus(spec.getStatus());
+            });
+        }
+        if (req.getApi() != null) {
+            req.getApi().forEach(api -> {
+                parseHttpMethod(api.getMethod());
+                if (api.getEndpoint() == null || api.getEndpoint().isBlank()) {
+                    throw new IllegalArgumentException("API endpoint를 입력해주세요.");
+                }
+            });
+        }
+    }
+
+    private void requireUserId(String userId) {
+        if (userId == null || userId.isBlank()) {
+            throw new IllegalArgumentException("사용자 정보가 필요합니다.");
+        }
+    }
+
+    private FeatureSpec.Priority parsePriority(String value) {
+        try {
+            return FeatureSpec.Priority.valueOf(clean(value, 20));
+        } catch (RuntimeException e) {
+            throw new IllegalArgumentException("지원하지 않는 기능 우선순위입니다.");
+        }
+    }
+
+    private FeatureSpec.Status parseFeatureStatus(String value) {
+        try {
+            return FeatureSpec.Status.valueOf(clean(value, 20).replace("-", "_"));
+        } catch (RuntimeException e) {
+            throw new IllegalArgumentException("지원하지 않는 기능 상태입니다.");
+        }
+    }
+
+    private ApiSpec.HttpMethod parseHttpMethod(String value) {
+        try {
+            return ApiSpec.HttpMethod.valueOf(clean(value, 10).toUpperCase(Locale.ROOT));
+        } catch (RuntimeException e) {
+            throw new IllegalArgumentException("지원하지 않는 HTTP method입니다.");
+        }
+    }
+
+    private String clean(String value, int maxLength) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException("필수 입력값이 비어 있습니다.");
+        }
+        String cleaned = value.trim();
+        return cleaned.length() > maxLength ? cleaned.substring(0, maxLength) : cleaned;
+    }
+
+    private String cleanNullableText(String value) {
+        return value == null ? null : value.trim();
     }
 
     // ── 수정 알림 발송 ─────────────────────────────────────

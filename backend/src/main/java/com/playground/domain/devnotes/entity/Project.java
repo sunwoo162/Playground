@@ -10,7 +10,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "projects")
+@Table(name = "projects", indexes = {
+        @Index(name = "idx_projects_user_updated", columnList = "user_id, updated_at")
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -22,10 +24,10 @@ public class Project {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
+    @Column(name = "user_id", nullable = false, length = 64)
     private String userId; // GitHub 유저 ID
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 180)
     private String title;
 
     @Column(columnDefinition = "TEXT")

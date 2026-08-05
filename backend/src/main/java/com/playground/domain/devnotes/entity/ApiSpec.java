@@ -20,11 +20,11 @@ public class ApiSpec {
     @JoinColumn(name = "project_id", nullable = false)
     private Project project;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 10)
     @Enumerated(EnumType.STRING)
     private HttpMethod method;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 240)
     private String endpoint;
 
     private String description;
