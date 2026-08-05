@@ -795,8 +795,7 @@ input[type='range'] {
   font-size: 12px;
   font-weight: 900;
   line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .search-stage {
@@ -2049,23 +2048,60 @@ input[type='range'] {
 }
 
 @media (max-width: 680px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
   .side-panel,
   .workspace {
     padding: 14px;
   }
 
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .editor-pane,
+  .visual-pane,
+  .phase-panel,
+  .runtime-panel,
+  .algorithm-stage {
+    min-width: 0;
+  }
+
   h1 {
     font-size: 26px;
+    overflow-wrap: anywhere;
   }
 
   .segmented,
-  .run-buttons {
+  .run-buttons,
+  .workspace-actions,
+  .runtime-grid,
+  .algorithm-grid,
+  .complexity-grid {
     grid-template-columns: 1fr;
+  }
+
+  .completion-bar {
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .completion-bar button {
+    min-width: 150px;
   }
 
   .code-editor textarea,
   .code-preview {
     font-size: 12px;
+    overflow-wrap: normal;
+  }
+
+  .code-line,
+  .code-preview pre {
+    white-space: pre-wrap;
+    word-break: break-word;
   }
 
   .execution-rail {
@@ -2124,6 +2160,26 @@ input[type='range'] {
     overflow-x: auto;
     justify-content: flex-start;
     padding: 20px 4px;
+  }
+
+  .sort-stage,
+  .search-stage,
+  .heap-stage,
+  .merge-stage {
+    overflow-x: auto;
+  }
+
+  .sort-bar {
+    min-width: 34px;
+  }
+
+  .search-stage.linear,
+  .search-stage.binary {
+    grid-template-columns: repeat(7, minmax(48px, 1fr));
+  }
+
+  .stage-caption {
+    font-size: 11px;
   }
 
   .tree-node {
