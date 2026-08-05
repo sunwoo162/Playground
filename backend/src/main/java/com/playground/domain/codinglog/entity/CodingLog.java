@@ -9,7 +9,14 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "coding_logs")
+@Table(
+        name = "coding_logs",
+        indexes = {
+                @Index(name = "idx_coding_logs_user_created", columnList = "user_id, created_at"),
+                @Index(name = "idx_coding_logs_public_created", columnList = "is_public, created_at"),
+                @Index(name = "idx_coding_logs_user_date", columnList = "user_id, date")
+        }
+)
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class CodingLog {
 
@@ -17,23 +24,26 @@ public class CodingLog {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 64)
     private String userId;
 
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)
     private Platform platform;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 180)
     private String problemTitle;
 
+    @Column(length = 64)
     private String problemNumber;
+    @Column(length = 64)
     private String level;
 
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)
     private Status status;
 
+    @Column(length = 32)
     private String language;
 
     @Column(columnDefinition = "TEXT")
@@ -42,6 +52,7 @@ public class CodingLog {
     @Column(columnDefinition = "TEXT")
     private String code;
 
+    @Column(length = 64)
     private String timeComplexity;
 
     private String tags; // JSON 배열 문자열

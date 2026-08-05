@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -36,19 +37,20 @@ public class CodingLogService {
     // 생성
     @Transactional
     public CodingLogDto.Response create(String userId, CodingLogDto.Request req) {
+        validateRequest(req);
         CodingLog log = CodingLog.builder()
                 .userId(userId)
-                .platform(CodingLog.Platform.valueOf(req.getPlatform()))
-                .problemTitle(req.getProblemTitle())
-                .problemNumber(req.getProblemNumber())
-                .level(req.getLevel())
-                .status(CodingLog.Status.valueOf(req.getStatus()))
-                .language(req.getLanguage())
-                .approach(req.getApproach())
-                .code(req.getCode())
-                .timeComplexity(req.getTimeComplexity())
-                .tags(req.getTags())
-                .date(req.getDate() != null ? LocalDate.parse(req.getDate()) : LocalDate.now())
+                .platform(parsePlatform(req.getPlatform()))
+                .problemTitle(clean(req.getProblemTitle(), 180))
+                .problemNumber(clean(req.getProblemNumber(), 64))
+                .level(clean(req.getLevel(), 64))
+                .status(parseStatus(req.getStatus()))
+                .language(clean(req.getLanguage(), 32))
+                .approach(cleanText(req.getApproach()))
+                .code(cleanText(req.getCode()))
+                .timeComplexity(clean(req.getTimeComplexity(), 64))
+                .tags(cleanText(req.getTags()))
+                .date(parseDate(req.getDate(), LocalDate.now()))
                 .isPublic(req.isPublic())
                 .build();
         return toResponse(codingLogRepository.save(log), userId);
@@ -57,19 +59,20 @@ public class CodingLogService {
     // 수정
     @Transactional
     public CodingLogDto.Response update(Long id, String userId, CodingLogDto.Request req) {
+        validateRequest(req);
         CodingLog log = codingLogRepository.findByIdAndUserId(id, userId)
-                .orElseThrow(() -> new RuntimeException("Not found"));
-        log.setPlatform(CodingLog.Platform.valueOf(req.getPlatform()));
-        log.setProblemTitle(req.getProblemTitle());
-        log.setProblemNumber(req.getProblemNumber());
-        log.setLevel(req.getLevel());
-        log.setStatus(CodingLog.Status.valueOf(req.getStatus()));
-        log.setLanguage(req.getLanguage());
-        log.setApproach(req.getApproach());
-        log.setCode(req.getCode());
-        log.setTimeComplexity(req.getTimeComplexity());
-        log.setTags(req.getTags());
-        log.setDate(req.getDate() != null ? LocalDate.parse(req.getDate()) : log.getDate());
+                .orElseThrow(() -> new IllegalArgumentException("일지를 찾을 수 없습니다."));
+        log.setPlatform(parsePlatform(req.getPlatform()));
+        log.setProblemTitle(clean(req.getProblemTitle(), 180));
+        log.setProblemNumber(clean(req.getProblemNumber(), 64));
+        log.setLevel(clean(req.getLevel(), 64));
+        log.setStatus(parseStatus(req.getStatus()));
+        log.setLanguage(clean(req.getLanguage(), 32));
+        log.setApproach(cleanText(req.getApproach()));
+        log.setCode(cleanText(req.getCode()));
+        log.setTimeComplexity(clean(req.getTimeComplexity(), 64));
+        log.setTags(cleanText(req.getTags()));
+        log.setDate(parseDate(req.getDate(), log.getDate()));
         log.setPublic(req.isPublic());
         return toResponse(log, userId);
     }
@@ -78,8 +81,52 @@ public class CodingLogService {
     @Transactional
     public void delete(Long id, String userId) {
         CodingLog log = codingLogRepository.findByIdAndUserId(id, userId)
-                .orElseThrow(() -> new RuntimeException("Not found"));
+                .orElseThrow(() -> new IllegalArgumentException("일지를 찾을 수 없습니다."));
         codingLogRepository.delete(log);
+    }
+
+    private void validateRequest(CodingLogDto.Request req) {
+        if (req == null) {
+            throw new IllegalArgumentException("요청 본문이 필요합니다.");
+        }
+        if (clean(req.getProblemTitle(), 180).isBlank()) {
+            throw new IllegalArgumentException("문제 제목을 입력해주세요.");
+        }
+    }
+
+    private CodingLog.Platform parsePlatform(String platform) {
+        try {
+            return CodingLog.Platform.valueOf(clean(platform, 32));
+        } catch (Exception e) {
+            throw new IllegalArgumentException("지원하지 않는 플랫폼입니다.");
+        }
+    }
+
+    private CodingLog.Status parseStatus(String status) {
+        try {
+            return CodingLog.Status.valueOf(clean(status, 32));
+        } catch (Exception e) {
+            throw new IllegalArgumentException("지원하지 않는 풀이 상태입니다.");
+        }
+    }
+
+    private LocalDate parseDate(String value, LocalDate fallback) {
+        String cleaned = clean(value, 32);
+        if (cleaned.isBlank()) return fallback;
+        try {
+            return LocalDate.parse(cleaned);
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException("날짜는 YYYY-MM-DD 형식이어야 합니다.");
+        }
+    }
+
+    private String clean(String value, int maxLength) {
+        String cleaned = value == null ? "" : value.trim();
+        return cleaned.length() <= maxLength ? cleaned : cleaned.substring(0, maxLength);
+    }
+
+    private String cleanText(String value) {
+        return value == null ? "" : value.trim();
     }
 
     private CodingLogDto.Response toResponse(CodingLog l, String currentUserId) {

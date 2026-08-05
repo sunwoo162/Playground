@@ -34,27 +34,39 @@ public class CodingLogController {
 
     // 생성
     @PostMapping
-    public ResponseEntity<CodingLogDto.Response> create(
+    public ResponseEntity<?> create(
             @RequestBody CodingLogDto.Request req,
             @AuthenticationPrincipal JwtAuthenticationToken auth) {
-        return ResponseEntity.ok(codingLogService.create(auth.getUserId(), req));
+        try {
+            return ResponseEntity.ok(codingLogService.create(auth.getUserId(), req));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
     // 수정
     @PutMapping("/{id}")
-    public ResponseEntity<CodingLogDto.Response> update(
+    public ResponseEntity<?> update(
             @PathVariable Long id,
             @RequestBody CodingLogDto.Request req,
             @AuthenticationPrincipal JwtAuthenticationToken auth) {
-        return ResponseEntity.ok(codingLogService.update(id, auth.getUserId(), req));
+        try {
+            return ResponseEntity.ok(codingLogService.update(id, auth.getUserId(), req));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
     // 삭제
     @DeleteMapping("/{id}")
-    public ResponseEntity<Map<String, Boolean>> delete(
+    public ResponseEntity<?> delete(
             @PathVariable Long id,
             @AuthenticationPrincipal JwtAuthenticationToken auth) {
-        codingLogService.delete(id, auth.getUserId());
-        return ResponseEntity.ok(Map.of("success", true));
+        try {
+            codingLogService.delete(id, auth.getUserId());
+            return ResponseEntity.ok(Map.of("success", true));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 }
