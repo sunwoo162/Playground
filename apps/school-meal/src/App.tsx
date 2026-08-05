@@ -228,12 +228,18 @@ export default function App() {
   const [selectedDate, setSelectedDate] = useState<Date>(defaultMealTarget.date);
   const [selectedMealType, setSelectedMealType] = useState<string>(defaultMealTarget.mealType);
   const [extensionStatus, setExtensionStatus] = useState('');
+  const [serviceMessage, setServiceMessage] = useState('');
   const alertTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const gradeOptions = saved ? getGradeOptions(saved.schoolType) : SECONDARY_GRADES;
   const extensionUrl = `${window.location.origin}/apps/school-meal/`;
   const visibleSchedule = saved
     ? schedule.filter(item => item.grades.length === 0 || item.grades.includes(saved.grade))
     : [];
+
+  const setServiceError = (context: string, error: unknown) => {
+    const message = error instanceof Error ? error.message : '요청을 처리할 수 없습니다.';
+    setServiceMessage(`${context}: ${message}`);
+  };
 
   useEffect(() => {
     document.documentElement.dataset.theme = 'dark';
@@ -293,8 +299,13 @@ export default function App() {
     setMealLoading(true);
     try {
       const res = await fetch(`/neis/meal?orgCode=${orgCode}&schoolCode=${schoolCode}&date=${dateToApi(date)}`);
+      if (!res.ok) throw new Error(`급식 API ${res.status}`);
       const data = await res.json();
       setMeals(Array.isArray(data) ? data : []);
+      setServiceMessage('');
+    } catch (error) {
+      setMeals([]);
+      setServiceError('급식 정보를 불러오지 못했습니다', error);
     } finally {
       setMealLoading(false);
     }
@@ -312,8 +323,13 @@ export default function App() {
         date: dateToApi(date),
       });
       const res = await fetch(`/neis/timetable?${params.toString()}`);
+      if (!res.ok) throw new Error(`시간표 API ${res.status}`);
       const data = await res.json();
       setTimetable(Array.isArray(data) ? data : []);
+      setServiceMessage('');
+    } catch (error) {
+      setTimetable([]);
+      setServiceError('시간표를 불러오지 못했습니다', error);
     } finally {
       setTimetableLoading(false);
     }
@@ -328,8 +344,13 @@ export default function App() {
         date: dateToApi(date),
       });
       const res = await fetch(`/neis/schedule?${params.toString()}`);
+      if (!res.ok) throw new Error(`학사일정 API ${res.status}`);
       const data = await res.json();
       setSchedule(Array.isArray(data) ? data : []);
+      setServiceMessage('');
+    } catch (error) {
+      setSchedule([]);
+      setServiceError('학사일정을 불러오지 못했습니다', error);
     } finally {
       setScheduleLoading(false);
     }
@@ -359,7 +380,13 @@ export default function App() {
     setSearching(true);
     try {
       const res = await fetch(`/neis/school?q=${encodeURIComponent(searchQuery)}`);
-      setSearchResults(await res.json());
+      if (!res.ok) throw new Error(`학교 검색 API ${res.status}`);
+      const data = await res.json();
+      setSearchResults(Array.isArray(data) ? data : []);
+      setServiceMessage('');
+    } catch (error) {
+      setSearchResults([]);
+      setServiceError('학교 검색에 실패했습니다', error);
     } finally {
       setSearching(false);
     }
@@ -487,6 +514,35 @@ export default function App() {
     }
   };
 
+  const exportSettings = () => {
+    if (!saved) return;
+    const blob = new Blob([JSON.stringify({
+      app: 'school-meal',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      settings: saved,
+    }, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `school-meal-settings-${saved.name}-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    setExtensionStatus('학교 설정 백업 파일을 만들었습니다.');
+  };
+
+  const resetSettings = () => {
+    localStorage.removeItem(STORAGE_KEY);
+    clearAlertTimers();
+    setSaved(null);
+    setMeals([]);
+    setTimetable([]);
+    setSchedule([]);
+    setView('search');
+    setExtensionStatus('');
+    setServiceMessage('학교 설정을 초기화했습니다. 다시 학교를 선택하세요.');
+  };
+
   return (
     <div className={`app ${isCompact ? 'compact-app' : ''}`}>
       {!isCompact && <header className="app-header">
@@ -512,6 +568,12 @@ export default function App() {
 
       {view === 'search' && (
         <div className="search-panel">
+          {serviceMessage && (
+            <div className="service-banner" role="status">
+              <span>{serviceMessage}</span>
+              <button onClick={() => setServiceMessage('')}>닫기</button>
+            </div>
+          )}
           <form className="search-form" onSubmit={handleSearch}>
             <input
               className="search-input"
@@ -531,6 +593,9 @@ export default function App() {
                 <div className="school-meta">{s.type} · {s.address}</div>
               </div>
             ))}
+            {!searching && searchQuery && searchResults.length === 0 && (
+              <p className="search-empty">검색 결과가 없으면 학교명을 줄여서 다시 검색하세요.</p>
+            )}
           </div>
         </div>
       )}
@@ -566,6 +631,15 @@ export default function App() {
               {extensionStatus && <p className="extension-status">{extensionStatus}</p>}
             </div>
           </div>}
+          <div className="settings-section">
+            <div className="settings-section-header">
+              <span>데이터 관리</span>
+            </div>
+            <div className="data-actions">
+              <button className="btn-ghost" onClick={exportSettings}>설정 백업</button>
+              <button className="btn-ghost danger" onClick={resetSettings}>학교 설정 초기화</button>
+            </div>
+          </div>
           <div className="settings-section">
             <div className="settings-section-header">
               <span>급식 알림</span>
@@ -660,6 +734,12 @@ export default function App() {
       {view === 'main' && (
         <main className="app-main">
           <div className="content-shell">
+            {serviceMessage && (
+              <div className="service-banner" role="status">
+                <span>{serviceMessage}</span>
+                <button onClick={() => setServiceMessage('')}>닫기</button>
+              </div>
+            )}
             <div className="date-nav">
               <button className="date-nav-btn" onClick={() => handleDateChange(-1)}>‹</button>
               <span className="date-label">{dateToDisplay(selectedDate)}</span>

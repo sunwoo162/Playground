@@ -43,7 +43,7 @@ function classifyApp(app) {
     hasPackage,
     hasBuildScript: Boolean(packageJson?.scripts?.build),
     hasDist: exists(`${appPath}/dist`),
-    hasReadme: exists(`${appPath}/README.md`),
+    hasProductDoc: exists(`${appPath}/README.md`) || exists(`${appPath}/PRODUCT.md`),
   };
 }
 
@@ -88,7 +88,7 @@ for (const app of registry.apps.map(classifyApp)) {
     warnings.push(`${app.id}: priority ${app.priority} app has no dist directory yet. Run its build before deployment.`);
   }
 
-  if (app.priority <= 2 && app.hasPackage && !app.hasReadme) {
+  if (app.priority <= 2 && app.hasPackage && !app.hasProductDoc) {
     warnings.push(`${app.id}: priority ${app.priority} app has no README.md or PRODUCT.md.`);
   }
 }
