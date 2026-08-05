@@ -654,10 +654,15 @@ input {
 }
 
 @media (max-width: 900px) {
+  body {
+    overflow-x: hidden;
+  }
+
   .room-status {
     position: static;
     width: calc(100vw - 24px);
     margin: 62px auto 0;
+    overflow-wrap: anywhere;
   }
   .room-layout,
   .room-layout.sharing {
@@ -687,8 +692,10 @@ input {
   .tile-card { aspect-ratio: 16 / 10; }
   .call-controls {
     width: calc(100vw - 20px);
+    max-width: 100%;
     justify-content: center;
     gap: 8px;
+    flex-wrap: wrap;
   }
   .control-pack > button,
   .add-trigger {
@@ -704,13 +711,43 @@ input {
 }
 
 @media (max-width: 560px) {
-  .channel-name { font-size: 20px; }
+  .topbar {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    align-items: start;
+  }
+
+  .channel-name {
+    font-size: 20px;
+    overflow-wrap: anywhere;
+  }
+
+  .status-chip,
+  .copy-button,
+  .music-bot-button,
+  .participant-name,
+  .tile-footer,
+  .chat-message {
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
   .quick-invite { bottom: 84px; left: 8px; }
   .call-controls {
     bottom: 10px;
     flex-wrap: wrap;
   }
+  .control-pack {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
   .song-form { grid-template-columns: 1fr; }
+  .bot-context {
+    right: 10px;
+    left: 10px;
+    bottom: 132px;
+    width: auto;
+  }
   .tile-footer {
     flex-direction: column;
     align-items: start;
