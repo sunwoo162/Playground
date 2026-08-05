@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import type { ChangeEvent } from 'react';
 import ReactMarkdown from 'react-markdown';
 import type { CornellNote, GitRepoSettings, Subject, VelogSettings } from './types';
 import { getNotes, saveNote, deleteNote, getSubjects, saveSubjects, getGitRepoSettings, saveGitRepoSettings, getVelogSettings, saveVelogSettings, generateId, getTodayStr } from './storage';
@@ -168,6 +169,7 @@ const importSharedNoteFromHash = (currentSubjects: Subject[]): { note: CornellNo
 export default function App() {
   const authed = useAuth();
   const notesTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const backupInputRef = useRef<HTMLInputElement | null>(null);
   const [notes, setNotes] = useState<CornellNote[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [view, setView] = useState<View>('list');
@@ -184,6 +186,7 @@ export default function App() {
   const [committing, setCommitting] = useState(false);
   const [publishingVelog, setPublishingVelog] = useState(false);
   const [shareStatus, setShareStatus] = useState('');
+  const [backupStatus, setBackupStatus] = useState('');
 
   useEffect(() => {
     document.documentElement.dataset.theme = 'dark';
@@ -484,6 +487,49 @@ export default function App() {
     }
   };
 
+  const exportBackup = () => {
+    const payload = {
+      app: 'cornell-notes',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      notes: getNotes(),
+      subjects: getSubjects(),
+      repoSettings: getGitRepoSettings(),
+      velogSettings: { ...getVelogSettings(), accessToken: '' },
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `cornell-notes-backup-${getTodayStr()}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    setBackupStatus('백업 파일을 만들었습니다. Velog 토큰은 포함하지 않았습니다.');
+  };
+
+  const importBackup = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const payload = JSON.parse(await file.text());
+      if (payload?.app !== 'cornell-notes' || payload?.version !== 1 || !Array.isArray(payload.notes) || !Array.isArray(payload.subjects)) {
+        setBackupStatus('코넬 노트 백업 파일 형식이 아닙니다.');
+        return;
+      }
+      localStorage.setItem('cornell-notes', JSON.stringify(payload.notes));
+      localStorage.setItem('cornell-subjects', JSON.stringify(payload.subjects));
+      setNotes(getNotes());
+      setSubjects(getSubjects());
+      setSelected(null);
+      setView('list');
+      setBackupStatus('백업을 복원했습니다.');
+    } catch {
+      setBackupStatus('파일을 읽을 수 없습니다. JSON 백업 파일을 선택하세요.');
+    } finally {
+      if (backupInputRef.current) backupInputRef.current.value = '';
+    }
+  };
+
   return (
     <div className="app">
       <header className="app-header">
@@ -752,8 +798,14 @@ export default function App() {
               {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
             <button className="btn-ghost" onClick={openRepoSettings}>GitHub / Velog 설정</button>
+            <button className="btn-ghost" onClick={exportBackup}>백업</button>
+            <label className="btn-ghost backup-import">
+              복원
+              <input ref={backupInputRef} type="file" accept="application/json,.json" onChange={importBackup} />
+            </label>
             <button className="btn-primary" onClick={handleNew}>+ 새 노트</button>
           </div>
+          {backupStatus && <p className="repo-status compact">{backupStatus}</p>}
 
           {filtered.length === 0 ? (
             <div className="empty-state">
