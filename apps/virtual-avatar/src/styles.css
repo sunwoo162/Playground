@@ -19,6 +19,7 @@ body {
 button,
 input {
   font: inherit;
+  min-width: 0;
 }
 
 .avatar-app {
@@ -1418,24 +1419,46 @@ input {
 @media (max-width: 860px) {
   body {
     overflow: auto;
+    overflow-x: hidden;
   }
 
   .avatar-app {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .stage {
     min-height: 68vh;
+    min-width: 0;
   }
 
   .control-panel {
+    width: 100%;
+    min-width: 0;
     min-height: auto;
     border-left: 0;
     border-top: 1px solid rgba(255,255,255,.08);
   }
 
-  .avatar-wrap {
+  .avatar-wrap,
+  .vrm-avatar-wrap,
+  .avatar-shadow-wrap,
+  .image-avatar-wrap {
     width: min(90vw, 560px);
-    min-width: 300px;
+    min-width: 0;
+  }
+
+  .model-url-row,
+  .model-actions,
+  .preset-actions,
+  .background-grid,
+  .expression-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .model-name,
+  .panel-notice,
+  .brand h1,
+  .brand p {
+    overflow-wrap: anywhere;
   }
 }
