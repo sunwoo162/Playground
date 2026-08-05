@@ -4,6 +4,7 @@ import com.playground.config.JwtAuthenticationToken;
 import com.playground.domain.study.dto.StudyDto;
 import com.playground.domain.study.service.StudyService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -82,5 +83,15 @@ public class StudyController {
             @RequestBody StudyDto.GoalRequest req,
             @AuthenticationPrincipal JwtAuthenticationToken auth) {
         return ResponseEntity.ok(studyService.saveGoal(auth.getUserId(), req));
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Map<String, String>> badRequest(IllegalArgumentException e) {
+        return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+    }
+
+    @ExceptionHandler(RuntimeException.class)
+    public ResponseEntity<Map<String, String>> notFound(RuntimeException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
     }
 }

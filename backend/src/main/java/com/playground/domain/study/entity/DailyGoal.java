@@ -9,8 +9,9 @@ import lombok.*;
 public class DailyGoal {
 
     @Id
-    @Column(name = "user_id")
+    @Column(name = "user_id", length = 64)
     private String userId;
 
+    @Column(nullable = false)
     private int totalMinutes;
 }
