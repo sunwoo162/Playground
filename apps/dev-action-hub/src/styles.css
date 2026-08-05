@@ -1722,12 +1722,25 @@ a {
 }
 
 @media (max-width: 760px) {
+  body {
+    overflow-x: hidden;
+  }
+
   .discord-shell {
-    grid-template-columns: 72px minmax(0, 1fr);
+    grid-template-columns: 64px minmax(0, 1fr);
+    min-width: 0;
   }
 
   .discord-sidebar {
     display: none;
+  }
+
+  .server-rail,
+  .main-panel,
+  .workspace-panel,
+  .channel-body,
+  .webhook-feed {
+    min-width: 0;
   }
 
   .channel-header {
@@ -1786,6 +1799,7 @@ a {
 
   .header-actions {
     width: 100%;
+    flex-wrap: wrap;
   }
 
   .workspace-panel {
@@ -1809,6 +1823,20 @@ a {
   .run-row {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .channel-title,
+  .channel-subtitle,
+  .message-content,
+  .webhook-message p,
+  .panel-card,
+  .panel-card p,
+  .doc-card,
+  .task-card,
+  .api-card,
+  .persona-card,
+  .deploy-card {
+    overflow-wrap: anywhere;
   }
 
   .button-row button,
