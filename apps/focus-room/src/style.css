@@ -630,6 +630,10 @@ select {
 }
 
 @media (max-width: 860px) {
+  body {
+    overflow-x: hidden;
+  }
+
   .place-select {
     grid-template-columns: 1fr;
     padding: 78px 16px 24px;
@@ -657,11 +661,28 @@ select {
     grid-template-columns: 1fr;
     right: auto;
     width: min(420px, calc(100vw - 36px));
+    min-width: 0;
   }
 
   .hud-controls {
     overflow-x: auto;
     justify-content: flex-start;
+  }
+
+  .planner-workspace {
+    padding: 12px;
+  }
+
+  .planner-window {
+    width: 100%;
+    height: calc(100vh - 24px);
+  }
+
+  .planner-window-top {
+    height: auto;
+    min-height: 48px;
+    flex-wrap: wrap;
+    padding-block: 8px;
   }
 
   .screen-overlay {
@@ -678,6 +699,7 @@ select {
 
   .intro h1 {
     font-size: 2.4rem;
+    overflow-wrap: anywhere;
   }
 
   .screen-overlay {
@@ -692,5 +714,17 @@ select {
 
   .look-help {
     display: none;
+  }
+
+  .hud-controls {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  .ambient-btn,
+  .timer-button {
+    min-width: 0;
+    flex: 1 1 132px;
+    white-space: normal;
   }
 }
