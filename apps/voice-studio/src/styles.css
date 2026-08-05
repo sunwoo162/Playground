@@ -14,7 +14,7 @@ body {
   background: #0b0d12;
 }
 
-button, input, select, textarea { font: inherit; }
+button, input, select, textarea { font: inherit; min-width: 0; }
 
 .voice-app {
   min-height: 100vh;
@@ -349,17 +349,41 @@ textarea {
 }
 
 @media (max-width: 960px) {
-  .voice-app { grid-template-columns: 1fr; }
+  .voice-app { grid-template-columns: minmax(0, 1fr); }
   .stage { min-height: auto; padding: 16px; }
   .scope { min-height: 430px; }
   .panel {
+    width: 100%;
+    min-width: 0;
     min-height: auto;
     border-left: 0;
     border-top: 1px solid rgba(255,255,255,.1);
   }
+
+  .hero-title,
+  .status-line,
+  .preset-list strong,
+  .preset-list span {
+    overflow-wrap: anywhere;
+  }
 }
 
 @media (max-width: 520px) {
+  body {
+    overflow-x: hidden;
+  }
+
+  .voice-app,
+  .stage,
+  .panel {
+    min-width: 0;
+  }
+
+  .hero-title {
+    font-size: 44px;
+    line-height: .95;
+  }
+
   .toolbar {
     align-items: stretch;
     flex-direction: column;
@@ -368,5 +392,7 @@ textarea {
   .toolbar button { width: 100%; }
   .preset-list { grid-template-columns: 1fr; }
   .meter-grid { grid-template-columns: 1fr; }
+  .tts-actions { grid-template-columns: 1fr; }
+  .select-row { grid-template-columns: 1fr; }
   .scope { min-height: 390px; }
 }
