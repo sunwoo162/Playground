@@ -23,7 +23,7 @@ import java.util.regex.Pattern;
 @Service
 @RequiredArgsConstructor
 public class ActionNotifierService {
-    private static final Pattern REPO_PATTERN = Pattern.compile("(?:https://github\\.com/)?([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\\.git)?/?");
+    private static final Pattern REPO_PATTERN = Pattern.compile("^(?:https://github\\.com/)?([A-Za-z0-9_.-]{1,120})/([A-Za-z0-9_.-]{1,160})(?:\\.git)?/?$");
 
     private final ActionRepositoryWatchRepository watchRepository;
     private final GitHubActionsClient gitHubActionsClient;
@@ -86,11 +86,8 @@ public class ActionNotifierService {
     )
     @Transactional
     public void pollCompletedActions() {
-        watchRepository.findAll().forEach(watch -> {
+        watchRepository.findByEnabledTrue().forEach(watch -> {
             try {
-                if (Boolean.FALSE.equals(watch.getEnabled())) {
-                    return;
-                }
                 refreshWatch(watch, true);
             } catch (Exception e) {
                 log.debug("GitHub action watch failed for {}/{}: {}", watch.getOwner(), watch.getRepo(), e.getMessage());
@@ -184,11 +181,20 @@ public class ActionNotifierService {
 
     private RepoName parseRepository(String repository) {
         String value = repository == null ? "" : repository.trim();
+        value = value
+                .replaceFirst("^git@github\\.com:", "https://github.com/")
+                .replaceFirst("^https://www\\.github\\.com/", "https://github.com/")
+                .replaceFirst("^http://github\\.com/", "https://github.com/");
         Matcher matcher = REPO_PATTERN.matcher(value);
         if (!matcher.matches()) {
             throw new IllegalArgumentException("owner/repo 또는 GitHub URL 형식으로 입력해주세요.");
         }
-        return new RepoName(matcher.group(1), matcher.group(2));
+        String owner = matcher.group(1);
+        String repo = matcher.group(2);
+        if (owner.startsWith(".") || repo.startsWith(".") || owner.endsWith(".") || repo.endsWith(".")) {
+            throw new IllegalArgumentException("GitHub owner/repo 이름을 확인해주세요.");
+        }
+        return new RepoName(owner, repo);
     }
 
     private record RepoName(String owner, String repo) {

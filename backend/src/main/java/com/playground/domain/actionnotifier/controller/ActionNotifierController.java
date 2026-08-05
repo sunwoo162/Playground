@@ -50,8 +50,12 @@ public class ActionNotifierController {
     public ResponseEntity<?> delete(
             @PathVariable Long id,
             @AuthenticationPrincipal JwtAuthenticationToken auth) {
-        actionNotifierService.delete(auth.getUserId(), id);
-        return ResponseEntity.ok(Map.of("success", true));
+        try {
+            actionNotifierService.delete(auth.getUserId(), id);
+            return ResponseEntity.ok(Map.of("success", true));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
     @PatchMapping("/repos/{id}/notification")

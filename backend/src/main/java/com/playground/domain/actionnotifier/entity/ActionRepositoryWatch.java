@@ -10,7 +10,11 @@ import java.time.LocalDateTime;
 @Entity
 @Table(
         name = "action_repository_watches",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "owner_name", "repo_name"})
+        uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "owner_name", "repo_name"}),
+        indexes = {
+                @Index(name = "idx_action_watch_enabled", columnList = "enabled"),
+                @Index(name = "idx_action_watch_user_updated", columnList = "user_id, updated_at")
+        }
 )
 @Getter
 @Setter
@@ -23,17 +27,17 @@ public class ActionRepositoryWatch {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "user_id", nullable = false)
+    @Column(name = "user_id", nullable = false, length = 64)
     private String userId;
 
-    @Column(name = "owner_name", nullable = false)
+    @Column(name = "owner_name", nullable = false, length = 120)
     private String owner;
 
-    @Column(name = "repo_name", nullable = false)
+    @Column(name = "repo_name", nullable = false, length = 160)
     private String repo;
 
     @Builder.Default
-    @Column(name = "enabled")
+    @Column(name = "enabled", nullable = false)
     private Boolean enabled = true;
 
     @Column(name = "last_run_id")

@@ -8,6 +8,7 @@ import java.util.Optional;
 
 public interface ActionRepositoryWatchRepository extends JpaRepository<ActionRepositoryWatch, Long> {
     List<ActionRepositoryWatch> findByUserIdOrderByUpdatedAtDesc(String userId);
+    List<ActionRepositoryWatch> findByEnabledTrue();
     Optional<ActionRepositoryWatch> findByIdAndUserId(Long id, String userId);
     Optional<ActionRepositoryWatch> findByUserIdAndOwnerIgnoreCaseAndRepoIgnoreCase(String userId, String owner, String repo);
 }
