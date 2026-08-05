@@ -12,6 +12,8 @@
     "install:all": "npm ci --no-audit --fund=false && npm run install:apps",
     "build:apps": "npm run build --prefix apps/life-tracker && npm run build --prefix apps/dev-notes && npm run build --prefix apps/dev-action-hub && npm run build --prefix apps/dev-term-roulette && npm run build --prefix apps/idea-mixer && npm run build --prefix apps/study-planner && npm run build --prefix apps/focus-room && npm run build --prefix apps/todo && npm run build --prefix apps/day-schedule && npm run build --prefix apps/cornell-notes && npm run build --prefix apps/coding-log && npm run build --prefix apps/school-meal && npm run build --prefix apps/commute-alarm && npm run build --prefix apps/mock-invest && npm run build --prefix apps/action-notifier && npm run build --prefix apps/code-run-visualizer && npm run build --prefix apps/voice-phishing && npm run build --prefix apps/virtual-study-room && npm run build --prefix apps/virtual-avatar && npm run build --prefix apps/voice-studio",
     "build:all": "npm run build && npm run build:apps",
+    "harness": "node scripts/harness-check.js",
+    "verify": "npm run build:all && npm run harness",
     "start": "node server/index.js"
   },
   "dependencies": {
