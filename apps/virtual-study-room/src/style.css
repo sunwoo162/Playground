@@ -46,6 +46,46 @@ input {
   padding: 10px 16px;
   pointer-events: none;
 }
+
+.room-status {
+  position: fixed;
+  z-index: 18;
+  top: 66px;
+  left: 16px;
+  width: min(420px, calc(100vw - 32px));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 10px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid rgba(142, 167, 255, .28);
+  border-radius: 8px;
+  background: rgba(20, 22, 31, .82);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 14px 42px rgba(0,0,0,.36);
+}
+.room-status strong {
+  color: #fff;
+  font-size: 13px;
+  font-weight: 950;
+}
+.room-status span {
+  grid-column: 1 / -1;
+  color: #bfc6df;
+  font-size: 12px;
+  line-height: 1.45;
+  font-weight: 800;
+}
+.room-status button {
+  grid-column: 2;
+  grid-row: 1;
+  min-height: 32px;
+  padding: 0 10px;
+  color: #dce4ff;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
 .back-button,
 .study-duration {
   pointer-events: auto;
@@ -614,12 +654,17 @@ input {
 }
 
 @media (max-width: 900px) {
+  .room-status {
+    position: static;
+    width: calc(100vw - 24px);
+    margin: 62px auto 0;
+  }
   .room-layout,
   .room-layout.sharing {
     width: calc(100vw - 24px);
     height: auto;
     min-height: 0;
-    margin-top: 62px;
+    margin-top: 12px;
     margin-bottom: 132px;
     display: grid;
     grid-template-rows: auto;

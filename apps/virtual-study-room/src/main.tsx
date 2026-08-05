@@ -41,6 +41,7 @@ function App() {
   const [incomingInvite, setIncomingInvite] = useState(() => new URLSearchParams(window.location.search).get('invitedBy'))
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const [returnConfirmOpen, setReturnConfirmOpen] = useState(false)
+  const [roomStatus, setRoomStatus] = useState('로컬 데모 모드입니다. 실제 친구의 영상/음성은 아직 동기화되지 않습니다.')
   const cameraRef = useRef<HTMLVideoElement | null>(null)
   const shareRef = useRef<HTMLVideoElement | null>(null)
   const cameraStream = useRef<MediaStream | null>(null)
@@ -61,6 +62,17 @@ function App() {
 
   function goToPlayground() {
     window.location.href = '/'
+  }
+
+  async function copyRoomLink() {
+    const url = new URL(window.location.href)
+    url.searchParams.set('room', roomId)
+    try {
+      await navigator.clipboard.writeText(url.toString())
+      setRoomStatus('방 링크를 복사했습니다. 현재 버전은 링크로 같은 방 UI를 여는 데모 모드입니다.')
+    } catch {
+      setRoomStatus(`복사에 실패했습니다. 방 ID: ${roomId}`)
+    }
   }
 
   function acceptIncomingInvite() {
@@ -159,6 +171,12 @@ function App() {
         </div>
       </header>
 
+      <aside className="room-status" role="status">
+        <strong>Study room</strong>
+        <span>{roomStatus}</span>
+        <button onClick={copyRoomLink}>방 링크 복사</button>
+      </aside>
+
       <section className={sharingTile ? 'room-layout sharing' : 'room-layout'}>
         {sharingTile && (
           <article className="share-stage">
@@ -219,7 +237,7 @@ function App() {
           </button>
         </div>
 
-        <button className="leave-button" title="나가기">Call end</button>
+        <button className="leave-button" title="나가기" onClick={() => setReturnConfirmOpen(true)}>Call end</button>
       </nav>
 
       {addMode && (
