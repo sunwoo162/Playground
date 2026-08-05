@@ -18,6 +18,7 @@ public class VoicePhishingService {
 
     @Transactional
     public VoicePhishingDto.SessionResponse create(String userId, VoicePhishingDto.CreateSessionRequest req) {
+        validateUserId(userId);
         if (req == null) {
             throw new IllegalArgumentException("체험 결과가 비어 있습니다.");
         }
@@ -40,6 +41,7 @@ public class VoicePhishingService {
 
     @Transactional(readOnly = true)
     public List<VoicePhishingDto.SessionResponse> getRecent(String userId) {
+        validateUserId(userId);
         return repository.findTop10ByUserIdOrderByCreatedAtDesc(userId).stream()
                 .map(this::toResponse)
                 .toList();
@@ -54,6 +56,12 @@ public class VoicePhishingService {
                         value.equals("auth-code")))
                 .distinct()
                 .toList();
+    }
+
+    private void validateUserId(String userId) {
+        if (userId == null || userId.isBlank()) {
+            throw new IllegalArgumentException("사용자 정보가 필요합니다.");
+        }
     }
 
     private int clamp(int value, int min, int max) {

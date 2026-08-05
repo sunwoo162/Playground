@@ -9,6 +9,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/voice-phishing")
@@ -30,7 +31,7 @@ public class VoicePhishingController {
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<String> badRequest(IllegalArgumentException e) {
-        return ResponseEntity.badRequest().body(e.getMessage());
+    public ResponseEntity<Map<String, String>> badRequest(IllegalArgumentException e) {
+        return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
     }
 }

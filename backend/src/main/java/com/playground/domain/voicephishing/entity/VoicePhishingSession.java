@@ -7,7 +7,10 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "voice_phishing_sessions")
+@Table(name = "voice_phishing_sessions", indexes = {
+        @Index(name = "idx_voice_phishing_user_created", columnList = "user_id, created_at"),
+        @Index(name = "idx_voice_phishing_risk_created", columnList = "risk_score, created_at")
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -18,10 +21,10 @@ public class VoicePhishingSession {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, length = 120)
+    @Column(name = "user_id", nullable = false, length = 64)
     private String userId;
 
-    @Column(nullable = false)
+    @Column(name = "risk_score", nullable = false)
     private int riskScore;
 
     @Column(nullable = false)
