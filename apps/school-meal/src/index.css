@@ -521,6 +521,7 @@ html[data-compact="true"][data-compact-view="settings"] .compact-app {
 }
 
 @media (max-width: 640px) {
+  body { overflow-x: hidden; }
   .app-header { align-items: flex-start; flex-wrap: wrap; }
   .header-info { min-width: 180px; }
   .header-actions { width: 100%; justify-content: flex-end; flex-wrap: wrap; }
@@ -536,4 +537,20 @@ html[data-compact="true"][data-compact-view="settings"] .compact-app {
   .calendar-picker { grid-column: 2; grid-row: 2; }
   .schedule-item { grid-template-columns: 1fr; }
   .schedule-date-badge { width: fit-content; }
+  .app-title,
+  .app-subtitle,
+  .school-name,
+  .meal-card,
+  .menu-item,
+  .schedule-title-row,
+  .schedule-content,
+  .timetable-subject {
+    overflow-wrap: anywhere;
+  }
+  .main-tabs,
+  .class-selector,
+  .meal-type-tabs {
+    overflow-x: auto;
+    justify-content: flex-start;
+  }
 }
