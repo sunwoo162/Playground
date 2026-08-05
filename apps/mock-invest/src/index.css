@@ -31,6 +31,11 @@ button {
   cursor: pointer;
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
 .app-shell {
   min-height: 100vh;
 }
@@ -96,6 +101,27 @@ button {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
   margin-bottom: 16px;
+}
+
+.risk-notice {
+  display: grid;
+  gap: 5px;
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border: 1px solid #4a3d21;
+  background: #1b160b;
+  color: #ffd28a;
+  border-radius: 8px;
+}
+
+.risk-notice strong {
+  color: #ffe2a9;
+}
+
+.risk-notice span {
+  color: #bda77f;
+  font-weight: 700;
+  line-height: 1.45;
 }
 
 .hero-panel > div,

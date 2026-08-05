@@ -348,11 +348,32 @@ function App() {
 
   const trade = async (type: 'buy' | 'sell') => {
     if (!selectedStock) return
+    const cleanQuantity = Math.floor(Number(quantity))
+    if (!Number.isFinite(cleanQuantity) || cleanQuantity < 1) {
+      setMessage('주문 수량은 1주 이상이어야 합니다.')
+      return
+    }
+    const tradePrice = selectedStock.price || 0
+    if (tradePrice <= 0) {
+      setMessage('실시간 시세가 없는 종목은 주문할 수 없습니다.')
+      return
+    }
+    if (type === 'buy' && portfolio && portfolio.cash < tradePrice * cleanQuantity) {
+      setMessage(`현금이 부족합니다. 예상 주문 금액은 ${money(tradePrice * cleanQuantity)}입니다.`)
+      return
+    }
+    if (type === 'sell') {
+      const holding = portfolio?.holdings.find((item) => item.symbol === selectedStock.symbol)
+      if (!holding || holding.quantity < cleanQuantity) {
+        setMessage(`보유 수량이 부족합니다. 현재 보유 수량은 ${holding?.quantity || 0}주입니다.`)
+        return
+      }
+    }
     await api<Order>(`/trades/${type}`, {
       method: 'POST',
-      body: JSON.stringify({ symbol: selectedStock.symbol, quantity }),
+      body: JSON.stringify({ symbol: selectedStock.symbol, quantity: cleanQuantity }),
     })
-    setMessage(`${selectedStock.name} ${quantity}주 ${type === 'buy' ? '매수' : '매도'} 완료`)
+    setMessage(`${selectedStock.name} ${cleanQuantity}주 ${type === 'buy' ? '매수' : '매도'} 완료`)
     await refreshAll()
   }
 
@@ -485,6 +506,11 @@ function App() {
           <div><span className="eyebrow">총자산</span><strong>{money(portfolio.totalAsset)}</strong><p className={portfolio.profit >= 0 ? 'positive' : 'negative'}>{money(portfolio.profit)} · {percent(portfolio.profitRate)}</p></div>
           <div><span className="eyebrow">보유 현금</span><strong>{money(portfolio.cash)}</strong><p>기준 원금 {money(portfolio.rewardedAmount)}</p></div>
           <div><span className="eyebrow">투자 금액</span><strong>{money(portfolio.invested)}</strong><p>평가 금액 {money(portfolio.evaluated)}</p></div>
+        </section>
+
+        <section className="risk-notice" aria-label="모의 투자 안내">
+          <strong>실제 거래가 아닌 학습용 시뮬레이션입니다.</strong>
+          <span>시세는 외부 데이터 제공자 상태에 따라 지연되거나 실패할 수 있고, 표시 정보는 투자 조언이 아닙니다.</span>
         </section>
 
         <nav className="tabs" aria-label="모의 투자 메뉴">
@@ -620,8 +646,8 @@ function App() {
               <div className="trade-box">
                 <label>주문 수량<input type="number" min={1} value={quantity} onChange={(event) => setQuantity(Number(event.target.value))} /></label>
                 <div><span>예상 금액</span><strong>{money(quotePrice * Math.max(1, quantity || 1))}</strong></div>
-                <button className="buy-btn" onClick={() => trade('buy')} disabled={!hasQuoteData}>매수</button>
-                <button className="sell-btn" onClick={() => trade('sell')} disabled={!hasQuoteData}>매도</button>
+                <button className="buy-btn" onClick={() => trade('buy')} disabled={!hasQuoteData || quantity < 1}>매수</button>
+                <button className="sell-btn" onClick={() => trade('sell')} disabled={!hasQuoteData || quantity < 1}>매도</button>
               </div>
             </section>
           </div>
