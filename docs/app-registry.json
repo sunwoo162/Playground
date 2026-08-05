@@ -1,0 +1,266 @@
+{
+  "updatedAt": "2026-08-06",
+  "statusDefinitions": {
+    "prototype": "Exists, but should not be treated as product-ready.",
+    "local-ready": "Usable locally after build/run verification.",
+    "beta": "Usable by real users with documented limitations.",
+    "production-candidate": "Ready for public release after final QA.",
+    "companion": "Extension, native tool, or add-on tied to another product.",
+    "candidate": "Portal idea or placeholder that needs product definition.",
+    "disabled": "Present but intentionally not offered as an active product."
+  },
+  "apps": [
+    {
+      "id": "study-planner",
+      "suite": "study",
+      "status": "local-ready",
+      "priority": 1,
+      "productDefinition": "Personal study operating system for timers, subjects, notes, statistics, and daily progress.",
+      "currentStack": ["React", "TypeScript", "Vite", "LocalStorage"],
+      "requiredForProduction": ["optional account sync decision", "backup/export", "mobile QA"]
+    },
+    {
+      "id": "school-meal",
+      "suite": "life-utility",
+      "status": "prototype",
+      "priority": 1,
+      "productDefinition": "School meal and timetable lookup dashboard.",
+      "currentStack": ["React", "TypeScript", "Vite"],
+      "requiredForProduction": ["school data provider", "school search", "API failure UX"]
+    },
+    {
+      "id": "mock-invest",
+      "suite": "finance-security",
+      "status": "prototype",
+      "priority": 1,
+      "productDefinition": "Practice trading simulator with watchlist, virtual orders, and portfolio history.",
+      "currentStack": ["React", "TypeScript", "Vite"],
+      "requiredForProduction": ["market data source", "server portfolio ledger", "auth", "financial disclaimer"]
+    },
+    {
+      "id": "dev-notes",
+      "suite": "developer",
+      "status": "prototype",
+      "priority": 1,
+      "productDefinition": "Project planning workspace for specs, API design, and user analysis.",
+      "currentStack": ["React", "TypeScript", "Vite"],
+      "requiredForProduction": ["durable storage", "export/import", "template README replacement"]
+    },
+    {
+      "id": "site-macro-extension",
+      "suite": "automation",
+      "status": "beta",
+      "priority": 1,
+      "productDefinition": "User-controlled browser automation for scheduled clicks, input, scrolls, and app presets.",
+      "currentStack": ["Chrome MV3", "JavaScript"],
+      "requiredForProduction": ["permission review", "selector test mode", "audit logs", "store packaging"]
+    },
+    {
+      "id": "webbridge",
+      "suite": "automation",
+      "status": "beta",
+      "priority": 1,
+      "productDefinition": "Rule-based connector for extracting, transforming, and sending data from websites without APIs.",
+      "currentStack": ["Chrome MV3", "JavaScript"],
+      "requiredForProduction": ["rule validation", "secret handling", "webhook safety", "onboarding examples"]
+    },
+    {
+      "id": "voice-studio",
+      "suite": "voice-avatar",
+      "status": "prototype",
+      "priority": 1,
+      "productDefinition": "Browser voice utility for microphone effects, pitch tools, singing mode, and TTS workflows.",
+      "currentStack": ["React", "TypeScript", "Vite", "Web Audio"],
+      "requiredForProduction": ["audio pipeline QA", "permission states", "latency handling", "provider keys for cloud TTS"]
+    },
+    {
+      "id": "virtual-study-room",
+      "suite": "study",
+      "status": "prototype",
+      "priority": 1,
+      "productDefinition": "Shared online study room with media, timers, and ambient controls.",
+      "currentStack": ["React", "TypeScript", "Vite"],
+      "requiredForProduction": ["realtime backend", "auth", "room privacy", "media permission UX"]
+    },
+    {
+      "id": "todo",
+      "suite": "study",
+      "status": "prototype",
+      "priority": 2,
+      "productDefinition": "Fast daily task board.",
+      "currentStack": ["React", "TypeScript", "Vite"],
+      "requiredForProduction": ["positioning decision", "persistence contract"]
+    },
+    {
+      "id": "day-schedule",
+      "suite": "study",
+      "status": "prototype",
+      "priority": 2,
+      "productDefinition": "Daily time-block planner.",
+      "currentStack": ["React", "TypeScript", "Vite"],
+      "requiredForProduction": ["merge decision with study-planner", "mobile layout QA"]
+    },
+    {
+      "id": "cornell-notes",
+      "suite": "study",
+      "status": "prototype",
+      "priority": 2,
+      "productDefinition": "Structured Cornell note editor.",
+      "currentStack": ["React", "TypeScript", "Vite", "react-markdown"],
+      "requiredForProduction": ["search", "export", "note persistence policy"]
+    },
+    {
+      "id": "coding-log",
+      "suite": "study",
+      "status": "prototype",
+      "priority": 2,
+      "productDefinition": "Coding practice journal for problem solving records.",
+      "currentStack": ["React", "TypeScript", "Vite"],
+      "requiredForProduction": ["problem source integration decision", "durable storage"]
+    },
+    {
+      "id": "code-run-visualizer",
+      "suite": "developer",
+      "status": "prototype",
+      "priority": 2,
+      "productDefinition": "Step-by-step visualization of code execution.",
+      "currentStack": ["React", "TypeScript", "Vite"],
+      "requiredForProduction": ["parser/interpreter strategy", "supported language scope"]
+    },
+    {
+      "id": "focus-room",
+      "suite": "study",
+      "status": "prototype",
+      "priority": 2,
+      "productDefinition": "Immersive 360-degree focus environment.",
+      "currentStack": ["React", "TypeScript", "Vite", "Three.js"],
+      "requiredForProduction": ["verified panorama assets", "mobile performance", "accessibility fallback"]
+    },
+    {
+      "id": "virtual-avatar",
+      "suite": "voice-avatar",
+      "status": "prototype",
+      "priority": 2,
+      "productDefinition": "Camera-driven avatar expression controller.",
+      "currentStack": ["React", "TypeScript", "Vite"],
+      "requiredForProduction": ["face tracking library", "avatar assets", "calibration flow"]
+    },
+    {
+      "id": "life-tracker",
+      "suite": "life-utility",
+      "status": "disabled",
+      "priority": 2,
+      "productDefinition": "Private reflection tracker for failures, wasted time, and small wins.",
+      "currentStack": ["React", "TypeScript", "Vite"],
+      "requiredForProduction": ["privacy model", "backup/export", "template README replacement"]
+    },
+    {
+      "id": "commute-alarm",
+      "suite": "life-utility",
+      "status": "prototype",
+      "priority": 2,
+      "productDefinition": "Location-based transit arrival alarm.",
+      "currentStack": ["React", "TypeScript", "Vite"],
+      "requiredForProduction": ["geolocation constraints", "transit data", "notification reliability"]
+    },
+    {
+      "id": "voice-phishing",
+      "suite": "finance-security",
+      "status": "prototype",
+      "priority": 2,
+      "productDefinition": "Educational voice-phishing scenario simulator.",
+      "currentStack": ["React", "TypeScript", "Vite"],
+      "requiredForProduction": ["scenario curriculum", "safety framing", "localization"]
+    },
+    {
+      "id": "action-notifier",
+      "suite": "developer",
+      "status": "prototype",
+      "priority": 2,
+      "productDefinition": "GitHub Actions completion notification client.",
+      "currentStack": ["React", "TypeScript", "Vite"],
+      "requiredForProduction": ["GitHub auth", "repo selection", "push subscription reliability"]
+    },
+    {
+      "id": "dev-action-hub",
+      "suite": "developer",
+      "status": "prototype",
+      "priority": 2,
+      "productDefinition": "Developer operations dashboard for notes, CI, and notifications.",
+      "currentStack": ["React", "TypeScript", "Vite"],
+      "requiredForProduction": ["merge decision with dev-notes", "GitHub API integration"]
+    },
+    {
+      "id": "dev-term-roulette",
+      "suite": "developer",
+      "status": "prototype",
+      "priority": 2,
+      "productDefinition": "Developer terminology learning game.",
+      "currentStack": ["React", "TypeScript", "Vite"],
+      "requiredForProduction": ["content database", "spaced repetition", "progress tracking"]
+    },
+    {
+      "id": "idea-mixer",
+      "suite": "developer",
+      "status": "prototype",
+      "priority": 2,
+      "productDefinition": "Idea generator from word combinations.",
+      "currentStack": ["React", "TypeScript", "Vite"],
+      "requiredForProduction": ["save/share", "better idea scoring", "prompt/data strategy"]
+    },
+    {
+      "id": "school-meal-extension",
+      "suite": "life-utility",
+      "status": "companion",
+      "priority": 3,
+      "productDefinition": "Chrome launcher companion for school-meal.",
+      "currentStack": ["Chrome MV3", "JavaScript"],
+      "requiredForProduction": ["hosted school-meal URL", "store packaging"]
+    },
+    {
+      "id": "mock-invest-extension",
+      "suite": "finance-security",
+      "status": "companion",
+      "priority": 3,
+      "productDefinition": "Chrome popup companion for mock-invest portfolio actions.",
+      "currentStack": ["Chrome MV3", "JavaScript"],
+      "requiredForProduction": ["mock-invest backend auth", "secure order API"]
+    },
+    {
+      "id": "voice-studio-extension",
+      "suite": "voice-avatar",
+      "status": "companion",
+      "priority": 3,
+      "productDefinition": "Chrome launcher companion for voice-studio.",
+      "currentStack": ["Chrome MV3", "JavaScript"],
+      "requiredForProduction": ["hosted voice-studio URL", "store packaging"]
+    },
+    {
+      "id": "focustime-extension",
+      "suite": "life-utility",
+      "status": "companion",
+      "priority": 3,
+      "productDefinition": "Website usage tracking and blocking extension.",
+      "currentStack": ["Chrome MV3", "JavaScript"],
+      "requiredForProduction": ["privacy onboarding", "data controls", "tracker install flow"]
+    },
+    {
+      "id": "focustime-tracker",
+      "suite": "life-utility",
+      "status": "companion",
+      "priority": 3,
+      "productDefinition": "Windows local app usage tracker for FocusTime.",
+      "currentStack": ["C#", "Windows executable"],
+      "requiredForProduction": ["signed build decision", "install/uninstall docs"]
+    },
+    {
+      "id": "site-macro-native-bridge",
+      "suite": "automation",
+      "status": "companion",
+      "priority": 3,
+      "productDefinition": "Windows Native Messaging host for site-macro-extension.",
+      "currentStack": [".NET", "Chrome Native Messaging"],
+      "requiredForProduction": ["signed build decision", "install/uninstall docs", "safety QA"]
+    }
+  ]
+}
