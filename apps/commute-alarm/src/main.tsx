@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import type { ChangeEvent } from 'react'
 import ReactDOM from 'react-dom/client'
 import './styles.css'
 
@@ -89,6 +90,7 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const watchIdRef = useRef<number | null>(null)
+  const importRef = useRef<HTMLInputElement | null>(null)
 
   const distance = position && target?.lat && target?.lng
     ? Math.round(distanceMeters(position.coords.latitude, position.coords.longitude, target.lat, target.lng))
@@ -125,6 +127,7 @@ function App() {
     }
     const result = await Notification.requestPermission()
     setPermission(result)
+    setStatus(result === 'granted' ? '브라우저 알림이 허용되었습니다.' : '브라우저 알림이 허용되지 않았습니다.')
   }
 
   const locateMe = () => {
@@ -246,6 +249,52 @@ function App() {
     }
   }
 
+  const exportSettings = () => {
+    const payload = {
+      app: 'commute-alarm',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      alertDistance,
+      target,
+      mode,
+    }
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `commute-alarm-settings-${new Date().toISOString().slice(0, 10)}.json`
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    URL.revokeObjectURL(url)
+    setStatus('알람 설정을 내보냈습니다.')
+  }
+
+  const importSettings = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    try {
+      const payload = JSON.parse(await file.text())
+      if (payload?.app !== 'commute-alarm' || payload?.version !== 1) {
+        throw new Error('commute-alarm 설정 파일이 아닙니다.')
+      }
+      const nextTarget = payload.target as TransitTarget | null
+      if (nextTarget?.id && nextTarget?.name && typeof nextTarget.lat === 'number' && typeof nextTarget.lng === 'number') {
+        setTarget(nextTarget)
+        setMode(nextTarget.type)
+      }
+      if (typeof payload.alertDistance === 'number') {
+        setAlertDistance(Math.min(2000, Math.max(200, payload.alertDistance)))
+      }
+      setAlarmed(false)
+      setStatus('알람 설정을 불러왔습니다.')
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : '알람 설정을 불러오지 못했습니다.')
+    } finally {
+      if (importRef.current) importRef.current.value = ''
+    }
+  }
+
   const missingKey = mode === 'subway' ? config && !config.subway : config && !config.bus
 
   return (
@@ -280,6 +329,13 @@ function App() {
           <div className="action-row">
             <button className="secondary-button" onClick={locateMe}>내 위치</button>
             <button className="secondary-button" onClick={requestNotification}>알림 허용</button>
+          </div>
+          <div className="action-row">
+            <button className="secondary-button" onClick={exportSettings}>설정 내보내기</button>
+            <label className="import-button">
+              설정 불러오기
+              <input ref={importRef} type="file" accept="application/json,.json" onChange={importSettings} />
+            </label>
           </div>
 
           {mode === 'subway' ? (

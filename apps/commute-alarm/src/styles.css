@@ -233,6 +233,29 @@ input:focus {
   gap: 10px;
 }
 
+.import-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  overflow: hidden;
+  border: 1px solid #c9d2cc;
+  border-radius: 8px;
+  background: #fff;
+  color: #25382f;
+  font-size: .86rem;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.import-button input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
 .primary-button,
 .secondary-button,
 .test-button {
