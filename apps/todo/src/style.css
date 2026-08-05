@@ -132,6 +132,42 @@ button {
   top: 18px;
 }
 
+.date-card {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 8px;
+  align-items: end;
+  padding: 12px;
+  border: 1px solid rgba(15, 23, 42, .08);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.date-card button,
+.data-tools button,
+.import-button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 8px;
+  background: #e9eeee;
+  color: #24302f;
+  padding: 0 12px;
+  font-weight: 950;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.date-card label {
+  margin: 0;
+}
+
+.date-card .today-button {
+  grid-column: 1 / -1;
+  background: #0f766e;
+  color: #fff;
+}
+
 label {
   display: grid;
   gap: 7px;
@@ -202,6 +238,52 @@ textarea:focus {
   justify-content: space-between;
   gap: 12px;
   align-items: center;
+  flex-wrap: wrap;
+}
+
+.day-summary {
+  display: grid;
+  gap: 2px;
+  margin-right: auto;
+}
+
+.day-summary strong {
+  color: #222222;
+}
+
+.day-summary span {
+  color: #62626a;
+  font-size: .82rem;
+  font-weight: 900;
+}
+
+.data-tools {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.import-button {
+  position: relative;
+  cursor: pointer;
+}
+
+.import-button input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.form-message {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(15, 118, 110, .22);
+  border-radius: 8px;
+  background: rgba(15, 118, 110, .08);
+  color: #0f766e;
+  font-size: .84rem;
+  font-weight: 850;
 }
 
 .clear-button:disabled {
@@ -308,7 +390,8 @@ textarea:focus {
 [data-theme="dark"] input,
 [data-theme="dark"] textarea,
 [data-theme="dark"] .check-button,
-[data-theme="dark"] .delete-button {
+[data-theme="dark"] .delete-button,
+[data-theme="dark"] .date-card {
   border-color: #273142;
   background: #1a2130;
   color: #f4f7fb;
@@ -316,8 +399,19 @@ textarea:focus {
 
 [data-theme="dark"] .priority-row button,
 [data-theme="dark"] .tabs button,
-[data-theme="dark"] .clear-button {
+[data-theme="dark"] .clear-button,
+[data-theme="dark"] .date-card button,
+[data-theme="dark"] .data-tools button,
+[data-theme="dark"] .import-button {
   background: #1a2130;
+  color: #93a1b5;
+}
+
+[data-theme="dark"] .day-summary strong {
+  color: #f4f7fb;
+}
+
+[data-theme="dark"] .day-summary span {
   color: #93a1b5;
 }
 
