@@ -1368,6 +1368,9 @@ app.use('/apps/site-macro-native-bridge', express.static(path.join(__dirname, '.
 app.use('/apps/webbridge', express.static(path.join(__dirname, '..', 'apps', 'webbridge')));
 app.use('/apps/focustime-extension', express.static(path.join(__dirname, '..', 'apps', 'focustime-extension')));
 app.use('/apps/focustime-tracker', express.static(path.join(__dirname, '..', 'apps', 'focustime-tracker')));
+app.use('/apps/school-meal-extension', express.static(path.join(__dirname, '..', 'apps', 'school-meal-extension')));
+app.use('/apps/mock-invest-extension', express.static(path.join(__dirname, '..', 'apps', 'mock-invest-extension')));
+app.use('/apps/voice-studio-extension', express.static(path.join(__dirname, '..', 'apps', 'voice-studio-extension')));
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'dist', 'index.html'));
