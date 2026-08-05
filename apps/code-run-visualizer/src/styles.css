@@ -131,6 +131,46 @@ input[type='range'] {
   gap: 8px;
 }
 
+.workspace-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.workspace-actions button,
+.workspace-actions label {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #303542;
+  color: #dce5f7;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.workspace-actions input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.workspace-status {
+  margin: -10px 0 0;
+  padding: 10px 12px;
+  border: 1px solid #324055;
+  border-radius: 8px;
+  background: #1d222c;
+  color: #b7bfcc;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .sort-tabs {
   grid-template-columns: 1fr;
 }

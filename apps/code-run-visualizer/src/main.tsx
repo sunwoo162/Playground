@@ -1,4 +1,5 @@
 import { KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
+import type { ChangeEvent } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
 
@@ -21,6 +22,7 @@ type Step = {
 
 const phaseNodes: Phase[] = ['tokenize', 'parse', 'compile', 'execute']
 const algorithmList: SortAlgorithm[] = ['community', 'selection', 'insertion', 'quick', 'merge', 'heap', 'linearSearch', 'binarySearch']
+const WORKSPACE_KEY = 'code-run-visualizer-workspace'
 const algorithmNames: Record<SortAlgorithm, string> = {
   community: '버블 정렬 (Bubble Sort)',
   selection: '선택 정렬 (Selection Sort)',
@@ -888,6 +890,7 @@ function buildSteps(code: string, selectedLanguage: Language): Step[] {
 
 function App() {
   const editorRef = useRef<HTMLTextAreaElement | null>(null)
+  const importRef = useRef<HTMLInputElement | null>(null)
   const [code, setCode] = useState(sampleCode)
   const [language, setLanguage] = useState<Language>('JavaScript')
   const [activeIndex, setActiveIndex] = useState(0)
@@ -900,6 +903,7 @@ function App() {
   const [askedToVisualize, setAskedToVisualize] = useState(false)
   const [visualizing, setVisualizing] = useState(false)
   const [sortIndex, setSortIndex] = useState(0)
+  const [workspaceStatus, setWorkspaceStatus] = useState('')
   const steps = useMemo(() => buildSteps(code, language), [code, language])
   const active = steps[Math.min(activeIndex, steps.length - 1)]
   const lines = code.split('\n')
@@ -933,6 +937,25 @@ function App() {
     setCompileResult(nextCompile)
     setRuntimeResult(nextCompile.ok ? runCode(code, language) : { ok: false, language, outputs: [], values: {}, errorLine: nextCompile.errorLine, error: nextCompile.message })
   }, [code, language])
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(WORKSPACE_KEY)
+      if (!raw) return
+      const saved = JSON.parse(raw)
+      if (typeof saved.code === 'string') setCode(saved.code)
+      if (['JavaScript', 'Python', 'Java'].includes(saved.language)) setLanguage(saved.language)
+      if (typeof saved.speed === 'number') setSpeed(saved.speed)
+      if (typeof saved.showHeat === 'boolean') setShowHeat(saved.showHeat)
+      setWorkspaceStatus('이전 작업 상태를 불러왔습니다.')
+    } catch {
+      setWorkspaceStatus('저장된 작업 상태를 읽지 못했습니다.')
+    }
+  }, [])
+
+  useEffect(() => {
+    localStorage.setItem(WORKSPACE_KEY, JSON.stringify({ code, language, speed, showHeat, updatedAt: new Date().toISOString() }))
+  }, [code, language, speed, showHeat])
 
   useEffect(() => {
     if (!playing) return
@@ -996,6 +1019,51 @@ function App() {
     setActiveIndex(0)
     setPlaying(false)
     setVisualizing(false)
+  }
+
+  function exportWorkspace() {
+    const payload = {
+      app: 'code-run-visualizer',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      code,
+      language,
+      speed,
+      showHeat,
+    }
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `code-run-visualizer-${new Date().toISOString().slice(0, 10)}.json`
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    URL.revokeObjectURL(url)
+    setWorkspaceStatus('작업 파일을 내보냈습니다.')
+  }
+
+  async function importWorkspace(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    if (!file) return
+    try {
+      const payload = JSON.parse(await file.text())
+      if (payload?.app !== 'code-run-visualizer' || payload?.version !== 1 || typeof payload?.code !== 'string') {
+        throw new Error('code-run-visualizer 작업 파일이 아닙니다.')
+      }
+      setCode(payload.code)
+      if (['JavaScript', 'Python', 'Java'].includes(payload.language)) setLanguage(payload.language)
+      if (typeof payload.speed === 'number') setSpeed(Math.min(1600, Math.max(250, payload.speed)))
+      if (typeof payload.showHeat === 'boolean') setShowHeat(payload.showHeat)
+      setSortIndex(0)
+      setActiveIndex(0)
+      setPlaying(false)
+      setWorkspaceStatus('작업 파일을 불러왔습니다.')
+    } catch (error) {
+      setWorkspaceStatus(error instanceof Error ? error.message : '작업 파일을 불러오지 못했습니다.')
+    } finally {
+      if (importRef.current) importRef.current.value = ''
+    }
   }
 
   function updateEditor(nextCode: string, nextCursor: number) {
@@ -1094,6 +1162,14 @@ function App() {
           <button onClick={() => setActiveIndex(index => Math.min(steps.length - 1, index + 1))}>다음 줄</button>
           <button onClick={() => setActiveIndex(0)}>처음</button>
         </div>
+        <div className="workspace-actions">
+          <button type="button" onClick={exportWorkspace}>작업 내보내기</button>
+          <label>
+            작업 불러오기
+            <input ref={importRef} type="file" accept="application/json,.json" onChange={importWorkspace} />
+          </label>
+        </div>
+        {workspaceStatus && <p className="workspace-status">{workspaceStatus}</p>}
         <div className={`compile-status ${compileResult.ok ? 'ok' : 'error'}`}>
           <strong>{compileResult.ok ? '컴파일 통과' : `${compileResult.errorLine}번 줄 에러`}</strong>
           <p>{compileResult.message}</p>
