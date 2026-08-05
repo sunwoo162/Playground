@@ -736,6 +736,10 @@ label {
 }
 
 @media (max-width: 900px) {
+  body {
+    overflow-x: hidden;
+  }
+
   .topbar {
     grid-template-columns: 1fr;
     position: static;
@@ -756,5 +760,27 @@ label {
 
   .ranking-list div {
     grid-template-columns: 42px 1fr;
+  }
+
+  .topbar,
+  .hero-panel,
+  .portfolio-card,
+  .stock-card,
+  .trade-box,
+  .ranking-list div,
+  .admin-list article,
+  .admin-account-list > div,
+  .modal-panel {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .ranking-mode-tabs {
+    justify-content: stretch;
+  }
+
+  .ranking-mode-tabs button {
+    flex: 1 1 140px;
+    min-width: 0;
   }
 }
