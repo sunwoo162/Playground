@@ -289,6 +289,31 @@ function App() {
     }, 1600)
   }
 
+  const exportSession = () => {
+    const payload = {
+      app: 'dev-term-roulette',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      mode,
+      accountKey,
+      currentTerm: result.final,
+      description: result.description,
+      history,
+      seenTerms,
+      customTerms: mode === 'custom' ? customTerms : [],
+      remainingCount,
+    }
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `dev-term-roulette-session-${new Date().toISOString().slice(0, 10)}.json`
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <main className="roulette-app">
       <section className="machine">
@@ -381,7 +406,10 @@ function App() {
         </article>
 
         <article className="panel">
-          <h2>최근 결과</h2>
+          <div className="panel-heading">
+            <h2>최근 결과</h2>
+            <button type="button" onClick={exportSession} disabled={history.length === 0}>내보내기</button>
+          </div>
           <div className="history-list">
             {history.length > 0 ? history.map(item => <span key={item}>{item}</span>) : <p className="hint">아직 돌린 기록이 없습니다.</p>}
           </div>
