@@ -3,7 +3,6 @@ import { createRoot } from 'react-dom/client'
 import { registerPushSubscription } from './push'
 import './styles.css'
 
-localStorage.removeItem('playground-theme')
 document.documentElement.dataset.theme = 'dark'
 
 const LOCAL_SERVERS_KEY = 'dev-action-hub-local-servers'

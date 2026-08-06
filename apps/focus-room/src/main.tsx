@@ -3,7 +3,6 @@ import { createRoot } from 'react-dom/client'
 import './style.css'
 import App from './App'
 
-localStorage.removeItem('playground-theme')
 document.documentElement.dataset.theme = 'dark'
 
 createRoot(document.getElementById('root')!).render(
