@@ -3,6 +3,7 @@ package com.playground.config;
 import com.playground.domain.user.entity.User;
 import com.playground.domain.user.repository.UserRepository;
 import io.jsonwebtoken.Claims;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
