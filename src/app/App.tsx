@@ -21,12 +21,16 @@ const APP_CATEGORIES: Array<{ id: AppItem['category']; label: string; descriptio
   { id: 'coming-soon', label: '준비 중', description: '나중에 열릴 기능' },
 ];
 
+const CATEGORY_LABELS = new Map(APP_CATEGORIES.map((category) => [category.id, category.label]));
+
 function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState<'home' | 'mypage' | 'friends' | 'github'>('home');
   const [favorites, setFavorites] = useState<string[]>(getFavorites);
   const [showFavOnly, setShowFavOnly] = useState(false);
+  const [activeCategory, setActiveCategory] = useState<AppItem['category'] | 'all'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [tokenExpiry, setTokenExpiry] = useState<Date | null>(null);
   const [timeLeft, setTimeLeft] = useState<string>('');
   const [studyElapsed, setStudyElapsed] = useState<number | null>(null);
@@ -233,15 +237,24 @@ function App() {
     setLoginRedirectApp(app);
   };
 
-  const displayedApps = showFavOnly
-    ? APPS.filter((a) => favorites.includes(a.id))
-    : APPS;
+  const availableApps = APPS.filter((app) => !app.disabled);
+  const disabledApps = APPS.filter((app) => app.disabled);
+  const searchTerm = searchQuery.trim().toLowerCase();
+  const displayedApps = APPS.filter((app) => {
+    if (showFavOnly && !favorites.includes(app.id)) return false;
+    if (activeCategory !== 'all' && app.category !== activeCategory) return false;
+    if (!searchTerm) return true;
+    return [app.title, app.description, app.id, CATEGORY_LABELS.get(app.category)]
+      .filter(Boolean)
+      .some((value) => value!.toLowerCase().includes(searchTerm));
+  });
   const displayedGroups = APP_CATEGORIES
     .map((category) => ({
       ...category,
       apps: displayedApps.filter((app) => app.category === category.id),
     }))
     .filter((category) => category.apps.length > 0);
+  const favoriteAvailableCount = favorites.filter((id) => availableApps.some((app) => app.id === id)).length;
 
   if (loading) {
     return (
@@ -281,8 +294,9 @@ function App() {
     <div className="app">
       <header className="header">
         <div className="header-left">
-          <h1 className="logo">🎮 놀이터</h1>
-          <p className="tagline">나만의 작은 웹앱 모음</p>
+          <span className="product-kicker">Playground OS</span>
+          <h1 className="logo">놀이터</h1>
+          <p className="tagline">공부, 개발, 자동화, 생활 도구를 한 계정에서 관리하는 개인 웹 작업대</p>
         </div>
         <div className="header-right">
           <button
@@ -334,11 +348,37 @@ function App() {
       </header>
 
       <main className="main">
-        {!user && (
-          <div className="login-prompt">
-            <p>로그인하면 앱을 사용할 수 있어요 👋</p>
+        <section className="portal-hero">
+          <div className="hero-copy">
+            <span className="hero-eyebrow">{user ? `${user.name || user.login}의 작업 공간` : '로그인하면 개인화됩니다'}</span>
+            <h2>필요한 웹앱을 찾고 바로 실행하세요.</h2>
+            <p>
+              앱을 무작정 나열하지 않고, 실제 사용 흐름에 맞춰 검색, 분류, 즐겨찾기, 알림을 한 화면에 모았습니다.
+            </p>
+            <div className="hero-actions">
+              {!user ? (
+                <button className="btn-primary hero-primary" onClick={handleLogin}>GitHub로 시작하기</button>
+              ) : (
+                <a className="btn-primary hero-primary" href="/apps/study-planner/">스터디 플래너 열기</a>
+              )}
+              <button className="btn-ghost" onClick={openFeatureRequest}>필요한 앱 요청</button>
+            </div>
           </div>
-        )}
+          <div className="hero-metrics" aria-label="놀이터 앱 상태">
+            <div>
+              <strong>{availableApps.length}</strong>
+              <span>사용 가능</span>
+            </div>
+            <div>
+              <strong>{favoriteAvailableCount}</strong>
+              <span>즐겨찾기</span>
+            </div>
+            <div>
+              <strong>{disabledApps.length}</strong>
+              <span>정의 필요</span>
+            </div>
+          </div>
+        </section>
 
         {user && (
           <section className="notice-section">
@@ -376,77 +416,114 @@ function App() {
           </section>
         )}
 
-        {/* 필터 바 */}
-        <div className="filter-bar">
-          <button
-            className={`filter-btn ${!showFavOnly ? 'active' : ''}`}
-            onClick={() => setShowFavOnly(false)}
-          >
-            전체 <span className="filter-count">{APPS.length}</span>
-          </button>
-          <button
-            className={`filter-btn ${showFavOnly ? 'active' : ''}`}
-            onClick={() => setShowFavOnly(true)}
-          >
-            ⭐ 즐겨찾기 <span className="filter-count">{favorites.length}</span>
-          </button>
-        </div>
-
-        {showFavOnly && displayedApps.length === 0 && (
-          <div className="fav-empty">
-            <p>즐겨찾기한 앱이 없어요.</p>
-            <p>앱 카드의 ⭐ 버튼을 눌러 추가해보세요.</p>
+        <section className="app-workbench" aria-label="앱 실행 영역">
+          <div className="workbench-toolbar">
+            <label className="search-field">
+              <span>검색</span>
+              <input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="앱 이름, 기능, 카테고리"
+              />
+            </label>
+            <div className="filter-bar" aria-label="앱 필터">
+              <button
+                className={`filter-btn ${!showFavOnly ? 'active' : ''}`}
+                onClick={() => setShowFavOnly(false)}
+              >
+                전체 <span className="filter-count">{APPS.length}</span>
+              </button>
+              <button
+                className={`filter-btn ${showFavOnly ? 'active' : ''}`}
+                onClick={() => setShowFavOnly(true)}
+              >
+                즐겨찾기 <span className="filter-count">{favorites.length}</span>
+              </button>
+            </div>
           </div>
-        )}
 
-        <div className="app-category-list">
-          {displayedGroups.map((group) => (
-            <section className="app-category" key={group.id}>
-              <div className="category-heading">
-                <div>
-                  <h2>{group.label}</h2>
-                  <p>{group.description}</p>
+          <div className="category-rail" aria-label="앱 카테고리">
+            <button
+              className={`category-tab ${activeCategory === 'all' ? 'active' : ''}`}
+              onClick={() => setActiveCategory('all')}
+            >
+              <span>전체</span>
+              <strong>{displayedApps.length}</strong>
+            </button>
+            {APP_CATEGORIES.map((category) => (
+              <button
+                key={category.id}
+                className={`category-tab ${activeCategory === category.id ? 'active' : ''}`}
+                onClick={() => setActiveCategory(category.id)}
+              >
+                <span>{category.label}</span>
+                <strong>{APPS.filter((app) => app.category === category.id).length}</strong>
+              </button>
+            ))}
+          </div>
+
+          {displayedApps.length === 0 && (
+            <div className="fav-empty">
+              <p>조건에 맞는 앱이 없습니다.</p>
+              <p>검색어를 줄이거나 전체 필터로 돌아가세요.</p>
+            </div>
+          )}
+
+          <div className="app-category-list">
+            {displayedGroups.map((group) => (
+              <section className="app-category" key={group.id}>
+                <div className="category-heading">
+                  <div>
+                    <h2>{group.label}</h2>
+                    <p>{group.description}</p>
+                  </div>
+                  <span>{group.apps.length}</span>
                 </div>
-                <span>{group.apps.length}</span>
-              </div>
-              <div className="apps-grid">
-                {group.apps.map((app) => (
-                  <a
-                    key={app.id}
-                    href={user && !app.disabled ? app.url : undefined}
-                    className={`app-card ${app.disabled ? 'disabled' : ''} ${!user ? 'locked' : ''}`}
-                    style={{ '--accent': app.color } as React.CSSProperties}
-                    onClick={(e) => {
-                      if (app.disabled) {
-                        e.preventDefault();
-                        return;
-                      }
-                      if (!user) {
-                        e.preventDefault();
-                        requestAppLogin(app);
-                      }
-                    }}
-                  >
-                    <button
-                      className={`fav-btn ${favorites.includes(app.id) ? 'favorited' : ''}`}
-                      onClick={(e) => toggleFavorite(app.id, e)}
-                      aria-label={favorites.includes(app.id) ? '즐겨찾기 해제' : '즐겨찾기 추가'}
-                      title={favorites.includes(app.id) ? '즐겨찾기 해제' : '즐겨찾기 추가'}
+                <div className="apps-grid">
+                  {group.apps.map((app) => (
+                    <a
+                      key={app.id}
+                      href={user && !app.disabled ? app.url : undefined}
+                      className={`app-card ${app.disabled ? 'disabled' : ''} ${!user ? 'locked' : ''}`}
+                      style={{ '--accent': app.color } as React.CSSProperties}
+                      onClick={(e) => {
+                        if (app.disabled) {
+                          e.preventDefault();
+                          return;
+                        }
+                        if (!user) {
+                          e.preventDefault();
+                          requestAppLogin(app);
+                        }
+                      }}
                     >
-                      {favorites.includes(app.id) ? '★' : '☆'}
-                    </button>
+                      <button
+                        className={`fav-btn ${favorites.includes(app.id) ? 'favorited' : ''}`}
+                        onClick={(e) => toggleFavorite(app.id, e)}
+                        aria-label={favorites.includes(app.id) ? '즐겨찾기 해제' : '즐겨찾기 추가'}
+                        title={favorites.includes(app.id) ? '즐겨찾기 해제' : '즐겨찾기 추가'}
+                      >
+                        {favorites.includes(app.id) ? '★' : '☆'}
+                      </button>
 
-                    <div className="app-emoji">{app.emoji}</div>
-                    <h3 className="app-title">{app.title}</h3>
-                    <p className="app-desc">{app.description}</p>
-                    {!user && !app.disabled && <span className="lock-badge">로그인 필요</span>}
-                    {app.disabled && <span className="lock-badge">준비 중</span>}
-                  </a>
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
+                      <div className="app-card-top">
+                        <div className="app-emoji">{app.emoji}</div>
+                        <span className="app-suite">{CATEGORY_LABELS.get(app.category)}</span>
+                      </div>
+                      <h3 className="app-title">{app.title}</h3>
+                      <p className="app-desc">{app.description}</p>
+                      <div className="app-card-footer">
+                        {!user && !app.disabled && <span className="lock-badge">로그인 필요</span>}
+                        {app.disabled && <span className="lock-badge">제품 정의 필요</span>}
+                        {user && !app.disabled && <span className="open-badge">열기</span>}
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+        </section>
       </main>
 
       <footer className="footer">
