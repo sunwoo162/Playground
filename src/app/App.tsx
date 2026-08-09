@@ -350,7 +350,6 @@ function App() {
       <main className="main">
         <section className="portal-hero">
           <div className="hero-copy">
-            <span className="hero-eyebrow">{user ? `${user.name || user.login}의 작업 공간` : '로그인하면 개인화됩니다'}</span>
             <h2>필요한 웹앱을 찾고 바로 실행하세요.</h2>
             <p>
               앱을 무작정 나열하지 않고, 실제 사용 흐름에 맞춰 검색, 분류, 즐겨찾기, 알림을 한 화면에 모았습니다.

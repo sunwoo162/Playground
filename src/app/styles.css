@@ -229,14 +229,6 @@ body {
     linear-gradient(180deg, color-mix(in srgb, var(--surface) 92%, var(--surface-2)), var(--surface));
 }
 
-.hero-eyebrow {
-  display: inline-flex;
-  margin-bottom: 10px;
-  color: var(--accent-blue);
-  font-size: 0.78rem;
-  font-weight: 900;
-}
-
 .hero-copy h2 {
   max-width: 680px;
   font-size: clamp(2rem, 5vw, 4rem);
