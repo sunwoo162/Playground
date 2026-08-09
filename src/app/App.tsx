@@ -22,6 +22,30 @@ const APP_CATEGORIES: Array<{ id: AppItem['category']; label: string; descriptio
 ];
 
 const CATEGORY_LABELS = new Map(APP_CATEGORIES.map((category) => [category.id, category.label]));
+const TODAY_PLAN_KEY = 'playground-today-plan';
+
+type TodayPlanItem = {
+  id: string;
+  appId: string;
+  time: string;
+  title: string;
+  reminder: boolean;
+  notified?: boolean;
+};
+
+const loadTodayPlan = (): TodayPlanItem[] => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(TODAY_PLAN_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const getDefaultPlanTime = () => {
+  const date = new Date(Date.now() + 30 * 60 * 1000);
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+};
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -31,6 +55,15 @@ function App() {
   const [showFavOnly, setShowFavOnly] = useState(false);
   const [activeCategory, setActiveCategory] = useState<AppItem['category'] | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [todayPlan, setTodayPlan] = useState<TodayPlanItem[]>(loadTodayPlan);
+  const [planAppId, setPlanAppId] = useState(() => APPS.find((app) => !app.disabled)?.id ?? '');
+  const [planTime, setPlanTime] = useState(getDefaultPlanTime);
+  const [planTitle, setPlanTitle] = useState('');
+  const [planReminder, setPlanReminder] = useState(true);
+  const [planStatus, setPlanStatus] = useState('');
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(
+    typeof Notification === 'undefined' ? 'denied' : Notification.permission,
+  );
   const [tokenExpiry, setTokenExpiry] = useState<Date | null>(null);
   const [timeLeft, setTimeLeft] = useState<string>('');
   const [studyElapsed, setStudyElapsed] = useState<number | null>(null);
@@ -56,6 +89,40 @@ function App() {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem(THEME_KEY, theme);
   }, [theme]);
+
+  useEffect(() => {
+    localStorage.setItem(TODAY_PLAN_KEY, JSON.stringify(todayPlan));
+  }, [todayPlan]);
+
+  useEffect(() => {
+    if (typeof Notification === 'undefined') return;
+    setNotificationPermission(Notification.permission);
+  }, []);
+
+  useEffect(() => {
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    const timers = todayPlan
+      .filter((item) => item.reminder && !item.notified)
+      .map((item) => {
+        const target = new Date();
+        const [hours, minutes] = item.time.split(':').map(Number);
+        target.setHours(hours, minutes, 0, 0);
+        const delay = target.getTime() - Date.now();
+        if (delay <= 0) return null;
+        return window.setTimeout(() => {
+          const app = APPS.find((candidate) => candidate.id === item.appId);
+          new Notification('놀이터 일정 알림', {
+            body: `${item.time} · ${app?.title ?? '앱'}${item.title ? ` - ${item.title}` : ''}`,
+          });
+          setTodayPlan((current) => current.map((plan) => (
+            plan.id === item.id ? { ...plan, notified: true } : plan
+          )));
+        }, delay);
+      })
+      .filter((timer): timer is number => timer !== null);
+
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [todayPlan]);
 
   useEffect(() => {
     fetch('/auth/me', { credentials: 'include' })
@@ -237,6 +304,64 @@ function App() {
     setLoginRedirectApp(app);
   };
 
+  const requestNotificationPermission = async () => {
+    if (typeof Notification === 'undefined') {
+      setPlanStatus('이 브라우저에서는 알림을 지원하지 않습니다.');
+      return false;
+    }
+    if (Notification.permission === 'granted') {
+      setNotificationPermission('granted');
+      return true;
+    }
+    if (Notification.permission === 'denied') {
+      setNotificationPermission('denied');
+      setPlanStatus('브라우저에서 알림이 차단되어 있습니다. 사이트 설정에서 알림을 허용해주세요.');
+      return false;
+    }
+    const permission = await Notification.requestPermission();
+    setNotificationPermission(permission);
+    if (permission !== 'granted') {
+      setPlanStatus('알림 권한 없이 일정만 저장했습니다.');
+      return false;
+    }
+    return true;
+  };
+
+  const addTodayPlan = async (e: FormEvent) => {
+    e.preventDefault();
+    const app = APPS.find((candidate) => candidate.id === planAppId && !candidate.disabled);
+    if (!app) {
+      setPlanStatus('사용 가능한 앱을 선택해주세요.');
+      return;
+    }
+    if (!planTime) {
+      setPlanStatus('시간을 선택해주세요.');
+      return;
+    }
+    const title = planTitle.trim();
+    const shouldRemind = planReminder && await requestNotificationPermission();
+    const nextItem: TodayPlanItem = {
+      id: `${Date.now()}-${app.id}`,
+      appId: app.id,
+      time: planTime,
+      title,
+      reminder: shouldRemind,
+    };
+    setTodayPlan((current) => [...current, nextItem].sort((a, b) => a.time.localeCompare(b.time)));
+    setPlanTitle('');
+    setPlanStatus(shouldRemind ? '일정과 알람을 저장했습니다.' : '일정을 저장했습니다.');
+  };
+
+  const removeTodayPlan = (id: string) => {
+    setTodayPlan((current) => current.filter((item) => item.id !== id));
+  };
+
+  const togglePlanDone = (id: string) => {
+    setTodayPlan((current) => current.map((item) => (
+      item.id === id ? { ...item, notified: !item.notified } : item
+    )));
+  };
+
   const availableApps = APPS.filter((app) => !app.disabled);
   const disabledApps = APPS.filter((app) => app.disabled);
   const searchTerm = searchQuery.trim().toLowerCase();
@@ -255,6 +380,7 @@ function App() {
     }))
     .filter((category) => category.apps.length > 0);
   const favoriteAvailableCount = favorites.filter((id) => availableApps.some((app) => app.id === id)).length;
+  const sortedTodayPlan = [...todayPlan].sort((a, b) => a.time.localeCompare(b.time));
 
   if (loading) {
     return (
@@ -348,37 +474,6 @@ function App() {
       </header>
 
       <main className="main">
-        <section className="portal-hero">
-          <div className="hero-copy">
-            <h2>필요한 웹앱을 찾고 바로 실행하세요.</h2>
-            <p>
-              앱을 무작정 나열하지 않고, 실제 사용 흐름에 맞춰 검색, 분류, 즐겨찾기, 알림을 한 화면에 모았습니다.
-            </p>
-            <div className="hero-actions">
-              {!user ? (
-                <button className="btn-primary hero-primary" onClick={handleLogin}>GitHub로 시작하기</button>
-              ) : (
-                <a className="btn-primary hero-primary" href="/apps/study-planner/">스터디 플래너 열기</a>
-              )}
-              <button className="btn-ghost" onClick={openFeatureRequest}>필요한 앱 요청</button>
-            </div>
-          </div>
-          <div className="hero-metrics" aria-label="놀이터 앱 상태">
-            <div>
-              <strong>{availableApps.length}</strong>
-              <span>사용 가능</span>
-            </div>
-            <div>
-              <strong>{favoriteAvailableCount}</strong>
-              <span>즐겨찾기</span>
-            </div>
-            <div>
-              <strong>{disabledApps.length}</strong>
-              <span>정의 필요</span>
-            </div>
-          </div>
-        </section>
-
         {user && (
           <section className="notice-section">
             <div className="notice-section-header">
@@ -415,7 +510,118 @@ function App() {
           </section>
         )}
 
+        <section className="portal-hero">
+          <div className="hero-copy">
+            <h2>필요한 웹앱을 찾고 바로 실행하세요.</h2>
+            <p>
+              앱을 무작정 나열하지 않고, 실제 사용 흐름에 맞춰 검색, 분류, 즐겨찾기, 알림을 한 화면에 모았습니다.
+            </p>
+            <div className="hero-actions">
+              {!user ? (
+                <button className="btn-primary hero-primary" onClick={handleLogin}>GitHub로 시작하기</button>
+              ) : (
+                <a className="btn-primary hero-primary" href="/apps/study-planner/">스터디 플래너 열기</a>
+              )}
+              <button className="btn-ghost" onClick={openFeatureRequest}>필요한 앱 요청</button>
+            </div>
+          </div>
+          <div className="hero-metrics" aria-label="놀이터 앱 상태">
+            <div>
+              <strong>{availableApps.length}</strong>
+              <span>사용 가능</span>
+            </div>
+            <div>
+              <strong>{favoriteAvailableCount}</strong>
+              <span>즐겨찾기</span>
+            </div>
+            <div>
+              <strong>{disabledApps.length}</strong>
+              <span>정의 필요</span>
+            </div>
+          </div>
+        </section>
+
         <section className="app-workbench" aria-label="앱 실행 영역">
+          <div className="daily-planner">
+            <div className="planner-panel">
+              <div className="planner-heading">
+                <div>
+                  <span className="planner-kicker">오늘 할 일</span>
+                  <h2>웹앱 시간표</h2>
+                </div>
+                <span className={`permission-pill ${notificationPermission}`}>
+                  {notificationPermission === 'granted' ? '알림 켜짐' : notificationPermission === 'denied' ? '알림 차단됨' : '알림 권한 필요'}
+                </span>
+              </div>
+
+              <form className="planner-form" onSubmit={addTodayPlan}>
+                <label>
+                  <span>웹앱</span>
+                  <select value={planAppId} onChange={(e) => setPlanAppId(e.target.value)}>
+                    {availableApps.map((app) => (
+                      <option key={app.id} value={app.id}>{app.title}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>시간</span>
+                  <input type="time" value={planTime} onChange={(e) => setPlanTime(e.target.value)} />
+                </label>
+                <label className="planner-title-field">
+                  <span>할 일</span>
+                  <input
+                    value={planTitle}
+                    onChange={(e) => setPlanTitle(e.target.value)}
+                    placeholder="예: 수학 오답 정리, 배포 확인"
+                  />
+                </label>
+                <label className="reminder-toggle">
+                  <input
+                    type="checkbox"
+                    checked={planReminder}
+                    onChange={(e) => setPlanReminder(e.target.checked)}
+                  />
+                  <span>시간 맞춰 알림</span>
+                </label>
+                <button className="btn-primary" type="submit">시간표에 추가</button>
+              </form>
+              {planStatus && <p className="planner-status">{planStatus}</p>}
+            </div>
+
+            <div className="schedule-board" aria-label="오늘 웹앱 시간표">
+              {sortedTodayPlan.length > 0 ? (
+                sortedTodayPlan.map((item) => {
+                  const app = APPS.find((candidate) => candidate.id === item.appId);
+                  return (
+                    <article className={`schedule-row ${item.notified ? 'done' : ''}`} key={item.id}>
+                      <div className="schedule-time">{item.time}</div>
+                      <div className="schedule-line" />
+                      <div className="schedule-card" style={{ '--accent': app?.color ?? 'var(--accent-blue)' } as React.CSSProperties}>
+                        <div className="schedule-card-main">
+                          <span className="schedule-app">{app?.emoji} {app?.title ?? '알 수 없는 앱'}</span>
+                          <strong>{item.title || app?.description || '오늘 이 웹앱 사용하기'}</strong>
+                          <span>{item.reminder ? '알림 예약됨' : '알림 없음'}</span>
+                        </div>
+                        <div className="schedule-actions">
+                          {user && app && !app.disabled && <a href={app.url}>열기</a>}
+                          <button type="button" onClick={() => togglePlanDone(item.id)}>
+                            {item.notified ? '다시 알림' : '완료'}
+                          </button>
+                          <button type="button" onClick={() => removeTodayPlan(item.id)}>삭제</button>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })
+              ) : (
+                <div className="schedule-empty">
+                  <strong>오늘 사용할 웹앱을 시간표로 정하세요.</strong>
+                  <span>시간을 넣으면 브라우저가 열려 있는 동안 해당 시간에 알림을 보냅니다.</span>
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="workbench-toolbar">
             <label className="search-field">
               <span>검색</span>

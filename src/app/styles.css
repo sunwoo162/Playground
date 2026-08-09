@@ -489,6 +489,263 @@ body {
   padding: 16px;
 }
 
+.daily-planner {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.9fr) minmax(0, 1.1fr);
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.planner-panel,
+.schedule-board {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+
+.planner-panel {
+  padding: 16px;
+}
+
+.planner-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.planner-kicker {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--accent-green);
+  font-size: 0.74rem;
+  font-weight: 900;
+}
+
+.planner-heading h2 {
+  font-size: 1.25rem;
+}
+
+.permission-pill {
+  flex: 0 0 auto;
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.permission-pill.granted {
+  border-color: color-mix(in srgb, var(--accent-green) 50%, var(--border));
+  color: var(--accent-green);
+}
+
+.permission-pill.denied {
+  border-color: color-mix(in srgb, #ef4444 50%, var(--border));
+  color: #ef4444;
+}
+
+.planner-form {
+  display: grid;
+  grid-template-columns: 1fr 128px;
+  gap: 10px;
+}
+
+.planner-form label {
+  display: grid;
+  gap: 6px;
+}
+
+.planner-form label > span {
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.planner-form input,
+.planner-form select {
+  width: 100%;
+  min-height: 40px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.planner-form input:focus,
+.planner-form select:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-blue) 18%, transparent);
+}
+
+.planner-title-field,
+.planner-form .btn-primary {
+  grid-column: 1 / -1;
+}
+
+.reminder-toggle {
+  grid-column: 1 / -1;
+  display: flex !important;
+  grid-template-columns: none !important;
+  align-items: center;
+  gap: 8px !important;
+  min-height: 34px;
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.reminder-toggle input {
+  width: 18px;
+  min-height: 18px;
+}
+
+.planner-status {
+  margin-top: 10px;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.schedule-board {
+  min-height: 310px;
+  padding: 14px;
+}
+
+.schedule-row {
+  display: grid;
+  grid-template-columns: 58px 18px minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+}
+
+.schedule-row + .schedule-row {
+  margin-top: 10px;
+}
+
+.schedule-time {
+  padding-top: 12px;
+  color: var(--text);
+  font-size: 0.86rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.schedule-line {
+  position: relative;
+}
+
+.schedule-line::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 0;
+  bottom: -10px;
+  width: 1px;
+  background: var(--border);
+}
+
+.schedule-line::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 16px;
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--accent-blue);
+  border-radius: 999px;
+  background: var(--surface);
+}
+
+.schedule-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.schedule-row.done .schedule-card {
+  opacity: 0.68;
+}
+
+.schedule-card-main {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.schedule-app,
+.schedule-card-main span:last-child {
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.schedule-card-main strong {
+  font-size: 0.95rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.schedule-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.schedule-actions a,
+.schedule-actions button {
+  min-height: 30px;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.76rem;
+  font-weight: 800;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.schedule-actions a {
+  border-color: color-mix(in srgb, var(--accent-blue) 55%, var(--border));
+  color: var(--accent-blue);
+}
+
+.schedule-empty {
+  min-height: 280px;
+  display: grid;
+  place-content: center;
+  gap: 8px;
+  padding: 24px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.schedule-empty strong {
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.schedule-empty span {
+  max-width: 360px;
+  line-height: 1.55;
+}
+
 .workbench-toolbar {
   display: grid;
   grid-template-columns: minmax(260px, 1fr) auto;
@@ -1593,6 +1850,7 @@ body {
   }
 
   .portal-hero,
+  .daily-planner,
   .workbench-toolbar {
     grid-template-columns: 1fr;
   }
@@ -1632,6 +1890,23 @@ body {
 
   .apps-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .planner-form,
+  .schedule-row {
+    grid-template-columns: 1fr;
+  }
+
+  .schedule-line {
+    display: none;
+  }
+
+  .schedule-card {
+    flex-direction: column;
+  }
+
+  .schedule-actions {
+    justify-content: flex-start;
   }
 
   .app-card {
