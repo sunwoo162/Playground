@@ -49,7 +49,6 @@ if (HAS_VAPID_KEYS) {
 const app = express();
 const PORT = process.env.PORT || 3000;
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8080';
-const HARUFIT_URL = process.env.HARUFIT_URL || 'http://127.0.0.1:4010';
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 
 app.set('trust proxy', 1);
@@ -164,49 +163,6 @@ function proxyToBackend(req, res) {
   if (bodyData) {
     proxyReq.write(bodyData);
     proxyReq.end();
-  } else {
-    req.pipe(proxyReq);
-  }
-}
-
-function proxyToHarufit(req, res, rewritePath) {
-  const targetPath = rewritePath(req.originalUrl);
-  const targetUrl = new URL(targetPath, HARUFIT_URL);
-  const client = targetUrl.protocol === 'https:' ? https : http;
-  const bodyData = req.body && Object.keys(req.body).length > 0
-    ? JSON.stringify(req.body)
-    : null;
-
-  const headers = {
-    ...req.headers,
-    host: targetUrl.host,
-    origin: HARUFIT_URL,
-  };
-
-  if (bodyData) {
-    headers['content-length'] = Buffer.byteLength(bodyData).toString();
-    headers['content-type'] = 'application/json';
-  }
-
-  const proxyReq = client.request(
-    targetUrl,
-    {
-      method: req.method,
-      headers,
-    },
-    (proxyRes) => {
-      res.writeHead(proxyRes.statusCode || 500, proxyRes.headers);
-      proxyRes.pipe(res);
-    }
-  );
-
-  proxyReq.on('error', (error) => {
-    console.error('Harufit proxy error:', error);
-    res.status(502).json({ error: 'harufit_unavailable' });
-  });
-
-  if (bodyData) {
-    proxyReq.write(bodyData);
   } else {
     req.pipe(proxyReq);
   }
@@ -1273,17 +1229,6 @@ app.post('/auth/logout', (req, res) => {
 
 // 놀이터 메인 (Vite 빌드 결과물)
 app.use(express.static(path.join(__dirname, '..', 'dist')));
-
-// 하루핏 앱/API (별도 Node 프로세스로 프록시)
-app.use('/harufit-api', (req, res) => {
-  proxyToHarufit(req, res, (originalUrl) => originalUrl.replace(/^\/harufit-api/, '/api'));
-});
-app.use('/apps/harufit', (req, res) => {
-  proxyToHarufit(req, res, (originalUrl) => {
-    const nextPath = originalUrl.replace(/^\/apps\/harufit/, '') || '/';
-    return nextPath.startsWith('/') ? nextPath : `/${nextPath}`;
-  });
-});
 
 // Life Tracker 앱 (서브 경로에서 서빙)
 app.use('/apps/life-tracker', express.static(path.join(__dirname, '..', 'apps', 'life-tracker', 'dist')));
