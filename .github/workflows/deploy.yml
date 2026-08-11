@@ -34,32 +34,32 @@ jobs:
         if: steps.changes.outputs.backend == 'true'
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: pnpm
 
       - name: Install frontend dependencies
-        run: npm run install:all
+        run: pnpm run install:all
 
-      - name: Clean npm cache and rebuild all apps
+      - name: Reinstall frontend workspace
         run: |
-          npm cache clean --force
-          for app in apps/life-tracker apps/dev-notes apps/dev-action-hub apps/dev-term-roulette apps/idea-mixer apps/study-planner apps/focus-room apps/virtual-study-room apps/virtual-avatar apps/voice-studio apps/todo apps/day-schedule apps/cornell-notes apps/coding-log apps/school-meal apps/commute-alarm apps/mock-invest apps/action-notifier apps/code-run-visualizer; do
-            echo "Cleaning $app..."
-            cd $app
-            rm -rf node_modules package-lock.json
-            npm install
-            cd ../../
-          done
+          pnpm store prune
+          pnpm install --frozen-lockfile
 
       - name: Build frontend apps
         run: |
-          npm run build:all
-          npm run build --prefix apps/virtual-study-room
-          npm run build --prefix apps/virtual-avatar
-          npm run build --prefix apps/voice-studio
-          npm run build --prefix apps/code-run-visualizer
+          pnpm run build:all
+          pnpm --filter ./apps/virtual-study-room run build
+          pnpm --filter ./apps/virtual-avatar run build
+          pnpm --filter ./apps/voice-studio run build
+          pnpm --filter ./apps/code-run-visualizer run build
           test -f apps/idea-mixer/dist/index.html
           test -f apps/virtual-study-room/dist/index.html
           test -f apps/virtual-avatar/dist/index.html
@@ -107,14 +107,15 @@ jobs:
             git reset --hard origin/main
 
             # 의존성 설치 및 프론트 빌드
-            npm run install:all
-            npm run build:all
-            npm run build --prefix apps/virtual-study-room
-            npm run build --prefix apps/virtual-avatar
-            npm run build --prefix apps/voice-studio
-            npm run build --prefix apps/code-run-visualizer
-            npm install --no-audit --fund=false --prefix apps/commute-alarm
-            npm run build --prefix apps/commute-alarm
+            corepack enable
+            corepack prepare pnpm@10.33.0 --activate
+            pnpm run install:all
+            pnpm run build:all
+            pnpm --filter ./apps/virtual-study-room run build
+            pnpm --filter ./apps/virtual-avatar run build
+            pnpm --filter ./apps/voice-studio run build
+            pnpm --filter ./apps/code-run-visualizer run build
+            pnpm --filter ./apps/commute-alarm run build
             test -f apps/idea-mixer/dist/index.html
             test -f apps/virtual-study-room/dist/index.html
             test -f apps/virtual-avatar/dist/index.html

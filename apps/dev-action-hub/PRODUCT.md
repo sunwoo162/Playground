@@ -29,5 +29,5 @@ Dev Action Hub is an integrated developer workspace for project rooms, direct me
 
 ## Verification
 
-- `npm run build --prefix apps/dev-action-hub`
-- `npm run harness`
+- `pnpm --filter ./apps/dev-action-hub run build`
+- `pnpm run harness`

@@ -58,6 +58,6 @@ Not yet production-complete:
 Use:
 
 ```powershell
-npm run build --prefix apps/study-planner
-npm run harness
+pnpm --filter ./apps/study-planner run build
+pnpm run harness
 ```

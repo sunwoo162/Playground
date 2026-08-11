@@ -27,5 +27,5 @@ Focus Room is an immersive 3D study environment that combines a timed focus sess
 
 ## Verification
 
-- `npm run build --prefix apps/focus-room`
-- `npm run harness`
+- `pnpm --filter ./apps/focus-room run build`
+- `pnpm run harness`

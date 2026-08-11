@@ -323,7 +323,7 @@ const detailedWebDocs = [
     ],
     troubleRows: [
       ['NEIS 학교 검색 부정확', 'NEIS API의 학교명 검색은 완전 일치 성격이라 부분 검색 UX가 나빴다.', '서버 시작 시 전국 학교 목록을 캐싱하고 includes 검색으로 응답했다.', '학교 선택은 첫 진입 UX라 빠르고 관대한 검색이 필요했다.'],
-      ['Vite native binding 누락', 'Linux 서버에서 rolldown/lightningcss optional dependency가 설치되지 않아 빌드가 실패했다.', '누락된 optional native package를 설치하고 npm install 절차를 정리했다.', '서버 배포에서 dist가 갱신되지 않으면 사용자는 반영이 안 된 것으로 보이므로 빌드 안정성이 중요했다.'],
+      ['Vite native binding 누락', 'Linux 서버에서 rolldown/lightningcss optional dependency가 설치되지 않아 빌드가 실패했다.', '누락된 optional native package를 설치하고 pnpm install 절차를 정리했다.', '서버 배포에서 dist가 갱신되지 않으면 사용자는 반영이 안 된 것으로 보이므로 빌드 안정성이 중요했다.'],
       ['확장 팝업 이중 스크롤', 'iframe 내부와 popup body가 동시에 스크롤되어 사용성이 나빴다.', 'compact 모드에서 header를 숨기고 popup 외부 overflow를 hidden으로 고정했다.', '확장 팝업은 작은 창이라 스크롤 컨테이너가 하나만 있어야 한다.'],
       ['설정 화면 스크롤 불가', 'compact 설정 화면 높이를 고정해 하단 알레르기 설정까지 접근할 수 없었다.', 'settings view일 때 document 자체가 세로 스크롤되도록 dataset 기반 CSS를 분리했다.', '설정은 항목이 늘어날 수 있으므로 고정 높이보다 내용 기반 스크롤이 맞다.'],
     ],

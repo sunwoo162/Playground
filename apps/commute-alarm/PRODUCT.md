@@ -28,5 +28,5 @@ Commute Alarm is a Seoul transit arrival and stop-alert tool that combines GPS d
 
 ## Verification
 
-- `npm run build --prefix apps/commute-alarm`
-- `npm run harness`
+- `pnpm --filter ./apps/commute-alarm run build`
+- `pnpm run harness`

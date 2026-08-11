@@ -29,5 +29,5 @@ Action Notifier watches selected GitHub repositories and sends browser push noti
 
 ## Verification
 
-- `npm run build --prefix apps/action-notifier`
-- `npm run harness`
+- `pnpm --filter ./apps/action-notifier run build`
+- `pnpm run harness`

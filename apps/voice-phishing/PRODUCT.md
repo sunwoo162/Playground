@@ -29,5 +29,5 @@ Voice Phishing is a browser-based fraud awareness simulator that teaches users h
 
 ## Verification
 
-- `npm run build --prefix apps/voice-phishing`
-- `npm run harness`
+- `pnpm --filter ./apps/voice-phishing run build`
+- `pnpm run harness`

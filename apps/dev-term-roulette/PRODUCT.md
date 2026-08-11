@@ -29,5 +29,5 @@ Dev Term Roulette is a study game that randomly selects developer terms, avoids 
 
 ## Verification
 
-- `npm run build --prefix apps/dev-term-roulette`
-- `npm run harness`
+- `pnpm --filter ./apps/dev-term-roulette run build`
+- `pnpm run harness`

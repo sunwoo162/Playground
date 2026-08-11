@@ -39,7 +39,7 @@ const SCREENS: Record<ScreenId, { label: string; title: string; items: string[] 
   pdf: { label: 'PDF', title: '강의자료.pdf', items: ['18쪽 핵심 개념', '예제 4번 풀이', '오답 표시'] },
   chatgpt: { label: 'ChatGPT', title: 'AI 튜터', items: ['시간복잡도 질문', '개념 요약', '암기 문장 생성'] },
   youtube: { label: '강의', title: '온라인 강의', items: ['00:18:42', '개념 설명 구간', '필기 모드'] },
-  vscode: { label: 'VSCode', title: 'VSCode Web', items: ['src/App.tsx', 'useTimer.ts', 'npm run build'] },
+  vscode: { label: 'VSCode', title: 'VSCode Web', items: ['src/App.tsx', 'useTimer.ts', 'pnpm run build'] },
   ide: { label: 'IDE', title: '온라인 IDE', items: ['예제 입력 실행', '시간 제한 확인', '제출 준비'] },
   docs: { label: '문서', title: 'Google Docs', items: ['보고서 목차', '자료 출처', '최종 문장'] },
 }

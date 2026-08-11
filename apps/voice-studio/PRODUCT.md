@@ -50,6 +50,6 @@ Voice Studio must run close to the browser audio stack for low-friction micropho
 Use:
 
 ```powershell
-npm run build --prefix apps/voice-studio
-npm run harness
+pnpm --filter ./apps/voice-studio run build
+pnpm run harness
 ```

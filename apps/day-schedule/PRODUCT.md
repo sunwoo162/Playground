@@ -38,6 +38,6 @@ Time-block planning is personal and fast. LocalStorage keeps it immediate; a bac
 Use:
 
 ```powershell
-npm run build --prefix apps/day-schedule
-npm run harness
+pnpm --filter ./apps/day-schedule run build
+pnpm run harness
 ```

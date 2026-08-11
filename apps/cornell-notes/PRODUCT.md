@@ -38,6 +38,6 @@ Capture learning in Cornell-note format, review notes by subject, share/import a
 Use:
 
 ```powershell
-npm run build --prefix apps/cornell-notes
-npm run harness
+pnpm --filter ./apps/cornell-notes run build
+pnpm run harness
 ```

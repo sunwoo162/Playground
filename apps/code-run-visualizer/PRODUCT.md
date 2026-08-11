@@ -26,5 +26,5 @@ Code Run Visualizer is an educational coding tool that shows how JavaScript, Pyt
 
 ## Verification
 
-- `npm run build --prefix apps/code-run-visualizer`
-- `npm run harness`
+- `pnpm --filter ./apps/code-run-visualizer run build`
+- `pnpm run harness`

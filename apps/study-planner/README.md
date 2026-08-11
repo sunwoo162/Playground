@@ -75,13 +75,13 @@ src/
 
 ```bash
 # 의존성 설치
-npm install
+pnpm install
 
 # 개발 서버
-npm run dev
+pnpm run dev
 
 # 빌드
-npm run build
+pnpm run build
 ```
 
 ## 데이터 저장

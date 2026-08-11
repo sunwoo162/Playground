@@ -38,6 +38,6 @@ This app is intentionally local-first and account-free. LocalStorage keeps the w
 Use:
 
 ```powershell
-npm run build --prefix apps/todo
-npm run harness
+pnpm --filter ./apps/todo run build
+pnpm run harness
 ```

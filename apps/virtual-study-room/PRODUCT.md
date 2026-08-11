@@ -54,6 +54,6 @@ The current client can validate room layout, media permission UX, screen sharing
 Use:
 
 ```powershell
-npm run build --prefix apps/virtual-study-room
-npm run harness
+pnpm --filter ./apps/virtual-study-room run build
+pnpm run harness
 ```

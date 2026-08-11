@@ -27,5 +27,5 @@ Idea Mixer is a creativity tool that pairs two random words and helps users turn
 
 ## Verification
 
-- `npm run build --prefix apps/idea-mixer`
-- `npm run harness`
+- `pnpm --filter ./apps/idea-mixer run build`
+- `pnpm run harness`

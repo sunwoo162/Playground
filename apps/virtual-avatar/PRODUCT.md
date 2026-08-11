@@ -29,5 +29,5 @@ Virtual Avatar is a browser-based avatar studio for lightweight VTuber-style cam
 
 ## Verification
 
-- `npm run build --prefix apps/virtual-avatar`
-- `npm run harness`
+- `pnpm --filter ./apps/virtual-avatar run build`
+- `pnpm run harness`

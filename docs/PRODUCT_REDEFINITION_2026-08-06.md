@@ -36,7 +36,7 @@ Avoid adding new frameworks until there is a real product reason. If a new app n
 
 Every shippable app must pass these gates:
 
-- `npm run build` succeeds for the app or the app has a documented non-Node build command
+- `pnpm run build` succeeds for the app or the app has a documented non-Node build command
 - Main page opens without a blank screen
 - Desktop and mobile layouts are usable
 - Primary workflow can be completed from an empty state
@@ -166,8 +166,8 @@ Use this before creating files:
 
 Checked on 2026-08-06:
 
-- `npm run build`: passed for the root portal.
-- `npm run build:apps`: passed for the 20 Node/Vite apps included in the root script.
+- `pnpm run build`: passed for the root portal.
+- `pnpm run build:apps`: passed for the 20 Node/Vite apps included in the root script.
 - `docs/app-registry.json`: valid JSON.
 
 This does not mean the products are market-ready. It only proves the current scripted builds complete. Remaining verification requires local run checks, browser QA, mobile layout checks, extension install checks, API failure checks, and hosted `/apps/<id>/` asset-path checks.

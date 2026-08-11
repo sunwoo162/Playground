@@ -10,15 +10,15 @@ Harness engineering means building the rails around the products so every app ca
 
 ## What Was Added
 
-- `npm run harness`
+- `pnpm run harness`
   - Runs `scripts/harness-check.js`.
   - Verifies that registered apps have directories.
   - Verifies that buildable apps have build scripts.
   - Warns when portal/server/build entries are out of sync with the registry.
 
-- `npm run verify`
-  - Runs `npm run build:all`.
-  - Runs `npm run harness`.
+- `pnpm run verify`
+  - Runs `pnpm run build:all`.
+  - Runs `pnpm run harness`.
   - Use this before shipping broad product changes.
 
 - `.github/workflows/harness.yml`
@@ -42,7 +42,7 @@ The harness turns those rules into executable checks.
 - Product truth starts in `docs/app-registry.json`.
 - User-facing portal truth is `src/entities/app-item/model/apps.ts`.
 - Deployable static routes live in `server/index.js`.
-- Buildable Node/Vite apps must expose `npm run build`.
+- Buildable Node/Vite apps must expose `pnpm run build`.
 - Apps that are not Node packages must be documented as companion/native/static tools.
 
 ## Next Harness Layers
@@ -58,6 +58,6 @@ The current harness is the foundation. Add these layers next:
 ## Command Reference
 
 ```powershell
-npm run harness
-npm run verify
+pnpm run harness
+pnpm run verify
 ```

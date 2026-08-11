@@ -28,5 +28,5 @@ Coding Log is a problem-solving journal for programmers who practice with Progra
 
 ## Verification
 
-- `npm run build --prefix apps/coding-log`
-- `npm run harness`
+- `pnpm --filter ./apps/coding-log run build`
+- `pnpm run harness`

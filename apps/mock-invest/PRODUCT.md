@@ -51,6 +51,6 @@ Trading simulation needs a server ledger. Portfolio cash, holdings, and order hi
 Use:
 
 ```powershell
-npm run build --prefix apps/mock-invest
-npm run harness
+pnpm --filter ./apps/mock-invest run build
+pnpm run harness
 ```

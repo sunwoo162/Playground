@@ -28,7 +28,11 @@ function getServerAppRoutes() {
 function getBuildScriptAppIds() {
   const pkg = readJson('package.json');
   const buildApps = pkg.scripts?.['build:apps'] || '';
-  return new Set(Array.from(buildApps.matchAll(/--prefix\s+apps\/([^\s&]+)/g)).map((match) => match[1]));
+  const ids = [
+    ...Array.from(buildApps.matchAll(/--prefix\s+apps\/([^\s&]+)/g)),
+    ...Array.from(buildApps.matchAll(/--filter\s+(?:\.\/)?apps\/([^\s&]+)/g)),
+  ].map((match) => match[1]);
+  return new Set(ids);
 }
 
 function classifyApp(app) {

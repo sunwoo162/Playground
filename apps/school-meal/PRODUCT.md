@@ -49,6 +49,6 @@ NEIS requests should be proxied by the server so API keys are not exposed to the
 Use:
 
 ```powershell
-npm run build --prefix apps/school-meal
-npm run harness
+pnpm --filter ./apps/school-meal run build
+pnpm run harness
 ```
