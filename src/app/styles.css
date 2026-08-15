@@ -926,6 +926,11 @@ body {
   gap: 10px;
 }
 
+.app-emoji {
+  font-size: 1.8rem;
+  margin-bottom: 14px;
+}
+
 .app-suite {
   max-width: 130px;
   padding: 4px 8px;
@@ -1256,18 +1261,8 @@ body {
   background: var(--surface);
 }
 
-.mypage-app-icon {
-  width: 30px;
-  height: 30px;
-  flex: 0 0 auto;
-}
-
-.mypage-app-icon path {
-  fill: none;
-  stroke: #1f2933;
-  stroke-width: 2.2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+.mypage-app-emoji {
+  font-size: 1.4rem;
 }
 
 .mypage-app-title {
@@ -1634,16 +1629,7 @@ body {
   background: color-mix(in srgb, var(--accent-blue) 14%, var(--surface-2));
   border: 1px solid color-mix(in srgb, var(--accent-blue) 38%, var(--border));
   border-radius: 50%;
-}
-
-.login-required-svg {
-  width: 24px;
-  height: 24px;
-  fill: none;
-  stroke: var(--accent-blue);
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  font-size: 1.25rem;
 }
 
 .login-required-modal h2 {
@@ -2455,6 +2441,18 @@ body {
   box-shadow: var(--shadow-hover);
 }
 
+.app-emoji {
+  width: 52px;
+  height: 52px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface-2));
+  font-size: 1.55rem;
+}
+
 .app-suite,
 .lock-badge {
   border: 1px solid var(--border);
@@ -2708,22 +2706,7 @@ body {
 
 .gallery-notice span {
   flex: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
   text-align: center;
-}
-
-.gallery-inline-icon {
-  width: 17px;
-  height: 17px;
-  flex: 0 0 auto;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
 }
 
 .gallery-notice button {
@@ -3060,30 +3043,18 @@ body {
   display: grid;
   place-items: center;
   overflow: hidden;
-  background: #eaf8f7;
+  background:
+    radial-gradient(circle at 22% 18%, color-mix(in srgb, var(--accent) 34%, transparent), transparent 28%),
+    linear-gradient(135deg, #eefbfb, color-mix(in srgb, var(--accent) 18%, #ffffff));
 }
 
-.gallery-app-icon {
-  width: 78px;
-  height: 78px;
-  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.11));
+.gallery-thumb-emoji {
+  font-size: 64px;
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.10));
   transition: transform 320ms cubic-bezier(0.2, 0.6, 0.25, 1);
 }
 
-.gallery-app-icon path,
-.gallery-app-icon rect:not(.icon-backplate) {
-  fill: none;
-  stroke: #233038;
-  stroke-width: 4.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.gallery-app-icon .icon-backplate {
-  opacity: 0.88;
-}
-
-.gallery-card:hover .gallery-app-icon {
+.gallery-card:hover .gallery-thumb-emoji {
   transform: scale(1.04);
 }
 
@@ -3143,36 +3114,18 @@ body {
 }
 
 .gallery-favorite {
-  width: 28px;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   flex: 0 0 auto;
   border: 0;
   background: transparent;
-  color: #9b9b9b;
+  color: #ffaa3c;
   cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
   opacity: 0.38;
 }
 
 .gallery-favorite.favorited {
-  color: #ffaa3c;
   opacity: 1;
-}
-
-.gallery-favorite-icon {
-  width: 17px;
-  height: 17px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2.2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.gallery-favorite-icon[data-filled="true"] {
-  fill: currentColor;
 }
 
 .gallery-card-body p {

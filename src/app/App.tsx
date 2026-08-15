@@ -31,81 +31,6 @@ type TodayPlanItem = {
   notified?: boolean;
 };
 
-function NoticeIcon() {
-  return (
-    <svg className="gallery-inline-icon" viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M7 10.5c0-3.05 1.95-5.25 5-5.25s5 2.2 5 5.25v3.2l1.5 2.05H5.5L7 13.7v-3.2Z" />
-      <path d="M10 18.25c.38.75 1.05 1.15 2 1.15s1.62-.4 2-1.15" />
-      <path d="M12 3.6v1.65" />
-    </svg>
-  );
-}
-
-function FavoriteIcon({ filled }: { filled: boolean }) {
-  return (
-    <svg className="gallery-favorite-icon" viewBox="0 0 24 24" aria-hidden="true" data-filled={filled}>
-      <path d="m12 4.4 2.15 4.35 4.8.7-3.48 3.4.82 4.78L12 15.38l-4.3 2.25.83-4.78-3.48-3.4 4.8-.7L12 4.4Z" />
-    </svg>
-  );
-}
-
-function LockIcon() {
-  return (
-    <svg className="login-required-svg" viewBox="0 0 24 24" aria-hidden="true">
-      <rect x="5.5" y="10.2" width="13" height="9.3" rx="2" />
-      <path d="M8.4 10.2V8a3.6 3.6 0 0 1 7.2 0v2.2" />
-      <path d="M12 13.7v2.3" />
-    </svg>
-  );
-}
-
-function AppIcon({ app }: { app: AppItem }) {
-  const color = app.color;
-  const variant = Math.abs(app.id.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0)) % 6;
-
-  return (
-    <svg className={`gallery-app-icon icon-variant-${variant}`} viewBox="0 0 96 96" aria-hidden="true">
-      <rect className="icon-backplate" x="14" y="14" width="68" height="68" rx="18" style={{ fill: color }} />
-      {variant === 0 && (
-        <>
-          <path d="M31 30h24c5.5 0 10 4.5 10 10v26H41c-5.5 0-10-4.5-10-10V30Z" />
-          <path d="M39 42h18M39 52h14" />
-        </>
-      )}
-      {variant === 1 && (
-        <>
-          <path d="M30 64V34h36v30H30Z" />
-          <path d="M38 44h20M38 54h12M66 34l-9 9" />
-        </>
-      )}
-      {variant === 2 && (
-        <>
-          <path d="M29 49c5-10 13-15 24-15 6 0 11 2 14 6-5 10-13 15-24 15-6 0-11-2-14-6Z" />
-          <path d="M40 63h24M48 35v28" />
-        </>
-      )}
-      {variant === 3 && (
-        <>
-          <path d="M32 35h32v26H32V35Z" />
-          <path d="M39 69h18M48 61v8M39 43h18M39 52h11" />
-        </>
-      )}
-      {variant === 4 && (
-        <>
-          <path d="M48 29 65 40v20L48 70 31 60V40l17-11Z" />
-          <path d="M48 29v20l17-9M48 49 31 40M48 49v21" />
-        </>
-      )}
-      {variant === 5 && (
-        <>
-          <path d="M34 35h28v26H34V35Z" />
-          <path d="M40 67h16M42 43l-6 5 6 5M54 43l6 5-6 5" />
-        </>
-      )}
-    </svg>
-  );
-}
-
 const loadTodayPlan = (): TodayPlanItem[] => {
   try {
     const parsed = JSON.parse(localStorage.getItem(TODAY_PLAN_KEY) || '[]');
@@ -479,7 +404,7 @@ function App() {
     <div className="app">
       {noticeVisible && (
         <div className="gallery-notice">
-          <span><NoticeIcon /> 2026년 Playground 앱 {APPS.length}개 정리 완료 - 학습·개발·생활 카테고리 업데이트됨</span>
+          <span>🔔 2026년 Playground 앱 {APPS.length}개 정리 완료 — 학습·개발·생활 카테고리 업데이트됨</span>
           <button type="button" onClick={() => setNoticeVisible(false)} aria-label="닫기">×</button>
         </div>
       )}
@@ -601,7 +526,7 @@ function App() {
                 }}
               >
                 <div className="gallery-thumb">
-                  <AppIcon app={app} />
+                  <span className="gallery-thumb-emoji">{app.emoji}</span>
                   <div className="gallery-badges">
                     {index < 3 && <span className="featured">추천</span>}
                     {!app.disabled && index % 4 === 1 && <span className="new">NEW</span>}
@@ -617,7 +542,7 @@ function App() {
                       onClick={(e) => toggleFavorite(app.id, e)}
                       aria-label={favorites.includes(app.id) ? '즐겨찾기 해제' : '즐겨찾기 추가'}
                     >
-                      <FavoriteIcon filled={favorites.includes(app.id)} />
+                      ★
                     </button>
                   </div>
                   <p>{app.description}</p>
@@ -688,7 +613,7 @@ function App() {
       {loginRedirectApp && (
         <div className="modal-backdrop" onClick={() => setLoginRedirectApp(null)}>
           <div className="login-required-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="login-required-icon"><LockIcon /></div>
+            <div className="login-required-icon">🔒</div>
             <h2>로그인이 필요해요</h2>
             <p>
               {loginRedirectApp.title} 앱은 로그인 후 사용할 수 있습니다.

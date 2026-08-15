@@ -35,34 +35,10 @@ interface MyPageProps {
 type Tab = 'apps' | 'friends';
 
 const APPS = [
-  { id: 'life-tracker', title: 'Life Tracker', color: '#70a1ff', url: '/apps/life-tracker/', disabled: true },
-  { id: 'dev-notes', title: '개발자 노트', color: '#2ed573', url: '/apps/dev-notes/' },
-  { id: 'study-planner', title: '스터디 플래너', color: '#55efc4', url: '/apps/study-planner/' },
+  { id: 'life-tracker', title: 'Life Tracker', emoji: '📊', url: '/apps/life-tracker/', disabled: true },
+  { id: 'dev-notes', title: '개발자 노트', emoji: '📒', url: '/apps/dev-notes/' },
+  { id: 'study-planner', title: '스터디 플래너', emoji: '📅', url: '/apps/study-planner/' },
 ];
-
-function MyPageAppIcon({ app }: { app: (typeof APPS)[number] }) {
-  return (
-    <svg className="mypage-app-icon" viewBox="0 0 32 32" aria-hidden="true">
-      <rect x="4" y="4" width="24" height="24" rx="7" style={{ fill: app.color }} />
-      {app.id === 'study-planner' ? (
-        <>
-          <path d="M11 10h8.5a3.5 3.5 0 0 1 3.5 3.5V23h-8.5A3.5 3.5 0 0 1 11 19.5V10Z" />
-          <path d="M15 15h5M15 19h4" />
-        </>
-      ) : app.id === 'dev-notes' ? (
-        <>
-          <path d="M10 11h12v10H10V11Z" />
-          <path d="M13 15h6M13 18h4" />
-        </>
-      ) : (
-        <>
-          <path d="M10 21V11h12v10H10Z" />
-          <path d="M13 18l2-3 2 2 2-4" />
-        </>
-      )}
-    </svg>
-  );
-}
 
 export function MyPage({ user, onLogout, onBack, initialTab = 'apps' }: MyPageProps) {
   const [tab, setTab] = useState<Tab>(initialTab);
@@ -171,9 +147,9 @@ export function MyPage({ user, onLogout, onBack, initialTab = 'apps' }: MyPagePr
 
         {/* 탭 */}
         <div className="mypage-tabs">
-          <button className={`mypage-tab ${tab === 'apps' ? 'active' : ''}`} onClick={() => setTab('apps')}>내 앱</button>
+          <button className={`mypage-tab ${tab === 'apps' ? 'active' : ''}`} onClick={() => setTab('apps')}>🎮 내 앱</button>
           <button className={`mypage-tab ${tab === 'friends' ? 'active' : ''}`} onClick={() => setTab('friends')}>
-            친구
+            👥 친구
             {requests.length > 0 && <span className="friend-badge">{requests.length}</span>}
           </button>
         </div>
@@ -190,7 +166,7 @@ export function MyPage({ user, onLogout, onBack, initialTab = 'apps' }: MyPagePr
                     className={`mypage-app-card ${app.disabled ? 'disabled' : ''}`}
                     onClick={(e) => { if (app.disabled) e.preventDefault(); }}
                   >
-                    <MyPageAppIcon app={app} />
+                    <span className="mypage-app-emoji">{app.emoji}</span>
                     <span className="mypage-app-title">{app.title}</span>
                     <span className="mypage-app-arrow">{app.disabled ? '준비 중' : '→'}</span>
                   </a>
@@ -199,7 +175,7 @@ export function MyPage({ user, onLogout, onBack, initialTab = 'apps' }: MyPagePr
             </section>
 
             <section className="mypage-section">
-              <h2 className="section-heading">계정</h2>
+              <h2 className="section-heading">⚙️ 계정</h2>
               <div className="account-card">
                 <div className="account-row">
                   <span className="account-label">GitHub ID</span>
@@ -226,7 +202,7 @@ export function MyPage({ user, onLogout, onBack, initialTab = 'apps' }: MyPagePr
             {/* 친구 요청 받은 것 */}
             {requests.length > 0 && (
               <div className="friend-requests-section">
-                <h3 className="section-heading">받은 친구 요청 ({requests.length})</h3>
+                <h3 className="section-heading">📬 받은 친구 요청 ({requests.length})</h3>
                 <div className="friend-list">
                   {requests.map(r => (
                     <div key={r.requestId} className="friend-item">
@@ -248,7 +224,7 @@ export function MyPage({ user, onLogout, onBack, initialTab = 'apps' }: MyPagePr
             {/* 최근 가입자 */}
             {!searchQuery && recentUsers.length > 0 && (
               <div className="friend-search-section">
-                <h3 className="section-heading">최근 가입자</h3>
+                <h3 className="section-heading">🆕 최근 가입자</h3>
                 <div className="friend-list">
                   {recentUsers.map(u => {
                     const { label, cls, action } = statusLabel(u.friendStatus);
@@ -271,7 +247,7 @@ export function MyPage({ user, onLogout, onBack, initialTab = 'apps' }: MyPagePr
 
             {/* 유저 검색 */}
             <div className="friend-search-section">
-              <h3 className="section-heading">친구 찾기</h3>
+              <h3 className="section-heading">🔍 친구 찾기</h3>
               <form className="friend-search-form" onSubmit={handleSearch}>
                 <input
                   type="text"
@@ -316,7 +292,7 @@ export function MyPage({ user, onLogout, onBack, initialTab = 'apps' }: MyPagePr
 
             {/* 친구 목록 */}
             <div className="friend-list-section">
-              <h3 className="section-heading">친구 {friends.length}명</h3>
+              <h3 className="section-heading">👥 친구 {friends.length}명</h3>
               {loadingFriends ? (
                 <p className="friend-empty">불러오는 중...</p>
               ) : friends.length === 0 ? (
