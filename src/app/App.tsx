@@ -78,6 +78,7 @@ function App() {
   const [noticeStatus, setNoticeStatus] = useState('');
   const [noticeSubmitting, setNoticeSubmitting] = useState(false);
   const [loginRedirectApp, setLoginRedirectApp] = useState<AppItem | null>(null);
+  const [noticeVisible, setNoticeVisible] = useState(true);
   useEffect(() => {
     localStorage.setItem(TODAY_PLAN_KEY, JSON.stringify(todayPlan));
   }, [todayPlan]);
@@ -359,6 +360,11 @@ function App() {
     .filter((category) => category.apps.length > 0);
   const favoriteAvailableCount = favorites.filter((id) => availableApps.some((app) => app.id === id)).length;
   const sortedTodayPlan = [...todayPlan].sort((a, b) => a.time.localeCompare(b.time));
+  const categoryTabs = [
+    { id: 'all' as const, label: '전체' },
+    ...APP_CATEGORIES.map((category) => ({ id: category.id, label: category.label })),
+  ];
+  const activeCategoryLabel = categoryTabs.find((category) => category.id === activeCategory)?.label ?? '전체';
 
   if (loading) {
     return (
@@ -396,298 +402,171 @@ function App() {
 
   return (
     <div className="app">
-      <header className="header">
-        <div className="header-right">
-          {user ? (
-            <div className="user-info">
-              {timeLeft && (
-                <span className={`token-expiry ${timeLeft === '만료됨' ? 'expired' : ''}`}>
-                  🔑 {timeLeft}
-                </span>
-              )}
-              {studyElapsed !== null && (
-                <a href="/apps/study-planner/" className="study-timer-badge">
-                  ⏱️ {formatStudyTime(studyElapsed)}
-                </a>
-              )}
-              <button className="btn-friends" onClick={() => setPage('friends')} aria-label="친구">
-                👥
-              </button>
-              <button className="avatar-btn" onClick={() => setPage('mypage')} aria-label="마이페이지">
-                <img src={user.avatar_url} alt={user.name} className="avatar" />
-              </button>
-              <button className="username-btn" onClick={() => setPage('mypage')}>
-                {user.name || user.login}
-              </button>
-              <button className="btn-logout" onClick={handleLogout}>로그아웃</button>
-            </div>
-          ) : (
-            <button className="btn-github-login" onClick={handleLogin}>
-              <svg className="github-icon" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
-              </svg>
-              GitHub로 로그인
+      {noticeVisible && (
+        <div className="gallery-notice">
+          <span>🔔 2026년 Playground 앱 {APPS.length}개 정리 완료 — 학습·개발·생활 카테고리 업데이트됨</span>
+          <button type="button" onClick={() => setNoticeVisible(false)} aria-label="닫기">×</button>
+        </div>
+      )}
+
+      <header className="gallery-header">
+        <div className="gallery-header-inner">
+          <a className="gallery-logo" href="/" aria-label="놀이터 홈">
+            <span>P</span>
+            <strong>놀이터</strong>
+          </a>
+          <label className="gallery-search">
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="앱 검색..."
+            />
+          </label>
+          <div className="gallery-header-actions">
+            <button
+              type="button"
+              className={`gallery-action ${showFavOnly ? 'active' : ''}`}
+              onClick={() => setShowFavOnly((current) => !current)}
+            >
+              즐겨찾기
             </button>
-          )}
+            <button type="button" className="gallery-action" onClick={openFeatureRequest}>
+              + 요청하기
+            </button>
+            {user ? (
+              <>
+                {studyElapsed !== null && (
+                  <a href="/apps/study-planner/" className="gallery-action timer-action">
+                    {formatStudyTime(studyElapsed)}
+                  </a>
+                )}
+                <button type="button" className="gallery-action" onClick={() => setPage('friends')}>친구</button>
+                <button type="button" className="gallery-user" onClick={() => setPage('mypage')}>
+                  <img src={user.avatar_url} alt={user.name} />
+                  <span>{user.name || user.login}</span>
+                </button>
+                <button type="button" className="gallery-action" onClick={handleLogout}>로그아웃</button>
+              </>
+            ) : (
+              <button type="button" className="gallery-submit" onClick={() => handleLogin()}>
+                GitHub 로그인
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
-      <main className="main">
-        {user && (
-          <section className="notice-section">
-            <div className="notice-section-header">
-              <div>
-                <span className="notice-eyebrow">공지사항</span>
-                <h2>놀이터 업데이트와 안내</h2>
-              </div>
-              <div className="notice-header-actions">
-                {isAdmin && (
-                  <button className="btn-ghost" onClick={() => {
-                    setNoticeStatus('');
-                    setShowNoticeEditor(true);
-                  }}>
-                    공지 작성
-                  </button>
-                )}
-                <button className="btn-ghost" onClick={() => openNoticeArchive()}>
-                  이전 공지
-                </button>
-              </div>
-            </div>
+      {user && latestNotice && (
+        <button className="gallery-live-notice" onClick={() => openNoticeArchive(latestNotice)}>
+          <span>{formatNoticeDate(latestNotice.createdAt)}</span>
+          <strong>{latestNotice.title}</strong>
+          <em>{latestNotice.content}</em>
+        </button>
+      )}
 
-            {latestNotice ? (
-              <button className="notice-featured" onClick={() => openNoticeArchive(latestNotice)}>
-                <span className="notice-date">{formatNoticeDate(latestNotice.createdAt)}</span>
-                <span className="notice-title">{latestNotice.title}</span>
-                <span className="notice-preview">{latestNotice.content}</span>
-              </button>
-            ) : (
-              <div className="notice-empty">
-                {isAdmin ? '아직 공지가 없어요. 첫 공지를 작성해보세요.' : '아직 등록된 공지가 없어요.'}
-              </div>
-            )}
-          </section>
-        )}
-
-        <section className="portal-hero">
-          <div className="hero-copy">
-            <h2>필요한 웹앱을 찾고 바로 실행하세요.</h2>
-            <p>
-              앱을 무작정 나열하지 않고, 실제 사용 흐름에 맞춰 검색, 분류, 즐겨찾기, 알림을 한 화면에 모았습니다.
-            </p>
-            <div className="hero-actions">
-              {!user ? (
-                <button className="btn-primary hero-primary" onClick={handleLogin}>GitHub로 시작하기</button>
-              ) : (
-                <a className="btn-primary hero-primary" href="/apps/study-planner/">스터디 플래너 열기</a>
-              )}
-              <button className="btn-ghost" onClick={openFeatureRequest}>필요한 앱 요청</button>
-            </div>
+      <section className="gallery-hero">
+        <div className="gallery-hero-inner">
+          <p>큐레이션 웹앱 갤러리</p>
+          <h1>필요한 웹앱만 골라서 보여드립니다</h1>
+          <span>
+            공부·개발·자동화·생활 도구를 카테고리별로 모았습니다.
+            검색과 즐겨찾기로 바로 실행할 앱을 빠르게 찾으세요.
+          </span>
+          <div className="gallery-stats">
+            <div><strong>{availableApps.length}</strong><small>사용 가능</small></div>
+            <div><strong>{favorites.length}</strong><small>즐겨찾기</small></div>
+            <div><strong>{APP_CATEGORIES.length}</strong><small>카테고리</small></div>
           </div>
-          <div className="hero-metrics" aria-label="놀이터 앱 상태">
-            <div>
-              <strong>{availableApps.length}</strong>
-              <span>사용 가능</span>
-            </div>
-            <div>
-              <strong>{favoriteAvailableCount}</strong>
-              <span>즐겨찾기</span>
-            </div>
-            <div>
-              <strong>{disabledApps.length}</strong>
-              <span>정의 필요</span>
-            </div>
-          </div>
-        </section>
+        </div>
+      </section>
 
-        <section className="app-workbench" aria-label="앱 실행 영역">
-          <div className="daily-planner">
-            <div className="planner-panel">
-              <div className="planner-heading">
-                <div>
-                  <span className="planner-kicker">오늘 할 일</span>
-                  <h2>웹앱 시간표</h2>
-                </div>
-                <span className={`permission-pill ${notificationPermission}`}>
-                  {notificationPermission === 'granted' ? '알림 켜짐' : notificationPermission === 'denied' ? '알림 차단됨' : '알림 권한 필요'}
-                </span>
-              </div>
-
-              <form className="planner-form" onSubmit={addTodayPlan}>
-                <label>
-                  <span>웹앱</span>
-                  <select value={planAppId} onChange={(e) => setPlanAppId(e.target.value)}>
-                    {availableApps.map((app) => (
-                      <option key={app.id} value={app.id}>{app.title}</option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <span>시간</span>
-                  <input type="time" value={planTime} onChange={(e) => setPlanTime(e.target.value)} />
-                </label>
-                <label className="planner-title-field">
-                  <span>할 일</span>
-                  <input
-                    value={planTitle}
-                    onChange={(e) => setPlanTitle(e.target.value)}
-                    placeholder="예: 수학 오답 정리, 배포 확인"
-                  />
-                </label>
-                <label className="reminder-toggle">
-                  <input
-                    type="checkbox"
-                    checked={planReminder}
-                    onChange={(e) => setPlanReminder(e.target.checked)}
-                  />
-                  <span>시간 맞춰 알림</span>
-                </label>
-                <button className="btn-primary" type="submit">시간표에 추가</button>
-              </form>
-              {planStatus && <p className="planner-status">{planStatus}</p>}
-            </div>
-
-            <div className="schedule-board" aria-label="오늘 웹앱 시간표">
-              {sortedTodayPlan.length > 0 ? (
-                sortedTodayPlan.map((item) => {
-                  const app = APPS.find((candidate) => candidate.id === item.appId);
-                  return (
-                    <article className={`schedule-row ${item.notified ? 'done' : ''}`} key={item.id}>
-                      <div className="schedule-time">{item.time}</div>
-                      <div className="schedule-line" />
-                      <div className="schedule-card" style={{ '--accent': app?.color ?? 'var(--accent-blue)' } as React.CSSProperties}>
-                        <div className="schedule-card-main">
-                          <span className="schedule-app">{app?.emoji} {app?.title ?? '알 수 없는 앱'}</span>
-                          <strong>{item.title || app?.description || '오늘 이 웹앱 사용하기'}</strong>
-                          <span>{item.reminder ? '알림 예약됨' : '알림 없음'}</span>
-                        </div>
-                        <div className="schedule-actions">
-                          {user && app && !app.disabled && <a href={app.url}>열기</a>}
-                        </div>
-                      </div>
-                    </article>
-                  );
-                })
-              ) : (
-                <div className="schedule-empty">
-                  <strong>오늘 사용할 웹앱을 시간표로 정하세요.</strong>
-                  <span>시간을 넣으면 브라우저가 열려 있는 동안 해당 시간에 알림을 보냅니다.</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="workbench-toolbar">
-            <label className="search-field">
-              <span>검색</span>
-              <input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="앱 이름, 기능, 카테고리"
-              />
-            </label>
-            <div className="filter-bar" aria-label="앱 필터">
-              <button
-                className={`filter-btn ${!showFavOnly ? 'active' : ''}`}
-                onClick={() => setShowFavOnly(false)}
-              >
-                전체 <span className="filter-count">{APPS.length}</span>
-              </button>
-              <button
-                className={`filter-btn ${showFavOnly ? 'active' : ''}`}
-                onClick={() => setShowFavOnly(true)}
-              >
-                즐겨찾기 <span className="filter-count">{favorites.length}</span>
-              </button>
-            </div>
-          </div>
-
-          <div className="category-rail" aria-label="앱 카테고리">
+      <nav className="gallery-tabs" aria-label="앱 카테고리">
+        <div className="gallery-tabs-inner">
+          {categoryTabs.map((category) => (
             <button
-              className={`category-tab ${activeCategory === 'all' ? 'active' : ''}`}
-              onClick={() => setActiveCategory('all')}
+              key={category.id}
+              type="button"
+              className={activeCategory === category.id ? 'active' : ''}
+              onClick={() => setActiveCategory(category.id)}
             >
-              <span>전체</span>
-              <strong>{displayedApps.length}</strong>
+              {category.label}
             </button>
-            {APP_CATEGORIES.map((category) => (
-              <button
-                key={category.id}
-                className={`category-tab ${activeCategory === category.id ? 'active' : ''}`}
-                onClick={() => setActiveCategory(category.id)}
+          ))}
+        </div>
+      </nav>
+
+      <main className="gallery-main">
+        <div className="gallery-section-title">
+          <h2>
+            {showFavOnly ? '즐겨찾기' : activeCategoryLabel}
+            <span>{displayedApps.length}개</span>
+          </h2>
+          <button type="button" onClick={() => setShowFavOnly(false)}>최신순 ▾</button>
+        </div>
+
+        {displayedApps.length === 0 ? (
+          <div className="gallery-empty">검색 결과가 없습니다</div>
+        ) : (
+          <div className="gallery-grid">
+            {displayedApps.map((app, index) => (
+              <a
+                key={app.id}
+                href={user && !app.disabled ? app.url : undefined}
+                className={`gallery-card ${app.disabled ? 'disabled' : ''} ${!user ? 'locked' : ''}`}
+                style={{ '--accent': app.color } as React.CSSProperties}
+                onClick={(e) => {
+                  if (app.disabled) {
+                    e.preventDefault();
+                    return;
+                  }
+                  if (!user) {
+                    e.preventDefault();
+                    requestAppLogin(app);
+                  }
+                }}
               >
-                <span>{category.label}</span>
-                <strong>{APPS.filter((app) => app.category === category.id).length}</strong>
-              </button>
-            ))}
-          </div>
-
-          {displayedApps.length === 0 && (
-            <div className="fav-empty">
-              <p>조건에 맞는 앱이 없습니다.</p>
-              <p>검색어를 줄이거나 전체 필터로 돌아가세요.</p>
-            </div>
-          )}
-
-          <div className="app-category-list">
-            {displayedGroups.map((group) => (
-              <section className="app-category" key={group.id}>
-                <div className="category-heading">
-                  <div>
-                    <h2>{group.label}</h2>
-                    <p>{group.description}</p>
+                <div className="gallery-thumb">
+                  <span className="gallery-thumb-emoji">{app.emoji}</span>
+                  <div className="gallery-badges">
+                    {index < 3 && <span className="featured">추천</span>}
+                    {!app.disabled && index % 4 === 1 && <span className="new">NEW</span>}
                   </div>
-                  <span>{group.apps.length}</span>
+                  <span className="gallery-category">{CATEGORY_LABELS.get(app.category)}</span>
                 </div>
-                <div className="apps-grid">
-                  {group.apps.map((app) => (
-                    <a
-                      key={app.id}
-                      href={user && !app.disabled ? app.url : undefined}
-                      className={`app-card ${app.disabled ? 'disabled' : ''} ${!user ? 'locked' : ''}`}
-                      style={{ '--accent': app.color } as React.CSSProperties}
-                      onClick={(e) => {
-                        if (app.disabled) {
-                          e.preventDefault();
-                          return;
-                        }
-                        if (!user) {
-                          e.preventDefault();
-                          requestAppLogin(app);
-                        }
-                      }}
+                <div className="gallery-card-body">
+                  <div className="gallery-card-head">
+                    <strong>{app.title}</strong>
+                    <button
+                      type="button"
+                      className={`gallery-favorite ${favorites.includes(app.id) ? 'favorited' : ''}`}
+                      onClick={(e) => toggleFavorite(app.id, e)}
+                      aria-label={favorites.includes(app.id) ? '즐겨찾기 해제' : '즐겨찾기 추가'}
                     >
-                      <button
-                        className={`fav-btn ${favorites.includes(app.id) ? 'favorited' : ''}`}
-                        onClick={(e) => toggleFavorite(app.id, e)}
-                        aria-label={favorites.includes(app.id) ? '즐겨찾기 해제' : '즐겨찾기 추가'}
-                        title={favorites.includes(app.id) ? '즐겨찾기 해제' : '즐겨찾기 추가'}
-                      >
-                        {favorites.includes(app.id) ? '★' : '☆'}
-                      </button>
-
-                      <div className="app-card-top">
-                        <div className="app-emoji">{app.emoji}</div>
-                        <span className="app-suite">{CATEGORY_LABELS.get(app.category)}</span>
-                      </div>
-                      <h3 className="app-title">{app.title}</h3>
-                      <p className="app-desc">{app.description}</p>
-                      <div className="app-card-footer">
-                        {!user && !app.disabled && <span className="lock-badge">로그인 필요</span>}
-                        {app.disabled && <span className="lock-badge">제품 정의 필요</span>}
-                        {user && !app.disabled && <span className="open-badge">열기</span>}
-                      </div>
-                    </a>
-                  ))}
+                      ★
+                    </button>
+                  </div>
+                  <p>{app.description}</p>
+                  <div className="gallery-card-meta">
+                    <div>
+                      <span>{app.disabled ? '정의 필요' : user ? '바로 실행' : '로그인 필요'}</span>
+                      <span>{app.id}</span>
+                    </div>
+                    <small>{app.disabled ? '준비 중' : '열기'}</small>
+                  </div>
+                  <div className="gallery-url">{app.url.replace('/apps/', '').replace('/', '') || app.id}</div>
                 </div>
-              </section>
+              </a>
             ))}
           </div>
-        </section>
+        )}
       </main>
 
-      <footer className="footer">
-        <p>놀이터 © 2024</p>
+      <footer className="gallery-footer">
+        <div>
+          <span>P</span>
+          <strong>놀이터</strong>
+        </div>
+        <small>© 2026 Playground. All rights reserved.</small>
       </footer>
 
       {showFeatureRequest && (
