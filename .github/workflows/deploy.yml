@@ -118,13 +118,13 @@ jobs:
             # 의존성 설치 및 프론트 빌드
             corepack enable || true
             corepack prepare pnpm@10.33.0 --activate || true
-            pnpm run install:all || record_failure "pnpm install failed"
-            pnpm run build:all || record_failure "pnpm build:all failed"
-            pnpm --filter ./apps/virtual-study-room run build || record_failure "virtual-study-room build failed"
-            pnpm --filter ./apps/virtual-avatar run build || record_failure "virtual-avatar build failed"
-            pnpm --filter ./apps/voice-studio run build || record_failure "voice-studio build failed"
-            pnpm --filter ./apps/code-run-visualizer run build || record_failure "code-run-visualizer build failed"
-            pnpm --filter ./apps/commute-alarm run build || record_failure "commute-alarm build failed"
+            pnpm run install:all > dist/deploy-command.log 2>&1 || record_failure "pnpm install failed"
+            pnpm run build:all > dist/deploy-command.log 2>&1 || record_failure "pnpm build:all failed"
+            pnpm --filter ./apps/virtual-study-room run build > dist/deploy-command.log 2>&1 || record_failure "virtual-study-room build failed"
+            pnpm --filter ./apps/virtual-avatar run build > dist/deploy-command.log 2>&1 || record_failure "virtual-avatar build failed"
+            pnpm --filter ./apps/voice-studio run build > dist/deploy-command.log 2>&1 || record_failure "voice-studio build failed"
+            pnpm --filter ./apps/code-run-visualizer run build > dist/deploy-command.log 2>&1 || record_failure "code-run-visualizer build failed"
+            pnpm --filter ./apps/commute-alarm run build > dist/deploy-command.log 2>&1 || record_failure "commute-alarm build failed"
             test -f apps/idea-mixer/dist/index.html || record_failure "idea-mixer dist missing"
             test -f apps/virtual-study-room/dist/index.html || record_failure "virtual-study-room dist missing"
             test -f apps/virtual-avatar/dist/index.html || record_failure "virtual-avatar dist missing"
