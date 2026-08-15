@@ -84,6 +84,36 @@ function parseCookies(cookieHeader = '') {
     }, {});
 }
 
+function resolveGithubCallbackUrl(req) {
+  const configured = process.env.CALLBACK_URL;
+  const forwardedHost = req.get('x-forwarded-host');
+  const host = forwardedHost || req.get('host');
+  const forwardedProto = req.get('x-forwarded-proto');
+  const protocol = forwardedProto || req.protocol || 'http';
+
+  if (!host) return configured;
+
+  const requestBasedCallback = `${protocol}://${host}/auth/github/callback`;
+  if (!configured) return requestBasedCallback;
+
+  try {
+    const configuredUrl = new URL(configured);
+    const configuredHost = configuredUrl.host.toLowerCase();
+    const requestHost = host.toLowerCase();
+    const localRequest = requestHost.startsWith('localhost') || requestHost.startsWith('127.0.0.1');
+    const localConfigured = configuredHost.startsWith('localhost') || configuredHost.startsWith('127.0.0.1');
+    const nodeCallbackPath = configuredUrl.pathname === '/auth/github/callback';
+
+    if (nodeCallbackPath && (configuredHost === requestHost || (localRequest && localConfigured))) {
+      return configured;
+    }
+  } catch {
+    return requestBasedCallback;
+  }
+
+  return requestBasedCallback;
+}
+
 function userFromJwtPayload(payload) {
   if (!payload || payload.type === 'refresh' || !payload.id || !payload.login) {
     return null;
@@ -136,6 +166,8 @@ function proxyToBackend(req, res) {
     ...req.headers,
     host: targetUrl.host,
     origin: BACKEND_URL,
+    'x-forwarded-host': req.headers.host,
+    'x-forwarded-proto': req.protocol,
   };
 
   if (bodyData) {
@@ -1031,7 +1063,7 @@ app.post('/github/commit', async (req, res) => {
 });
 app.get('/auth/github', (req, res) => {
   const clientId = process.env.GITHUB_CLIENT_ID;
-  const callbackUrl = process.env.CALLBACK_URL;
+  const callbackUrl = resolveGithubCallbackUrl(req);
 
   // returnTo 세션에 저장
   if (req.query.returnTo) {
@@ -1049,6 +1081,7 @@ app.get('/auth/github', (req, res) => {
  */
 app.get('/auth/github/callback', async (req, res) => {
   const { code } = req.query;
+  const callbackUrl = resolveGithubCallbackUrl(req);
 
   if (!code) {
     return res.redirect('/?error=no_code');
@@ -1066,7 +1099,7 @@ app.get('/auth/github/callback', async (req, res) => {
         client_id: process.env.GITHUB_CLIENT_ID,
         client_secret: process.env.GITHUB_CLIENT_SECRET,
         code,
-        redirect_uri: process.env.CALLBACK_URL,
+        redirect_uri: callbackUrl,
       }),
     });
 
@@ -1154,7 +1187,7 @@ app.get('/auth/github/callback', async (req, res) => {
     console.error('OAuth error:', error);
     console.error('GITHUB_CLIENT_ID:', process.env.GITHUB_CLIENT_ID);
     console.error('GITHUB_CLIENT_SECRET 길이:', process.env.GITHUB_CLIENT_SECRET?.length ?? '없음');
-    console.error('CALLBACK_URL:', process.env.CALLBACK_URL);
+    console.error('CALLBACK_URL:', callbackUrl);
     res.redirect('/?error=auth_failed&detail=' + encodeURIComponent(String(error)));
   }
 });
