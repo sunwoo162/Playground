@@ -6,6 +6,7 @@ export default defineConfig({
   server: {
     port: 5174,
     proxy: {
+      '/auth': 'http://localhost:3000',
       '/api': 'http://localhost:8080',
       '/local-github': 'http://localhost:3000',
       '/oauth2': 'http://localhost:8080',
