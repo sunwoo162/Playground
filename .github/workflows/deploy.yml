@@ -99,8 +99,10 @@ jobs:
           port: 24136
           username: ubuntu
           password: ${{ secrets.SSH_PASSWORD }}
+          envs: BACKEND_CHANGED
           script: |
             set -eu
+            BACKEND_CHANGED="${BACKEND_CHANGED:-false}"
             cd ~/playground
 
             # 서버에서 수정된 파일(application.yml 등) 무시하고 pull
