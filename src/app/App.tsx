@@ -353,7 +353,6 @@ function App() {
   };
 
   const availableApps = APPS.filter((app) => !app.disabled);
-  const disabledApps = APPS.filter((app) => app.disabled);
   const searchTerm = searchQuery.trim().toLowerCase();
   const displayedApps = APPS.filter((app) => {
     if (showFavOnly && !favorites.includes(app.id)) return false;
@@ -369,7 +368,6 @@ function App() {
       apps: displayedApps.filter((app) => app.category === category.id),
     }))
     .filter((category) => category.apps.length > 0);
-  const favoriteAvailableCount = favorites.filter((id) => availableApps.some((app) => app.id === id)).length;
   const sortedTodayPlan = [...todayPlan].sort((a, b) => a.time.localeCompare(b.time));
 
   if (loading) {
@@ -499,37 +497,6 @@ function App() {
             )}
           </section>
         )}
-
-        <section className="portal-hero">
-          <div className="hero-copy">
-            <h2>필요한 웹앱을 찾고 바로 실행하세요.</h2>
-            <p>
-              앱을 무작정 나열하지 않고, 실제 사용 흐름에 맞춰 검색, 분류, 즐겨찾기, 알림을 한 화면에 모았습니다.
-            </p>
-            <div className="hero-actions">
-              {!user ? (
-                <button className="btn-primary hero-primary" onClick={handleLogin}>GitHub로 시작하기</button>
-              ) : (
-                <a className="btn-primary hero-primary" href="/apps/study-planner/">스터디 플래너 열기</a>
-              )}
-              <button className="btn-ghost" onClick={openFeatureRequest}>필요한 앱 요청</button>
-            </div>
-          </div>
-          <div className="hero-metrics" aria-label="놀이터 앱 상태">
-            <div>
-              <strong>{availableApps.length}</strong>
-              <span>사용 가능</span>
-            </div>
-            <div>
-              <strong>{favoriteAvailableCount}</strong>
-              <span>즐겨찾기</span>
-            </div>
-            <div>
-              <strong>{disabledApps.length}</strong>
-              <span>정의 필요</span>
-            </div>
-          </div>
-        </section>
 
         <section className="app-workbench" aria-label="앱 실행 영역">
           <div className="daily-planner">

@@ -205,85 +205,11 @@ body {
   font-size: 0.9rem;
 }
 
-.portal-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
-  gap: 18px;
-  align-items: stretch;
-  margin: 8px 0 20px;
-}
-
-.hero-copy,
-.hero-metrics,
 .app-workbench {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
   box-shadow: var(--shadow);
-}
-
-.hero-copy {
-  padding: 28px;
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--accent-blue) 11%, transparent), transparent 42%),
-    linear-gradient(180deg, color-mix(in srgb, var(--surface) 92%, var(--surface-2)), var(--surface));
-}
-
-.hero-copy h2 {
-  max-width: 680px;
-  font-size: clamp(2rem, 5vw, 4rem);
-  line-height: 1.03;
-  letter-spacing: 0;
-}
-
-.hero-copy p {
-  max-width: 660px;
-  margin-top: 14px;
-  color: var(--text-muted);
-  font-size: 1rem;
-  line-height: 1.7;
-}
-
-.hero-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 24px;
-}
-
-.hero-primary {
-  min-height: 42px;
-  display: inline-flex;
-  align-items: center;
-  text-decoration: none;
-}
-
-.hero-metrics {
-  display: grid;
-  gap: 10px;
-  padding: 18px;
-}
-
-.hero-metrics div {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 16px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg);
-}
-
-.hero-metrics strong {
-  font-size: 2rem;
-  line-height: 1;
-}
-
-.hero-metrics span {
-  color: var(--text-muted);
-  font-size: 0.82rem;
-  font-weight: 800;
 }
 
 /* Notices */
@@ -1849,17 +1775,8 @@ body {
     padding: 16px;
   }
 
-  .portal-hero,
   .daily-planner,
   .workbench-toolbar {
-    grid-template-columns: 1fr;
-  }
-
-  .hero-copy {
-    padding: 22px;
-  }
-
-  .hero-metrics {
     grid-template-columns: 1fr;
   }
 
