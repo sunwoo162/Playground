@@ -148,6 +148,65 @@ function issueAccessTokenCookie(res, user) {
   });
 }
 
+function getAuthenticatedUser(req, res) {
+  if (req.session.user) return req.session.user;
+
+  const cookies = parseCookies(req.headers.cookie || '');
+  const accessToken = cookies.playground_token;
+  const refreshToken = cookies.playground_refresh;
+
+  if (accessToken) {
+    try {
+      const user = userFromJwtPayload(jwt.verify(accessToken, JWT_SECRET));
+      if (user) {
+        req.session.user = user;
+        return user;
+      }
+    } catch {
+      // Try refresh token below.
+    }
+  }
+
+  if (refreshToken) {
+    try {
+      const payload = jwt.verify(refreshToken, JWT_SECRET);
+      if (payload?.type === 'refresh') {
+        const user = {
+          id: payload.id,
+          login: payload.login,
+          name: payload.name || payload.login,
+          avatar_url: payload.avatar_url || '',
+        };
+        if (user.id && user.login) {
+          req.session.user = user;
+          issueAccessTokenCookie(res, user);
+          return user;
+        }
+      }
+    } catch {
+      res.clearCookie('playground_token', { path: '/' });
+      res.clearCookie('playground_refresh', { path: '/' });
+    }
+  }
+
+  return null;
+}
+
+function requireAppAccess(req, res, next) {
+  const user = getAuthenticatedUser(req, res);
+  if (user) {
+    next();
+    return;
+  }
+
+  if (req.accepts('html')) {
+    res.redirect(`/auth/github?returnTo=${encodeURIComponent(req.originalUrl)}`);
+    return;
+  }
+
+  res.status(401).json({ error: 'login_required' });
+}
+
 function proxyToBackend(req, res) {
   const targetUrl = new URL(req.originalUrl, BACKEND_URL);
   const client = targetUrl.protocol === 'https:' ? https : http;
@@ -1197,52 +1256,7 @@ app.get('/auth/github/callback', async (req, res) => {
  * 현재 로그인한 사용자 정보 반환
  */
 app.get('/auth/me', (req, res) => {
-  if (req.session.user) {
-    res.json({ user: req.session.user });
-    return;
-  }
-
-  const cookies = parseCookies(req.headers.cookie || '');
-  const accessToken = cookies.playground_token;
-  const refreshToken = cookies.playground_refresh;
-
-  if (accessToken) {
-    try {
-      const user = userFromJwtPayload(jwt.verify(accessToken, JWT_SECRET));
-      if (user) {
-        req.session.user = user;
-        res.json({ user });
-        return;
-      }
-    } catch {
-      // Try refresh token below.
-    }
-  }
-
-  if (refreshToken) {
-    try {
-      const payload = jwt.verify(refreshToken, JWT_SECRET);
-      if (payload?.type === 'refresh') {
-        const user = {
-          id: payload.id,
-          login: payload.login,
-          name: payload.name || payload.login,
-          avatar_url: payload.avatar_url || '',
-        };
-        if (user.id && user.login) {
-          req.session.user = user;
-          issueAccessTokenCookie(res, user);
-          res.json({ user });
-          return;
-        }
-      }
-    } catch {
-      res.clearCookie('playground_token', { path: '/' });
-      res.clearCookie('playground_refresh', { path: '/' });
-    }
-  }
-
-  res.json({ user: null });
+  res.json({ user: getAuthenticatedUser(req, res) });
 });
 
 /**
@@ -1263,6 +1277,9 @@ app.post('/auth/logout', (req, res) => {
 
 // 놀이터 메인 (Vite 빌드 결과물)
 app.use(express.static(path.join(__dirname, '..', 'dist')));
+
+// 모든 개별 웹앱은 로그인 후에만 직접 접근할 수 있습니다.
+app.use('/apps', requireAppAccess);
 
 // Life Tracker 앱 (서브 경로에서 서빙)
 app.use('/apps/life-tracker', express.static(path.join(__dirname, '..', 'apps', 'life-tracker', 'dist')));
