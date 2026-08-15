@@ -3071,40 +3071,16 @@ body {
   background: #eef7f4;
 }
 
-.gallery-app-icon {
-  width: 104px;
-  height: 86px;
+.gallery-app-image {
+  width: min(132px, 58%);
+  height: 96px;
+  object-fit: contain;
+  display: block;
   filter: drop-shadow(0 10px 16px rgba(16, 32, 42, 0.08));
   transition: transform 320ms cubic-bezier(0.2, 0.6, 0.25, 1);
 }
 
-.gallery-app-icon .icon-window {
-  fill: #ffffff;
-  stroke: color-mix(in srgb, var(--accent) 54%, #40525b);
-  stroke-width: 1.9;
-}
-
-.gallery-app-icon .icon-window-bar {
-  fill: none;
-  stroke: color-mix(in srgb, var(--accent) 38%, #50616a);
-  stroke-width: 1.8;
-}
-
-.gallery-app-icon .icon-dot {
-  fill: #d1dbdf;
-  stroke: none;
-}
-
-.gallery-app-icon path,
-.gallery-app-icon rect:not(.icon-window) {
-  fill: none;
-  stroke: #1d2a33;
-  stroke-width: 3.25;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.gallery-card:hover .gallery-app-icon {
+.gallery-card:hover .gallery-app-image {
   transform: translateY(-2px) scale(1.035);
 }
 
