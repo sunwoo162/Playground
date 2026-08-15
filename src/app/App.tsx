@@ -10,6 +10,8 @@ import type { LocalGitHubStatus } from '../entities/github-status/model/types'
 import { getFavorites, saveFavorites } from '../features/app-favorite/model/storage'
 import { getStudyTimerElapsed, formatStudyTime } from '../features/study-timer-badge/model/timer'
 
+const THEME_KEY = 'playground-theme';
+
 const APP_CATEGORIES: Array<{ id: AppItem['category']; label: string; description: string }> = [
   { id: 'study', label: '학습', description: '공부 계획, 기록, 집중 공간' },
   { id: 'web-extension', label: '웹 확장', description: '브라우저 확장과 자동화 도구' },
@@ -78,6 +80,16 @@ function App() {
   const [noticeStatus, setNoticeStatus] = useState('');
   const [noticeSubmitting, setNoticeSubmitting] = useState(false);
   const [loginRedirectApp, setLoginRedirectApp] = useState<AppItem | null>(null);
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const saved = localStorage.getItem(THEME_KEY);
+    return saved === 'light' ? 'light' : 'dark';
+  });
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem(THEME_KEY, theme);
+  }, [theme]);
+
   useEffect(() => {
     localStorage.setItem(TODAY_PLAN_KEY, JSON.stringify(todayPlan));
   }, [todayPlan]);
@@ -397,7 +409,26 @@ function App() {
   return (
     <div className="app">
       <header className="header">
+        <div className="header-left">
+          <span className="product-kicker">Playground OS</span>
+          <h1 className="logo">놀이터</h1>
+          <p className="tagline">공부, 개발, 자동화, 생활 도구를 한 계정에서 관리하는 개인 웹 작업대</p>
+        </div>
         <div className="header-right">
+          <button
+            className="theme-toggle"
+            onClick={() => setTheme((current) => current === 'light' ? 'dark' : 'light')}
+            aria-label={theme === 'light' ? '다크 모드로 변경' : '화이트 모드로 변경'}
+            title={theme === 'light' ? '다크 모드' : '화이트 모드'}
+          >
+            {theme === 'light' ? '🌙' : '☀️'}
+          </button>
+          <button className="btn-feature-request" onClick={() => setPage('github')}>
+            GitHub 관리
+          </button>
+          <button className="btn-feature-request" onClick={openFeatureRequest}>
+            기능추가 요청
+          </button>
           {user ? (
             <div className="user-info">
               {timeLeft && (
