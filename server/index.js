@@ -1038,7 +1038,7 @@ app.get('/auth/github', (req, res) => {
     req.session.returnTo = req.query.returnTo;
   }
   
-  const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(callbackUrl)}&scope=read:user,user:email,repo`;
+  const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(callbackUrl)}&scope=read:user`;
   res.redirect(githubAuthUrl);
 });
 
@@ -1066,6 +1066,7 @@ app.get('/auth/github/callback', async (req, res) => {
         client_id: process.env.GITHUB_CLIENT_ID,
         client_secret: process.env.GITHUB_CLIENT_SECRET,
         code,
+        redirect_uri: process.env.CALLBACK_URL,
       }),
     });
 
@@ -1113,11 +1114,11 @@ app.get('/auth/github/callback', async (req, res) => {
       avatar_url: userData.avatar_url,
     };
 
-    // 액세스 토큰 (5시간)
+    // 액세스 토큰 (1시간)
     const accessToken = jwt.sign(
       { ...userPayload, type: 'access' },
       JWT_SECRET,
-      { expiresIn: '5h' }
+      { expiresIn: '1h' }
     );
 
     // 리프레시 토큰 (7일)
@@ -1127,12 +1128,12 @@ app.get('/auth/github/callback', async (req, res) => {
       { expiresIn: '7d' }
     );
 
-    // 액세스 토큰 쿠키 (5시간)
+    // 액세스 토큰 쿠키 (1시간)
     res.cookie('playground_token', accessToken, {
-      httpOnly: true,
+      httpOnly: false, // 프론트에서 읽을 수 있게
       secure: IS_PRODUCTION,
-      maxAge: 5 * 60 * 60 * 1000, // 5시간
-      sameSite: 'strict',
+      maxAge: 60 * 60 * 1000, // 1시간
+      sameSite: 'lax',
       path: '/',
     });
 
@@ -1141,7 +1142,7 @@ app.get('/auth/github/callback', async (req, res) => {
       httpOnly: true,
       secure: IS_PRODUCTION,
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7일
-      sameSite: 'strict',
+      sameSite: 'lax',
       path: '/',
     });
 
