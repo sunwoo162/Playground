@@ -118,6 +118,7 @@ jobs:
             # 의존성 설치 및 프론트 빌드
             corepack enable || true
             corepack prepare pnpm@10.33.0 --activate || true
+            command -v pnpm >/dev/null 2>&1 || npm install -g pnpm@10.33.0 > dist/deploy-command.log 2>&1 || record_failure "pnpm install global failed"
             pnpm run install:all > dist/deploy-command.log 2>&1 || record_failure "pnpm install failed"
             pnpm run build:all > dist/deploy-command.log 2>&1 || record_failure "pnpm build:all failed"
             pnpm --filter ./apps/virtual-study-room run build > dist/deploy-command.log 2>&1 || record_failure "virtual-study-room build failed"
