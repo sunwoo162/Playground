@@ -518,43 +518,6 @@ function App() {
         </div>
       </section>
 
-      <section className="gallery-quick-actions" aria-label="주요 기능">
-        <div className="gallery-quick-actions-inner">
-          <button
-            type="button"
-            className="quick-action-card primary"
-            onClick={() => user ? setPage('mypage') : handleLogin()}
-          >
-            <span>{user ? '내 계정' : 'GitHub 로그인'}</span>
-            <strong>{user ? (user.name || user.login) : '로그인하고 앱 실행하기'}</strong>
-          </button>
-          <button type="button" className="quick-action-card" onClick={openFeatureRequest}>
-            <span>기능추가 요청</span>
-            <strong>필요한 웹앱이나 개선점 보내기</strong>
-          </button>
-          <button
-            type="button"
-            className="quick-action-card"
-            onClick={() => setShowFavOnly((current) => !current)}
-          >
-            <span>즐겨찾기</span>
-            <strong>{favoriteAvailableCount}개 저장됨</strong>
-          </button>
-          {user && (
-            <button type="button" className="quick-action-card" onClick={() => setPage('friends')}>
-              <span>친구</span>
-              <strong>친구 목록과 요청 확인</strong>
-            </button>
-          )}
-          {isAdmin && (
-            <button type="button" className="quick-action-card" onClick={() => setShowNoticeEditor(true)}>
-              <span>공지 작성</span>
-              <strong>전체 사용자에게 공지 올리기</strong>
-            </button>
-          )}
-        </div>
-      </section>
-
       <nav className="gallery-tabs" aria-label="앱 카테고리">
         <div className="gallery-tabs-inner">
           {categoryTabs.map((category) => (

@@ -2954,62 +2954,6 @@ body {
   font-size: 12px;
 }
 
-.gallery-quick-actions {
-  border-bottom: 1px solid #e8e8e8;
-  background: #ffffff;
-}
-
-.gallery-quick-actions-inner {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 16px 24px;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 10px;
-}
-
-.quick-action-card {
-  min-height: 72px;
-  padding: 13px 14px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 5px;
-  border: 1px solid #e3e7ea;
-  border-radius: 10px;
-  background: #fbfcfc;
-  color: #111111;
-  cursor: pointer;
-  font: inherit;
-  text-align: left;
-  transition: border-color 0.18s, box-shadow 0.18s, transform 0.18s;
-}
-
-.quick-action-card:hover {
-  transform: translateY(-1px);
-  border-color: #00d5ce;
-  box-shadow: rgba(12, 24, 34, 0.10) 0 8px 18px;
-}
-
-.quick-action-card.primary {
-  border-color: #00d5ce;
-  background: #00d5ce;
-  color: #ffffff;
-}
-
-.quick-action-card span {
-  color: inherit;
-  font-size: 12px;
-  font-weight: 800;
-  opacity: 0.72;
-}
-
-.quick-action-card strong {
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1.35;
-}
-
 .gallery-tabs {
   position: sticky;
   top: 56px;
@@ -3378,13 +3322,8 @@ body {
     padding: 36px 16px;
   }
 
-  .gallery-quick-actions-inner {
-    padding: 14px 16px;
-    grid-template-columns: 1fr;
-  }
-
   .gallery-tabs {
-    position: static;
+    top: 84px;
   }
 
   .gallery-tabs-inner,
