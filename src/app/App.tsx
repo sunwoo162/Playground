@@ -80,6 +80,7 @@ function App() {
   const [noticeStatus, setNoticeStatus] = useState('');
   const [noticeSubmitting, setNoticeSubmitting] = useState(false);
   const [loginRedirectApp, setLoginRedirectApp] = useState<AppItem | null>(null);
+  const [activeWorkspaceVersion, setActiveWorkspaceVersion] = useState<'v1' | 'v2'>('v1');
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem(THEME_KEY);
     return saved === 'light' ? 'light' : 'dark';
@@ -498,82 +499,107 @@ function App() {
           </section>
         )}
 
-        <section className="app-workbench" aria-label="앱 실행 영역">
-          <div className="daily-planner">
-            <div className="planner-panel">
-              <div className="planner-heading">
-                <div>
-                  <span className="planner-kicker">오늘 할 일</span>
-                  <h2>웹앱 시간표</h2>
-                </div>
-                <span className={`permission-pill ${notificationPermission}`}>
-                  {notificationPermission === 'granted' ? '알림 켜짐' : notificationPermission === 'denied' ? '알림 차단됨' : '알림 권한 필요'}
-                </span>
-              </div>
-
-              <form className="planner-form" onSubmit={addTodayPlan}>
-                <label>
-                  <span>웹앱</span>
-                  <select value={planAppId} onChange={(e) => setPlanAppId(e.target.value)}>
-                    {availableApps.map((app) => (
-                      <option key={app.id} value={app.id}>{app.title}</option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <span>시간</span>
-                  <input type="time" value={planTime} onChange={(e) => setPlanTime(e.target.value)} />
-                </label>
-                <label className="planner-title-field">
-                  <span>할 일</span>
-                  <input
-                    value={planTitle}
-                    onChange={(e) => setPlanTitle(e.target.value)}
-                    placeholder="예: 수학 오답 정리, 배포 확인"
-                  />
-                </label>
-                <label className="reminder-toggle">
-                  <input
-                    type="checkbox"
-                    checked={planReminder}
-                    onChange={(e) => setPlanReminder(e.target.checked)}
-                  />
-                  <span>시간 맞춰 알림</span>
-                </label>
-                <button className="btn-primary" type="submit">시간표에 추가</button>
-              </form>
-              {planStatus && <p className="planner-status">{planStatus}</p>}
-            </div>
-
-            <div className="schedule-board" aria-label="오늘 웹앱 시간표">
-              {sortedTodayPlan.length > 0 ? (
-                sortedTodayPlan.map((item) => {
-                  const app = APPS.find((candidate) => candidate.id === item.appId);
-                  return (
-                    <article className={`schedule-row ${item.notified ? 'done' : ''}`} key={item.id}>
-                      <div className="schedule-time">{item.time}</div>
-                      <div className="schedule-line" />
-                      <div className="schedule-card" style={{ '--accent': app?.color ?? 'var(--accent-blue)' } as React.CSSProperties}>
-                        <div className="schedule-card-main">
-                          <span className="schedule-app">{app?.emoji} {app?.title ?? '알 수 없는 앱'}</span>
-                          <strong>{item.title || app?.description || '오늘 이 웹앱 사용하기'}</strong>
-                          <span>{item.reminder ? '알림 예약됨' : '알림 없음'}</span>
-                        </div>
-                        <div className="schedule-actions">
-                          {user && app && !app.disabled && <a href={app.url}>열기</a>}
-                        </div>
-                      </div>
-                    </article>
-                  );
-                })
-              ) : (
-                <div className="schedule-empty">
-                  <strong>오늘 사용할 웹앱을 시간표로 정하세요.</strong>
-                  <span>시간을 넣으면 브라우저가 열려 있는 동안 해당 시간에 알림을 보냅니다.</span>
-                </div>
-              )}
-            </div>
+        <section className="workspace-shell" aria-label="작업 공간 선택">
+          <div className="workspace-version-bar" role="tablist" aria-label="작업 공간 버전">
+            <button
+              className={`workspace-version-tab ${activeWorkspaceVersion === 'v1' ? 'active' : ''}`}
+              type="button"
+              role="tab"
+              aria-selected={activeWorkspaceVersion === 'v1'}
+              onClick={() => setActiveWorkspaceVersion('v1')}
+            >
+              <span>V1</span>
+              <strong>기존 작업대</strong>
+            </button>
+            <button
+              className={`workspace-version-tab ${activeWorkspaceVersion === 'v2' ? 'active' : ''}`}
+              type="button"
+              role="tab"
+              aria-selected={activeWorkspaceVersion === 'v2'}
+              onClick={() => setActiveWorkspaceVersion('v2')}
+            >
+              <span>V2</span>
+              <strong>빈 공간</strong>
+            </button>
           </div>
+
+          {activeWorkspaceVersion === 'v1' ? (
+            <div className="app-workbench" role="tabpanel" aria-label="V1 기존 작업대">
+              <div className="daily-planner">
+                <div className="planner-panel">
+                  <div className="planner-heading">
+                    <div>
+                      <span className="planner-kicker">오늘 할 일</span>
+                      <h2>웹앱 시간표</h2>
+                    </div>
+                    <span className={`permission-pill ${notificationPermission}`}>
+                      {notificationPermission === 'granted' ? '알림 켜짐' : notificationPermission === 'denied' ? '알림 차단됨' : '알림 권한 필요'}
+                    </span>
+                  </div>
+
+                  <form className="planner-form" onSubmit={addTodayPlan}>
+                    <label>
+                      <span>웹앱</span>
+                      <select value={planAppId} onChange={(e) => setPlanAppId(e.target.value)}>
+                        {availableApps.map((app) => (
+                          <option key={app.id} value={app.id}>{app.title}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span>시간</span>
+                      <input type="time" value={planTime} onChange={(e) => setPlanTime(e.target.value)} />
+                    </label>
+                    <label className="planner-title-field">
+                      <span>할 일</span>
+                      <input
+                        value={planTitle}
+                        onChange={(e) => setPlanTitle(e.target.value)}
+                        placeholder="예: 수학 오답 정리, 배포 확인"
+                      />
+                    </label>
+                    <label className="reminder-toggle">
+                      <input
+                        type="checkbox"
+                        checked={planReminder}
+                        onChange={(e) => setPlanReminder(e.target.checked)}
+                      />
+                      <span>시간 맞춰 알림</span>
+                    </label>
+                    <button className="btn-primary" type="submit">시간표에 추가</button>
+                  </form>
+                  {planStatus && <p className="planner-status">{planStatus}</p>}
+                </div>
+
+                <div className="schedule-board" aria-label="오늘 웹앱 시간표">
+                  {sortedTodayPlan.length > 0 ? (
+                    sortedTodayPlan.map((item) => {
+                      const app = APPS.find((candidate) => candidate.id === item.appId);
+                      return (
+                        <article className={`schedule-row ${item.notified ? 'done' : ''}`} key={item.id}>
+                          <div className="schedule-time">{item.time}</div>
+                          <div className="schedule-line" />
+                          <div className="schedule-card" style={{ '--accent': app?.color ?? 'var(--accent-blue)' } as React.CSSProperties}>
+                            <div className="schedule-card-main">
+                              <span className="schedule-app">{app?.emoji} {app?.title ?? '알 수 없는 앱'}</span>
+                              <strong>{item.title || app?.description || '오늘 이 웹앱 사용하기'}</strong>
+                              <span>{item.reminder ? '알림 예약됨' : '알림 없음'}</span>
+                            </div>
+                            <div className="schedule-actions">
+                              {user && app && !app.disabled && <a href={app.url}>열기</a>}
+                            </div>
+                          </div>
+                        </article>
+                      );
+                    })
+                  ) : (
+                    <div className="schedule-empty">
+                      <strong>오늘 사용할 웹앱을 시간표로 정하세요.</strong>
+                      <span>시간을 넣으면 브라우저가 열려 있는 동안 해당 시간에 알림을 보냅니다.</span>
+                    </div>
+                  )}
+                </div>
+              </div>
 
           <div className="workbench-toolbar">
             <label className="search-field">
@@ -627,60 +653,70 @@ function App() {
             </div>
           )}
 
-          <div className="app-category-list">
-            {displayedGroups.map((group) => (
-              <section className="app-category" key={group.id}>
-                <div className="category-heading">
-                  <div>
-                    <h2>{group.label}</h2>
-                    <p>{group.description}</p>
-                  </div>
-                  <span>{group.apps.length}</span>
-                </div>
-                <div className="apps-grid">
-                  {group.apps.map((app) => (
-                    <a
-                      key={app.id}
-                      href={user && !app.disabled ? app.url : undefined}
-                      className={`app-card ${app.disabled ? 'disabled' : ''} ${!user ? 'locked' : ''}`}
-                      style={{ '--accent': app.color } as React.CSSProperties}
-                      onClick={(e) => {
-                        if (app.disabled) {
-                          e.preventDefault();
-                          return;
-                        }
-                        if (!user) {
-                          e.preventDefault();
-                          requestAppLogin(app);
-                        }
-                      }}
-                    >
-                      <button
-                        className={`fav-btn ${favorites.includes(app.id) ? 'favorited' : ''}`}
-                        onClick={(e) => toggleFavorite(app.id, e)}
-                        aria-label={favorites.includes(app.id) ? '즐겨찾기 해제' : '즐겨찾기 추가'}
-                        title={favorites.includes(app.id) ? '즐겨찾기 해제' : '즐겨찾기 추가'}
-                      >
-                        {favorites.includes(app.id) ? '★' : '☆'}
-                      </button>
+              <div className="app-category-list">
+                {displayedGroups.map((group) => (
+                  <section className="app-category" key={group.id}>
+                    <div className="category-heading">
+                      <div>
+                        <h2>{group.label}</h2>
+                        <p>{group.description}</p>
+                      </div>
+                      <span>{group.apps.length}</span>
+                    </div>
+                    <div className="apps-grid">
+                      {group.apps.map((app) => (
+                        <a
+                          key={app.id}
+                          href={user && !app.disabled ? app.url : undefined}
+                          className={`app-card ${app.disabled ? 'disabled' : ''} ${!user ? 'locked' : ''}`}
+                          style={{ '--accent': app.color } as React.CSSProperties}
+                          onClick={(e) => {
+                            if (app.disabled) {
+                              e.preventDefault();
+                              return;
+                            }
+                            if (!user) {
+                              e.preventDefault();
+                              requestAppLogin(app);
+                            }
+                          }}
+                        >
+                          <button
+                            className={`fav-btn ${favorites.includes(app.id) ? 'favorited' : ''}`}
+                            onClick={(e) => toggleFavorite(app.id, e)}
+                            aria-label={favorites.includes(app.id) ? '즐겨찾기 해제' : '즐겨찾기 추가'}
+                            title={favorites.includes(app.id) ? '즐겨찾기 해제' : '즐겨찾기 추가'}
+                          >
+                            {favorites.includes(app.id) ? '★' : '☆'}
+                          </button>
 
-                      <div className="app-card-top">
-                        <div className="app-emoji">{app.emoji}</div>
-                        <span className="app-suite">{CATEGORY_LABELS.get(app.category)}</span>
-                      </div>
-                      <h3 className="app-title">{app.title}</h3>
-                      <p className="app-desc">{app.description}</p>
-                      <div className="app-card-footer">
-                        {!user && !app.disabled && <span className="lock-badge">로그인 필요</span>}
-                        {app.disabled && <span className="lock-badge">제품 정의 필요</span>}
-                        {user && !app.disabled && <span className="open-badge">열기</span>}
-                      </div>
-                    </a>
-                  ))}
-                </div>
-              </section>
-            ))}
-          </div>
+                          <div className="app-card-top">
+                            <div className="app-emoji">{app.emoji}</div>
+                            <span className="app-suite">{CATEGORY_LABELS.get(app.category)}</span>
+                          </div>
+                          <h3 className="app-title">{app.title}</h3>
+                          <p className="app-desc">{app.description}</p>
+                          <div className="app-card-footer">
+                            {!user && !app.disabled && <span className="lock-badge">로그인 필요</span>}
+                            {app.disabled && <span className="lock-badge">제품 정의 필요</span>}
+                            {user && !app.disabled && <span className="open-badge">열기</span>}
+                          </div>
+                        </a>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="workspace-empty" role="tabpanel" aria-label="V2 빈 작업 공간">
+              <div>
+                <span>V2</span>
+                <h2>빈 작업 공간</h2>
+                <p>새 버전을 위한 공간만 열어두었습니다.</p>
+              </div>
+            </div>
+          )}
         </section>
       </main>
 

@@ -411,8 +411,89 @@ body {
 }
 
 /* Apps Grid */
+.workspace-shell {
+  display: grid;
+  gap: 14px;
+}
+
+.workspace-version-bar {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.workspace-version-tab {
+  min-height: 68px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-muted);
+  text-align: left;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  transition: transform 0.2s, border-color 0.2s, background 0.2s;
+}
+
+.workspace-version-tab:hover {
+  transform: translateY(-1px);
+  border-color: var(--accent-blue);
+}
+
+.workspace-version-tab span,
+.workspace-version-tab strong {
+  display: block;
+}
+
+.workspace-version-tab span {
+  margin-bottom: 5px;
+  color: var(--accent-green);
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.workspace-version-tab strong {
+  color: var(--text);
+  font-size: 0.98rem;
+}
+
+.workspace-version-tab.active {
+  border-color: var(--accent-blue);
+  background: color-mix(in srgb, var(--accent-blue) 12%, var(--surface));
+}
+
 .app-workbench {
   padding: 16px;
+}
+
+.workspace-empty {
+  min-height: 460px;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.workspace-empty span {
+  display: inline-flex;
+  margin-bottom: 8px;
+  color: var(--accent-green);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.workspace-empty h2 {
+  margin-bottom: 8px;
+  font-size: 1.25rem;
+}
+
+.workspace-empty p {
+  color: var(--text-muted);
+  font-size: 0.9rem;
 }
 
 .daily-planner {
