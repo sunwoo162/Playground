@@ -59,47 +59,198 @@ function LockIcon() {
   );
 }
 
+const getAppIconKind = (id: string) => {
+  if (id.includes('study-planner')) return 'study-planner';
+  if (id.includes('focus-room')) return 'focus-room';
+  if (id.includes('virtual-study-room')) return 'virtual-study-room';
+  if (id.includes('virtual-avatar')) return 'virtual-avatar';
+  if (id === 'todo' || id.includes('habit')) return 'todo';
+  if (id.includes('day-schedule')) return 'schedule';
+  if (id.includes('cornell') || id.includes('notes')) return 'notes';
+  if (id.includes('coding-log')) return 'coding-log';
+  if (id.includes('code-run')) return 'code-run';
+  if (id.includes('action')) return 'action';
+  if (id.includes('term-roulette')) return 'roulette';
+  if (id.includes('idea')) return 'idea';
+  if (id.includes('macro')) return 'macro';
+  if (id.includes('webbridge')) return 'bridge';
+  if (id.includes('focustime')) return 'focus-time';
+  if (id.includes('school-meal')) return 'meal';
+  if (id.includes('commute')) return 'commute';
+  if (id.includes('life')) return 'life';
+  if (id.includes('mock-invest')) return 'invest';
+  if (id.includes('voice-phishing')) return 'shield';
+  if (id.includes('voice-studio')) return 'voice';
+  if (id.includes('reading')) return 'reading';
+  if (id.includes('budget')) return 'budget';
+  if (id.includes('workout')) return 'workout';
+  if (id.includes('diary') || id.includes('retrospective') || id.includes('mood')) return 'journal';
+  if (id.includes('goal')) return 'goal';
+  if (id.includes('link')) return 'link';
+  if (id.includes('recipe')) return 'recipe';
+  if (id.includes('travel')) return 'travel';
+  return 'app';
+};
+
+const getAppUseLabel = (app: AppItem) => {
+  if (app.id.includes('extension')) return '브라우저 도구';
+  if (app.category === 'study') return '학습 웹앱';
+  if (app.category === 'dev') return '개발 웹앱';
+  if (app.category === 'life') return '생활 웹앱';
+  if (app.category === 'finance-security') return '보안·금융 웹앱';
+  if (app.category === 'coming-soon') return '준비 중인 웹앱';
+  return '웹앱';
+};
+
 function AppIcon({ app }: { app: AppItem }) {
   const color = app.color;
-  const variant = Math.abs(app.id.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0)) % 6;
+  const kind = getAppIconKind(app.id);
 
   return (
-    <svg className={`gallery-app-icon icon-variant-${variant}`} viewBox="0 0 96 96" aria-hidden="true">
-      <rect className="icon-backplate" x="14" y="14" width="68" height="68" rx="18" style={{ fill: color }} />
-      {variant === 0 && (
+    <svg className={`gallery-app-icon icon-kind-${kind}`} viewBox="0 0 112 92" aria-hidden="true">
+      <rect className="icon-window" x="10" y="10" width="92" height="68" rx="12" />
+      <path className="icon-window-bar" d="M10 25h92" />
+      <circle className="icon-dot" cx="23" cy="18" r="2.4" style={{ fill: color }} />
+      <circle className="icon-dot" cx="32" cy="18" r="2.4" />
+      <circle className="icon-dot" cx="41" cy="18" r="2.4" />
+      <rect className="icon-accent" x="20" y="35" width="30" height="30" rx="9" style={{ fill: color }} />
+
+      {kind === 'study-planner' && (
         <>
-          <path d="M31 30h24c5.5 0 10 4.5 10 10v26H41c-5.5 0-10-4.5-10-10V30Z" />
-          <path d="M39 42h18M39 52h14" />
+          <path d="M28 40h17c4 0 7 3 7 7v14H35c-4 0-7-3-7-7V40Z" />
+          <path d="M58 39h23M58 49h18M58 59h12" />
         </>
       )}
-      {variant === 1 && (
+      {kind === 'focus-room' && (
         <>
-          <path d="M30 64V34h36v30H30Z" />
-          <path d="M38 44h20M38 54h12M66 34l-9 9" />
+          <path d="M27 58c9-17 34-20 51-3" />
+          <path d="M34 49c7-8 21-11 33-2" />
+          <path d="M56 35v24M48 42h16" />
         </>
       )}
-      {variant === 2 && (
+      {kind === 'virtual-study-room' && (
         <>
-          <path d="M29 49c5-10 13-15 24-15 6 0 11 2 14 6-5 10-13 15-24 15-6 0-11-2-14-6Z" />
-          <path d="M40 63h24M48 35v28" />
+          <rect x="27" y="38" width="21" height="16" rx="4" />
+          <rect x="57" y="38" width="21" height="16" rx="4" />
+          <path d="M34 63h37M45 63v-6M60 63v-6" />
         </>
       )}
-      {variant === 3 && (
+      {kind === 'virtual-avatar' && (
         <>
-          <path d="M32 35h32v26H32V35Z" />
-          <path d="M39 69h18M48 61v8M39 43h18M39 52h11" />
+          <circle cx="52" cy="49" r="14" />
+          <path d="M39 43c3-8 23-8 26 0M46 49h.2M58 49h.2M47 57c4 3 8 3 12 0" />
+          <path d="M72 42v13l9 5V37l-9 5Z" />
         </>
       )}
-      {variant === 4 && (
+      {kind === 'todo' && (
         <>
-          <path d="M48 29 65 40v20L48 70 31 60V40l17-11Z" />
-          <path d="M48 29v20l17-9M48 49 31 40M48 49v21" />
+          <path d="M31 43l6 6 12-13M31 59l6 6 12-13" />
+          <path d="M58 43h20M58 59h15" />
         </>
       )}
-      {variant === 5 && (
+      {kind === 'schedule' && (
         <>
-          <path d="M34 35h28v26H34V35Z" />
-          <path d="M40 67h16M42 43l-6 5 6 5M54 43l6 5-6 5" />
+          <rect x="28" y="38" width="44" height="29" rx="5" />
+          <path d="M28 48h44M38 34v8M62 34v8M38 57h8M54 57h8" />
+        </>
+      )}
+      {kind === 'notes' && (
+        <>
+          <path d="M34 35h32l8 8v24H34V35Z" />
+          <path d="M65 35v9h9M42 49h22M42 58h15" />
+        </>
+      )}
+      {kind === 'coding-log' && (
+        <>
+          <path d="M43 42 32 51l11 9M63 42l11 9-11 9M57 39l-8 24" />
+        </>
+      )}
+      {kind === 'code-run' && (
+        <>
+          <path d="m37 38 24 14-24 14V38Z" />
+          <path d="M66 41h14M66 52h11M66 63h8" />
+        </>
+      )}
+      {kind === 'action' && (
+        <>
+          <path d="M33 51h17M50 51l-6-6M50 51l-6 6M57 39h17v24H57V39Z" />
+          <path d="M63 47h5M63 55h5" />
+        </>
+      )}
+      {kind === 'roulette' && (
+        <>
+          <circle cx="53" cy="51" r="17" />
+          <path d="M53 34v34M36 51h34M41 39l24 24M65 39 41 63" />
+          <circle cx="53" cy="51" r="4" />
+        </>
+      )}
+      {kind === 'idea' && (
+        <>
+          <path d="M53 36c-9 0-15 6-15 14 0 5 3 9 8 12v6h14v-6c5-3 8-7 8-12 0-8-6-14-15-14Z" />
+          <path d="M47 74h12M45 51h16" />
+        </>
+      )}
+      {kind === 'macro' && (
+        <>
+          <path d="M34 37v29l10-8 6 12 8-4-6-11h13L34 37Z" />
+          <path d="M70 40h10M70 50h8M70 60h6" />
+        </>
+      )}
+      {kind === 'bridge' && (
+        <>
+          <path d="M31 61c9-18 36-18 45 0M38 61V49M49 61V43M60 61V43M71 61V49" />
+          <path d="M28 61h51" />
+        </>
+      )}
+      {kind === 'focus-time' && (
+        <>
+          <circle cx="52" cy="52" r="17" />
+          <path d="M52 41v12l9 5M75 40l6-6M29 40l-6-6" />
+        </>
+      )}
+      {kind === 'meal' && (
+        <>
+          <path d="M31 47h43v17H31V47Z" />
+          <path d="M37 40h31M40 55h8M55 55h8M76 41v23" />
+        </>
+      )}
+      {kind === 'commute' && (
+        <>
+          <rect x="33" y="36" width="40" height="28" rx="7" />
+          <path d="M42 64 35 72M64 64l7 8M41 45h24M42 56h.2M64 56h.2" />
+        </>
+      )}
+      {kind === 'life' && (
+        <>
+          <path d="M53 67V47M53 48c-8 0-15-5-17-12 9-1 16 2 20 10M53 49c8 0 15-5 17-12-9-1-16 2-20 10" />
+        </>
+      )}
+      {kind === 'invest' && (
+        <>
+          <path d="M32 63h45M38 58l10-12 9 8 14-18" />
+          <path d="M70 36h7v7" />
+        </>
+      )}
+      {kind === 'shield' && (
+        <>
+          <path d="M53 35 72 42v10c0 12-8 19-19 23-11-4-19-11-19-23V42l19-7Z" />
+          <path d="M45 53l6 6 12-14" />
+        </>
+      )}
+      {kind === 'voice' && (
+        <>
+          <path d="M53 36v21M44 42v11c0 6 4 10 9 10s9-4 9-10V42" />
+          <path d="M36 50c0 13 7 20 17 20s17-7 17-20M53 70v7" />
+        </>
+      )}
+      {![
+        'study-planner', 'focus-room', 'virtual-study-room', 'virtual-avatar', 'todo', 'schedule', 'notes',
+        'coding-log', 'code-run', 'action', 'roulette', 'idea', 'macro', 'bridge', 'focus-time', 'meal',
+        'commute', 'life', 'invest', 'shield', 'voice',
+      ].includes(kind) && (
+        <>
+          <path d="M34 39h38v25H34V39Z" />
+          <path d="M43 47h20M43 56h12" />
         </>
       )}
     </svg>
@@ -602,6 +753,10 @@ function App() {
               >
                 <div className="gallery-thumb">
                   <AppIcon app={app} />
+                  <div className="gallery-thumb-copy">
+                    <strong>{app.title}</strong>
+                    <span>{getAppUseLabel(app)}</span>
+                  </div>
                   <div className="gallery-badges">
                     {index < 3 && <span className="featured">추천</span>}
                     {!app.disabled && index % 4 === 1 && <span className="new">NEW</span>}
