@@ -51,10 +51,6 @@ const PORT = process.env.PORT || 3000;
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8080';
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 
-function isMissingOAuthValue(value) {
-  return !value || value.includes('여기에_') || value.includes('your-') || value === 'undefined';
-}
-
 app.set('trust proxy', 1);
 
 // 세션 설정 (로그인 상태 유지)
@@ -1036,12 +1032,6 @@ app.post('/github/commit', async (req, res) => {
 app.get('/auth/github', (req, res) => {
   const clientId = process.env.GITHUB_CLIENT_ID;
   const callbackUrl = process.env.CALLBACK_URL;
-  const clientSecret = process.env.GITHUB_CLIENT_SECRET;
-
-  if (isMissingOAuthValue(clientId) || isMissingOAuthValue(clientSecret) || isMissingOAuthValue(callbackUrl)) {
-    console.error('GitHub OAuth is not configured. Set GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, and CALLBACK_URL.');
-    return res.redirect('/?error=oauth_not_configured');
-  }
 
   // returnTo 세션에 저장
   if (req.query.returnTo) {

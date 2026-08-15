@@ -205,20 +205,6 @@ body {
   font-size: 0.9rem;
 }
 
-.auth-error-banner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  text-align: left;
-  border-color: color-mix(in srgb, #ff4757 38%, var(--border));
-  color: var(--text);
-}
-
-.auth-error-banner span {
-  line-height: 1.55;
-}
-
 .portal-hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 340px;

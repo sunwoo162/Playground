@@ -47,22 +47,6 @@ const getDefaultPlanTime = () => {
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 };
 
-const getAuthErrorMessage = () => {
-  const params = new URLSearchParams(window.location.search);
-  const error = params.get('error');
-  if (!error) return '';
-  if (error === 'oauth_not_configured') {
-    return 'GitHub OAuth 설정이 비어 있습니다. .env의 GITHUB_CLIENT_ID와 GITHUB_CLIENT_SECRET을 실제 OAuth App 값으로 바꿔야 로그인할 수 있습니다.';
-  }
-  if (error === 'token_failed') {
-    return params.get('detail') || 'GitHub 토큰 발급에 실패했습니다.';
-  }
-  if (error === 'auth_failed') {
-    return 'GitHub 로그인 처리 중 오류가 발생했습니다.';
-  }
-  return `로그인 오류: ${error}`;
-};
-
 function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -96,7 +80,6 @@ function App() {
   const [noticeStatus, setNoticeStatus] = useState('');
   const [noticeSubmitting, setNoticeSubmitting] = useState(false);
   const [loginRedirectApp, setLoginRedirectApp] = useState<AppItem | null>(null);
-  const [authError, setAuthError] = useState(getAuthErrorMessage);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem(THEME_KEY);
     return saved === 'light' ? 'light' : 'dark';
@@ -186,7 +169,6 @@ function App() {
   }, [tokenExpiry]);
 
   const handleLogin = (returnToOverride?: string) => {
-    setAuthError('');
     const params = new URLSearchParams(window.location.search);
     const returnTo = returnToOverride || params.get('returnTo');
     window.location.href = returnTo
@@ -482,13 +464,6 @@ function App() {
       </header>
 
       <main className="main">
-        {authError && (
-          <div className="login-prompt auth-error-banner">
-            <span>{authError}</span>
-            <button type="button" className="btn-text" onClick={() => setAuthError('')}>닫기</button>
-          </div>
-        )}
-
         {user && (
           <section className="notice-section">
             <div className="notice-section-header">
