@@ -352,16 +352,6 @@ function App() {
     setPlanStatus(shouldRemind ? '일정과 알람을 저장했습니다.' : '일정을 저장했습니다.');
   };
 
-  const removeTodayPlan = (id: string) => {
-    setTodayPlan((current) => current.filter((item) => item.id !== id));
-  };
-
-  const togglePlanDone = (id: string) => {
-    setTodayPlan((current) => current.map((item) => (
-      item.id === id ? { ...item, notified: !item.notified } : item
-    )));
-  };
-
   const availableApps = APPS.filter((app) => !app.disabled);
   const disabledApps = APPS.filter((app) => app.disabled);
   const searchTerm = searchQuery.trim().toLowerCase();
@@ -604,10 +594,6 @@ function App() {
                         </div>
                         <div className="schedule-actions">
                           {user && app && !app.disabled && <a href={app.url}>열기</a>}
-                          <button type="button" onClick={() => togglePlanDone(item.id)}>
-                            {item.notified ? '다시 알림' : '완료'}
-                          </button>
-                          <button type="button" onClick={() => removeTodayPlan(item.id)}>삭제</button>
                         </div>
                       </div>
                     </article>
