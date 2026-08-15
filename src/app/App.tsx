@@ -113,7 +113,6 @@ function AppIcon({ app }: { app: AppItem }) {
       <circle className="icon-dot" cx="23" cy="18" r="2.4" style={{ fill: color }} />
       <circle className="icon-dot" cx="32" cy="18" r="2.4" />
       <circle className="icon-dot" cx="41" cy="18" r="2.4" />
-      <rect className="icon-accent" x="20" y="35" width="30" height="30" rx="9" style={{ fill: color }} />
 
       {kind === 'study-planner' && (
         <>
@@ -779,11 +778,10 @@ function App() {
                   <div className="gallery-card-meta">
                     <div>
                       <span>{app.disabled ? '정의 필요' : user ? '바로 실행' : '로그인 필요'}</span>
-                      <span>{app.id}</span>
                     </div>
                     <small>{app.disabled ? '준비 중' : '열기'}</small>
                   </div>
-                  <div className="gallery-url">{app.url.replace('/apps/', '').replace('/', '') || app.id}</div>
+                  <div className="gallery-url">{app.id}</div>
                 </div>
               </a>
             ))}
