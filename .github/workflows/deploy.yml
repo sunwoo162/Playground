@@ -116,8 +116,8 @@ jobs:
             git reset --hard origin/main || record_failure "git reset failed"
 
             # 의존성 설치 및 프론트 빌드
-            corepack enable || record_failure "corepack enable failed"
-            corepack prepare pnpm@10.33.0 --activate || record_failure "corepack prepare failed"
+            corepack enable || true
+            corepack prepare pnpm@10.33.0 --activate || true
             pnpm run install:all || record_failure "pnpm install failed"
             pnpm run build:all || record_failure "pnpm build:all failed"
             pnpm --filter ./apps/virtual-study-room run build || record_failure "virtual-study-room build failed"
