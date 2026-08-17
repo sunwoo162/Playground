@@ -1,25 +1,23 @@
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import "./App.css";
 
+const appWindow = getCurrentWindow();
+
 function App() {
+  const handleMouseDown = async (
+    event: React.MouseEvent<HTMLDivElement>
+  ) => {
+    if (event.button !== 0) return;
+
+    await appWindow.startDragging();
+  };
+
   return (
-    <main
-      style={{
-        width: "100%",
-        height: "100%",
-        display: "grid",
-        placeItems: "center",
-      }}
-    >
+    <main className="pet-window">
       <div
-        style={{
-          width: 180,
-          height: 180,
-          borderRadius: "50%",
-          background: "#f4f8ff",
-          border: "4px solid #83b9ff",
-          display: "grid",
-          placeItems: "center",
-          fontSize: 42,
+        className="pet"
+        onMouseDown={(event) => {
+          void handleMouseDown(event);
         }}
       >
         ( •‿• )

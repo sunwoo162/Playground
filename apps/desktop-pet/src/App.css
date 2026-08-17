@@ -16,3 +16,28 @@ body,
 body {
   user-select: none;
 }
+
+.pet-window {
+  width: 100%;
+  height: 100%;
+}
+
+.pet {
+  width: 100%;
+  height: 100%;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 50%;
+  border: 4px solid #83b9ff;
+  background: #f4f8ff;
+
+  font-size: 42px;
+
+  cursor: grab;
+}
+
+.pet:active {
+  cursor: grabbing;
+}
