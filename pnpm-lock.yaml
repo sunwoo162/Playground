@@ -266,7 +266,7 @@ importers:
         specifier: ^6.2.0
         version: 6.4.3(@types/node@24.13.3)(lightningcss@1.33.0)
 
-  apps/desktop-pet:
+  apps/desktop:
     dependencies:
       '@tauri-apps/api':
         specifier: ^2
