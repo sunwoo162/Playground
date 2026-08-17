@@ -12,9 +12,17 @@
   "app": {
     "windows": [
       {
+        "label": "pet",
         "title": "desktop-pet",
-        "width": 800,
-        "height": 600
+        "width": 280,
+        "height": 280,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "shadow": false,
+        "center": true
       }
     ],
     "security": {
