@@ -17,23 +17,23 @@ const groups = [
   {
     title: "Daily",
     items: [
-      { label: "Home", page: "home" as LunaPage },
-      { label: "Focus", page: "focus" as LunaPage },
-      { label: "Tasks", page: "tasks" as LunaPage },
-      { label: "Activity", page: "activity" as LunaPage },
+      { label: "Home", icon: "⌂", page: "home" as LunaPage },
+      { label: "Focus", icon: "◷", page: "focus" as LunaPage },
+      { label: "Tasks", icon: "✓", page: "tasks" as LunaPage },
+      { label: "Activity", icon: "◫", page: "activity" as LunaPage },
     ],
   },
   {
     title: "Playground",
     items: [
-      { label: "Tools", page: "tools" as LunaPage },
+      { label: "Tools", icon: "⌘", page: "tools" as LunaPage },
     ],
   },
   {
     title: "Luna",
     items: [
-      { label: "Inventory", page: "inventory" as LunaPage },
-      { label: "Shop", page: "shop" as LunaPage },
+      { label: "Inventory", icon: "◇", page: "inventory" as LunaPage },
+      { label: "Shop", icon: "✦", page: "shop" as LunaPage },
     ],
   },
 ];
@@ -45,8 +45,12 @@ export function Sidebar({
   return (
     <aside className="sidebar">
       <div className="sidebar-brand">
-        <span className="sidebar-brand-mark">☾</span>
-        <strong>Luna</strong>
+        <div className="sidebar-brand-icon">☾</div>
+
+        <div>
+          <strong>Luna</strong>
+          <span className="sidebar-brand-status">Awake</span>
+        </div>
       </div>
 
       <div className="sidebar-groups">
@@ -64,7 +68,11 @@ export function Sidebar({
                 }`}
                 onClick={() => onChangePage(item.page)}
               >
-                {item.label}
+                <span className="sidebar-item-icon">
+                  {item.icon}
+                </span>
+
+                <span>{item.label}</span>
               </button>
             ))}
           </div>
@@ -77,7 +85,8 @@ export function Sidebar({
         }`}
         onClick={() => onChangePage("settings")}
       >
-        Settings
+        <span className="sidebar-item-icon">⚙</span>
+        <span>Settings</span>
       </button>
     </aside>
   );
