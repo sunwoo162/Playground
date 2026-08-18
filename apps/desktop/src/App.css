@@ -17,6 +17,10 @@ body {
   user-select: none;
 }
 
+/* =========================
+   Pet Window
+   ========================= */
+
 .pet-window {
   width: 100%;
   height: 100%;
@@ -40,4 +44,85 @@ body {
 
 .pet:active {
   cursor: grabbing;
+}
+
+/* =========================
+   Luna Main Window
+   ========================= */
+
+.luna-shell {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  overflow: hidden;
+}
+
+.sidebar {
+  width: 240px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 14px;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 10px 24px;
+  font-size: 20px;
+}
+
+.sidebar-brand-mark {
+  font-size: 22px;
+}
+
+.sidebar-groups {
+  flex: 1;
+}
+
+.sidebar-group {
+  margin-bottom: 24px;
+}
+
+.sidebar-group-title {
+  display: block;
+  padding: 0 10px 8px;
+  font-size: 12px;
+  opacity: 0.5;
+}
+
+.sidebar-item {
+  width: 100%;
+  border: 0;
+  padding: 10px 12px;
+  margin-bottom: 4px;
+  border-radius: 8px;
+
+  background: transparent;
+  color: inherit;
+
+  text-align: left;
+  cursor: pointer;
+}
+
+.sidebar-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.sidebar-item.active {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.sidebar-settings {
+  margin-top: auto;
+}
+
+.luna-main {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 32px;
+  overflow: auto;
 }
