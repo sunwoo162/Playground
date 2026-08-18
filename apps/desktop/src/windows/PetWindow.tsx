@@ -20,29 +20,29 @@ export function PetWindow() {
     }
   };
 
-  const openLuna = async () => {
-    cancelDrag();
+const openLuna = async () => {
+  cancelDrag();
 
-    const existing = await WebviewWindow.getByLabel("main");
+  const existing = await WebviewWindow.getByLabel("main");
 
-    if (existing) {
-      await existing.show();
-      await existing.setFocus();
-      return;
-    }
+  if (existing) {
+    await existing.show();
+    await existing.setFocus();
+    return;
+  }
 
-    new WebviewWindow("main", {
-      title: "Luna",
-      url: "http://localhost:5174",
-      width: 1200,
-      height: 760,
-      minWidth: 900,
-      minHeight: 600,
-      center: true,
-      resizable: true,
-      decorations: true,
-    });
-  };
+  new WebviewWindow("main", {
+    title: "Luna",
+    url: "/",
+    width: 1200,
+    height: 760,
+    minWidth: 900,
+    minHeight: 600,
+    center: true,
+    resizable: true,
+    decorations: true,
+  });
+};
 
   return (
     <main className="pet-window">
