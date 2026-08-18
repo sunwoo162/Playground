@@ -280,139 +280,410 @@ body {
   box-shadow: 0 0 10px #a9c7ff;
 }
 
+/* =========================
+   Luna Room
+   ========================= */
+
 .room-card {
   position: relative;
   height: 430px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 24px;
+
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+
+  background: #222331;
+}
+
+.room-wall {
+  position: absolute;
+  inset: 0 0 30%;
+
   background:
     radial-gradient(
-      circle at 50% 65%,
-      rgba(169, 199, 255, 0.1),
-      transparent 35%
+      circle at 65% 30%,
+      rgba(169, 199, 255, 0.05),
+      transparent 30%
     ),
-    linear-gradient(180deg, #202235 0%, #171827 100%);
+    linear-gradient(
+      180deg,
+      #252635 0%,
+      #20212e 100%
+    );
 }
 
-.room-sky {
+/* Window */
+
+.room-window {
+  position: absolute;
+  top: 34px;
+  right: 55px;
+
+  width: 150px;
+  height: 125px;
+
+  overflow: hidden;
+
+  border: 7px solid #363849;
+  border-radius: 10px;
+
+  background: #151725;
+
+  box-shadow:
+    0 8px 20px rgba(0, 0, 0, 0.15),
+    0 0 30px rgba(169, 199, 255, 0.04);
+}
+
+.window-sky {
   position: absolute;
   inset: 0;
-  pointer-events: none;
+
+  background:
+    radial-gradient(
+      circle at 70% 25%,
+      rgba(169, 199, 255, 0.12),
+      transparent 30%
+    ),
+    linear-gradient(
+      180deg,
+      #181a2b,
+      #20233a
+    );
 }
 
-.room-moon {
+.window-moon {
   position: absolute;
-  top: 36px;
-  right: 52px;
-  font-size: 42px;
-  opacity: 0.75;
+  top: 15px;
+  right: 21px;
+
+  color: var(--color-luna-soft);
+
+  font-size: 26px;
+
+  text-shadow: 0 0 16px var(--color-luna-glow);
 }
 
-.star {
+.window-star {
   position: absolute;
-  opacity: 0.45;
+  color: var(--color-luna-soft);
+  opacity: 0.55;
 }
 
-.star-one {
-  top: 80px;
-  left: 18%;
+.star-a {
+  top: 23px;
+  left: 25px;
 }
 
-.star-two {
+.star-b {
+  top: 65px;
+  left: 48px;
+}
+
+.star-c {
+  top: 77px;
+  right: 30px;
+}
+
+.window-frame {
+  position: absolute;
+  z-index: 2;
+
+  background: #363849;
+}
+
+.window-frame-v {
+  top: 0;
+  bottom: 0;
+  left: 50%;
+
+  width: 5px;
+
+  transform: translateX(-50%);
+}
+
+.window-frame-h {
+  top: 50%;
+  right: 0;
+  left: 0;
+
+  height: 5px;
+
+  transform: translateY(-50%);
+}
+
+/* Wall decoration */
+
+.room-picture {
+  position: absolute;
   top: 45px;
-  left: 42%;
+  left: 46%;
+
+  width: 56px;
+  height: 68px;
+
+  display: grid;
+  place-items: center;
+
+  border: 5px solid #373849;
+  border-radius: 6px;
+
+  background: #1b1c29;
+  color: var(--color-lavender);
+
+  font-size: 20px;
 }
 
-.star-three {
-  top: 130px;
-  right: 24%;
+.room-shelf {
+  position: absolute;
+  left: 42px;
+  bottom: 55px;
+
+  width: 150px;
+  height: 9px;
+
+  display: flex;
+  align-items: flex-end;
+  gap: 5px;
+
+  padding-left: 12px;
+
+  border-radius: 4px;
+
+  background: #3b3942;
 }
 
-.room-content {
-  position: relative;
-  width: 100%;
-  height: 100%;
+.shelf-book {
+  width: 14px;
+  height: 39px;
+
+  border-radius: 3px 3px 0 0;
+
+  background: #77718b;
 }
+
+.shelf-book.small {
+  height: 30px;
+  background: #8c7e78;
+}
+
+.shelf-plant {
+  position: absolute;
+  right: 15px;
+  bottom: 4px;
+
+  color: #879784;
+
+  font-size: 30px;
+}
+
+/* Lamp */
+
+.room-lamp {
+  position: absolute;
+  right: 235px;
+  bottom: -1px;
+
+  width: 70px;
+  height: 120px;
+}
+
+.lamp-light {
+  position: absolute;
+  top: -30px;
+  left: -35px;
+
+  width: 140px;
+  height: 140px;
+
+  border-radius: 50%;
+
+  background: rgba(227, 196, 157, 0.09);
+
+  filter: blur(22px);
+}
+
+.lamp-shade {
+  position: absolute;
+  top: 5px;
+  left: 14px;
+
+  width: 44px;
+  height: 29px;
+
+  border-radius: 50% 50% 8px 8px;
+
+  background: #c5aa8b;
+}
+
+.lamp-neck {
+  position: absolute;
+  top: 31px;
+  left: 34px;
+
+  width: 4px;
+  height: 67px;
+
+  background: #77717a;
+}
+
+.lamp-base {
+  position: absolute;
+  bottom: 16px;
+  left: 20px;
+
+  width: 33px;
+  height: 7px;
+
+  border-radius: 50%;
+
+  background: #77717a;
+}
+
+/* Message */
 
 .room-message {
   position: absolute;
   top: 42px;
   left: 42px;
+
   display: flex;
   flex-direction: column;
   gap: 5px;
-  font-size: 13px;
-  opacity: 0.7;
+
+  color: var(--color-text-secondary);
+
+  font-size: 12px;
 }
 
 .room-message strong {
-  font-size: 15px;
+  color: var(--color-text);
+
+  font-size: 14px;
   font-weight: 500;
-  opacity: 1;
 }
+
+/* Floor */
+
+.room-floor {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+
+  height: 30%;
+
+  background:
+    linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.015) 1px,
+      transparent 1px
+    ),
+    #292834;
+
+  background-size: 70px 100%;
+}
+
+.room-rug {
+  position: absolute;
+  bottom: -40px;
+  left: 50%;
+
+  width: 470px;
+  height: 130px;
+
+  border-radius: 50%;
+
+  background: rgba(185, 167, 220, 0.12);
+
+  transform: translateX(-50%);
+}
+
+/* Luna */
 
 .room-luna {
   position: absolute;
+  bottom: 40px;
   left: 50%;
-  bottom: 70px;
-  width: 130px;
-  height: 130px;
+
+  width: 120px;
+  height: 120px;
+
   transform: translateX(-50%);
 }
 
 .room-luna-glow {
   position: absolute;
-  inset: -25px;
+  inset: -30px;
+
   border-radius: 50%;
-  background: rgba(169, 199, 255, 0.18);
-  filter: blur(25px);
+
+  background: var(--color-luna-glow);
+
+  filter: blur(30px);
 }
 
 .room-luna-body {
   position: relative;
+  z-index: 2;
+
   width: 100%;
   height: 100%;
+
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 20px;
+  gap: 18px;
+
   border-radius: 50%;
+
   background:
     radial-gradient(
-      circle at 35% 28%,
+      circle at 35% 27%,
       #ffffff 0%,
-      #e8f3ff 25%,
-      #a9c7ff 68%,
-      #7187c7 100%
+      #e9f2ff 24%,
+      #b8ceff 65%,
+      #8399d3 100%
     );
+
   box-shadow:
-    0 0 25px rgba(169, 199, 255, 0.35),
-    0 0 60px rgba(169, 199, 255, 0.15);
+    0 0 25px rgba(169, 199, 255, 0.28),
+    0 0 55px rgba(169, 199, 255, 0.12);
 }
 
 .room-luna-eye {
-  width: 9px;
-  height: 13px;
+  width: 8px;
+  height: 12px;
+
   border-radius: 50%;
+
   background: #35415f;
 }
 
 .room-luna-mouth {
   position: absolute;
-  bottom: 34px;
-  font-size: 17px;
+  bottom: 31px;
+
   color: #526184;
+
+  font-size: 16px;
 }
 
-.room-floor {
+.luna-shadow {
   position: absolute;
-  left: 8%;
-  right: 8%;
-  bottom: -110px;
-  height: 180px;
+  z-index: 1;
+  bottom: -12px;
+  left: 50%;
+
+  width: 105px;
+  height: 22px;
+
   border-radius: 50%;
-  background: rgba(185, 167, 232, 0.08);
+
+  background: rgba(0, 0, 0, 0.22);
+
+  filter: blur(6px);
+
+  transform: translateX(-50%);
 }
 
 .home-widgets {
