@@ -1,3 +1,41 @@
-export function ToolsPage() {
-  return <div>Tools</div>;
+import type { LunaPage } from "../components/Sidebar";
+
+type ToolsPageProps = {
+  onChangePage: (page: LunaPage) => void;
+};
+
+export function ToolsPage({ onChangePage }: ToolsPageProps) {
+  return (
+    <div className="tools-page">
+      <header className="tools-header">
+        <span className="home-eyebrow">TOOLS</span>
+        <h1>Tools</h1>
+        <p>Choose a tool to get started.</p>
+      </header>
+
+      <div className="tools-grid">
+        <button
+          className="tool-card"
+          onClick={() => onChangePage("focus")}
+        >
+          <span className="tool-card-icon">◷</span>
+          <div>
+            <strong>Focus</strong>
+            <span>Stay focused with a timer.</span>
+          </div>
+        </button>
+
+        <button
+          className="tool-card"
+          onClick={() => onChangePage("tasks")}
+        >
+          <span className="tool-card-icon">✓</span>
+          <div>
+            <strong>Tasks</strong>
+            <span>Manage what you need to do.</span>
+          </div>
+        </button>
+      </div>
+    </div>
+  );
 }
