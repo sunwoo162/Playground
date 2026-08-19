@@ -18,8 +18,6 @@ const groups = [
     title: "Daily",
     items: [
       { label: "Home", icon: "⌂", page: "home" as LunaPage },
-      { label: "Focus", icon: "◷", page: "focus" as LunaPage },
-      { label: "Tasks", icon: "✓", page: "tasks" as LunaPage },
       { label: "Activity", icon: "◫", page: "activity" as LunaPage },
     ],
   },

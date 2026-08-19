@@ -22,7 +22,7 @@ export function MainWindow() {
       case "activity":
         return <ActivityPage />;
       case "tools":
-        return <ToolsPage />;
+        return <ToolsPage onChangePage={setCurrentPage} />;
       case "inventory":
         return <InventoryPage />;
       case "shop":
