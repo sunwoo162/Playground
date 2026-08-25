@@ -6,12 +6,18 @@ import { FocusPage } from "../pages/FocusPage";
 import { TasksPage } from "../pages/TasksPage";
 import { ActivityPage } from "../pages/ActivityPage";
 import { ToolsPage } from "../pages/ToolsPage";
+import { CharacterPage } from "../pages/CharacterPage";
+import {
+  CharacterCreatePage,
+  type CharacterDraft,
+} from "../pages/CharacterCreatePage";
 import { InventoryPage } from "../pages/InventoryPage";
 import { ShopPage } from "../pages/ShopPage";
 import { SettingsPage } from "../pages/SettingsPage";
 
 export function MainWindow() {
   const [currentPage, setCurrentPage] = useState<LunaPage>("home");
+  const [characterDraft, setCharacterDraft] = useState<CharacterDraft | null>(null);
 
   const renderPage = () => {
     switch (currentPage) {
@@ -23,6 +29,24 @@ export function MainWindow() {
         return <ActivityPage />;
       case "tools":
         return <ToolsPage onChangePage={setCurrentPage} />;
+      case "characters":
+        return (
+          <CharacterPage
+            draft={characterDraft}
+            onAddCharacter={() => setCurrentPage("character-create")}
+          />
+        );
+      case "character-create":
+        return (
+          <CharacterCreatePage
+            initialDraft={characterDraft}
+            onCancel={() => setCurrentPage("characters")}
+            onNext={(draft) => {
+              setCharacterDraft(draft);
+              setCurrentPage("characters");
+            }}
+          />
+        );
       case "inventory":
         return <InventoryPage />;
       case "shop":
