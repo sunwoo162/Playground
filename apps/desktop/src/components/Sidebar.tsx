@@ -4,6 +4,8 @@ export type LunaPage =
   | "tasks"
   | "activity"
   | "tools"
+  | "characters"
+  | "character-customize"
   | "inventory"
   | "shop"
   | "settings";
@@ -32,6 +34,7 @@ const groups = [
   {
     title: "Luna",
     items: [
+      { label: "Character", icon: "◉", page: "characters" as LunaPage },
       { label: "Inventory", icon: "◇", page: "inventory" as LunaPage },
       { label: "Shop", icon: "✦", page: "shop" as LunaPage },
     ],
@@ -64,7 +67,10 @@ export function Sidebar({
               <button
                 key={item.page}
                 className={`sidebar-item ${
-                  currentPage === item.page ? "active" : ""
+                  currentPage === item.page ||
+                  (item.page === "characters" && currentPage === "character-customize")
+                    ? "active"
+                    : ""
                 }`}
                 onClick={() => onChangePage(item.page)}
               >
