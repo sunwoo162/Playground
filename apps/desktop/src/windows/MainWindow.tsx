@@ -6,6 +6,8 @@ import { FocusPage } from "../pages/FocusPage";
 import { TasksPage } from "../pages/TasksPage";
 import { ActivityPage } from "../pages/ActivityPage";
 import { ToolsPage } from "../pages/ToolsPage";
+import { CharacterPage } from "../pages/CharacterPage";
+import { CharacterCustomizePage } from "../pages/CharacterCustomizePage";
 import { InventoryPage } from "../pages/InventoryPage";
 import { ShopPage } from "../pages/ShopPage";
 import { SettingsPage } from "../pages/SettingsPage";
@@ -23,6 +25,10 @@ export function MainWindow() {
         return <ActivityPage />;
       case "tools":
         return <ToolsPage />;
+      case "characters":
+        return <CharacterPage onAddCharacter={() => setCurrentPage("character-customize")} />;
+      case "character-customize":
+        return <CharacterCustomizePage onBack={() => setCurrentPage("characters")} />;
       case "inventory":
         return <InventoryPage />;
       case "shop":
