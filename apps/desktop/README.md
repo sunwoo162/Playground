@@ -6,7 +6,7 @@ Luna is a Windows desktop companion built around a persistent desktop pet and a 
 
 - **User:** a Windows user who wants a lightweight desktop companion they can personalize.
 - **Primary job:** keep a character on the desktop and configure how that character looks and reacts without editing source code.
-- **Current MVP workflow:** open the management window, move to **캐릭터**, choose **캐릭터 추가하기**, upload a required default image and a required movement image, preview both images, then keep the draft ready for the next character-setup step.
+- **Current MVP workflow:** open the management window, move to **캐릭터**, choose **캐릭터 추가하기**, upload a required default image and a required movement image, then continue to the setup step to name the character and configure the movement label, default playback interval, and loop behavior.
 - **Non-goals for this iteration:** cloud accounts, AI generation, marketplace distribution, and durable behavior-pack storage.
 
 ## Stack
@@ -18,12 +18,22 @@ Luna is a Windows desktop companion built around a persistent desktop pet and a 
 
 ## Character creation behavior
 
-The character creation screen accepts PNG, JPG, and JPEG files up to 10 MB each. Two images are required:
+The character creation flow has two steps.
+
+### Step 1: required images
+
+The image screen accepts PNG, JPG, and JPEG files up to 10 MB each. Two images are required:
 
 1. **기본 상태** — the character's default pose.
 2. **움직이는 상태** — an example movement pose such as walking or running.
 
-The **다음** action becomes available only after both images pass validation. In this iteration the draft is kept only for the current app session and is surfaced back on the character page. Durable local asset storage and behavior animation manifests are intentionally deferred until their storage contract is defined.
+The **다음** action becomes available only after both images pass validation.
+
+### Step 2: character setup
+
+The setup screen requires a character name and a movement name. It also lets the user choose a default playback interval from 50 to 1000 ms and whether the movement should loop. Going back to the image step preserves setup values that were already entered in the current session.
+
+After **캐릭터 생성**, the character page shows the configured name and movement summary. The current iteration still keeps the draft only for the current app session. Durable local asset storage and behavior animation manifests are intentionally deferred until their storage contract is defined.
 
 ## Run locally
 

@@ -11,6 +11,7 @@ import {
   CharacterCreatePage,
   type CharacterDraft,
 } from "../pages/CharacterCreatePage";
+import { CharacterSetupPage } from "../pages/CharacterSetupPage";
 import { InventoryPage } from "../pages/InventoryPage";
 import { ShopPage } from "../pages/ShopPage";
 import { SettingsPage } from "../pages/SettingsPage";
@@ -18,6 +19,11 @@ import { SettingsPage } from "../pages/SettingsPage";
 export function MainWindow() {
   const [currentPage, setCurrentPage] = useState<LunaPage>("home");
   const [characterDraft, setCharacterDraft] = useState<CharacterDraft | null>(null);
+
+  const openCharacterCreate = () => setCurrentPage("character-create");
+  const openCharacterSetup = () => {
+    setCurrentPage(characterDraft ? "character-setup" : "character-create");
+  };
 
   const renderPage = () => {
     switch (currentPage) {
@@ -33,7 +39,8 @@ export function MainWindow() {
         return (
           <CharacterPage
             draft={characterDraft}
-            onAddCharacter={() => setCurrentPage("character-create")}
+            onAddCharacter={openCharacterCreate}
+            onEditCharacter={openCharacterSetup}
           />
         );
       case "character-create":
@@ -42,6 +49,27 @@ export function MainWindow() {
             initialDraft={characterDraft}
             onCancel={() => setCurrentPage("characters")}
             onNext={(draft) => {
+              setCharacterDraft(draft);
+              setCurrentPage("character-setup");
+            }}
+          />
+        );
+      case "character-setup":
+        if (!characterDraft) {
+          return (
+            <CharacterPage
+              draft={null}
+              onAddCharacter={openCharacterCreate}
+              onEditCharacter={openCharacterCreate}
+            />
+          );
+        }
+
+        return (
+          <CharacterSetupPage
+            initialDraft={characterDraft}
+            onBack={() => setCurrentPage("character-create")}
+            onComplete={(draft) => {
               setCharacterDraft(draft);
               setCurrentPage("characters");
             }}

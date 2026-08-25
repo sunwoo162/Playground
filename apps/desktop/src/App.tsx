@@ -5,6 +5,7 @@ import { MainWindow } from "./windows/MainWindow";
 
 import "./App.css";
 import "./Character.css";
+import "./CharacterSetup.css";
 
 function App() {
   const label = getCurrentWindow().label;

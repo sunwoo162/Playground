@@ -11,6 +11,10 @@ import {
 export type CharacterDraft = {
   baseImage: File;
   motionImage: File;
+  name?: string;
+  motionName?: string;
+  frameDurationMs?: number;
+  loop?: boolean;
 };
 
 type CharacterCreatePageProps = {
@@ -219,7 +223,11 @@ export function CharacterCreatePage({
       return;
     }
 
-    onNext({ baseImage, motionImage });
+    onNext({
+      ...initialDraft,
+      baseImage,
+      motionImage,
+    });
   };
 
   return (

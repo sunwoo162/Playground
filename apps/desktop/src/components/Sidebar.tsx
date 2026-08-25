@@ -6,6 +6,7 @@ export type LunaPage =
   | "tools"
   | "characters"
   | "character-create"
+  | "character-setup"
   | "inventory"
   | "shop"
   | "settings";
@@ -72,6 +73,14 @@ function NavIcon({ name }: { name: NavIconName }) {
   );
 }
 
+function isNavigationItemActive(currentPage: LunaPage, itemPage: LunaPage) {
+  if (currentPage === itemPage) {
+    return true;
+  }
+
+  return itemPage === "character-create" && currentPage === "character-setup";
+}
+
 export function Sidebar({ currentPage, onChangePage }: SidebarProps) {
   return (
     <aside className="sidebar luna-navigation">
@@ -92,7 +101,7 @@ export function Sidebar({ currentPage, onChangePage }: SidebarProps) {
           <button
             key={item.page}
             className={`sidebar-item luna-navigation-item ${
-              currentPage === item.page ? "active" : ""
+              isNavigationItemActive(currentPage, item.page) ? "active" : ""
             }`}
             onClick={() => onChangePage(item.page)}
             type="button"
