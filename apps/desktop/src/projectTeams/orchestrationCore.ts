@@ -53,6 +53,7 @@ export function selectOrchestrationWave(
   limit = ORCHESTRATION_MAX_PARALLEL_TASKS,
 ): ProjectTaskRun[] {
   if (!Number.isInteger(limit) || limit <= 0) return [];
+  const boundedLimit = Math.min(limit, ORCHESTRATION_MAX_PARALLEL_TASKS);
 
   const selected: ProjectTaskRun[] = [];
   const busyRoles = new Set<ExecutableAgentRole>(
@@ -65,7 +66,7 @@ export function selectOrchestrationWave(
     if (run.status !== "ready" || busyRoles.has(run.role)) continue;
     selected.push(run);
     busyRoles.add(run.role);
-    if (selected.length >= limit) break;
+    if (selected.length >= boundedLimit) break;
   }
 
   return selected;
