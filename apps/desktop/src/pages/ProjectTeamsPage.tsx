@@ -7,6 +7,14 @@ import {
   EXECUTION_POLICY,
   WORKFLOW_STAGES,
 } from "../projectTeams/catalog";
+import {
+  getProjectExecutionControlState,
+  pauseProjectExecution,
+  reconcileProjectExecutionControl,
+  resetProjectExecutionControlState,
+  resumeProjectExecution,
+  stopProjectExecution,
+} from "../projectTeams/executionControlState";
 import { diagnoseBlockedTask, toFailureRouteRecord } from "../projectTeams/failureRouting";
 import { applyFailureRoute, beginFailureRouting, failFailureRouting } from "../projectTeams/failureState";
 import { integrateProjectPullRequests } from "../projectTeams/integration";
@@ -106,6 +114,10 @@ export function ProjectTeamsPage() {
     || dispatchingAgents
     || runningReplan
     || runningRetrospective;
+  const commandLocked = runningIntake
+    || launchingProject
+    || runningReplan
+    || runningRetrospective;
 
   const selectedTeam = useMemo(
     () => state.teams.find((team) => team.id === selectedTeamId) ?? state.teams[0],
@@ -117,6 +129,9 @@ export function ProjectTeamsPage() {
     return state.projects.find((project) => project.id === selectedTeam.activeProjectId) ?? null;
   }, [selectedTeam, state.projects]);
 
+  const activeExecutionControl = activeProject
+    ? getProjectExecutionControlState(activeProject.id)
+    : null;
   const latestFailureRoute = activeProject?.failureRoutes?.[0] ?? null;
   const latestProductOwnerDecision = activeProject && latestFailureRoute?.route === "needs-human"
     ? getProductOwnerDecision(state, activeProject.id, latestFailureRoute.id)
@@ -221,6 +236,14 @@ export function ProjectTeamsPage() {
 
     try {
       while (true) {
+        let controlResult = reconcileProjectExecutionControl(nextState, projectId);
+        nextState = controlResult.state;
+        setState(nextState);
+        if (controlResult.control.state !== "running") {
+          setMessage(nextState.projects.find((item) => item.id === projectId)?.runtimeMessage ?? "Agent 실행 제어 대기");
+          break;
+        }
+
         const currentProject = nextState.projects.find((item) => item.id === projectId);
         if (!currentProject || currentProject.status === "blocked") break;
 
@@ -267,6 +290,14 @@ export function ProjectTeamsPage() {
         });
         setState(nextState);
 
+        controlResult = reconcileProjectExecutionControl(nextState, projectId);
+        nextState = controlResult.state;
+        setState(nextState);
+        if (controlResult.control.state !== "running") {
+          setMessage(nextState.projects.find((item) => item.id === projectId)?.runtimeMessage ?? "Agent 실행 제어 대기");
+          break;
+        }
+
         const blockedTaskIds = wave
           .map((task) => task.taskId)
           .filter((taskId) =>
@@ -288,6 +319,12 @@ export function ProjectTeamsPage() {
 
       const finalProject = nextState.projects.find((item) => item.id === projectId);
       if (!finalProject) return nextState;
+
+      const finalControl = getProjectExecutionControlState(projectId);
+      if (finalControl.state !== "running") {
+        setMessage(finalProject.runtimeMessage);
+        return nextState;
+      }
 
       const allTasksDone = finalProject.taskRuns.length > 0
         && finalProject.taskRuns.every((run) => run.status === "done");
@@ -457,11 +494,68 @@ export function ProjectTeamsPage() {
     }
   };
 
+  const handlePauseExecution = () => {
+    if (!activeProject || !activeProject.plan) {
+      setMessage("일시정지할 Agent 프로젝트가 없습니다.");
+      return;
+    }
+    const result = pauseProjectExecution(state, activeProject.id);
+    setState(result.state);
+    setMessage(result.state.projects.find((project) => project.id === activeProject.id)?.runtimeMessage ?? "일시정지 요청됨");
+  };
+
+  const handleResumeExecution = async () => {
+    if (!activeProject || !activeProject.plan) {
+      setMessage("재개할 Agent 프로젝트가 없습니다.");
+      return;
+    }
+    const result = resumeProjectExecution(state, activeProject.id);
+    setState(result.state);
+    setMessage(result.state.projects.find((project) => project.id === activeProject.id)?.runtimeMessage ?? "Agent 실행 재개");
+
+    const project = result.state.projects.find((item) => item.id === activeProject.id);
+    if (
+      result.control.state === "running"
+      && !dispatchingAgents
+      && project
+      && project.status !== "blocked"
+      && project.status !== "retrospective"
+      && project.status !== "completed"
+    ) {
+      await runAgentQueue(result.state, activeProject.id);
+    }
+  };
+
+  const handleStopExecution = () => {
+    if (!activeProject || !activeProject.plan) {
+      setMessage("중지할 Agent 프로젝트가 없습니다.");
+      return;
+    }
+    const result = stopProjectExecution(state, activeProject.id);
+    setState(result.state);
+    setMessage(result.state.projects.find((project) => project.id === activeProject.id)?.runtimeMessage ?? "프로젝트 실행 중지 요청됨");
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (runtimeBusy) return;
-
     const value = command.trim();
+    const executionControlCommand = value === "/pause" || value === "/resume" || value === "/stop";
+    if (runtimeBusy && !executionControlCommand) return;
+
+    if (value === "/pause") {
+      handlePauseExecution();
+      return;
+    }
+
+    if (value === "/resume") {
+      await handleResumeExecution();
+      return;
+    }
+
+    if (value === "/stop") {
+      handleStopExecution();
+      return;
+    }
 
     if (awaitingDecision) {
       await submitProductOwnerDecision(value);
@@ -503,7 +597,7 @@ export function ProjectTeamsPage() {
       return;
     }
 
-    setMessage("현재는 /start, /decide 명령을 사용할 수 있습니다.");
+    setMessage("현재는 /start, /decide, /pause, /resume, /stop 명령을 사용할 수 있습니다.");
   };
 
   const handleRetryPmRuntime = async () => {
@@ -567,6 +661,7 @@ export function ProjectTeamsPage() {
 
   const handleReset = () => {
     if (runtimeBusy) return;
+    resetProjectExecutionControlState();
     const nextState = resetProjectTeamsState();
     setState(nextState);
     setSelectedTeamId(nextState.teams[0].id);
@@ -613,7 +708,7 @@ export function ProjectTeamsPage() {
               ? "Product Owner 결정 입력"
               : awaitingRequirement
                 ? "요구사항 입력 → 조직 분석 → 팀 배정"
-                : "새 프로젝트 시작 / 복구 결정"}
+                : "새 프로젝트 / Agent 실행 제어 / 복구 결정"}
           </small>
         </div>
         <input
@@ -625,12 +720,12 @@ export function ProjectTeamsPage() {
               ? "결정 내용을 입력하세요"
               : awaitingRequirement
                 ? "무엇을 만들지 입력하세요"
-                : "/start 또는 /decide"
+                : "/start, /decide, /pause, /resume, /stop"
           }
-          disabled={runtimeBusy}
+          disabled={commandLocked}
         />
-        <button type="submit" disabled={runtimeBusy}>
-          {runtimeBusy ? "실행 중" : "실행"}
+        <button type="submit" disabled={commandLocked}>
+          {commandLocked ? "실행 중" : "실행"}
         </button>
       </form>
 
@@ -680,10 +775,41 @@ export function ProjectTeamsPage() {
                       ? `${activeProject.repositoryFullName} · ${activeProject.plan?.tasks.length ?? 0} tasks · ${activeProject.runtimeMessage}`
                       : activeProject.runtimeMessage}
                   </small>
+                  {activeExecutionControl && activeProject.plan && (
+                    <small>Execution control: {activeExecutionControl.state}</small>
+                  )}
                   {activeProject.intake && (
                     <small>
                       Intake {activeProject.intake.id} · {activeProject.intake.complexity} · 핵심 역할 {activeProject.intake.criticalRoles.join(", ") || "없음"} · risk {activeProject.intake.riskFlags.join(", ") || "없음"}
                     </small>
+                  )}
+                  {activeProject.plan && activeProject.status !== "completed" && activeProject.status !== "retrospective" && (
+                    <div>
+                      <button
+                        className="project-reset-button project-runtime-retry-button"
+                        type="button"
+                        onClick={handlePauseExecution}
+                        disabled={commandLocked || activeExecutionControl?.state === "paused" || activeExecutionControl?.state === "pause-requested" || activeExecutionControl?.state === "stopped" || activeExecutionControl?.state === "stop-requested"}
+                      >
+                        일시정지
+                      </button>
+                      <button
+                        className="project-reset-button project-runtime-retry-button"
+                        type="button"
+                        onClick={handleResumeExecution}
+                        disabled={commandLocked || (activeExecutionControl?.state !== "paused" && activeExecutionControl?.state !== "pause-requested")}
+                      >
+                        재개
+                      </button>
+                      <button
+                        className="project-reset-button project-runtime-retry-button"
+                        type="button"
+                        onClick={handleStopExecution}
+                        disabled={commandLocked || activeExecutionControl?.state === "stopped" || activeExecutionControl?.state === "stop-requested"}
+                      >
+                        중지
+                      </button>
+                    </div>
                   )}
                   {activeProject.status === "queued" && !activeProject.plan && (
                     <button
