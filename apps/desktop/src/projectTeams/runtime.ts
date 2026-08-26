@@ -5,6 +5,7 @@ import type {
   AgentTaskVerification,
   FailureRouteDecision,
   ProjectPlan,
+  ProjectTaskPlan,
   TeamId,
 } from "./types";
 
@@ -147,6 +148,57 @@ export type RouteAgentFailureResult = {
   decision: FailureRouteDecision;
 };
 
+export type ReplanTaskContext = ProjectTaskPlan & {
+  status: string;
+  attempts: number;
+  hasArtifacts: boolean;
+};
+
+export type ReplanFailureRoute = {
+  id: string;
+  failedTaskId: string;
+  failedRole: string;
+  failureType: string;
+  severity: string;
+  summary: string;
+  rationaleSummary: string;
+  evidence: string[];
+  recommendedAction: string;
+};
+
+export type ReplanProjectInput = {
+  projectId: string;
+  teamId: string;
+  teamName: string;
+  repositoryFullName: string;
+  workspacePath: string;
+  userRequest: string;
+  productSummary: string;
+  architectureSummary: string;
+  failureRoute: ReplanFailureRoute;
+  currentTasks: ReplanTaskContext[];
+  retirableTaskIds: string[];
+  reopenableTaskIds: string[];
+  replanAttempt: number;
+};
+
+export type ProjectReplanProposal = {
+  summary: string;
+  rationaleSummary: string;
+  retireTaskIds: string[];
+  reopenTaskIds: string[];
+  newTasks: ProjectTaskPlan[];
+};
+
+export type ReplanProjectResult = {
+  projectId: string;
+  triggerRouteId: string;
+  sessionId: string | null;
+  eventsPath: string;
+  outputPath: string;
+  proposal: ProjectReplanProposal;
+};
+
 export type MergeProjectPullRequestsInput = {
   repositoryFullName: string;
   pullRequestNumbers: number[];
@@ -184,6 +236,10 @@ export async function dispatchAgentTask(input: AgentTaskRuntimeInput) {
 
 export async function routeAgentFailure(input: RouteAgentFailureInput) {
   return invoke<RouteAgentFailureResult>("route_agent_failure", { input });
+}
+
+export async function replanProjectFailure(input: ReplanProjectInput) {
+  return invoke<ReplanProjectResult>("replan_project_failure", { input });
 }
 
 export async function mergeProjectPullRequests(input: MergeProjectPullRequestsInput) {

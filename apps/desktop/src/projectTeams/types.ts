@@ -157,6 +157,21 @@ export type FailureRouteRecord = FailureRouteDecision & {
   createdAt: string;
 };
 
+export type ProjectReplanRecord = {
+  id: string;
+  triggerRouteId: string;
+  replanAttempt: number;
+  summary: string;
+  rationaleSummary: string;
+  retiredTaskIds: string[];
+  reopenedTaskIds: string[];
+  addedTaskIds: string[];
+  pmSessionId: string | null;
+  eventsPath: string;
+  outputPath: string;
+  createdAt: string;
+};
+
 export type AgentState = {
   id: string;
   role: AgentRole;
@@ -208,6 +223,8 @@ export type ProjectState = {
   plan: ProjectPlan | null;
   taskRuns: ProjectTaskRun[];
   failureRoutes?: FailureRouteRecord[];
+  replans?: ProjectReplanRecord[];
+  replanAttempts?: Record<string, number>;
   repositoryFullName: string | null;
   workspacePath: string | null;
   pmSessionId: string | null;

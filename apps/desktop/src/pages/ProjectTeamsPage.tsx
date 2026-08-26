@@ -12,6 +12,12 @@ import { applyFailureRoute, beginFailureRouting, failFailureRouting } from "../p
 import { integrateProjectPullRequests } from "../projectTeams/integration";
 import { markProjectIntegrated } from "../projectTeams/integrationState";
 import { loadOrganizationRuntimeSettings } from "../projectTeams/organization";
+import { runProjectFailureReplan } from "../projectTeams/replanning";
+import {
+  applyProjectFailureReplan,
+  beginProjectFailureReplan,
+  failProjectFailureReplan,
+} from "../projectTeams/replanState";
 import { runProjectRetrospectives } from "../projectTeams/retrospective";
 import { completeProjectRetrospective } from "../projectTeams/retrospectiveState";
 import { dispatchAgentTask, startProjectRuntime } from "../projectTeams/runtime";
@@ -76,9 +82,10 @@ export function ProjectTeamsPage() {
   const [awaitingRequirement, setAwaitingRequirement] = useState(false);
   const [launchingProject, setLaunchingProject] = useState(false);
   const [dispatchingAgents, setDispatchingAgents] = useState(false);
+  const [runningReplan, setRunningReplan] = useState(false);
   const [runningRetrospective, setRunningRetrospective] = useState(false);
   const [message, setMessage] = useState("/start로 새 프로젝트를 배정할 수 있습니다.");
-  const runtimeBusy = launchingProject || dispatchingAgents || runningRetrospective;
+  const runtimeBusy = launchingProject || dispatchingAgents || runningReplan || runningRetrospective;
 
   const selectedTeam = useMemo(
     () => state.teams.find((team) => team.id === selectedTeamId) ?? state.teams[0],
@@ -89,6 +96,13 @@ export function ProjectTeamsPage() {
     if (!selectedTeam?.activeProjectId) return null;
     return state.projects.find((project) => project.id === selectedTeam.activeProjectId) ?? null;
   }, [selectedTeam, state.projects]);
+
+  const latestFailureRoute = activeProject?.failureRoutes?.[0] ?? null;
+  const blockedActionLabel = latestFailureRoute?.route === "escalate-pm"
+    ? "PM 복구 재계획"
+    : latestFailureRoute?.route === "needs-human"
+      ? "Product Owner 결정 필요"
+      : "Debug Router로 재분석";
 
   const runRetrospectiveStage = async (baseState: ProjectTeamsState, projectId: string) => {
     const project = baseState.projects.find((item) => item.id === projectId);
@@ -113,6 +127,31 @@ export function ProjectTeamsPage() {
     }
   };
 
+  const runFailureReplanStage = async (
+    baseState: ProjectTeamsState,
+    projectId: string,
+  ) => {
+    let nextState = beginProjectFailureReplan(baseState, projectId);
+    setState(nextState);
+    setRunningReplan(true);
+    setMessage("Debug Router escalation · PM Codex가 기존 repository와 Git 작업을 보존한 복구 재계획을 생성 중");
+
+    try {
+      const outcome = await runProjectFailureReplan(nextState, projectId);
+      nextState = applyProjectFailureReplan(nextState, projectId, outcome);
+      setState(nextState);
+      setMessage(nextState.projects.find((item) => item.id === projectId)?.runtimeMessage ?? outcome.runtime.proposal.summary);
+      return nextState;
+    } catch (error) {
+      nextState = failProjectFailureReplan(nextState, projectId, errorMessage(error));
+      setState(nextState);
+      setMessage(nextState.projects.find((item) => item.id === projectId)?.runtimeMessage ?? errorMessage(error));
+      return nextState;
+    } finally {
+      setRunningReplan(false);
+    }
+  };
+
   const routeBlockedTask = async (
     baseState: ProjectTeamsState,
     projectId: string,
@@ -130,6 +169,10 @@ export function ProjectTeamsPage() {
       nextState = applyFailureRoute(nextState, projectId, route);
       setState(nextState);
       setMessage(nextState.projects.find((item) => item.id === projectId)?.runtimeMessage ?? route.summary);
+
+      if (route.route === "escalate-pm") {
+        nextState = await runFailureReplanStage(nextState, projectId);
+      }
       return nextState;
     } catch (error) {
       nextState = failFailureRouting(nextState, projectId, taskId, errorMessage(error));
@@ -359,7 +402,17 @@ export function ProjectTeamsPage() {
   };
 
   const handleRetryPmRuntime = async () => {
-    if (!activeProject || runtimeBusy || activeProject.plan) return;
+    if (!activeProject || runtimeBusy) return;
+    if (activeProject.plan) {
+      const route = activeProject.failureRoutes?.[0];
+      if (route?.route !== "escalate-pm") return;
+      const nextState = await runFailureReplanStage(state, activeProject.id);
+      const project = nextState.projects.find((item) => item.id === activeProject.id);
+      if (project && project.status !== "blocked") {
+        await runAgentQueue(nextState, activeProject.id);
+      }
+      return;
+    }
     await launchProjectRuntime(state, activeProject.id);
   };
 
@@ -370,6 +423,21 @@ export function ProjectTeamsPage() {
 
   const handleRetryBlockedAgents = async () => {
     if (!activeProject || runtimeBusy || !activeProject.plan) return;
+
+    const route = activeProject.failureRoutes?.[0];
+    if (route?.route === "needs-human") {
+      setMessage(`Product Owner 결정 필요 · ${route.recommendedAction}`);
+      return;
+    }
+    if (route?.route === "escalate-pm") {
+      const nextState = await runFailureReplanStage(state, activeProject.id);
+      const project = nextState.projects.find((item) => item.id === activeProject.id);
+      if (project && project.status !== "blocked") {
+        await runAgentQueue(nextState, activeProject.id);
+      }
+      return;
+    }
+
     let nextState = state;
     const blockedTaskIds = activeProject.taskRuns
       .filter((run) => run.status === "blocked")
@@ -415,13 +483,15 @@ export function ProjectTeamsPage() {
           <span className="project-teams-runtime-dot" />
           <div>
             <strong>
-              {runningRetrospective
-                ? "Retrospective Runtime 실행 중"
-                : dispatchingAgents
-                  ? "Agent Runtime 실행 중"
-                  : launchingProject
-                    ? "PM Runtime 실행 중"
-                    : "Codex Runtime"}
+              {runningReplan
+                ? "PM Recovery Replan 실행 중"
+                : runningRetrospective
+                  ? "Retrospective Runtime 실행 중"
+                  : dispatchingAgents
+                    ? "Agent Runtime 실행 중"
+                    : launchingProject
+                      ? "PM Runtime 실행 중"
+                      : "Codex Runtime"}
             </strong>
             <span>ChatGPT Codex 인증과 BloomBouquet 로컬 Runtime을 사용</span>
           </div>
@@ -496,9 +566,10 @@ export function ProjectTeamsPage() {
                       실패 단계: {activeProject.runtimeFailureSource === "pm" ? "PM Runtime" : "Agent Runtime"}
                     </small>
                   )}
-                  {activeProject.status === "blocked"
-                    && (activeProject.runtimeFailureSource === "pm"
-                      || (!activeProject.plan && activeProject.runtimeFailureSource === null)) && (
+                  {activeProject.status === "blocked" && latestFailureRoute?.route === "needs-human" && (
+                    <small>Product Owner 결정 필요: {latestFailureRoute.recommendedAction}</small>
+                  )}
+                  {activeProject.status === "blocked" && !activeProject.plan && (
                     <button
                       className="project-reset-button project-runtime-retry-button"
                       type="button"
@@ -506,6 +577,18 @@ export function ProjectTeamsPage() {
                       disabled={runtimeBusy}
                     >
                       PM Runtime 다시 실행
+                    </button>
+                  )}
+                  {activeProject.status === "blocked"
+                    && activeProject.plan
+                    && latestFailureRoute?.route === "escalate-pm" && (
+                    <button
+                      className="project-reset-button project-runtime-retry-button"
+                      type="button"
+                      onClick={handleRetryPmRuntime}
+                      disabled={runtimeBusy}
+                    >
+                      PM 복구 재계획 다시 실행
                     </button>
                   )}
                   {activeProject.status === "retrospective" && (
@@ -525,6 +608,8 @@ export function ProjectTeamsPage() {
                   busy={runtimeBusy}
                   onContinue={handleContinueAgents}
                   onRetryBlocked={handleRetryBlockedAgents}
+                  blockedActionLabel={blockedActionLabel}
+                  blockedActionDisabled={latestFailureRoute?.route === "needs-human"}
                 />
               </>
             ) : (
