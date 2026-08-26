@@ -93,6 +93,10 @@
   font-weight: 800;
 }
 
+.builder-draft > .builder-primary {
+  margin-top: 16px;
+}
+
 @media (max-width: 720px) {
   .builder-projects-card {
     padding: 20px;

@@ -37,6 +37,18 @@ type BuilderProject = {
   updatedAt: string
 }
 
+type BuilderRun = {
+  id: number
+  projectId: number
+  status: string
+  workerId?: string | null
+  failureReason?: string | null
+  createdAt?: string | null
+  updatedAt?: string | null
+  startedAt?: string | null
+  finishedAt?: string | null
+}
+
 const templates: Template[] = [
   {
     id: 'community',
@@ -115,7 +127,7 @@ const platformLabel: Record<Platform, string> = {
   both: 'Web + Mobile',
 }
 
-function formatDate(value: string) {
+function formatDate(value?: string | null) {
   if (!value) return '-'
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
@@ -139,9 +151,11 @@ export default function BuilderApp() {
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null)
   const [project, setProject] = useState<BuilderProject | null>(null)
   const [projects, setProjects] = useState<BuilderProject[]>([])
+  const [currentRun, setCurrentRun] = useState<BuilderRun | null>(null)
   const [user, setUser] = useState<BuilderUser | null>(null)
   const [authLoading, setAuthLoading] = useState(true)
   const [projectsLoading, setProjectsLoading] = useState(false)
+  const [runLoading, setRunLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitStatus, setSubmitStatus] = useState('')
 
@@ -149,6 +163,10 @@ export default function BuilderApp() {
     () => featureOptions.filter((feature) => (project?.features ?? features).includes(feature.key)),
     [features, project],
   )
+
+  const handleLogin = () => {
+    window.location.href = `/auth/github?returnTo=${encodeURIComponent(window.location.pathname)}`
+  }
 
   const loadProjects = async () => {
     setProjectsLoading(true)
@@ -169,6 +187,53 @@ export default function BuilderApp() {
     }
   }
 
+  const loadProjectRun = async (projectId: number) => {
+    setRunLoading(true)
+    try {
+      const response = await fetch(`/api/builder/projects/${projectId}/runs`, { credentials: 'include' })
+      if (response.status === 401) {
+        setUser(null)
+        setCurrentRun(null)
+        return
+      }
+      if (!response.ok) throw new Error(await readError(response))
+      const data = await response.json()
+      setCurrentRun(Array.isArray(data) && data.length > 0 ? data[0] : null)
+    } catch (error) {
+      setCurrentRun(null)
+      setSubmitStatus(error instanceof Error ? error.message : '실행 상태를 불러오지 못했습니다.')
+    } finally {
+      setRunLoading(false)
+    }
+  }
+
+  const requestProjectRun = async (projectId: number) => {
+    setRunLoading(true)
+    try {
+      const response = await fetch(`/api/builder/projects/${projectId}/runs`, {
+        method: 'POST',
+        credentials: 'include',
+      })
+      if (response.status === 401) {
+        handleLogin()
+        throw new Error('로그인이 필요합니다.')
+      }
+      if (!response.ok) throw new Error(await readError(response))
+
+      const run: BuilderRun = await response.json()
+      setCurrentRun(run)
+      setProject((current) => (
+        current?.id === projectId ? { ...current, status: run.status } : current
+      ))
+      setProjects((current) => current.map((item) => (
+        item.id === projectId ? { ...item, status: run.status } : item
+      )))
+      return run
+    } finally {
+      setRunLoading(false)
+    }
+  }
+
   useEffect(() => {
     fetch('/auth/me', { credentials: 'include' })
       .then((response) => response.json())
@@ -181,10 +246,6 @@ export default function BuilderApp() {
       .finally(() => setAuthLoading(false))
   }, [])
 
-  const handleLogin = () => {
-    window.location.href = `/auth/github?returnTo=${encodeURIComponent(window.location.pathname)}`
-  }
-
   const toggleFeature = (key: FeatureKey) => {
     setFeatures((current) => (
       current.includes(key)
@@ -193,13 +254,36 @@ export default function BuilderApp() {
     ))
   }
 
+  const resetSelectedProject = () => {
+    setProject(null)
+    setCurrentRun(null)
+    setSubmitStatus('')
+  }
+
   const applyTemplate = (template: Template) => {
     setSelectedTemplate(template.id)
     setBrief(template.prompt)
     setPlatform(template.platform)
     setFeatures(template.features)
-    setProject(null)
+    resetSelectedProject()
+  }
+
+  const selectProject = (selected: BuilderProject) => {
+    setProject(selected)
+    setCurrentRun(null)
     setSubmitStatus('')
+    void loadProjectRun(selected.id)
+  }
+
+  const retryProjectRun = async () => {
+    if (!project || runLoading) return
+    setSubmitStatus('')
+    try {
+      const run = await requestProjectRun(project.id)
+      setSubmitStatus(`Run #${run.id}이 Agent 실행 큐에 등록되었습니다.`)
+    } catch (error) {
+      setSubmitStatus(error instanceof Error ? error.message : 'Agent 실행 요청에 실패했습니다.')
+    }
   }
 
   const submitProject = async (event: FormEvent) => {
@@ -214,6 +298,7 @@ export default function BuilderApp() {
 
     setSubmitting(true)
     setSubmitStatus('')
+    setCurrentRun(null)
     try {
       const response = await fetch('/api/builder/projects', {
         method: 'POST',
@@ -236,7 +321,18 @@ export default function BuilderApp() {
       const created: BuilderProject = await response.json()
       setProject(created)
       setProjects((current) => [created, ...current.filter((item) => item.id !== created.id)])
-      setSubmitStatus('프로젝트가 서버에 저장되었습니다.')
+      setSubmitStatus('프로젝트가 저장되었습니다. Agent 실행 큐에 등록 중입니다.')
+
+      try {
+        const run = await requestProjectRun(created.id)
+        setSubmitStatus(`프로젝트가 저장되고 Run #${run.id}이 Agent 실행 큐에 등록되었습니다.`)
+      } catch (error) {
+        setSubmitStatus(
+          error instanceof Error
+            ? `프로젝트는 저장됐지만 실행 큐 등록에 실패했습니다: ${error.message}`
+            : '프로젝트는 저장됐지만 실행 큐 등록에 실패했습니다.',
+        )
+      }
     } catch (error) {
       setSubmitStatus(error instanceof Error ? error.message : '프로젝트를 만들지 못했습니다.')
     } finally {
@@ -284,8 +380,8 @@ export default function BuilderApp() {
 
           <div className="builder-runtime-note">
             <span>현재 피벗 단계</span>
-            <strong>프로젝트 저장 API 연결</strong>
-            <p>프로젝트는 실제 사용자 계정과 DB에 저장됩니다. Agent worker 실행은 다음 단계에서 연결합니다.</p>
+            <strong>프로젝트 실행 큐 연결</strong>
+            <p>프로젝트 저장 뒤 실제 Run queue까지 등록됩니다. worker가 claim하기 전에는 queued 상태로만 표시합니다.</p>
           </div>
         </section>
 
@@ -307,8 +403,7 @@ export default function BuilderApp() {
                 onChange={(event) => {
                   setBrief(event.target.value)
                   setSelectedTemplate(null)
-                  setProject(null)
-                  setSubmitStatus('')
+                  resetSelectedProject()
                 }}
                 placeholder="예: 수험생이 수험표 혜택을 지도에서 찾고 저장할 수 있는 서비스를 만들어줘."
                 rows={7}
@@ -327,8 +422,7 @@ export default function BuilderApp() {
                       className={platform === value ? 'is-selected' : ''}
                       onClick={() => {
                         setPlatform(value)
-                        setProject(null)
-                        setSubmitStatus('')
+                        resetSelectedProject()
                       }}
                     >
                       {platformLabel[value]}
@@ -352,8 +446,7 @@ export default function BuilderApp() {
                         className={`builder-feature ${selected ? 'is-selected' : ''}`}
                         onClick={() => {
                           toggleFeature(feature.key)
-                          setProject(null)
-                          setSubmitStatus('')
+                          resetSelectedProject()
                         }}
                         aria-pressed={selected}
                       >
@@ -387,7 +480,7 @@ export default function BuilderApp() {
               )}
 
               <button className="builder-primary" type="submit" disabled={!brief.trim() || submitting || authLoading}>
-                {submitting ? '저장 중…' : user ? '프로젝트 만들기' : '로그인하고 프로젝트 만들기'}
+                {submitting ? '프로젝트 생성 중…' : user ? '프로젝트 만들고 Agent 요청' : '로그인하고 프로젝트 만들기'}
               </button>
             </form>
 
@@ -416,11 +509,29 @@ export default function BuilderApp() {
                     <dt>Created</dt>
                     <dd>{formatDate(project.createdAt)}</dd>
                   </div>
+                  <div>
+                    <dt>Run</dt>
+                    <dd>{currentRun ? `#${currentRun.id} · ${currentRun.status}` : runLoading ? '확인 중' : '없음'}</dd>
+                  </div>
                 </dl>
 
                 <div className="builder-draft-message">
-                  이 프로젝트는 실제 서버 DB에 `draft`로 저장되었습니다. 아직 Project Intake / Agent worker가 연결되지 않았으므로 실행 중이라고 표시하지 않습니다.
+                  {runLoading
+                    ? '실행 queue 상태를 확인하고 있습니다.'
+                    : currentRun?.status === 'queued'
+                      ? `Run #${currentRun.id}은 실제 실행 queue에서 worker를 기다리고 있습니다. worker가 claim하기 전에는 running으로 표시하지 않습니다.`
+                      : currentRun
+                        ? `Run #${currentRun.id}의 현재 상태는 ${currentRun.status}입니다.`
+                        : project.status === 'draft' || project.status === 'failed'
+                          ? '아직 active Run이 없습니다. 아래 버튼으로 Agent 실행 요청을 queue에 등록할 수 있습니다.'
+                          : '실행 record를 확인할 수 없습니다. 새 실행을 추정 생성하지 않고 현재 프로젝트 상태를 유지합니다.'}
                 </div>
+
+                {!currentRun && (project.status === 'draft' || project.status === 'failed') && (
+                  <button className="builder-primary" type="button" onClick={() => void retryProjectRun()} disabled={runLoading}>
+                    {runLoading ? '실행 요청 중…' : 'Agent 실행 요청'}
+                  </button>
+                )}
               </section>
             )}
           </section>
@@ -443,7 +554,7 @@ export default function BuilderApp() {
                 ) : (
                   <div className="builder-project-list">
                     {projects.slice(0, 5).map((item) => (
-                      <button key={item.id} type="button" onClick={() => setProject(item)}>
+                      <button key={item.id} type="button" onClick={() => selectProject(item)}>
                         <span>
                           <strong>{item.title}</strong>
                           <small>{platformLabel[item.platform]} · {formatDate(item.createdAt)}</small>
