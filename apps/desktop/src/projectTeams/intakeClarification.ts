@@ -14,6 +14,11 @@ function canUseStorage() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
 }
 
+function validRound(round: number, allowZero: boolean) {
+  const minimum = allowZero ? 0 : 1;
+  return Number.isInteger(round) && round >= minimum && round <= MAX_INTAKE_CLARIFICATION_ROUNDS;
+}
+
 export function intakeNeedsClarification(intake: ProjectIntakeRecord) {
   return intake.missingInputs.some((item) => item.trim().length > 0);
 }
@@ -37,7 +42,14 @@ export function appendProductOwnerClarification(
   answer: string,
   round: number,
 ) {
+  const normalizedRequest = request.trim();
   const normalizedAnswer = answer.trim();
+  if (!normalizedRequest) {
+    throw new Error("기존 Project Intake 요구사항을 찾지 못했습니다.");
+  }
+  if (!validRound(round, false)) {
+    throw new Error(`Project Intake 확인은 최대 ${MAX_INTAKE_CLARIFICATION_ROUNDS}회까지 재분석할 수 있습니다.`);
+  }
   if (!normalizedAnswer) {
     throw new Error("Project Intake 확인 답변을 입력해 주세요.");
   }
@@ -48,7 +60,7 @@ export function appendProductOwnerClarification(
     : "No outstanding intake questions were recorded.";
 
   return [
-    request.trim(),
+    normalizedRequest,
     "",
     `[Product Owner clarification round ${round} for Luna Project Intake ${intake.id}]`,
     "Questions raised by the organization intake:",
@@ -68,9 +80,12 @@ export function loadPendingIntakeClarification(): PendingIntakeClarification | n
     const parsed = JSON.parse(raw) as PendingIntakeClarification;
     if (!parsed
       || typeof parsed.request !== "string"
-      || typeof parsed.round !== "number"
+      || !parsed.request.trim()
+      || !validRound(parsed.round, true)
       || !parsed.intake
-      || !Array.isArray(parsed.intake.missingInputs)) {
+      || typeof parsed.intake.id !== "string"
+      || !Array.isArray(parsed.intake.missingInputs)
+      || typeof parsed.updatedAt !== "string") {
       return null;
     }
     return parsed;
@@ -82,9 +97,20 @@ export function loadPendingIntakeClarification(): PendingIntakeClarification | n
 export function savePendingIntakeClarification(
   pending: PendingIntakeClarification,
 ) {
+  const request = pending.request.trim();
+  if (!request) {
+    throw new Error("저장할 Project Intake 요구사항이 비어 있습니다.");
+  }
+  if (!validRound(pending.round, true)) {
+    throw new Error("Project Intake 확인 상태의 round가 허용 범위를 벗어났습니다.");
+  }
+  if (!intakeNeedsClarification(pending.intake)) {
+    throw new Error("확인이 끝난 Project Intake는 pending 상태로 저장하지 않습니다.");
+  }
+
   const next: PendingIntakeClarification = {
     ...pending,
-    request: pending.request.trim(),
+    request,
     updatedAt: new Date().toISOString(),
   };
   if (canUseStorage()) {
