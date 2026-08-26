@@ -5,6 +5,7 @@ export type LunaPage =
   | "activity"
   | "tools"
   | "project-teams"
+  | "market-discovery"
   | "inventory"
   | "shop"
   | "settings";
