@@ -7,6 +7,7 @@ mod orchestration_history;
 mod project_runtime;
 mod replan_runtime;
 mod retrospective_runtime;
+mod worktree_lifecycle;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -25,7 +26,8 @@ pub fn run() {
             integration_runtime::merge_project_pull_requests,
             retrospective_runtime::run_project_retrospectives,
             orchestration_history::persist_orchestration_snapshot,
-            orchestration_history::load_orchestration_snapshot
+            orchestration_history::load_orchestration_snapshot,
+            worktree_lifecycle::cleanup_project_worktrees
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

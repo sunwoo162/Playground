@@ -1,6 +1,7 @@
 import { evaluateProjectMergeGate } from "./mergeGate";
 import { mergeProjectPullRequests } from "./runtime";
 import type { ProjectState } from "./types";
+import { cleanupProjectWorktrees, summarizeWorktreeCleanup } from "./worktreeLifecycle";
 
 export type IntegrateProjectResult =
   | {
@@ -13,6 +14,10 @@ export type IntegrateProjectResult =
       reasons: string[];
       message: string;
     };
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
 
 export async function integrateProjectPullRequests(
   project: ProjectState,
@@ -40,9 +45,17 @@ export async function integrateProjectPullRequests(
   });
   const mergedPullRequestNumbers = result.mergedPullRequests.map((pullRequest) => pullRequest.number);
 
+  let cleanupMessage = "worktree lifecycle 미실행";
+  try {
+    const cleanup = await cleanupProjectWorktrees(project);
+    cleanupMessage = summarizeWorktreeCleanup(cleanup);
+  } catch (error) {
+    cleanupMessage = `worktree 정리 경고: ${errorMessage(error)}`;
+  }
+
   return {
     ok: true,
     mergedPullRequestNumbers,
-    message: `develop 통합 완료 · ${mergedPullRequestNumbers.map((number) => `#${number}`).join(", ")}`,
+    message: `develop 통합 완료 · ${mergedPullRequestNumbers.map((number) => `#${number}`).join(", ")} · ${cleanupMessage}`,
   };
 }
