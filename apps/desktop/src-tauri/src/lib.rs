@@ -1,7 +1,7 @@
 pub mod agent_runtime;
 mod failure_router_runtime;
 mod intake_runtime;
-mod integration_runtime;
+pub mod integration_runtime;
 mod market_discovery_runtime;
 mod power_runtime;
 pub mod project_runtime;
