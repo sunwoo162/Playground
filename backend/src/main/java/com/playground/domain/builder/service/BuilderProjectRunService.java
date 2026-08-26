@@ -125,7 +125,10 @@ public class BuilderProjectRunService {
                 .createdAt(run.getCreatedAt())
                 .updatedAt(run.getUpdatedAt())
                 .startedAt(run.getStartedAt())
+                .heartbeatAt(run.getHeartbeatAt())
+                .leaseExpiresAt(run.getLeaseExpiresAt())
                 .finishedAt(run.getFinishedAt())
+                .claimCount(run.getClaimCount())
                 .build();
     }
 }
