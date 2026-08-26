@@ -4,6 +4,8 @@ export type LunaPage =
   | "tasks"
   | "activity"
   | "tools"
+  | "character"
+  | "character-customize"
   | "project-teams"
   | "market-discovery"
   | "e2e-smoke"
@@ -16,33 +18,18 @@ type SidebarProps = {
   onChangePage: (page: LunaPage) => void;
 };
 
-const groups = [
-  {
-    title: "Daily",
-    items: [
-      { label: "Home", icon: "⌂", page: "home" as LunaPage },
-      { label: "Activity", icon: "◫", page: "activity" as LunaPage },
-    ],
-  },
-  {
-    title: "Playground",
-    items: [
-      { label: "Tools", icon: "⌘", page: "tools" as LunaPage },
-    ],
-  },
-  {
-    title: "Luna",
-    items: [
-      { label: "Inventory", icon: "◇", page: "inventory" as LunaPage },
-      { label: "Shop", icon: "✦", page: "shop" as LunaPage },
-    ],
-  },
+const primaryItems = [
+  { label: "캐릭터", icon: "◇", page: "character" as LunaPage },
+  { label: "에이전트", icon: "✦", page: "project-teams" as LunaPage },
 ];
 
 export function Sidebar({
   currentPage,
   onChangePage,
 }: SidebarProps) {
+  const activePage =
+    currentPage === "character-customize" ? "character" : currentPage;
+
   return (
     <aside className="sidebar">
       <div className="sidebar-brand">
@@ -50,45 +37,28 @@ export function Sidebar({
 
         <div>
           <strong>Luna</strong>
-          <span className="sidebar-brand-status">Awake</span>
+          <span className="sidebar-brand-status">Character + Agents</span>
         </div>
       </div>
 
       <div className="sidebar-groups">
-        {groups.map((group) => (
-          <div className="sidebar-group" key={group.title}>
-            <span className="sidebar-group-title">
-              {group.title}
-            </span>
+        <div className="sidebar-group">
+          <span className="sidebar-group-title">Luna</span>
 
-            {group.items.map((item) => (
-              <button
-                key={item.page}
-                className={`sidebar-item ${
-                  currentPage === item.page ? "active" : ""
-                }`}
-                onClick={() => onChangePage(item.page)}
-              >
-                <span className="sidebar-item-icon">
-                  {item.icon}
-                </span>
-
-                <span>{item.label}</span>
-              </button>
-            ))}
-          </div>
-        ))}
+          {primaryItems.map((item) => (
+            <button
+              key={item.page}
+              className={`sidebar-item ${
+                activePage === item.page ? "active" : ""
+              }`}
+              onClick={() => onChangePage(item.page)}
+            >
+              <span className="sidebar-item-icon">{item.icon}</span>
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </div>
       </div>
-
-      <button
-        className={`sidebar-item sidebar-settings ${
-          currentPage === "settings" ? "active" : ""
-        }`}
-        onClick={() => onChangePage("settings")}
-      >
-        <span className="sidebar-item-icon">⚙</span>
-        <span>Settings</span>
-      </button>
     </aside>
   );
 }
