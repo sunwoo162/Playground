@@ -24,10 +24,20 @@ The fixed product is **PulseNote**, a deliberately small full-stack notes applic
 
 The scope is narrow on purpose. The test is Luna's project organization, not the novelty of the sample app.
 
+Every run uses an isolated repository. Given Luna Project ID `PROJECT-ABC-123`, the PM must choose exactly:
+
+```text
+pulsenote-canary-project-abc-123
+```
+
+The Project ID makes the repository deterministic and unique per run. Reusing a prior `pulsenote` or prior Canary repository can leave stale branches, commits, PRs, documentation, or test artifacts and therefore does not qualify as a valid fresh E2E run. Luna validates the planned repository name before Agent execution continues.
+
 ## Actual flow
 
 ```text
 Live E2E Canary
+  ↓
+Runtime preflight
   ↓
 Organization Project Intake
   ↓
@@ -35,7 +45,7 @@ equal-team allocation
   ↓
 team PM Codex
   ↓
-BloomBouquet repository bootstrap
+fresh BloomBouquet repository bootstrap
   ↓
 Frontend + Backend Agent work
   ↓
@@ -67,11 +77,13 @@ The existing Project Teams runtime performs the work. The Canary does not use a 
 1. Open Luna → Tools → **Live E2E Canary**.
 2. Ensure Project Teams Runtime has a valid Workspace root.
 3. Press **실제 E2E Canary 시작**.
-4. Organization Intake runs and a real idle team is allocated.
-5. Luna moves to Project Teams with the Canary project selected.
-6. Press **PM Runtime 실행** for the newly queued project.
-7. The existing PM → Agent queue → integration → retrospective flow continues automatically until completion or an explicit blocker.
-8. Return to Tools → Live E2E Canary and press **E2E 상태 새로고침** to inspect the final report.
+4. Luna checks Git, GitHub CLI/authentication, ChatGPT Codex authentication, and BloomBouquet access. Any missing prerequisite blocks the run before Intake.
+5. Organization Intake runs and a real idle team is allocated.
+6. Luna moves to Project Teams with the Canary project selected.
+7. Press **PM Runtime 실행** for the newly queued project.
+8. PM must return the exact isolated Canary repository name and include real Frontend + Backend implementation work. Luna's normal marketing policy appends the Data & Marketing → Documentation → Code Review → Reviewer → QA governance chain.
+9. The existing PM → Agent queue → integration → retrospective flow continues automatically until completion or an explicit blocker.
+10. Return to Tools → Live E2E Canary and press **E2E 상태 새로고침** to inspect the final report.
 
 The second explicit PM click exists because a project arriving from another Luna tool is intentionally queued before repository mutation. It preserves the same boundary used by Market Discovery handoff rather than silently creating a repository from a navigation action.
 
@@ -92,7 +104,7 @@ The Canary has 12 evidence stages. **Every stage must be PASS**:
 11. Agent retrospective
 12. Team Evolution
 
-A Canary is PASS only when the stored project is `completed`, all required stages are evidence-backed, and no required-plan blocker remains.
+A Canary is PASS only when the stored project is `completed`, all required stages are evidence-backed, the repository name matches the Project-ID-derived isolated name, and no required-plan blocker remains.
 
 The report also records:
 
@@ -114,6 +126,7 @@ The following do **not** independently prove E2E success:
 - a PM plan without Agent execution
 - Agent text claiming that a test passed
 - local files without pushed branches/PR evidence
+- reuse of a previous Canary repository
 - PRs that never pass the review/QA integration gate
 - completed application code without Data & Marketing / Documentation governance
 - merged PRs without retrospective and Team Evolution completion
