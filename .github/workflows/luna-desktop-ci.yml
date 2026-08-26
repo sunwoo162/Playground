@@ -59,3 +59,18 @@ jobs:
       - name: Check Luna Tauri runtime
         working-directory: apps/desktop/src-tauri
         run: cargo check --locked
+
+  verify-windows-runtime:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Check Luna Windows Tauri runtime
+        working-directory: apps/desktop/src-tauri
+        run: cargo check --locked
