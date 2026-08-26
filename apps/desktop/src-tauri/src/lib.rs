@@ -7,6 +7,7 @@ mod power_runtime;
 mod project_runtime;
 mod replan_runtime;
 mod retrospective_runtime;
+mod state_runtime;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -24,7 +25,9 @@ pub fn run() {
             replan_runtime::replan_project_failure,
             integration_runtime::merge_project_pull_requests,
             retrospective_runtime::run_project_retrospectives,
-            power_runtime::set_runtime_keep_awake
+            power_runtime::set_runtime_keep_awake,
+            state_runtime::load_project_teams_state_file,
+            state_runtime::save_project_teams_state_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
