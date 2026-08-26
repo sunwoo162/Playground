@@ -1,6 +1,7 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 
 import './builder.css'
+import './builder-projects.css'
 
 type Platform = 'web' | 'mobile' | 'both'
 type FeatureKey = 'auth' | 'search' | 'notifications' | 'admin' | 'payments' | 'maps' | 'uploads'
@@ -14,13 +15,26 @@ type Template = {
   features: FeatureKey[]
 }
 
-type DraftProject = {
+type BuilderUser = {
   id: string
+  login: string
+  name?: string
+  avatar_url?: string
+}
+
+type BuilderProject = {
+  id: number
   title: string
   brief: string
   platform: Platform
   features: FeatureKey[]
+  status: string
+  authRequired: boolean
+  templateId?: string | null
+  repositoryFullName?: string | null
+  previewUrl?: string | null
   createdAt: string
+  updatedAt: string
 }
 
 const templates: Template[] = [
@@ -101,10 +115,21 @@ const platformLabel: Record<Platform, string> = {
   both: 'Web + Mobile',
 }
 
-function createProjectTitle(brief: string) {
-  const normalized = brief.replace(/\s+/g, ' ').trim()
-  if (!normalized) return '새 프로젝트'
-  return normalized.length > 28 ? `${normalized.slice(0, 28)}…` : normalized
+function formatDate(value: string) {
+  if (!value) return '-'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString('ko-KR', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+async function readError(response: Response) {
+  const text = await response.text()
+  return text || `요청에 실패했습니다. (${response.status})`
 }
 
 export default function BuilderApp() {
@@ -112,12 +137,53 @@ export default function BuilderApp() {
   const [platform, setPlatform] = useState<Platform>('web')
   const [features, setFeatures] = useState<FeatureKey[]>(['auth'])
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null)
-  const [project, setProject] = useState<DraftProject | null>(null)
+  const [project, setProject] = useState<BuilderProject | null>(null)
+  const [projects, setProjects] = useState<BuilderProject[]>([])
+  const [user, setUser] = useState<BuilderUser | null>(null)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [projectsLoading, setProjectsLoading] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitStatus, setSubmitStatus] = useState('')
 
   const selectedFeatureDetails = useMemo(
-    () => featureOptions.filter((feature) => features.includes(feature.key)),
-    [features],
+    () => featureOptions.filter((feature) => (project?.features ?? features).includes(feature.key)),
+    [features, project],
   )
+
+  const loadProjects = async () => {
+    setProjectsLoading(true)
+    try {
+      const response = await fetch('/api/builder/projects', { credentials: 'include' })
+      if (response.status === 401) {
+        setUser(null)
+        setProjects([])
+        return
+      }
+      if (!response.ok) throw new Error(await readError(response))
+      const data = await response.json()
+      setProjects(Array.isArray(data) ? data : [])
+    } catch (error) {
+      setSubmitStatus(error instanceof Error ? error.message : '프로젝트 목록을 불러오지 못했습니다.')
+    } finally {
+      setProjectsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetch('/auth/me', { credentials: 'include' })
+      .then((response) => response.json())
+      .then((data) => {
+        const currentUser = data?.user ?? null
+        setUser(currentUser)
+        if (currentUser) void loadProjects()
+      })
+      .catch(() => setUser(null))
+      .finally(() => setAuthLoading(false))
+  }, [])
+
+  const handleLogin = () => {
+    window.location.href = `/auth/github?returnTo=${encodeURIComponent(window.location.pathname)}`
+  }
 
   const toggleFeature = (key: FeatureKey) => {
     setFeatures((current) => (
@@ -133,21 +199,49 @@ export default function BuilderApp() {
     setPlatform(template.platform)
     setFeatures(template.features)
     setProject(null)
+    setSubmitStatus('')
   }
 
-  const submitProject = (event: FormEvent) => {
+  const submitProject = async (event: FormEvent) => {
     event.preventDefault()
     const normalized = brief.trim()
-    if (!normalized) return
+    if (!normalized || submitting) return
 
-    setProject({
-      id: `draft-${Date.now()}`,
-      title: createProjectTitle(normalized),
-      brief: normalized,
-      platform,
-      features,
-      createdAt: new Date().toLocaleString('ko-KR'),
-    })
+    if (!user) {
+      handleLogin()
+      return
+    }
+
+    setSubmitting(true)
+    setSubmitStatus('')
+    try {
+      const response = await fetch('/api/builder/projects', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brief: normalized,
+          platform,
+          features,
+          templateId: selectedTemplate,
+        }),
+      })
+
+      if (response.status === 401) {
+        handleLogin()
+        return
+      }
+      if (!response.ok) throw new Error(await readError(response))
+
+      const created: BuilderProject = await response.json()
+      setProject(created)
+      setProjects((current) => [created, ...current.filter((item) => item.id !== created.id)])
+      setSubmitStatus('프로젝트가 서버에 저장되었습니다.')
+    } catch (error) {
+      setSubmitStatus(error instanceof Error ? error.message : '프로젝트를 만들지 못했습니다.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -167,8 +261,13 @@ export default function BuilderApp() {
           <button type="button">Agent</button>
         </nav>
 
-        <button className="builder-account" type="button" title="꽃다발 플랫폼 인증 연결 예정">
-          로그인
+        <button
+          className="builder-account"
+          type="button"
+          onClick={user ? undefined : handleLogin}
+          title={user ? '플랫폼 꽃다발 인증 전환 예정' : '현재 GitHub 로그인 사용 · 꽃다발 전환 예정'}
+        >
+          {authLoading ? '확인 중' : user ? user.login : '로그인'}
         </button>
       </header>
 
@@ -185,8 +284,8 @@ export default function BuilderApp() {
 
           <div className="builder-runtime-note">
             <span>현재 피벗 단계</span>
-            <strong>Web control plane 구축 중</strong>
-            <p>기존 Tauri Agent Runtime은 삭제하지 않고 worker/runtime으로 이관합니다.</p>
+            <strong>프로젝트 저장 API 연결</strong>
+            <p>프로젝트는 실제 사용자 계정과 DB에 저장됩니다. Agent worker 실행은 다음 단계에서 연결합니다.</p>
           </div>
         </section>
 
@@ -204,10 +303,12 @@ export default function BuilderApp() {
               <textarea
                 className="builder-brief"
                 value={brief}
+                maxLength={4000}
                 onChange={(event) => {
                   setBrief(event.target.value)
                   setSelectedTemplate(null)
                   setProject(null)
+                  setSubmitStatus('')
                 }}
                 placeholder="예: 수험생이 수험표 혜택을 지도에서 찾고 저장할 수 있는 서비스를 만들어줘."
                 rows={7}
@@ -227,6 +328,7 @@ export default function BuilderApp() {
                       onClick={() => {
                         setPlatform(value)
                         setProject(null)
+                        setSubmitStatus('')
                       }}
                     >
                       {platformLabel[value]}
@@ -251,6 +353,7 @@ export default function BuilderApp() {
                         onClick={() => {
                           toggleFeature(feature.key)
                           setProject(null)
+                          setSubmitStatus('')
                         }}
                         aria-pressed={selected}
                       >
@@ -277,8 +380,14 @@ export default function BuilderApp() {
                 </div>
               )}
 
-              <button className="builder-primary" type="submit" disabled={!brief.trim()}>
-                프로젝트 만들기
+              {submitStatus && (
+                <p className={`builder-submit-status ${project ? 'is-success' : ''}`} role="status">
+                  {submitStatus}
+                </p>
+              )}
+
+              <button className="builder-primary" type="submit" disabled={!brief.trim() || submitting || authLoading}>
+                {submitting ? '저장 중…' : user ? '프로젝트 만들기' : '로그인하고 프로젝트 만들기'}
               </button>
             </form>
 
@@ -286,10 +395,10 @@ export default function BuilderApp() {
               <section className="builder-draft" aria-live="polite">
                 <div className="builder-draft-top">
                   <div>
-                    <span>PROJECT DRAFT</span>
+                    <span>PROJECT #{project.id}</span>
                     <h3>{project.title}</h3>
                   </div>
-                  <span className="builder-draft-status">Intake 준비</span>
+                  <span className="builder-draft-status">{project.status}</span>
                 </div>
 
                 <p>{project.brief}</p>
@@ -305,18 +414,48 @@ export default function BuilderApp() {
                   </div>
                   <div>
                     <dt>Created</dt>
-                    <dd>{project.createdAt}</dd>
+                    <dd>{formatDate(project.createdAt)}</dd>
                   </div>
                 </dl>
 
                 <div className="builder-draft-message">
-                  지금 단계에서는 웹 control plane의 프로젝트 입력 계약만 연결되어 있습니다. 다음 migration 단계에서 이 draft를 실제 Project Intake / Agent Orchestrator API에 연결합니다.
+                  이 프로젝트는 실제 서버 DB에 `draft`로 저장되었습니다. 아직 Project Intake / Agent worker가 연결되지 않았으므로 실행 중이라고 표시하지 않습니다.
                 </div>
               </section>
             )}
           </section>
 
           <aside className="builder-side-panel">
+            {user && (
+              <section className="builder-projects-card">
+                <div className="builder-section-heading compact">
+                  <div>
+                    <span>PROJECTS</span>
+                    <h2>내 프로젝트</h2>
+                  </div>
+                  <button className="builder-refresh" type="button" onClick={() => void loadProjects()} disabled={projectsLoading}>
+                    {projectsLoading ? '불러오는 중' : '새로고침'}
+                  </button>
+                </div>
+
+                {projects.length === 0 ? (
+                  <p className="builder-project-empty">아직 저장된 프로젝트가 없습니다.</p>
+                ) : (
+                  <div className="builder-project-list">
+                    {projects.slice(0, 5).map((item) => (
+                      <button key={item.id} type="button" onClick={() => setProject(item)}>
+                        <span>
+                          <strong>{item.title}</strong>
+                          <small>{platformLabel[item.platform]} · {formatDate(item.createdAt)}</small>
+                        </span>
+                        <span className="builder-project-status">{item.status}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
+
             <section className="builder-templates">
               <div className="builder-section-heading compact">
                 <div>
