@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 
+import { ensureBouquetAuthPlan } from "./bouquetAuth";
 import { ensureMarketingDocumentationPlan } from "./dataMarketing";
 import { getProjectEvolutionInstructions } from "./evolutionExperiments";
 import { validateProjectPlanReviewTopology } from "./planTopology";
@@ -223,6 +224,7 @@ export type MergeProjectPullRequestsResult = {
 function withSeniorPmStandard(input: StartProjectRuntimeInput): StartProjectRuntimeInput {
   const internalContext = [
     seniorAgentContext("pm"),
+    "If the product needs login or sign-up, set needsAuth=true. Luna will enforce the shared 꽃다발 server/client authentication contract after your plan, so keep provider-specific choices behind adapters and do not invent a separate auth state model.",
     "Luna will append a mandatory Data & Marketing → Documentation → Code Review → Reviewer → QA chain after your plan. Plan the product normally and do not fabricate market metrics or user research to compensate for missing evidence.",
   ].join("\n\n");
 
@@ -279,7 +281,8 @@ export async function startProjectRuntime(input: StartProjectRuntimeInput) {
     "start_project_runtime",
     preparedInput,
   );
-  const plan = ensureMarketingDocumentationPlan(result.pm.plan);
+  const authPlan = ensureBouquetAuthPlan(result.pm.plan);
+  const plan = ensureMarketingDocumentationPlan(authPlan);
   validateProjectPlanReviewTopology(plan);
   return {
     ...result,
