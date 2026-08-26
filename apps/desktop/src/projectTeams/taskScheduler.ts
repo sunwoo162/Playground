@@ -2,6 +2,7 @@ import { getProjectEvolutionInstructions } from "./evolutionExperiments";
 import { failureRecoveryContext } from "./failureRouting";
 import type { OrganizationRuntimeSettings } from "./organization";
 import type { AgentTaskRuntimeInput, DependencyArtifact } from "./runtime";
+import { seniorAgentContext } from "./seniorAgent";
 import type { ProjectTaskRun, ProjectTeamsState } from "./types";
 
 function dependencySummary(
@@ -86,6 +87,7 @@ export function buildAgentTaskRuntimeInput(
   });
 
   const summary = [
+    seniorAgentContext(task.role),
     task.summary,
     failureRecoveryContext(project, task.id),
     evolutionContext(state, project, run),
