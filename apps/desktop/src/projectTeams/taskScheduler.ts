@@ -1,3 +1,4 @@
+import { getProjectEvolutionInstructions } from "./evolutionExperiments";
 import { failureRecoveryContext } from "./failureRouting";
 import type { OrganizationRuntimeSettings } from "./organization";
 import type { AgentTaskRuntimeInput, DependencyArtifact } from "./runtime";
@@ -15,6 +16,34 @@ function dependencySummary(
   return `${base} | upstream reviewed PRs: ${run.reviewedPullRequests
     .map((number) => `#${number}`)
     .join(", ")}`;
+}
+
+function evolutionContext(
+  state: ProjectTeamsState,
+  project: ProjectTeamsState["projects"][number],
+  run: ProjectTaskRun,
+) {
+  const experiment = getProjectEvolutionInstructions(state, project, run.agentId);
+  if (!experiment) return null;
+
+  const playbook = experiment.playbookChanges.length > 0
+    ? experiment.playbookChanges.map((change) => `- ${change}`).join("\n")
+    : "- 이번 실험에서 별도 Team playbook 변경 없음";
+  const agent = experiment.agentInstructions.length > 0
+    ? experiment.agentInstructions.map((change) => `- ${change}`).join("\n")
+    : "- 이 Agent 전용 변경 없음. Team playbook 실험만 독립적으로 적용";
+
+  return [
+    `TEAM EVOLUTION EXPERIMENT ${experiment.experimentId}`,
+    `Candidate team playbook version: ${experiment.playbookVersion}`,
+    `Candidate Agent version: ${experiment.agentVersion ?? "unchanged"}`,
+    "이 변경은 이전 프로젝트 회고에서 나온 가설이며 권위가 아닙니다. 실제 repository/테스트/요구사항과 충돌하면 근거를 남기고 안전한 쪽을 우선하세요.",
+    "Experimental team playbook changes:",
+    playbook,
+    "Experimental agent-specific objective:",
+    agent,
+    "최종 결과에는 실험 지침이 도움이 됐는지 또는 방해가 됐는지 관찰 가능한 evidence를 남기세요.",
+  ].join("\n");
 }
 
 export function buildAgentTaskRuntimeInput(
@@ -56,10 +85,11 @@ export function buildAgentTaskRuntimeInput(
     };
   });
 
-  const recoveryContext = failureRecoveryContext(project, task.id);
-  const summary = recoveryContext
-    ? `${task.summary}\n\n${recoveryContext}`
-    : task.summary;
+  const summary = [
+    task.summary,
+    failureRecoveryContext(project, task.id),
+    evolutionContext(state, project, run),
+  ].filter((value): value is string => Boolean(value?.trim())).join("\n\n");
 
   return {
     organization: runtimeSettings.organization,

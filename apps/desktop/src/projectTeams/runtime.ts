@@ -1,6 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 
+import { getProjectEvolutionInstructions } from "./evolutionExperiments";
 import { validateProjectPlanReviewTopology } from "./planTopology";
+import { loadProjectTeamsState } from "./store";
 import type {
   AgentTaskVerification,
   FailureRouteDecision,
@@ -216,6 +218,39 @@ export type MergeProjectPullRequestsResult = {
   mergedPullRequests: MergedPullRequest[];
 };
 
+function withPmEvolutionExperiment(input: StartProjectRuntimeInput): StartProjectRuntimeInput {
+  const state = loadProjectTeamsState();
+  const project = state.projects.find((item) => item.id === input.projectId);
+  const team = state.teams.find((item) => item.id === input.teamId);
+  const pm = team?.agents.find((agent) => agent.role === "pm");
+  if (!project || !pm) return input;
+
+  const experiment = getProjectEvolutionInstructions(state, project, pm.id);
+  if (!experiment) return input;
+
+  const playbook = experiment.playbookChanges.length > 0
+    ? experiment.playbookChanges.map((change) => `- ${change}`).join("\n")
+    : "- 이번 실험에서 별도 Team playbook 변경 없음";
+  const agent = experiment.agentInstructions.length > 0
+    ? experiment.agentInstructions.map((change) => `- ${change}`).join("\n")
+    : "- PM 전용 변경 없음. Team playbook 실험만 적용";
+  const internalContext = [
+    `[Luna internal Team Evolution experiment ${experiment.experimentId}]`,
+    `Candidate team playbook version: ${experiment.playbookVersion}`,
+    "These are experimental process hypotheses, not Product Owner requirements. Preserve the original product request and independently reject any experiment instruction that conflicts with repository evidence, tests, safety, or explicit user direction.",
+    "Experimental team playbook changes:",
+    playbook,
+    "Experimental PM objective:",
+    agent,
+    "When planning, keep the experiment auditable in task rationale/evidence instead of silently treating it as a permanent rule.",
+  ].join("\n");
+
+  return {
+    ...input,
+    request: `${input.request}\n\n${internalContext}`,
+  };
+}
+
 export async function checkProjectRuntime(organization: string) {
   return invoke<ProjectRuntimePreflight>("project_runtime_preflight", { organization });
 }
@@ -225,7 +260,10 @@ export async function bootstrapProjectRepository(input: BootstrapProjectReposito
 }
 
 export async function startProjectRuntime(input: StartProjectRuntimeInput) {
-  const result = await invoke<StartProjectRuntimeResult>("start_project_runtime", input);
+  const result = await invoke<StartProjectRuntimeResult>(
+    "start_project_runtime",
+    withPmEvolutionExperiment(input),
+  );
   validateProjectPlanReviewTopology(result.pm.plan);
   return result;
 }
