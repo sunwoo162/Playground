@@ -1,4 +1,4 @@
-import { REPOSITORY_WRITER_ROLES, taskTransitivelyDependsOn } from "./planTopology";
+import { taskTransitivelyDependsOn } from "./planTopology";
 import { routeAgentFailure } from "./runtime";
 import type { FailureRouteRecord, ProjectState, ProjectTeamsState } from "./types";
 
@@ -28,7 +28,6 @@ function candidateOwners(project: ProjectState, failedTaskId: string) {
   const candidates = project.plan.tasks.filter((task) => {
     if (task.id === failedTaskId) return true;
     if (task.role === "debug-router") return false;
-    if (!REPOSITORY_WRITER_ROLES.includes(task.role)) return false;
     return taskTransitivelyDependsOn(project.plan!, failedTaskId, task.id);
   });
 
