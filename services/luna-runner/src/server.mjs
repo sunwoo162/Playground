@@ -2,13 +2,19 @@ import { createServer } from "node:http";
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 
 const host = process.env.LUNA_RUNNER_HOST?.trim() || "127.0.0.1";
 const port = Number(process.env.LUNA_RUNNER_PORT || "4781");
 const token = process.env.LUNA_RUNNER_TOKEN?.trim() || "";
 const dataDir = resolve(process.env.LUNA_RUNNER_DATA_DIR?.trim() || ".luna-runner");
 const workerExecutable = process.env.LUNA_RUNNER_WORKER?.trim() || "";
+const allowedOrigins = new Set(
+  (process.env.LUNA_RUNNER_ALLOWED_ORIGINS || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean),
+);
 const jobsFile = join(dataDir, "jobs.json");
 const jobDir = join(dataDir, "jobs");
 const maxBodyBytes = 1024 * 1024;
@@ -18,6 +24,9 @@ if (!token) {
 }
 if (!Number.isInteger(port) || port < 1 || port > 65535) {
   throw new Error("LUNA_RUNNER_PORT must be a valid TCP port.");
+}
+if (workerExecutable && !isAbsolute(workerExecutable)) {
+  throw new Error("LUNA_RUNNER_WORKER must be an absolute executable path.");
 }
 
 const state = {
@@ -45,12 +54,25 @@ function authorized(request) {
   return digest.length === expectedTokenDigest.length && timingSafeEqual(digest, expectedTokenDigest);
 }
 
-function json(response, statusCode, body) {
+function corsHeaders(request) {
+  const origin = request.headers.origin;
+  if (!origin || !allowedOrigins.has(origin)) return {};
+  return {
+    "access-control-allow-origin": origin,
+    "access-control-allow-methods": "GET,POST,OPTIONS",
+    "access-control-allow-headers": "authorization,content-type",
+    "access-control-max-age": "600",
+    vary: "Origin",
+  };
+}
+
+function json(request, response, statusCode, body) {
   const payload = JSON.stringify(body);
   response.writeHead(statusCode, {
     "content-type": "application/json; charset=utf-8",
     "content-length": Buffer.byteLength(payload),
     "cache-control": "no-store",
+    ...corsHeaders(request),
   });
   response.end(payload);
 }
@@ -273,9 +295,21 @@ function routePath(request) {
 const server = createServer(async (request, response) => {
   try {
     const path = routePath(request);
+    const requestOrigin = request.headers.origin;
+
+    if (request.method === "OPTIONS") {
+      if (requestOrigin && allowedOrigins.has(requestOrigin)) {
+        response.writeHead(204, corsHeaders(request));
+        response.end();
+        return;
+      }
+      response.writeHead(403, { "cache-control": "no-store" });
+      response.end();
+      return;
+    }
 
     if (path === "/health" && request.method === "GET") {
-      return json(response, 200, {
+      return json(request, response, 200, {
         ok: true,
         service: "luna-runner",
         protocolVersion: 1,
@@ -286,17 +320,17 @@ const server = createServer(async (request, response) => {
     }
 
     if (!authorized(request)) {
-      return json(response, 401, { error: "unauthorized" });
+      return json(request, response, 401, { error: "unauthorized" });
     }
 
     if (path === "/v1/jobs" && request.method === "POST") {
       const body = await readJsonBody(request);
       const { job, created } = await createJob(body);
-      return json(response, created ? 202 : 200, publicJob(job));
+      return json(request, response, created ? 202 : 200, publicJob(job));
     }
 
     if (path === "/v1/jobs" && request.method === "GET") {
-      return json(response, 200, {
+      return json(request, response, 200, {
         jobs: state.jobs.map(publicJob),
       });
     }
@@ -304,34 +338,34 @@ const server = createServer(async (request, response) => {
     const match = path.match(/^\/v1\/jobs\/([0-9a-f-]+)$/i);
     if (match && request.method === "GET") {
       const job = state.jobs.find((item) => item.id === match[1]);
-      if (!job) return json(response, 404, { error: "job_not_found" });
-      return json(response, 200, publicJob(job));
+      if (!job) return json(request, response, 404, { error: "job_not_found" });
+      return json(request, response, 200, publicJob(job));
     }
 
     const cancelMatch = path.match(/^\/v1\/jobs\/([0-9a-f-]+)\/cancel$/i);
     if (cancelMatch && request.method === "POST") {
       const job = state.jobs.find((item) => item.id === cancelMatch[1]);
-      if (!job) return json(response, 404, { error: "job_not_found" });
+      if (!job) return json(request, response, 404, { error: "job_not_found" });
       if (job.status === "running") {
-        return json(response, 409, {
+        return json(request, response, 409, {
           error: "job_running",
           message: "Running jobs are not force-killed. Worker-level cooperative cancellation is required.",
         });
       }
       if (job.status !== "queued") {
-        return json(response, 409, { error: "job_not_queued" });
+        return json(request, response, 409, { error: "job_not_queued" });
       }
       job.status = "cancelled";
       job.updatedAt = now();
       job.completedAt = job.updatedAt;
       await persistJobs();
-      return json(response, 200, publicJob(job));
+      return json(request, response, 200, publicJob(job));
     }
 
-    return json(response, 404, { error: "not_found" });
+    return json(request, response, 404, { error: "not_found" });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return json(response, 400, { error: "bad_request", message });
+    return json(request, response, 400, { error: "bad_request", message });
   }
 });
 
@@ -340,5 +374,6 @@ server.listen(port, host, () => {
   console.log(`Luna Runner listening on http://${host}:${port}`);
   console.log(`Data directory: ${dataDir}`);
   console.log(`Worker configured: ${workerExecutable ? "yes" : "no"}`);
+  console.log(`Allowed browser origins: ${allowedOrigins.size || "none"}`);
   void processQueue();
 });
