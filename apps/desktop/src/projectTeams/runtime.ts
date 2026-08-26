@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 
+import { validateProjectPlanReviewTopology } from "./planTopology";
 import type {
   AgentTaskVerification,
   ProjectPlan,
@@ -139,7 +140,9 @@ export async function bootstrapProjectRepository(input: BootstrapProjectReposito
 }
 
 export async function startProjectRuntime(input: StartProjectRuntimeInput) {
-  return invoke<StartProjectRuntimeResult>("start_project_runtime", input);
+  const result = await invoke<StartProjectRuntimeResult>("start_project_runtime", input);
+  validateProjectPlanReviewTopology(result.pm.plan);
+  return result;
 }
 
 export async function dispatchAgentTask(input: AgentTaskRuntimeInput) {
