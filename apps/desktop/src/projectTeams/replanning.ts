@@ -1,6 +1,8 @@
 import { validateProjectPlanReviewTopology } from "./planTopology";
+import { getProductOwnerDecision } from "./productOwnerDecision";
 import { replanProjectFailure } from "./runtime";
 import type {
+  AgentDecision,
   FailureRouteRecord,
   ProjectPlan,
   ProjectState,
@@ -10,10 +12,30 @@ import type {
 const MAX_REPLAN_ATTEMPTS = 3;
 const MAX_AGENT_ATTEMPTS = 3;
 
-function latestPmEscalation(project: ProjectState) {
-  return (project.failureRoutes ?? []).find(
-    (route) => route.route === "escalate-pm",
-  ) ?? null;
+export type PmRecoveryTrigger = {
+  route: FailureRouteRecord;
+  productOwnerDecision: AgentDecision | null;
+};
+
+export function getPmRecoveryTrigger(
+  state: ProjectTeamsState,
+  project: ProjectState,
+): PmRecoveryTrigger | null {
+  const route = project.failureRoutes?.[0] ?? null;
+  if (!route) return null;
+
+  if (route.route === "escalate-pm") {
+    return { route, productOwnerDecision: null };
+  }
+
+  if (route.route === "needs-human") {
+    const decision = getProductOwnerDecision(state, project.id, route.id);
+    if (decision) {
+      return { route, productOwnerDecision: decision };
+    }
+  }
+
+  return null;
 }
 
 function replanAttempt(project: ProjectState, route: FailureRouteRecord) {
@@ -66,11 +88,12 @@ export async function runProjectFailureReplan(
     throw new Error("PM 복구 재계획에 필요한 Project 계획/repository/workspace가 없습니다.");
   }
 
-  const route = latestPmEscalation(project);
-  if (!route) {
-    throw new Error("PM 복구 재계획을 요청한 Debug Router escalation이 없습니다.");
+  const trigger = getPmRecoveryTrigger(state, project);
+  if (!trigger) {
+    throw new Error("PM 복구 재계획 trigger가 없거나 Product Owner 결정이 아직 기록되지 않았습니다.");
   }
 
+  const { route, productOwnerDecision } = trigger;
   const attempt = replanAttempt(project, route);
   if (attempt > MAX_REPLAN_ATTEMPTS) {
     throw new Error(`PM 복구 재계획 한도(${MAX_REPLAN_ATTEMPTS})에 도달했습니다.`);
@@ -110,6 +133,11 @@ export async function runProjectFailureReplan(
     })
     .map((task) => task.id);
 
+  const productOwnerEvidence = productOwnerDecision
+    ? [
+        `Product Owner decision ${productOwnerDecision.id}: ${productOwnerDecision.rationaleSummary}`,
+      ]
+    : [];
   const runtime = await replanProjectFailure({
     projectId: project.id,
     teamId: project.teamId,
@@ -126,9 +154,13 @@ export async function runProjectFailureReplan(
       failureType: route.failureType,
       severity: route.severity,
       summary: route.summary,
-      rationaleSummary: route.rationaleSummary,
-      evidence: route.evidence,
-      recommendedAction: route.recommendedAction,
+      rationaleSummary: productOwnerDecision
+        ? `${route.rationaleSummary} Product Owner가 명시적으로 결정했습니다: ${productOwnerDecision.rationaleSummary}`
+        : route.rationaleSummary,
+      evidence: [...route.evidence, ...productOwnerEvidence],
+      recommendedAction: productOwnerDecision
+        ? `Product Owner 결정에 맞춰 복구 계획을 작성하세요: ${productOwnerDecision.rationaleSummary}. 기존 Router 요청: ${route.recommendedAction}`
+        : route.recommendedAction,
     },
     currentTasks,
     retirableTaskIds,
