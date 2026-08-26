@@ -1,6 +1,7 @@
 mod agent_runtime;
 mod integration_runtime;
 mod project_runtime;
+mod retrospective_runtime;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -12,7 +13,8 @@ pub fn run() {
             project_runtime::bootstrap_project_repository,
             project_runtime::start_project_runtime,
             agent_runtime::dispatch_agent_task,
-            integration_runtime::merge_project_pull_requests
+            integration_runtime::merge_project_pull_requests,
+            retrospective_runtime::run_project_retrospectives
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
