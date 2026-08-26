@@ -28,7 +28,7 @@ const project = {
       acceptanceCriteria: ["build passes"],
     }],
   },
-} as ProjectState;
+} as unknown as ProjectState;
 
 const eligible = classifyInterruptedTaskRecovery(project, run);
 assert(eligible.action === "reconcile", "running task with complete metadata should reconcile");
