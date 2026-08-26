@@ -38,6 +38,7 @@ export type RemoteWorkerResult = {
   workspacePath: string;
   blockedTaskId: string | null;
   taskResults: AgentTaskRunResult[];
+  mergedPullRequestNumbers: number[];
 };
 
 export type RemoteRunnerJob = {
