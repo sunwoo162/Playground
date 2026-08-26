@@ -6,7 +6,7 @@ mod market_discovery_runtime;
 mod power_runtime;
 pub mod project_runtime;
 mod reconciliation_runtime;
-mod replan_runtime;
+pub mod replan_runtime;
 mod retrospective_runtime;
 mod state_runtime;
 
