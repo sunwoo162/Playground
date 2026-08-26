@@ -238,6 +238,14 @@ export type TeamState = {
   agents: AgentState[];
 };
 
+export type TeamAllocationRecord = {
+  strategy: "least-assigned-oldest-idle";
+  assignmentCountBefore: number;
+  completedProjectsBefore: number;
+  lastAssignedAt: string | null;
+  reason: string;
+};
+
 export type AgentDecision = {
   id: string;
   projectId: string;
@@ -257,6 +265,7 @@ export type ProjectState = {
   status: ProjectStatus;
   createdAt: string;
   completedAt?: string | null;
+  teamAllocation?: TeamAllocationRecord | null;
   authPolicyId: "bouquet";
   executionPolicyId: "iseol-workflow";
   autonomyPolicyId: "independent-agent";
