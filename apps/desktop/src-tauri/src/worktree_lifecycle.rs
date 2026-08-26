@@ -204,6 +204,22 @@ fn validate_merged_writer_pr(
     Ok(())
 }
 
+fn registered_worktree_contains(workspace: &Path, target: &Path) -> Result<bool, String> {
+    let registered = run_checked("git", &git_args(workspace, &["worktree", "list", "--porcelain"]))?;
+    let text = String::from_utf8_lossy(&registered.stdout);
+    for line in text.lines() {
+        let Some(path) = line.strip_prefix("worktree ") else {
+            continue;
+        };
+        if let Ok(canonical) = fs::canonicalize(path) {
+            if canonical == target {
+                return Ok(true);
+            }
+        }
+    }
+    Ok(false)
+}
+
 fn validate_existing_worktree(
     workspace: &Path,
     expected_root: &Path,
@@ -260,10 +276,7 @@ fn validate_existing_worktree(
         ));
     }
 
-    let registered = run_checked("git", &git_args(workspace, &["worktree", "list", "--porcelain"]))?;
-    let registered_text = String::from_utf8_lossy(&registered.stdout);
-    let marker = format!("worktree {}", canonical.to_string_lossy());
-    if !registered_text.lines().any(|line| line == marker) {
+    if !registered_worktree_contains(workspace, &canonical)? {
         return Err("Git worktree registry에서 정리 대상 경로를 찾을 수 없습니다.".to_string());
     }
 
@@ -283,7 +296,7 @@ fn task_archive_record(
         "role": task.role,
         "phase": phase,
         "detail": detail,
-        "archivedAt": chrono_free_timestamp(),
+        "archivedAt": archive_timestamp(),
         "branchName": task.branch_name,
         "worktreePath": task.worktree_path,
         "commitSha": task.commit_sha,
@@ -297,8 +310,7 @@ fn task_archive_record(
     })
 }
 
-fn chrono_free_timestamp() -> String {
-    // Keep this module dependency-free; SystemTime is sufficient for an auditable UTC-ish epoch marker.
+fn archive_timestamp() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     match SystemTime::now().duration_since(UNIX_EPOCH) {
         Ok(duration) => format!("unix-ms:{}", duration.as_millis()),
@@ -313,7 +325,12 @@ fn cleanup_project_worktrees_blocking(
     validate_project_id(input.project_id.trim())?;
     validate_repository(input.repository_full_name.trim())?;
 
-    let workspace = fs::canonicalize(PathBuf::from(input.workspace_path.trim()))
+    let workspace_input = PathBuf::from(input.workspace_path.trim());
+    if !workspace_input.is_absolute() || has_unsafe_components(&workspace_input) {
+        return Err("Project workspace는 안전한 절대 경로여야 합니다.".to_string());
+    }
+    let lexical_root = expected_worktree_root(&workspace_input, input.project_id.trim())?;
+    let workspace = fs::canonicalize(&workspace_input)
         .map_err(|error| format!("Project workspace 확인 실패: {error}"))?;
     if !workspace.join(".git").exists() {
         return Err("Project workspace가 Git repository가 아닙니다.".to_string());
@@ -338,7 +355,10 @@ fn cleanup_project_worktrees_blocking(
         }
 
         let raw_path = PathBuf::from(task.worktree_path.trim());
-        if !raw_path.is_absolute() || has_unsafe_components(&raw_path) || !raw_path.starts_with(&expected_root) {
+        if !raw_path.is_absolute()
+            || has_unsafe_components(&raw_path)
+            || !raw_path.starts_with(&lexical_root)
+        {
             skipped.push(WorktreeCleanupSkip {
                 task_id: task.task_id.clone(),
                 reason: "기록된 worktree 경로가 Luna project root 밖이거나 안전하지 않습니다.".to_string(),
