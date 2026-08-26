@@ -20,6 +20,7 @@ export type AgentRole =
 
 export type AgentPermission =
   | "repository:read"
+  | "repository:create"
   | "repository:write"
   | "branch:create"
   | "worktree:create"

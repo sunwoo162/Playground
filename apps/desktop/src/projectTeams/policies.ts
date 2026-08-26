@@ -2,6 +2,7 @@ import type { AgentPermission } from "./types";
 
 export const AGENT_PERMISSIONS: AgentPermission[] = [
   "repository:read",
+  "repository:create",
   "repository:write",
   "branch:create",
   "worktree:create",
@@ -25,15 +26,31 @@ export const AGENT_PERMISSIONS: AgentPermission[] = [
 
 export const AGENT_AUTONOMY_POLICY = {
   id: "independent-agent" as const,
-  version: "1.0.0",
+  version: "1.1.0",
   summary: "각 Agent를 독립 실행 개체로 취급하고 프로젝트 범위 안에서 저장소와 협업 도구를 직접 사용하게 합니다.",
   rules: [
     "Agent마다 독립 세션, 역할 지시문, 프로젝트 메모리, 작업 기록, 회고, 버전을 유지합니다.",
     "저장소를 변경하는 Agent는 자신의 branch 또는 worktree를 사용합니다.",
     "PM이 Git 작업을 대신하지 않으며 작업한 Agent가 직접 commit, push, PR 생성과 업데이트를 수행합니다.",
+    "프로젝트에 새 저장소가 필요하면 PM이 범위를 결정하고 권한을 가진 Agent가 Organization 안에서 직접 생성할 수 있습니다.",
     "Code Review, Reviewer, QA 역시 독립 세션에서 PR과 실제 결과물을 검증하고 차단할 수 있습니다.",
     "PR merge와 배포 권한은 제공하되 repository protection과 Reviewer/QA 품질 게이트를 우회할 수 없습니다.",
     "실제 인증 자격 증명은 Luna Runtime이 보관하고 모든 행동에는 논리적 Agent ID를 감사 로그로 남깁니다.",
+  ],
+};
+
+export const REPOSITORY_POLICY = {
+  id: "bloombouquet-git-flow" as const,
+  version: "1.0.0",
+  organization: "BloomBouquet",
+  summary: "새 프로젝트는 BloomBouquet Organization을 기본 GitHub 작업 공간으로 사용합니다.",
+  rules: [
+    "기본 전략은 프로젝트 하나당 하나의 monorepo이며 PM이 실제 요구에 따라 multi-repo가 필요하다고 판단할 때만 분리합니다.",
+    "release branch는 main, 통합 branch는 develop을 사용합니다.",
+    "Agent 작업 branch는 agent/<team>/<role>/<task> 형식을 사용합니다.",
+    "각 Agent는 최신 develop에서 자신의 작업 branch/worktree를 만들고 자신의 commit, push, PR을 책임집니다.",
+    "코드 변경이 없는 검토 Agent는 불필요한 branch를 만들지 않고 PR review/comment만 남길 수 있습니다.",
+    "다른 Agent branch를 base로 하는 stacked PR은 실제 의존성이 명확한 경우만 허용합니다.",
   ],
 };
 
