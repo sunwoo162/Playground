@@ -88,6 +88,19 @@ export async function reconcileInterruptedAgentTasksAtStartup(): Promise<Startup
       continue;
     }
 
+    const repositoryFullName = project.repositoryFullName;
+    const workspacePath = project.workspacePath;
+    if (!repositoryFullName || !workspacePath) {
+      state = failAgentTask(
+        state,
+        project.id,
+        run.taskId,
+        reconciliationFailureReason("repository/workspace metadata가 reconciliation 직전에 사라졌습니다."),
+      );
+      summary.blocked += 1;
+      continue;
+    }
+
     try {
       const result = await invoke<ReconcileInterruptedAgentTaskResult>(
         "reconcile_interrupted_agent_task",
@@ -99,8 +112,8 @@ export async function reconcileInterruptedAgentTasksAtStartup(): Promise<Startup
             agentId: run.agentId,
             taskId: run.taskId,
             taskSlug: policy.taskSlug,
-            repositoryFullName: project.repositoryFullName,
-            workspacePath: project.workspacePath,
+            repositoryFullName,
+            workspacePath,
           } satisfies ReconcileInterruptedAgentTaskInput,
         },
       );
