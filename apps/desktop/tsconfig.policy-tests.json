@@ -26,6 +26,8 @@
     "src/projectTeams/orchestrationHistoryPolicy.ts",
     "src/projectTeams/orchestrationHistory.policy-test.ts",
     "src/projectTeams/worktreeLifecyclePolicy.ts",
-    "src/projectTeams/worktreeLifecycle.policy-test.ts"
+    "src/projectTeams/worktreeLifecycle.policy-test.ts",
+    "src/projectTeams/bouquetAuth.ts",
+    "src/projectTeams/bouquetAuth.policy-test.ts"
   ]
 }
