@@ -215,6 +215,39 @@ export type EvolutionExperiment = {
   completedAt: string | null;
 };
 
+export type TeamRolePerformance = {
+  role: Exclude<AgentRole, "pm">;
+  projectCount: number;
+  taskCount: number;
+  retryCount: number;
+  routedFailureCount: number;
+  verificationIssueCount: number;
+  retryRate: number;
+  failureRate: number;
+  verificationIssueRate: number;
+  issueRate: number;
+};
+
+export type TeamStrengthConfidence = "emerging" | "established";
+
+export type TeamStrengthEvidence = {
+  role: Exclude<AgentRole, "pm">;
+  confidence: TeamStrengthConfidence;
+  projectCount: number;
+  taskCount: number;
+  teamIssueRate: number;
+  peerIssueRate: number;
+  advantage: number;
+  reason: string;
+};
+
+export type TeamPerformanceProfile = {
+  measuredProjectCount: number;
+  rolePerformance: TeamRolePerformance[];
+  strengths: TeamStrengthEvidence[];
+  updatedAt: string;
+};
+
 export type AgentState = {
   id: string;
   role: AgentRole;
@@ -235,6 +268,7 @@ export type TeamState = {
   completedProjects: number;
   averageScore: number | null;
   activeProjectId: string | null;
+  performanceProfile?: TeamPerformanceProfile | null;
   agents: AgentState[];
 };
 
