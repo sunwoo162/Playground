@@ -28,6 +28,26 @@ export type RemoteRunnerHealth = {
   queuedJobs: number;
 };
 
+export type RemoteFailureRoute = {
+  projectId: string;
+  failedTaskId: string;
+  routerAgentId: string;
+  sessionId: string | null;
+  eventsPath: string;
+  outputPath: string;
+  decision: {
+    route: "retry-owner" | "escalate-pm" | "needs-human";
+    failureType: string;
+    severity: string;
+    ownerTaskId: string | null;
+    ownerRole: string | null;
+    summary: string;
+    rationaleSummary: string;
+    evidence: string[];
+    recommendedAction: string;
+  };
+};
+
 export type RemoteWorkerResult = {
   protocolVersion: number;
   jobId: string;
@@ -38,7 +58,8 @@ export type RemoteWorkerResult = {
   workspacePath: string;
   blockedTaskId: string | null;
   taskResults: AgentTaskRunResult[];
-  mergedPullRequestNumbers: number[];
+  failureRoutes?: RemoteFailureRoute[];
+  mergedPullRequestNumbers?: number[];
 };
 
 export type RemoteRunnerJob = {
