@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "packageManager": "pnpm@10.33.0",
-  "description": "놀이터 - 여러 웹앱을 모아둔 포털",
+  "description": "Agent 팀이 아이디어에서 웹과 앱을 자동으로 기획·개발·검증하는 소프트웨어 제작 플랫폼",
   "scripts": {
     "dev": "concurrently \"pnpm run dev:server\" \"pnpm run dev:client\"",
     "dev:server": "node server/index.js",
