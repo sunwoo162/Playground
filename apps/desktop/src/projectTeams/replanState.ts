@@ -49,6 +49,9 @@ function resetRun(run: ProjectTaskRun, task: ProjectTaskPlan, teamId: string): P
     turnId: null,
     eventsPath: null,
     stderrPath: null,
+    commitSha: null,
+    pullRequestNumber: null,
+    pullRequestUrl: null,
     reviewedPullRequests: [],
     summary: null,
     rationaleSummary: null,
@@ -118,17 +121,26 @@ export function beginProjectFailureReplan(
   state: ProjectTeamsState,
   projectId: string,
 ) {
+  const project = state.projects.find((item) => item.id === projectId);
+  const route = project?.failureRoutes?.find((item) => item.route === "escalate-pm") ?? null;
+  if (!project || !route) return state;
+
+  const nextAttempt = (project.replanAttempts?.[route.id] ?? 0) + 1;
   const nextState: ProjectTeamsState = {
     ...state,
-    projects: state.projects.map((project) =>
-      project.id === projectId
+    projects: state.projects.map((item) =>
+      item.id === projectId
         ? {
-            ...project,
+            ...item,
+            replanAttempts: {
+              ...(item.replanAttempts ?? {}),
+              [route.id]: nextAttempt,
+            },
             status: "planning",
             runtimeFailureSource: "pm",
-            runtimeMessage: "Debug Router escalation · PM Codex가 기존 repository/work를 보존한 복구 재계획을 생성 중",
+            runtimeMessage: `Debug Router escalation · PM Codex 복구 재계획 ${nextAttempt}회차 생성 중`,
           }
-        : project,
+        : item,
     ),
   };
   const synced = syncTeam(nextState, projectId, "working");
