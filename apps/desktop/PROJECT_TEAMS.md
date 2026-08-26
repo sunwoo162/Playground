@@ -94,7 +94,7 @@ The scheduler currently limits execution to at most two tasks per wave and at mo
 
 Each Agent task is executed through a dedicated Codex App Server thread/turn with its own role prompt, task contract, worktree, and dependency artifacts.
 
-Repository-changing Agents receive dedicated worktrees/branches. When an Agent claims completion, Luna independently verifies expected branch, clean worktree, local HEAD, matching remote branch SHA, and an open `develop`-targeting PR before trusting commit/PR metadata.
+Repository-changing Agents receive dedicated worktrees/branches. Before execution Luna verifies that the project workspace `origin` exactly identifies the expected GitHub repository. When a writer Agent claims completion, the common evidence gate requires the reported commit, worktree HEAD, origin branch SHA, and the expected open `develop` PR `headRefOid` to agree before trusting the result.
 
 Review/QA/User-style Agents report the dependency PRs they actually examined and return structured evidence and verification results.
 
@@ -108,11 +108,11 @@ Project Teams supports `/pause`, `/resume`, and `/stop` for an active planned pr
 
 The control states are `running`, `pause-requested`, `paused`, `stop-requested`, and `stopped`. They are stored under a dedicated local persistence record so the asynchronous queue can observe a user request even while its current React execution closure is waiting for Agent results.
 
-This is not a claim of true in-turn process suspension. Luna does not currently freeze and later continue the same in-flight Codex turn; process-level interruption/reconnect reconciliation remains separate runtime work. If Luna itself exits while a Task is recorded as `running`, the existing interrupted-task recovery still marks that Task blocked so repository evidence can be checked before retrying.
+This is not a claim of true in-turn process suspension. Luna does not currently freeze and later continue the same in-flight Codex turn. After a process restart, Luna can now recover an **already-terminal** Agent result when the completed App Server turn and required repository evidence were written before the interruption; an in-flight turn without terminal evidence is still blocked rather than guessed successful. See [`SESSION_RECONCILIATION.md`](./SESSION_RECONCILIATION.md).
 
 ## Durable orchestration history
 
-Project Teams now keeps a disk-backed orchestration history in addition to the browser `localStorage` cache. The durable snapshot contains the Project Teams state and execution-control map, including project/task status, Agent identity, session references, branches, commits, PR references, evidence, verification, blockers, recovery decisions, and other orchestration metadata already held by the runtime.
+Project Teams keeps a disk-backed orchestration history in addition to the browser `localStorage` cache. The durable snapshot contains the Project Teams state and execution-control map, including project/task status, Agent identity, session references, branches, commits, PR references, evidence, verification, blockers, recovery decisions, and other orchestration metadata already held by the runtime.
 
 The Tauri runtime writes under the application's data directory:
 
@@ -127,11 +127,11 @@ project-teams/orchestration/
 
 Local state remains authoritative when it is structurally valid. Disk recovery is used only when the Project Teams local cache is absent or malformed, so an intentionally reset empty local state is not resurrected from an older backup. If only execution-control local data is missing, Luna can restore that control map from the durable snapshot without replacing a valid Project Teams state.
 
-The durable bootstrap runs before the React application renders. After recovery, the existing `loadProjectTeamsState()` hydration and interrupted-task policy still applies; a task that was recorded as `running` at an unclean shutdown is therefore not silently treated as successfully resumed.
+The durable bootstrap runs before React rendering. It is followed by interrupted-task reconciliation, which inspects persisted `running` Tasks before ordinary hydration applies the hard-block fallback. Only terminal App Server evidence can be recovered; unresolved or unsafe Tasks remain blocked.
 
 Project Teams and execution-control local writes are coalesced at the microtask boundary and disk writes are serialized so an older asynchronous snapshot cannot finish later and replace a newer one. GitHub/Codex credential tokens and environment secret values are not part of the Project Teams snapshot contract and are not intentionally persisted by this history layer.
 
-This history makes the orchestration state durable beyond browser storage, but it does not reconnect to an already-running Codex OS process after a full app/process loss. True process-level live-session reconciliation remains separate work.
+Durable history plus reconciliation can recover terminal evidence after restart, but it does not reconnect to or resume a still-running Codex OS process after Luna loses the process. True live-session reconnect remains separate work.
 
 ## Worktree lifecycle cleanup and archive
 
@@ -203,7 +203,7 @@ This two-file/two-PR split prevents independent Agents from editing the same sou
 
 ## Runtime failure handling
 
-PM Runtime failures and Agent Runtime failures are tracked separately. Interrupted `running` tasks are recovered as blocked rather than being falsely treated as resumed.
+PM Runtime failures and Agent Runtime failures are tracked separately. On startup, persisted `running` Tasks are first checked by the interrupted Agent reconciliation runtime. A Task with complete terminal App Server evidence can be recovered; missing, malformed, incomplete, or repository-inconsistent evidence is converted to an explicit blocked result and continues through the existing recovery flow.
 
 Blocked Agent failures can be analyzed by the independent Debug / Problem Router, which records failure type, severity, evidence, and one of the supported recovery routes: retry an owner task, escalate to PM replanning, or request a Product Owner decision.
 
@@ -268,7 +268,7 @@ Implemented in the existing Tauri/React desktop app includes:
 - **15 independent delivery Agent roles per team**, including Data & Marketing
 - organization-level Project Intake and clarification gate
 - fairness-guarded evidence-based team allocation
-- local state persistence and interrupted-task recovery
+- local state persistence plus evidence-based interrupted terminal-task reconciliation
 - durable app-data orchestration snapshots and append-only history beyond localStorage
 - PM Codex planning runtime and dependency validation
 - shared 꽃다발 authentication contract with `needsAuth` Backend/Frontend Task injection and mandatory security criteria enforcement
@@ -279,7 +279,7 @@ Implemented in the existing Tauri/React desktop app includes:
 - dedicated Agent worktrees and `agent/<team>/<role>/<task>` branches
 - evidence-gated completed-worktree cleanup/archive after project integration
 - Codex App Server Agent threads/turns
-- repository writer commit/push/PR contract with independent post-turn verification
+- common writer evidence gate requiring exact origin and matching report/worktree/remote/PR head SHAs
 - Code Review / Reviewer / QA / Documentation / User role separation
 - Debug / Problem Router failure classification and PM/Product Owner recovery routing
 - integration/merge evidence gate
@@ -289,13 +289,13 @@ Implemented in the existing Tauri/React desktop app includes:
 - senior 10+ operating baseline across Agent contexts
 - Data & Marketing analysis → Documentation GTM workflow and policy tests
 
-See [`AGENT_RUNTIME_POLICY.md`](./AGENT_RUNTIME_POLICY.md) for the detailed autonomy, seniority, decision, dependency, marketing, documentation, PR, and release contract.
+See [`AGENT_RUNTIME_POLICY.md`](./AGENT_RUNTIME_POLICY.md) for the detailed autonomy, seniority, decision, dependency, marketing, documentation, PR, and release contract. See [`SESSION_RECONCILIATION.md`](./SESSION_RECONCILIATION.md) for restart reconciliation evidence and limitations.
 
 ## Remaining runtime work
 
 The following still require dedicated verification or implementation and must not be represented as finished:
 
-- true in-turn Codex App Server pause/interruption/reconnect reconciliation beyond the implemented cooperative wave-boundary controls
+- true live in-flight Codex App Server process reconnect and non-destructive turn pause/resume beyond terminal-evidence restart reconciliation
 - final Luna apps portal release publication
 - managed unattended GitHub identity/credential strategy
 - full packaged Windows Tauri + Codex App Server end-to-end verification
