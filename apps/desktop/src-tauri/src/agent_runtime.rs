@@ -61,6 +61,23 @@ const AGENT_RESULT_SCHEMA: &str = r#"{
   }
 }"#;
 
+const ALLOWED_TEAMS: &[&str] = &["rose", "lily", "tulip", "sunflower", "cherry-blossom"];
+const ALLOWED_ROLES: &[&str] = &[
+    "idea",
+    "design-system",
+    "designer",
+    "frontend",
+    "backend",
+    "code-review",
+    "reviewer",
+    "qa",
+    "documentation",
+    "debug-router",
+    "user-a",
+    "user-b",
+    "process-evaluator",
+];
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DependencyArtifact {
@@ -152,15 +169,15 @@ fn run_command(program: &str, args: &[String]) -> Result<Output, String> {
 fn run_checked(program: &str, args: &[String]) -> Result<Output, String> {
     let output = run_command(program, args)?;
     if output.status.success() {
-        Ok(output)
-    } else {
-        let detail = output_detail(&output);
-        Err(if detail.is_empty() {
-            format!("{program} 명령이 실패했습니다.")
-        } else {
-            format!("{program} 명령 실패: {detail}")
-        })
+        return Ok(output);
     }
+
+    let detail = output_detail(&output);
+    Err(if detail.is_empty() {
+        format!("{program} 명령이 실패했습니다.")
+    } else {
+        format!("{program} 명령 실패: {detail}")
+    })
 }
 
 fn git_args(workspace: &Path, tail: &[&str]) -> Vec<String> {
@@ -204,6 +221,32 @@ fn validate_project_id(value: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn validate_task_id(value: &str) -> Result<(), String> {
+    let Some((prefix, number)) = value.rsplit_once('-') else {
+        return Err(format!("Task ID 형식이 잘못되었습니다: {value}"));
+    };
+    if prefix.is_empty()
+        || !prefix.chars().all(|character| character.is_ascii_uppercase())
+        || number.len() != 3
+        || !number.chars().all(|character| character.is_ascii_digit())
+    {
+        return Err(format!("Task ID 형식이 잘못되었습니다: {value}"));
+    }
+    Ok(())
+}
+
+fn validate_organization(value: &str) -> Result<(), String> {
+    if value.is_empty()
+        || value.len() > 100
+        || !value
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || character == '-')
+    {
+        return Err("Organization 이름 형식이 잘못되었습니다.".to_string());
+    }
+    Ok(())
+}
+
 fn is_repository_writer(role: &str) -> bool {
     matches!(
         role,
@@ -212,25 +255,27 @@ fn is_repository_writer(role: &str) -> bool {
 }
 
 fn is_review_role(role: &str) -> bool {
-    matches!(role, "code-review" | "reviewer" | "qa" | "user-a" | "user-b" | "process-evaluator")
+    matches!(
+        role,
+        "code-review" | "reviewer" | "qa" | "user-a" | "user-b" | "process-evaluator"
+    )
 }
 
 fn local_branch_exists(workspace: &Path, branch: &str) -> bool {
+    let branch_ref = format!("refs/heads/{branch}");
     run_command(
         "git",
-        &git_args(workspace, &["show-ref", "--verify", "--quiet", &format!("refs/heads/{branch}")]),
+        &git_args(workspace, &["show-ref", "--verify", "--quiet", branch_ref.as_str()]),
     )
     .map(|output| output.status.success())
     .unwrap_or(false)
 }
 
 fn remote_branch_exists(workspace: &Path, branch: &str) -> bool {
+    let branch_ref = format!("refs/remotes/origin/{branch}");
     run_command(
         "git",
-        &git_args(
-            workspace,
-            &["show-ref", "--verify", "--quiet", &format!("refs/remotes/origin/{branch}")],
-        ),
+        &git_args(workspace, &["show-ref", "--verify", "--quiet", branch_ref.as_str()]),
     )
     .map(|output| output.status.success())
     .unwrap_or(false)
@@ -259,8 +304,8 @@ fn prepare_agent_worktree(input: &AgentTaskRuntimeInput) -> Result<(PathBuf, Opt
             .map_err(|error| format!("Agent worktree 상위 경로 생성 실패: {error}"))?;
     }
 
-    let writer = is_repository_writer(&input.role);
-    let branch = writer.then(|| format!("agent/{}/{}/{}", input.team_id, input.role, input.task_slug));
+    let branch = is_repository_writer(&input.role)
+        .then(|| format!("agent/{}/{}/{}", input.team_id, input.role, input.task_slug));
 
     if worktree.exists() {
         if !worktree.join(".git").exists() {
@@ -401,7 +446,7 @@ Execution mode:
 Final-output contract:
 - Return only the structured result required by the supplied output schema.
 - `verification` must distinguish passed, failed, blocked, and not-run checks truthfully.
-- For repository-changing work, report commit/PR identifiers only after they actually exist. Luna will independently verify the branch, clean worktree, commit SHA, and PR after your turn.
+- For repository-changing work, report commit/PR identifiers only after they actually exist. Luna will independently verify the branch, clean worktree, commit SHA, remote branch SHA, and PR after your turn.
 - For review/QA/user-test work, include every dependency PR you actually examined in `reviewedPullRequests`.
 "#,
         agent_id = input.agent_id,
@@ -511,143 +556,149 @@ fn run_app_server_agent(
         .spawn()
         .map_err(|error| format!("Codex app-server 실행 실패: {error}"))?;
 
-    let mut stdin = child
-        .stdin
-        .take()
-        .ok_or_else(|| "Codex app-server stdin을 열 수 없습니다.".to_string())?;
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| "Codex app-server stdout을 열 수 없습니다.".to_string())?;
-    let mut reader = BufReader::new(stdout);
+    let protocol_result = (|| -> Result<(String, String, String, AgentTaskReport), String> {
+        let mut stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| "Codex app-server stdin을 열 수 없습니다.".to_string())?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| "Codex app-server stdout을 열 수 없습니다.".to_string())?;
+        let mut reader = BufReader::new(stdout);
 
-    write_json_line(
-        &mut stdin,
-        &json!({
-            "method": "initialize",
-            "id": 0,
-            "params": {
-                "clientInfo": {
-                    "name": "luna_project_teams",
-                    "title": "Luna Project Teams",
-                    "version": "0.1.0"
+        write_json_line(
+            &mut stdin,
+            &json!({
+                "method": "initialize",
+                "id": 0,
+                "params": {
+                    "clientInfo": {
+                        "name": "luna_project_teams",
+                        "title": "Luna Project Teams",
+                        "version": "0.1.0"
+                    }
                 }
-            }
-        }),
-    )?;
-    wait_for_response(&mut reader, &mut events_log, 0)?;
-    write_json_line(&mut stdin, &json!({ "method": "initialized", "params": {} }))?;
+            }),
+        )?;
+        wait_for_response(&mut reader, &mut events_log, 0)?;
+        write_json_line(&mut stdin, &json!({ "method": "initialized", "params": {} }))?;
 
-    write_json_line(
-        &mut stdin,
-        &json!({
-            "method": "thread/start",
-            "id": 1,
-            "params": {
-                "cwd": worktree.to_string_lossy(),
-                "approvalPolicy": "never",
-                "sandbox": "workspaceWrite",
-                "serviceName": "luna_project_teams"
-            }
-        }),
-    )?;
-    let thread_result = wait_for_response(&mut reader, &mut events_log, 1)?;
-    let thread = thread_result
-        .get("thread")
-        .ok_or_else(|| "Codex app-server thread/start 결과에 thread가 없습니다.".to_string())?;
-    let thread_id = thread
-        .get("id")
-        .and_then(Value::as_str)
-        .ok_or_else(|| "Codex app-server thread ID가 없습니다.".to_string())?
-        .to_string();
-    let session_id = thread
-        .get("sessionId")
-        .and_then(Value::as_str)
-        .unwrap_or(thread_id.as_str())
-        .to_string();
+        write_json_line(
+            &mut stdin,
+            &json!({
+                "method": "thread/start",
+                "id": 1,
+                "params": {
+                    "cwd": worktree.to_string_lossy(),
+                    "approvalPolicy": "never",
+                    "sandbox": "workspaceWrite",
+                    "serviceName": "luna_project_teams"
+                }
+            }),
+        )?;
+        let thread_result = wait_for_response(&mut reader, &mut events_log, 1)?;
+        let thread = thread_result
+            .get("thread")
+            .ok_or_else(|| "Codex app-server thread/start 결과에 thread가 없습니다.".to_string())?;
+        let thread_id = thread
+            .get("id")
+            .and_then(Value::as_str)
+            .ok_or_else(|| "Codex app-server thread ID가 없습니다.".to_string())?
+            .to_string();
+        let session_id = thread
+            .get("sessionId")
+            .and_then(Value::as_str)
+            .unwrap_or(thread_id.as_str())
+            .to_string();
 
-    let schema: Value = serde_json::from_str(AGENT_RESULT_SCHEMA)
-        .map_err(|error| format!("Agent output schema 파싱 실패: {error}"))?;
-    let prompt = agent_prompt(input, branch);
-    write_json_line(
-        &mut stdin,
-        &json!({
-            "method": "turn/start",
-            "id": 2,
-            "params": {
-                "threadId": thread_id,
-                "input": [{ "type": "text", "text": prompt }],
-                "cwd": worktree.to_string_lossy(),
-                "approvalPolicy": "never",
-                "sandboxPolicy": {
-                    "type": "workspaceWrite",
-                    "writableRoots": [worktree.to_string_lossy()],
-                    "networkAccess": true
-                },
-                "outputSchema": schema
-            }
-        }),
-    )?;
-    let turn_result = wait_for_response(&mut reader, &mut events_log, 2)?;
-    let turn_id = turn_result
-        .get("turn")
-        .and_then(|turn| turn.get("id"))
-        .and_then(Value::as_str)
-        .ok_or_else(|| "Codex app-server turn ID가 없습니다.".to_string())?
-        .to_string();
+        let schema: Value = serde_json::from_str(AGENT_RESULT_SCHEMA)
+            .map_err(|error| format!("Agent output schema 파싱 실패: {error}"))?;
+        let prompt = agent_prompt(input, branch);
+        write_json_line(
+            &mut stdin,
+            &json!({
+                "method": "turn/start",
+                "id": 2,
+                "params": {
+                    "threadId": thread_id,
+                    "input": [{ "type": "text", "text": prompt }],
+                    "cwd": worktree.to_string_lossy(),
+                    "approvalPolicy": "never",
+                    "sandboxPolicy": {
+                        "type": "workspaceWrite",
+                        "writableRoots": [worktree.to_string_lossy()],
+                        "networkAccess": true
+                    },
+                    "outputSchema": schema
+                }
+            }),
+        )?;
+        let turn_result = wait_for_response(&mut reader, &mut events_log, 2)?;
+        let turn_id = turn_result
+            .get("turn")
+            .and_then(|turn| turn.get("id"))
+            .and_then(Value::as_str)
+            .ok_or_else(|| "Codex app-server turn ID가 없습니다.".to_string())?
+            .to_string();
 
-    let mut final_message: Option<String> = None;
-    let mut turn_status: Option<String> = None;
-    let mut turn_error: Option<String> = None;
+        let mut final_message: Option<String> = None;
+        let mut turn_status: Option<String> = None;
+        let mut turn_error: Option<String> = None;
 
-    loop {
-        let value = read_json_line(&mut reader, &mut events_log)?;
-        let method = value.get("method").and_then(Value::as_str).unwrap_or_default();
-        if method == "item/completed" {
-            if let Some(item) = value.get("params").and_then(|params| params.get("item")) {
-                if item.get("type").and_then(Value::as_str) == Some("agentMessage") {
-                    if let Some(text) = item.get("text").and_then(Value::as_str) {
-                        final_message = Some(text.to_string());
+        loop {
+            let value = read_json_line(&mut reader, &mut events_log)?;
+            let method = value.get("method").and_then(Value::as_str).unwrap_or_default();
+            if method == "item/completed" {
+                if let Some(item) = value.get("params").and_then(|params| params.get("item")) {
+                    if item.get("type").and_then(Value::as_str) == Some("agentMessage") {
+                        if let Some(text) = item.get("text").and_then(Value::as_str) {
+                            final_message = Some(text.to_string());
+                        }
                     }
                 }
             }
-        }
-        if method == "turn/completed" {
-            let turn = value
-                .get("params")
-                .and_then(|params| params.get("turn"))
-                .ok_or_else(|| "turn/completed payload에 turn이 없습니다.".to_string())?;
-            if turn.get("id").and_then(Value::as_str) != Some(turn_id.as_str()) {
-                continue;
+            if method == "turn/completed" {
+                let turn = value
+                    .get("params")
+                    .and_then(|params| params.get("turn"))
+                    .ok_or_else(|| "turn/completed payload에 turn이 없습니다.".to_string())?;
+                if turn.get("id").and_then(Value::as_str) != Some(turn_id.as_str()) {
+                    continue;
+                }
+                turn_status = turn.get("status").and_then(Value::as_str).map(str::to_string);
+                turn_error = turn
+                    .get("error")
+                    .and_then(|error| error.get("message"))
+                    .and_then(Value::as_str)
+                    .map(str::to_string);
+                break;
             }
-            turn_status = turn.get("status").and_then(Value::as_str).map(str::to_string);
-            turn_error = turn
-                .get("error")
-                .and_then(|error| error.get("message"))
-                .and_then(Value::as_str)
-                .map(str::to_string);
-            break;
         }
-    }
+
+        if turn_status.as_deref() != Some("completed") {
+            return Err(format!(
+                "Codex Agent turn이 완료되지 않았습니다. status={} error={}",
+                turn_status.unwrap_or_else(|| "unknown".to_string()),
+                turn_error.unwrap_or_else(|| "-".to_string())
+            ));
+        }
+
+        let final_message = final_message
+            .ok_or_else(|| "Codex Agent final agentMessage가 없습니다.".to_string())?;
+        let report: AgentTaskReport = serde_json::from_str(&final_message)
+            .map_err(|error| format!("Codex Agent 결과 JSON 파싱 실패: {error}"))?;
+        if !matches!(report.status.as_str(), "completed" | "blocked") {
+            return Err(format!("Codex Agent 결과 status가 잘못되었습니다: {}", report.status));
+        }
+
+        Ok((thread_id, session_id, turn_id, report))
+    })();
 
     let _ = child.kill();
     let _ = child.wait();
 
-    if turn_status.as_deref() != Some("completed") {
-        return Err(format!(
-            "Codex Agent turn이 완료되지 않았습니다. status={} error={}",
-            turn_status.unwrap_or_else(|| "unknown".to_string()),
-            turn_error.unwrap_or_else(|| "-".to_string())
-        ));
-    }
-
-    let final_message = final_message.ok_or_else(|| "Codex Agent final agentMessage가 없습니다.".to_string())?;
-    let report: AgentTaskReport = serde_json::from_str(&final_message)
-        .map_err(|error| format!("Codex Agent 결과 JSON 파싱 실패: {error}"))?;
-    if !matches!(report.status.as_str(), "completed" | "blocked") {
-        return Err(format!("Codex Agent 결과 status가 잘못되었습니다: {}", report.status));
-    }
-
+    let (thread_id, session_id, turn_id, report) = protocol_result?;
     Ok((
         thread_id,
         session_id,
@@ -683,8 +734,18 @@ fn verify_repository_writer_result(
     let head_sha = String::from_utf8_lossy(&head.stdout).trim().to_string();
 
     let remote = run_checked("git", &git_args(worktree, &["ls-remote", "--heads", "origin", branch]))?;
-    if String::from_utf8_lossy(&remote.stdout).trim().is_empty() {
+    let remote_line = String::from_utf8_lossy(&remote.stdout).trim().to_string();
+    if remote_line.is_empty() {
         return Err("Agent가 completed를 반환했지만 원격 branch가 존재하지 않습니다.".to_string());
+    }
+    let remote_sha = remote_line
+        .split_whitespace()
+        .next()
+        .ok_or_else(|| "원격 branch SHA를 확인할 수 없습니다.".to_string())?;
+    if remote_sha != head_sha {
+        return Err(format!(
+            "Agent local HEAD와 원격 branch SHA가 다릅니다. local={head_sha}, remote={remote_sha}"
+        ));
     }
 
     let pr_output = run_checked(
@@ -728,12 +789,21 @@ fn verify_repository_writer_result(
 }
 
 fn validate_input(input: &AgentTaskRuntimeInput) -> Result<(), String> {
+    validate_organization(input.organization.trim())?;
     validate_project_id(&input.project_id)?;
+    validate_task_id(&input.task_id)?;
     validate_segment(&input.team_id, "Team ID")?;
     validate_segment(&input.role, "Agent role")?;
     validate_segment(&input.task_slug, "Task slug")?;
-    if input.agent_id.trim().is_empty() || input.task_id.trim().is_empty() {
-        return Err("Agent ID 또는 Task ID가 비어 있습니다.".to_string());
+
+    if !ALLOWED_TEAMS.contains(&input.team_id.as_str()) {
+        return Err(format!("허용되지 않은 Team ID입니다: {}", input.team_id));
+    }
+    if !ALLOWED_ROLES.contains(&input.role.as_str()) {
+        return Err(format!("허용되지 않은 Agent role입니다: {}", input.role));
+    }
+    if input.agent_id.trim().is_empty() {
+        return Err("Agent ID가 비어 있습니다.".to_string());
     }
     if input.title.trim().is_empty() || input.summary.trim().is_empty() {
         return Err("Task 제목 또는 설명이 비어 있습니다.".to_string());
@@ -741,9 +811,19 @@ fn validate_input(input: &AgentTaskRuntimeInput) -> Result<(), String> {
     if input.acceptance_criteria.is_empty() {
         return Err("Task acceptance criteria가 없습니다.".to_string());
     }
-    if input.repository_full_name.trim() != format!("{}/{}", input.organization.trim(), input.repository_full_name.split('/').last().unwrap_or_default()) {
+    if input.workspace_path.trim().is_empty() {
+        return Err("Project workspace path가 비어 있습니다.".to_string());
+    }
+
+    let (owner, repository) = input
+        .repository_full_name
+        .trim()
+        .split_once('/')
+        .ok_or_else(|| "Repository는 owner/name 형식이어야 합니다.".to_string())?;
+    if owner != input.organization.trim() || repository.is_empty() || repository.contains('/') {
         return Err("Repository가 설정된 Organization과 일치하지 않습니다.".to_string());
     }
+
     Ok(())
 }
 
