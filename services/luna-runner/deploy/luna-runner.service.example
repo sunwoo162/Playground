@@ -1,0 +1,23 @@
+[Unit]
+Description=Luna Remote Runner
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=luna
+Group=luna
+WorkingDirectory=/opt/luna/Playground
+EnvironmentFile=/etc/luna-runner.env
+ExecStart=/usr/bin/node /opt/luna/Playground/services/luna-runner/src/server.mjs
+Restart=always
+RestartSec=3
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/luna-runner /opt/luna/workspaces
+
+[Install]
+WantedBy=multi-user.target
