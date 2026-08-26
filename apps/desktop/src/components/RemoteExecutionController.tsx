@@ -114,9 +114,12 @@ export function RemoteExecutionController() {
         if (!synced) continue;
         state = synced.state;
 
-        if (synced.appliedTaskCount > 0) {
+        if (synced.appliedTaskCount > 0 || synced.integrationApplied) {
+          const integrationLabel = synced.integrationApplied
+            ? ` · develop 통합 ${synced.job.result?.mergedPullRequestNumbers.map((number) => `#${number}`).join(", ")}`
+            : "";
           setMessage(
-            `${project.plan?.projectName ?? project.id} · 원격 Agent 결과 ${synced.appliedTaskCount}개를 Luna 상태에 반영했습니다.`,
+            `${project.plan?.projectName ?? project.id} · 원격 Agent 결과 ${synced.appliedTaskCount}개 반영${integrationLabel}`,
           );
           window.setTimeout(() => window.location.reload(), 80);
           return;
@@ -129,8 +132,11 @@ export function RemoteExecutionController() {
         } else if (synced.job.status === "cancelled") {
           setMessage(`${project.plan?.projectName ?? project.id} · Remote Runner 작업이 취소됐습니다.`);
         } else if (synced.job.status === "succeeded") {
+          const remoteResult = synced.job.result;
           setMessage(
-            `${project.plan?.projectName ?? project.id} · 원격 Agent 실행 완료 · Luna Task 결과 동기화 완료`,
+            remoteResult?.status === "blocked"
+              ? `${project.plan?.projectName ?? project.id} · Remote Runtime 차단 · ${remoteResult.message}`
+              : `${project.plan?.projectName ?? project.id} · 원격 Agent 실행/PR 통합 완료 · Luna 상태 동기화 완료`,
           );
         } else {
           setMessage(
