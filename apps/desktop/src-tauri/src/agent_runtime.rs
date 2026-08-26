@@ -10,6 +10,7 @@ use std::{
 const MAX_JSONL_LINE_BYTES: usize = 10 * 1024 * 1024;
 
 const AGENT_RESULT_SCHEMA: &str = r#"{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -27,23 +28,26 @@ const AGENT_RESULT_SCHEMA: &str = r#"{
   "properties": {
     "status": { "type": "string", "enum": ["completed", "blocked"] },
     "summary": { "type": "string", "minLength": 1, "maxLength": 1600 },
-    "rationaleSummary": { "type": "string", "minLength": 1, "maxLength": 1600 },
+    "rationaleSummary": { "type": "string", "minLength": 1, "maxLength": 1800 },
     "evidence": {
       "type": "array",
-      "maxItems": 30,
-      "items": { "type": "string", "minLength": 1, "maxLength": 500 }
+      "maxItems": 40,
+      "items": { "type": "string", "minLength": 1, "maxLength": 700 }
     },
     "verification": {
       "type": "array",
-      "maxItems": 30,
+      "maxItems": 40,
       "items": {
         "type": "object",
         "additionalProperties": false,
         "required": ["name", "status", "details"],
         "properties": {
           "name": { "type": "string", "minLength": 1, "maxLength": 120 },
-          "status": { "type": "string", "enum": ["passed", "failed", "blocked", "not-run"] },
-          "details": { "type": "string", "maxLength": 800 }
+          "status": {
+            "type": "string",
+            "enum": ["passed", "failed", "blocked", "not-run"]
+          },
+          "details": { "type": "string", "minLength": 1, "maxLength": 800 }
         }
       }
     },
@@ -93,7 +97,7 @@ pub struct DependencyArtifact {
     pub pull_request_url: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentTaskRuntimeInput {
     pub organization: String,
@@ -213,8 +217,8 @@ fn validate_segment(value: &str, label: &str) -> Result<(), String> {
 }
 
 fn validate_project_id(value: &str) -> Result<(), String> {
-    if value.is_empty()
-        || value.len() > 100
+    if value.trim().is_empty()
+        || value.len() > 120
         || !value
             .chars()
             .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'))
