@@ -16,7 +16,7 @@ export const BOUQUET_AUTH_POLICY = {
 
 export const EXECUTION_POLICY = {
   id: "iseol-workflow" as const,
-  version: "1.2.0",
+  version: "1.3.0",
   summary: "모든 Agent는 이설 작업 방식처럼 실제 저장소를 기준으로 독립적으로 작업합니다.",
   rules: [
     "작업 전 현재 저장소, 브랜치, 관련 규칙과 실제 파일을 확인합니다.",
@@ -27,6 +27,7 @@ export const EXECUTION_POLICY = {
     "커밋은 작은 작업 단위로 나누고 영어 커밋 메시지를 사용합니다.",
     "작업한 Agent가 직접 branch push와 PR 생성/업데이트를 수행합니다.",
     "Code Review Agent가 코드 품질을 독립 검토하고 Reviewer Agent가 기능/요구사항/구조를 별도로 검토합니다.",
+    "QA Agent는 실제 build/test/사용 흐름을 검증하고 Documentation Agent는 검증된 사실을 기준으로 사용자·개발·운영 문서를 맞춥니다.",
     "Developer 결과는 Code Review, Reviewer, QA를 통과해야 완료로 인정합니다.",
     "문제가 생기면 Debug / Problem Router가 해결 가능한 Agent로 다시 보냅니다.",
     "프로젝트 종료 후 모든 Agent는 개별 회고를 남기고 버전 개선 후보를 만듭니다.",
@@ -42,6 +43,7 @@ export const WORKFLOW_STAGES = [
   "Code Review",
   "Reviewer",
   "QA",
+  "Documentation",
   "User A / User B",
   "Process Evaluator",
   "Retrospective",
@@ -62,6 +64,7 @@ const agentCatalog: Array<{
   { role: "code-review", label: "Code Review Agent", description: "PR diff의 코드 품질, 버그, 보안, 성능, 테스트 누락을 독립 검토" },
   { role: "reviewer", label: "Reviewer Agent", description: "기능, 요구사항, 구조와 제품 완성도를 독립 검토" },
   { role: "qa", label: "QA Agent", description: "build, test, 실제 동작을 검증" },
+  { role: "documentation", label: "Documentation Agent", description: "실제 구현과 검증 결과를 근거로 사용자·개발·운영 문서를 유지" },
   { role: "debug-router", label: "Debug / Problem Router", description: "문제 원인을 분류하고 적합한 Agent로 재배정" },
   { role: "user-a", label: "User Agent A", description: "처음 사용하는 사용자 관점으로 검증" },
   { role: "user-b", label: "User Agent B", description: "숙련 사용자 관점으로 효율과 반복 작업을 검증" },
