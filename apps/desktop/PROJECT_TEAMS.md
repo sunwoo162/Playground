@@ -110,6 +110,29 @@ The control states are `running`, `pause-requested`, `paused`, `stop-requested`,
 
 This is not a claim of true in-turn process suspension. Luna does not currently freeze and later continue the same in-flight Codex turn; process-level interruption/reconnect reconciliation remains separate runtime work. If Luna itself exits while a Task is recorded as `running`, the existing interrupted-task recovery still marks that Task blocked so repository evidence can be checked before retrying.
 
+## Durable orchestration history
+
+Project Teams now keeps a disk-backed orchestration history in addition to the browser `localStorage` cache. The durable snapshot contains the Project Teams state and execution-control map, including project/task status, Agent identity, session references, branches, commits, PR references, evidence, verification, blockers, recovery decisions, and other orchestration metadata already held by the runtime.
+
+The Tauri runtime writes under the application's data directory:
+
+```text
+project-teams/orchestration/
+  latest.json
+  history.jsonl
+  history.previous.jsonl   # only after rotation
+```
+
+`latest.json` is the fast recovery snapshot. `history.jsonl` is append-only orchestration history. When the active history reaches 25MB it is rotated to `history.previous.jsonl`; a single incoming snapshot is limited to 10MB. Latest-snapshot replacement uses temporary and backup files. If `latest.json` is missing or malformed, Luna falls back to the backup and then the newest valid JSONL record.
+
+Local state remains authoritative when it is structurally valid. Disk recovery is used only when the Project Teams local cache is absent or malformed, so an intentionally reset empty local state is not resurrected from an older backup. If only execution-control local data is missing, Luna can restore that control map from the durable snapshot without replacing a valid Project Teams state.
+
+The durable bootstrap runs before the React application renders. After recovery, the existing `loadProjectTeamsState()` hydration and interrupted-task policy still applies; a task that was recorded as `running` at an unclean shutdown is therefore not silently treated as successfully resumed.
+
+Project Teams and execution-control local writes are coalesced at the microtask boundary and disk writes are serialized so an older asynchronous snapshot cannot finish later and replace a newer one. GitHub/Codex credential tokens and environment secret values are not part of the Project Teams snapshot contract and are not intentionally persisted by this history layer.
+
+This history makes the orchestration state durable beyond browser storage, but it does not reconnect to an already-running Codex OS process after a full app/process loss. True process-level live-session reconciliation remains separate work.
+
 ## Data & Marketing workflow
 
 Every team has its own independent **Data & Marketing Agent**. It is a repository-changing Agent and works in:
@@ -214,6 +237,7 @@ Implemented in the existing Tauri/React desktop app includes:
 - organization-level Project Intake and clarification gate
 - fairness-guarded evidence-based team allocation
 - local state persistence and interrupted-task recovery
+- durable app-data orchestration snapshots and append-only history beyond localStorage
 - PM Codex planning runtime and dependency validation
 - mandatory marketing/documentation governance plan injection
 - `BloomBouquet` repository bootstrap and `main`/`develop` setup
@@ -238,7 +262,6 @@ See [`AGENT_RUNTIME_POLICY.md`](./AGENT_RUNTIME_POLICY.md) for the detailed auto
 The following still require dedicated verification or implementation and must not be represented as finished:
 
 - true in-turn Codex App Server pause/interruption/reconnect reconciliation beyond the implemented cooperative wave-boundary controls
-- persistent orchestration history beyond localStorage
 - completed-worktree lifecycle cleanup/archive
 - reusable 꽃다발 authentication implementation
 - final Luna apps portal release publication
