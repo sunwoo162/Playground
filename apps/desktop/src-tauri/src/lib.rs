@@ -3,6 +3,7 @@ mod failure_router_runtime;
 mod intake_runtime;
 mod integration_runtime;
 mod market_discovery_runtime;
+mod power_runtime;
 mod project_runtime;
 mod replan_runtime;
 mod retrospective_runtime;
@@ -22,7 +23,8 @@ pub fn run() {
             failure_router_runtime::route_agent_failure,
             replan_runtime::replan_project_failure,
             integration_runtime::merge_project_pull_requests,
-            retrospective_runtime::run_project_retrospectives
+            retrospective_runtime::run_project_retrospectives,
+            power_runtime::set_runtime_keep_awake
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
