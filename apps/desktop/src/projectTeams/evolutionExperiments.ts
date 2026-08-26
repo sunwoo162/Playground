@@ -123,6 +123,16 @@ function experimentRegressions(baseline: EvolutionMetrics, current: EvolutionMet
   return regressions;
 }
 
+function stagedExperimentForProject(state: ProjectTeamsState, project: ProjectState) {
+  const projectCreatedAt = Date.parse(project.createdAt);
+  return (state.evolutionExperiments ?? []).find((experiment) =>
+    experiment.teamId === project.teamId
+      && experiment.status === "proposed"
+      && experiment.sourceProjectId !== project.id
+      && Date.parse(experiment.createdAt) <= projectCreatedAt,
+  ) ?? null;
+}
+
 export function createEvolutionExperimentCandidate(
   state: ProjectTeamsState,
   result: RunProjectRetrospectivesResult,
@@ -150,21 +160,18 @@ export function createEvolutionExperimentCandidate(
     const toVersion = recommendedComparison !== null && recommendedComparison > 0
       ? proposal.recommendedVersion
       : bumpMinor(agent.version);
-    if (toVersion === agent.version) return [];
-
-    const instructionChanges = (proposal.instructionChanges ?? [])
-      .map((value) => value.trim())
-      .filter(Boolean)
-      .slice(0, 8);
-    if (instructionChanges.length === 0) return [];
+    const reason = proposal.reason.trim();
+    if (toVersion === agent.version || !reason) return [];
 
     candidateAgentVersions[agent.id] = toVersion;
     return [{
       agentId: agent.id,
       fromVersion: agent.version,
       toVersion,
-      reason: proposal.reason,
-      instructionChanges,
+      reason,
+      instructionChanges: [
+        `Team Evolution experiment objective: ${reason}`,
+      ],
     }];
   });
 
@@ -201,60 +208,17 @@ export function createEvolutionExperimentCandidate(
   return {
     ...state,
     evolutionExperiments: [experiment, ...(state.evolutionExperiments ?? [])],
-  };
-}
-
-export function activatePendingEvolutionExperiment(
-  state: ProjectTeamsState,
-  teamId: TeamState["id"],
-  projectId: string,
-) {
-  const experiment = (state.evolutionExperiments ?? []).find(
-    (item) => item.teamId === teamId && item.status === "proposed",
-  );
-  if (!experiment) {
-    const team = state.teams.find((item) => item.id === teamId);
-    if (!team) return state;
-    const snapshot = snapshotTeamVersions(team);
-    return {
-      ...state,
-      projects: state.projects.map((project) =>
-        project.id === projectId
-          ? { ...project, evolutionExperimentId: null, versionSnapshot: snapshot }
-          : project,
-      ),
-    };
-  }
-
-  const activatedAt = new Date().toISOString();
-  return {
-    ...state,
-    evolutionExperiments: (state.evolutionExperiments ?? []).map((item) =>
-      item.id === experiment.id
-        ? { ...item, status: "active" as const, targetProjectId: projectId, activatedAt }
-        : item,
-    ),
-    teams: state.teams.map((team) =>
-      team.id === teamId
+    teams: state.teams.map((currentTeam) =>
+      currentTeam.id === team.id
         ? {
-            ...team,
+            ...currentTeam,
             playbookVersion: experiment.candidate.playbookVersion,
-            agents: team.agents.map((agent) => ({
+            agents: currentTeam.agents.map((agent) => ({
               ...agent,
               version: experiment.candidate.agentVersions[agent.id] ?? agent.version,
             })),
           }
-        : team,
-    ),
-    projects: state.projects.map((project) =>
-      project.id === projectId
-        ? {
-            ...project,
-            evolutionExperimentId: experiment.id,
-            versionSnapshot: experiment.candidate,
-            runtimeMessage: `팀 배정 완료 · Team Evolution 실험 ${experiment.id} 적용 · PM Codex 실행 준비`,
-          }
-        : project,
+        : currentTeam,
     ),
   };
 }
@@ -264,12 +228,7 @@ export function getProjectEvolutionInstructions(
   project: ProjectState,
   agentId: string,
 ) {
-  if (!project.evolutionExperimentId) return null;
-  const experiment = (state.evolutionExperiments ?? []).find(
-    (item) => item.id === project.evolutionExperimentId
-      && item.status === "active"
-      && item.targetProjectId === project.id,
-  );
+  const experiment = stagedExperimentForProject(state, project);
   if (!experiment) return null;
 
   const agentChange = experiment.agentChanges.find((item) => item.agentId === agentId) ?? null;
@@ -286,12 +245,8 @@ export function finalizeActiveEvolutionExperiment(
   projectId: string,
 ) {
   const project = state.projects.find((item) => item.id === projectId);
-  if (!project?.evolutionExperimentId) return state;
-  const experiment = (state.evolutionExperiments ?? []).find(
-    (item) => item.id === project.evolutionExperimentId
-      && item.status === "active"
-      && item.targetProjectId === project.id,
-  );
+  if (!project) return state;
+  const experiment = stagedExperimentForProject(state, project);
   if (!experiment) return state;
 
   const metrics = collectEvolutionMetrics(project);
@@ -309,6 +264,8 @@ export function finalizeActiveEvolutionExperiment(
         ? {
             ...item,
             status: keep ? "kept" as const : "rolled-back" as const,
+            targetProjectId: project.id,
+            activatedAt: project.createdAt,
             experimentMetrics: metrics,
             verdictReason,
             completedAt,
@@ -331,6 +288,8 @@ export function finalizeActiveEvolutionExperiment(
       item.id === project.id
         ? {
             ...item,
+            evolutionExperimentId: experiment.id,
+            versionSnapshot: experiment.candidate,
             runtimeMessage: `${item.runtimeMessage} · Team Evolution 실험 ${keep ? "유지" : "롤백"}: ${verdictReason}`,
           }
         : item,
