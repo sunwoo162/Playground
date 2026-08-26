@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 @Table(
         name = "builder_projects",
         indexes = {
-                @Index(name = "idx_builder_project_owner_created", columnList = "ownerId,createdAt"),
+                @Index(name = "idx_builder_project_owner_created", columnList = "owner_id,created_at"),
                 @Index(name = "idx_builder_project_status", columnList = "status")
         }
 )
@@ -25,7 +25,7 @@ public class BuilderProject {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, length = 120)
+    @Column(name = "owner_id", nullable = false, length = 120)
     private String ownerId;
 
     @Column(nullable = false, length = 120)
@@ -37,29 +37,29 @@ public class BuilderProject {
     @Column(nullable = false, length = 20)
     private String platform;
 
-    @Column(nullable = false, length = 1000)
+    @Column(name = "feature_keys", nullable = false, length = 1000)
     private String featureKeys;
 
     @Column(nullable = false, length = 40)
     private String status;
 
-    @Column(nullable = false)
+    @Column(name = "auth_required", nullable = false)
     private boolean authRequired;
 
-    @Column(length = 160)
+    @Column(name = "template_id", length = 160)
     private String templateId;
 
-    @Column(length = 120)
+    @Column(name = "repository_full_name", length = 120)
     private String repositoryFullName;
 
-    @Column(length = 500)
+    @Column(name = "preview_url", length = 500)
     private String previewUrl;
 
     @CreationTimestamp
-    @Column(nullable = false, updatable = false)
+    @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     @UpdateTimestamp
-    @Column(nullable = false)
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 }
