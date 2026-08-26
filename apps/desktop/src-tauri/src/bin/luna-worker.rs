@@ -2,16 +2,27 @@ use luna_lib::{
     agent_runtime::{
         dispatch_agent_task, AgentTaskRunResult, AgentTaskRuntimeInput, DependencyArtifact,
     },
+    integration_runtime::{merge_project_pull_requests, MergeProjectPullRequestsInput},
     project_runtime::bootstrap_project_repository,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     env,
     fs,
     path::{Path, PathBuf},
 };
+
+const REPOSITORY_WRITER_ROLES: &[&str] = &[
+    "design-system",
+    "designer",
+    "frontend",
+    "backend",
+    "data-marketing",
+    "documentation",
+    "debug-router",
+];
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -40,6 +51,13 @@ struct WorkerTask {
     runtime_input: AgentTaskRuntimeInput,
 }
 
+#[derive(Debug, Clone)]
+struct WorkerTaskMetadata {
+    task_id: String,
+    role: String,
+    depends_on: Vec<String>,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct WorkerOutput {
@@ -52,6 +70,7 @@ struct WorkerOutput {
     workspace_path: String,
     blocked_task_id: Option<String>,
     task_results: Vec<AgentTaskRunResult>,
+    merged_pull_request_numbers: Vec<u64>,
 }
 
 fn parse_args() -> Result<(PathBuf, PathBuf), String> {
@@ -198,6 +217,165 @@ fn bootstrap_remote_workspace(
     Ok((repository_full_name, workspace_path))
 }
 
+fn task_transitively_depends_on(
+    metadata: &HashMap<String, WorkerTaskMetadata>,
+    task_id: &str,
+    dependency_task_id: &str,
+) -> bool {
+    let mut visited = HashSet::new();
+    let mut stack = metadata
+        .get(task_id)
+        .map(|task| task.depends_on.clone())
+        .unwrap_or_default();
+
+    while let Some(current) = stack.pop() {
+        if current == dependency_task_id {
+            return true;
+        }
+        if !visited.insert(current.clone()) {
+            continue;
+        }
+        if let Some(task) = metadata.get(&current) {
+            stack.extend(task.depends_on.iter().cloned());
+        }
+    }
+
+    false
+}
+
+fn verification_passed(result: &AgentTaskRunResult) -> bool {
+    !result.report.verification.iter().any(|verification| {
+        matches!(verification.status.as_str(), "failed" | "blocked")
+    })
+}
+
+fn clean_review_results<'a>(
+    completed: &'a [AgentTaskRunResult],
+    role: &str,
+    pull_request_number: u64,
+) -> Vec<&'a AgentTaskRunResult> {
+    completed
+        .iter()
+        .filter(|result| {
+            result.role == role
+                && result.report.status == "completed"
+                && result
+                    .report
+                    .reviewed_pull_requests
+                    .contains(&pull_request_number)
+                && verification_passed(result)
+        })
+        .collect()
+}
+
+fn evaluate_remote_merge_gate(
+    metadata: &HashMap<String, WorkerTaskMetadata>,
+    completed: &[AgentTaskRunResult],
+) -> Result<Vec<u64>, String> {
+    if completed.len() != metadata.len() {
+        return Err(format!(
+            "remote merge gate blocked: completed Agent tasks {}/{}",
+            completed.len(),
+            metadata.len()
+        ));
+    }
+    if completed
+        .iter()
+        .any(|result| result.report.status != "completed")
+    {
+        return Err("remote merge gate blocked: at least one Agent task is not completed".to_string());
+    }
+
+    let writer_results = completed
+        .iter()
+        .filter(|result| REPOSITORY_WRITER_ROLES.contains(&result.role.as_str()))
+        .collect::<Vec<_>>();
+
+    let mut pull_request_numbers = Vec::new();
+    for owner in &writer_results {
+        let pull_request_number = owner.report.pull_request_number.ok_or_else(|| {
+            format!(
+                "remote merge gate blocked: {}({}) completed without a PR number",
+                owner.task_id, owner.role
+            )
+        })?;
+        pull_request_numbers.push(pull_request_number);
+
+        let code_reviews = clean_review_results(completed, "code-review", pull_request_number)
+            .into_iter()
+            .filter(|review| {
+                task_transitively_depends_on(metadata, &review.task_id, &owner.task_id)
+            })
+            .collect::<Vec<_>>();
+        if code_reviews.is_empty() {
+            return Err(format!(
+                "remote merge gate blocked: PR #{pull_request_number} ({}) has no valid downstream Code Review evidence",
+                owner.task_id
+            ));
+        }
+
+        let reviewers = clean_review_results(completed, "reviewer", pull_request_number)
+            .into_iter()
+            .filter(|reviewer| {
+                code_reviews.iter().any(|code_review| {
+                    task_transitively_depends_on(
+                        metadata,
+                        &reviewer.task_id,
+                        &code_review.task_id,
+                    )
+                })
+            })
+            .collect::<Vec<_>>();
+        if reviewers.is_empty() {
+            return Err(format!(
+                "remote merge gate blocked: PR #{pull_request_number} ({}) has no valid Reviewer evidence after Code Review",
+                owner.task_id
+            ));
+        }
+
+        let qa_results = clean_review_results(completed, "qa", pull_request_number)
+            .into_iter()
+            .filter(|qa| {
+                reviewers.iter().any(|reviewer| {
+                    task_transitively_depends_on(metadata, &qa.task_id, &reviewer.task_id)
+                })
+            })
+            .collect::<Vec<_>>();
+        if qa_results.is_empty() {
+            return Err(format!(
+                "remote merge gate blocked: PR #{pull_request_number} ({}) has no valid QA evidence after Reviewer",
+                owner.task_id
+            ));
+        }
+    }
+
+    pull_request_numbers.sort_unstable();
+    pull_request_numbers.dedup();
+    if pull_request_numbers.is_empty() {
+        return Err("remote merge gate blocked: there are no Agent PRs to integrate".to_string());
+    }
+
+    Ok(pull_request_numbers)
+}
+
+fn integrate_remote_pull_requests(
+    repository_full_name: &str,
+    metadata: &HashMap<String, WorkerTaskMetadata>,
+    completed: &[AgentTaskRunResult],
+) -> Result<Vec<u64>, String> {
+    let pull_request_numbers = evaluate_remote_merge_gate(metadata, completed)?;
+    let integration = merge_project_pull_requests(MergeProjectPullRequestsInput {
+        repository_full_name: repository_full_name.to_string(),
+        pull_request_numbers,
+    })?;
+
+    Ok(integration
+        .merged_pull_requests
+        .iter()
+        .map(|pull_request| pull_request.number)
+        .collect())
+}
+
 fn run_project(mut envelope: WorkerEnvelope) -> Result<WorkerOutput, String> {
     validate_envelope(&envelope)?;
 
@@ -205,6 +383,22 @@ fn run_project(mut envelope: WorkerEnvelope) -> Result<WorkerOutput, String> {
     let repository_name = envelope.payload.repository_name.trim().to_string();
     let (repository_full_name, workspace_path) =
         bootstrap_remote_workspace(&organization, &repository_name)?;
+
+    let metadata = envelope
+        .payload
+        .tasks
+        .iter()
+        .map(|task| {
+            (
+                task.runtime_input.task_id.clone(),
+                WorkerTaskMetadata {
+                    task_id: task.runtime_input.task_id.clone(),
+                    role: task.runtime_input.role.clone(),
+                    depends_on: task.depends_on.clone(),
+                },
+            )
+        })
+        .collect::<HashMap<_, _>>();
 
     let mut pending = std::mem::take(&mut envelope.payload.tasks);
     for task in &mut pending {
@@ -265,20 +459,47 @@ fn run_project(mut envelope: WorkerEnvelope) -> Result<WorkerOutput, String> {
                 workspace_path,
                 blocked_task_id: Some(task_id),
                 task_results: completed,
+                merged_pull_request_numbers: Vec::new(),
             });
         }
     }
+
+    let merged_pull_request_numbers = match integrate_remote_pull_requests(
+        &repository_full_name,
+        &metadata,
+        &completed,
+    ) {
+        Ok(numbers) => numbers,
+        Err(error) => {
+            return Ok(WorkerOutput {
+                protocol_version: 1,
+                job_id: envelope.job_id,
+                project_id: envelope.project_id,
+                status: "blocked".to_string(),
+                message: error,
+                repository_full_name,
+                workspace_path,
+                blocked_task_id: None,
+                task_results: completed,
+                merged_pull_request_numbers: Vec::new(),
+            });
+        }
+    };
 
     Ok(WorkerOutput {
         protocol_version: 1,
         job_id: envelope.job_id,
         project_id: envelope.project_id,
         status: "completed".to_string(),
-        message: "All dependency-ready Agent tasks completed on the remote worker".to_string(),
+        message: format!(
+            "All Agent tasks completed and {} PR(s) were integrated into develop",
+            merged_pull_request_numbers.len()
+        ),
         repository_full_name,
         workspace_path,
         blocked_task_id: None,
         task_results: completed,
+        merged_pull_request_numbers,
     })
 }
 
