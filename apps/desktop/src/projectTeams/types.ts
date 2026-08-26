@@ -207,7 +207,7 @@ export type ProjectState = {
   deploymentPolicyId: "luna-apps-portal";
   plan: ProjectPlan | null;
   taskRuns: ProjectTaskRun[];
-  failureRoutes: FailureRouteRecord[];
+  failureRoutes?: FailureRouteRecord[];
   repositoryFullName: string | null;
   workspacePath: string | null;
   pmSessionId: string | null;
