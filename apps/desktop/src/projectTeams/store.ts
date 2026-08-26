@@ -1,14 +1,18 @@
 import { createInitialProjectTeamsState } from "./catalog";
 import { createAgentRuntimeIdentity } from "./permissions";
+import type { AgentTaskRunResult } from "./runtime";
 import type {
   AgentDecision,
+  AgentRole,
   ProjectPlan,
   ProjectState,
+  ProjectTaskRun,
   ProjectTeamsState,
   TeamId,
 } from "./types";
 
 const STORAGE_KEY = "luna.project-teams.v1";
+const MAX_TASK_ATTEMPTS = 3;
 
 export type StartProjectResult =
   | { ok: true; state: ProjectTeamsState; project: ProjectState }
@@ -26,6 +30,61 @@ export type CompleteProjectPlanningInput = {
 
 function canUseStorage() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+}
+
+function emptyTaskRun(task: ProjectPlan["tasks"][number], teamId: TeamId): ProjectTaskRun {
+  return {
+    taskId: task.id,
+    role: task.role,
+    agentId: `${teamId}:${task.role}`,
+    status: task.dependsOn.length === 0 ? "ready" : "pending",
+    attempts: 0,
+    branchName: null,
+    worktreePath: null,
+    threadId: null,
+    sessionId: null,
+    turnId: null,
+    eventsPath: null,
+    stderrPath: null,
+    commitSha: null,
+    pullRequestNumber: null,
+    pullRequestUrl: null,
+    reviewedPullRequests: [],
+    summary: null,
+    rationaleSummary: null,
+    evidence: [],
+    verification: [],
+    blockers: [],
+    lastError: null,
+    startedAt: null,
+    completedAt: null,
+  };
+}
+
+function hydrateTaskRun(run: ProjectTaskRun): ProjectTaskRun {
+  return {
+    ...run,
+    attempts: Number.isFinite(run.attempts) ? run.attempts : 0,
+    branchName: run.branchName ?? null,
+    worktreePath: run.worktreePath ?? null,
+    threadId: run.threadId ?? null,
+    sessionId: run.sessionId ?? null,
+    turnId: run.turnId ?? null,
+    eventsPath: run.eventsPath ?? null,
+    stderrPath: run.stderrPath ?? null,
+    commitSha: run.commitSha ?? null,
+    pullRequestNumber: run.pullRequestNumber ?? null,
+    pullRequestUrl: run.pullRequestUrl ?? null,
+    reviewedPullRequests: Array.isArray(run.reviewedPullRequests) ? run.reviewedPullRequests : [],
+    summary: run.summary ?? null,
+    rationaleSummary: run.rationaleSummary ?? null,
+    evidence: Array.isArray(run.evidence) ? run.evidence : [],
+    verification: Array.isArray(run.verification) ? run.verification : [],
+    blockers: Array.isArray(run.blockers) ? run.blockers : [],
+    lastError: run.lastError ?? null,
+    startedAt: run.startedAt ?? null,
+    completedAt: run.completedAt ?? null,
+  };
 }
 
 function hydrateState(state: ProjectTeamsState): ProjectTeamsState {
@@ -67,6 +126,7 @@ function hydrateState(state: ProjectTeamsState): ProjectTeamsState {
       qualityPolicyId: project.qualityPolicyId ?? "production-service",
       deploymentPolicyId: project.deploymentPolicyId ?? "luna-apps-portal",
       plan: project.plan ?? null,
+      taskRuns: Array.isArray(project.taskRuns) ? project.taskRuns.map(hydrateTaskRun) : [],
       repositoryFullName: project.repositoryFullName ?? null,
       workspacePath: project.workspacePath ?? null,
       pmSessionId: project.pmSessionId ?? null,
@@ -124,11 +184,85 @@ function createDecisionId() {
   return `DECISION-${time}-${random}`;
 }
 
-function updateProject(state: ProjectTeamsState, projectId: string, updater: (project: ProjectState) => ProjectState) {
+function updateProject(
+  state: ProjectTeamsState,
+  projectId: string,
+  updater: (project: ProjectState) => ProjectState,
+) {
   return {
     ...state,
-    projects: state.projects.map((project) => (project.id === projectId ? updater(project) : project)),
+    projects: state.projects.map((project) =>
+      project.id === projectId ? updater(project) : project,
+    ),
   };
+}
+
+function taskPlanById(project: ProjectState, taskId: string) {
+  return project.plan?.tasks.find((task) => task.id === taskId) ?? null;
+}
+
+function refreshDependencyReadiness(project: ProjectState): ProjectState {
+  if (!project.plan) return project;
+  const completed = new Set(
+    project.taskRuns.filter((run) => run.status === "done").map((run) => run.taskId),
+  );
+
+  return {
+    ...project,
+    taskRuns: project.taskRuns.map((run) => {
+      if (run.status !== "pending") return run;
+      const task = taskPlanById(project, run.taskId);
+      if (!task) return run;
+      const ready = task.dependsOn.every((dependency) => completed.has(dependency));
+      return ready ? { ...run, status: "ready" as const } : run;
+    }),
+  };
+}
+
+function agentStatusFromRuns(role: AgentRole, runs: ProjectTaskRun[]) {
+  const roleRuns = runs.filter((run) => run.role === role);
+  if (roleRuns.length === 0) return "idle" as const;
+  if (roleRuns.some((run) => run.status === "running")) return "working" as const;
+  if (roleRuns.some((run) => run.status === "blocked")) return "blocked" as const;
+  if (roleRuns.some((run) => run.status === "ready")) return "ready" as const;
+  if (roleRuns.every((run) => run.status === "done")) return "done" as const;
+  return "idle" as const;
+}
+
+function syncTeamAgentStatuses(state: ProjectTeamsState, projectId: string) {
+  const project = state.projects.find((item) => item.id === projectId);
+  if (!project) return state;
+
+  return {
+    ...state,
+    teams: state.teams.map((team) => {
+      if (team.id !== project.teamId) return team;
+      return {
+        ...team,
+        status: "working" as const,
+        agents: team.agents.map((agent) => {
+          if (agent.role === "pm") {
+            return { ...agent, status: project.plan ? "done" as const : agent.status };
+          }
+          return { ...agent, status: agentStatusFromRuns(agent.role, project.taskRuns) };
+        }),
+      };
+    }),
+  };
+}
+
+function projectStatusForRoles(roles: Array<Exclude<AgentRole, "pm">>) {
+  const priority: Array<{ roles: Array<Exclude<AgentRole, "pm">>; status: ProjectState["status"] }> = [
+    { roles: ["process-evaluator"], status: "evaluation" },
+    { roles: ["user-a", "user-b"], status: "user-test" },
+    { roles: ["qa"], status: "qa" },
+    { roles: ["code-review", "reviewer", "documentation"], status: "review" },
+    { roles: ["frontend", "backend", "debug-router"], status: "development" },
+    { roles: ["design-system", "designer"], status: "design" },
+    { roles: ["idea"], status: "planning" },
+  ];
+
+  return priority.find((group) => roles.some((role) => group.roles.includes(role)))?.status ?? "development";
 }
 
 export function recordAgentDecision(state: ProjectTeamsState, input: RecordDecisionInput) {
@@ -172,6 +306,7 @@ export function startProject(state: ProjectTeamsState, request: string): StartPr
     qualityPolicyId: "production-service",
     deploymentPolicyId: "luna-apps-portal",
     plan: null,
+    taskRuns: [],
     repositoryFullName: null,
     workspacePath: null,
     pmSessionId: null,
@@ -236,38 +371,204 @@ export function completeProjectPlanning(state: ProjectTeamsState, input: Complet
   const project = state.projects.find((item) => item.id === input.projectId);
   if (!project) return state;
 
-  const requiredRoles = new Set(input.plan.tasks.map((task) => task.role));
+  const taskRuns = input.plan.tasks.map((task) => emptyTaskRun(task, project.teamId));
   let nextState = updateProject(state, input.projectId, (currentProject) => ({
     ...currentProject,
-    status: "planning",
+    status: "development",
     plan: input.plan,
+    taskRuns,
     repositoryFullName: input.repositoryFullName,
     workspacePath: input.workspacePath,
     pmSessionId: input.pmSessionId,
-    runtimeMessage: "PM 계획 및 repository 준비 완료 · 독립 Agent worker dispatch 대기",
+    runtimeMessage: "PM 계획 및 repository 준비 완료 · 독립 Agent Task 실행 준비",
   }));
 
-  nextState = {
-    ...nextState,
-    teams: nextState.teams.map((team) =>
-      team.id === project.teamId
-        ? {
-            ...team,
-            status: "working",
-            agents: team.agents.map((agent) => ({
-              ...agent,
-              status:
-                agent.role === "pm"
-                  ? "done"
-                  : requiredRoles.has(agent.role)
-                    ? "ready"
-                    : "idle",
-            })),
-          }
-        : team,
-    ),
-  };
+  nextState = syncTeamAgentStatuses(nextState, input.projectId);
+  saveProjectTeamsState(nextState);
+  return nextState;
+}
 
+export function getRunnableTaskRuns(state: ProjectTeamsState, projectId: string, limit = 2) {
+  const project = state.projects.find((item) => item.id === projectId);
+  if (!project || !project.plan || project.status === "blocked") return [];
+
+  const selected: ProjectTaskRun[] = [];
+  const busyRoles = new Set(
+    project.taskRuns.filter((run) => run.status === "running").map((run) => run.role),
+  );
+
+  for (const run of project.taskRuns) {
+    if (run.status !== "ready" || busyRoles.has(run.role)) continue;
+    selected.push(run);
+    busyRoles.add(run.role);
+    if (selected.length >= limit) break;
+  }
+
+  return selected;
+}
+
+export function beginAgentTasks(state: ProjectTeamsState, projectId: string, taskIds: string[]) {
+  const project = state.projects.find((item) => item.id === projectId);
+  if (!project || taskIds.length === 0) return state;
+
+  const selected = new Set(taskIds);
+  const now = new Date().toISOString();
+  const roles = project.taskRuns
+    .filter((run) => selected.has(run.taskId) && run.status === "ready")
+    .map((run) => run.role);
+
+  let nextState = updateProject(state, projectId, (currentProject) => ({
+    ...currentProject,
+    status: projectStatusForRoles(roles),
+    runtimeMessage: `독립 Agent ${roles.length}개 Task 실행 중`,
+    taskRuns: currentProject.taskRuns.map((run) =>
+      selected.has(run.taskId) && run.status === "ready"
+        ? {
+            ...run,
+            status: "running" as const,
+            attempts: run.attempts + 1,
+            startedAt: now,
+            completedAt: null,
+            lastError: null,
+            blockers: [],
+          }
+        : run,
+    ),
+  }));
+
+  nextState = syncTeamAgentStatuses(nextState, projectId);
+  saveProjectTeamsState(nextState);
+  return nextState;
+}
+
+export function completeAgentTask(state: ProjectTeamsState, result: AgentTaskRunResult) {
+  const project = state.projects.find((item) => item.id === result.projectId);
+  if (!project) return state;
+
+  const now = new Date().toISOString();
+  const blocked = result.report.status === "blocked";
+  let nextState = updateProject(state, result.projectId, (currentProject) => ({
+    ...currentProject,
+    taskRuns: currentProject.taskRuns.map((run) =>
+      run.taskId === result.taskId
+        ? {
+            ...run,
+            status: blocked ? "blocked" as const : "done" as const,
+            branchName: result.branchName,
+            worktreePath: result.worktreePath,
+            threadId: result.threadId,
+            sessionId: result.sessionId,
+            turnId: result.turnId,
+            eventsPath: result.eventsPath,
+            stderrPath: result.stderrPath,
+            commitSha: result.report.commitSha,
+            pullRequestNumber: result.report.pullRequestNumber,
+            pullRequestUrl: result.report.pullRequestUrl,
+            reviewedPullRequests: result.report.reviewedPullRequests,
+            summary: result.report.summary,
+            rationaleSummary: result.report.rationaleSummary,
+            evidence: result.report.evidence,
+            verification: result.report.verification,
+            blockers: result.report.blockers,
+            lastError: blocked ? result.report.blockers.join(" · ") || result.report.summary : null,
+            completedAt: now,
+          }
+        : run,
+    ),
+  }));
+
+  nextState = updateProject(nextState, result.projectId, refreshDependencyReadiness);
+  const updatedProject = nextState.projects.find((item) => item.id === result.projectId);
+  if (!updatedProject) return nextState;
+
+  const hasBlocked = updatedProject.taskRuns.some((run) => run.status === "blocked");
+  const allDone = updatedProject.taskRuns.length > 0
+    && updatedProject.taskRuns.every((run) => run.status === "done");
+
+  nextState = updateProject(nextState, result.projectId, (currentProject) => ({
+    ...currentProject,
+    status: hasBlocked ? "blocked" : allDone ? "review" : currentProject.status,
+    runtimeMessage: hasBlocked
+      ? "Agent Task가 막혔습니다 · 근거를 확인하고 재시도 또는 제품 결정을 진행해 주세요."
+      : allDone
+        ? "PM 계획의 모든 Agent Task 실행 완료 · PR 통합/merge gate 연결 대기"
+        : "Agent Task 완료 · dependency가 충족된 다음 Task 실행 준비",
+  }));
+
+  nextState = syncTeamAgentStatuses(nextState, result.projectId);
+  saveProjectTeamsState(nextState);
+  return nextState;
+}
+
+export function failAgentTask(
+  state: ProjectTeamsState,
+  projectId: string,
+  taskId: string,
+  reason: string,
+) {
+  const project = state.projects.find((item) => item.id === projectId);
+  if (!project) return state;
+
+  const now = new Date().toISOString();
+  let nextState = updateProject(state, projectId, (currentProject) => ({
+    ...currentProject,
+    status: "blocked",
+    runtimeMessage: `Agent Runtime 실패 · ${reason}`,
+    taskRuns: currentProject.taskRuns.map((run) =>
+      run.taskId === taskId
+        ? {
+            ...run,
+            status: "blocked" as const,
+            lastError: reason,
+            blockers: [reason],
+            completedAt: now,
+          }
+        : run,
+    ),
+  }));
+
+  nextState = syncTeamAgentStatuses(nextState, projectId);
+  saveProjectTeamsState(nextState);
+  return nextState;
+}
+
+export function retryBlockedAgentTasks(state: ProjectTeamsState, projectId: string) {
+  const project = state.projects.find((item) => item.id === projectId);
+  if (!project) return state;
+
+  let retryCount = 0;
+  let exhaustedCount = 0;
+  let nextState = updateProject(state, projectId, (currentProject) => ({
+    ...currentProject,
+    taskRuns: currentProject.taskRuns.map((run) => {
+      if (run.status !== "blocked") return run;
+      if (run.attempts >= MAX_TASK_ATTEMPTS) {
+        exhaustedCount += 1;
+        return run;
+      }
+      retryCount += 1;
+      return {
+        ...run,
+        status: "ready" as const,
+        lastError: null,
+        blockers: [],
+        completedAt: null,
+      };
+    }),
+  }));
+
+  nextState = updateProject(nextState, projectId, (currentProject) => ({
+    ...currentProject,
+    status: retryCount > 0 ? "development" : "blocked",
+    runtimeMessage:
+      retryCount > 0
+        ? `막힌 Agent Task ${retryCount}개 재시도 준비`
+        : exhaustedCount > 0
+          ? `자동 재시도 한도(${MAX_TASK_ATTEMPTS})에 도달했습니다 · PM/사용자 결정 필요`
+          : currentProject.runtimeMessage,
+  }));
+
+  nextState = syncTeamAgentStatuses(nextState, projectId);
   saveProjectTeamsState(nextState);
   return nextState;
 }

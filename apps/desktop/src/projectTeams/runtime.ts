@@ -1,6 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 
-import type { ProjectPlan, TeamId } from "./types";
+import type {
+  AgentTaskVerification,
+  ProjectPlan,
+  TeamId,
+} from "./types";
 
 export type ProjectRuntimePreflight = {
   organization: string;
@@ -51,6 +55,64 @@ export type StartProjectRuntimeInput = {
   request: string;
 };
 
+export type DependencyArtifact = {
+  taskId: string;
+  role: string;
+  summary: string;
+  branchName: string | null;
+  commitSha: string | null;
+  pullRequestNumber: number | null;
+  pullRequestUrl: string | null;
+};
+
+export type AgentTaskRuntimeInput = {
+  organization: string;
+  projectId: string;
+  teamId: TeamId;
+  teamName: string;
+  role: string;
+  agentId: string;
+  taskId: string;
+  taskSlug: string;
+  title: string;
+  summary: string;
+  acceptanceCriteria: string[];
+  userRequest: string;
+  productSummary: string;
+  architectureSummary: string;
+  repositoryFullName: string;
+  workspacePath: string;
+  dependencies: DependencyArtifact[];
+};
+
+export type AgentTaskReport = {
+  status: "completed" | "blocked";
+  summary: string;
+  rationaleSummary: string;
+  evidence: string[];
+  verification: AgentTaskVerification[];
+  commitSha: string | null;
+  pullRequestNumber: number | null;
+  pullRequestUrl: string | null;
+  reviewedPullRequests: number[];
+  blockers: string[];
+};
+
+export type AgentTaskRunResult = {
+  projectId: string;
+  taskId: string;
+  role: string;
+  agentId: string;
+  branchName: string | null;
+  worktreePath: string;
+  threadId: string;
+  sessionId: string;
+  turnId: string;
+  eventsPath: string;
+  stderrPath: string;
+  report: AgentTaskReport;
+};
+
 export async function checkProjectRuntime(organization: string) {
   return invoke<ProjectRuntimePreflight>("project_runtime_preflight", { organization });
 }
@@ -61,4 +123,8 @@ export async function bootstrapProjectRepository(input: BootstrapProjectReposito
 
 export async function startProjectRuntime(input: StartProjectRuntimeInput) {
   return invoke<StartProjectRuntimeResult>("start_project_runtime", input);
+}
+
+export async function dispatchAgentTask(input: AgentTaskRuntimeInput) {
+  return invoke<AgentTaskRunResult>("dispatch_agent_task", { input });
 }
