@@ -5,11 +5,23 @@ import type { LunaPage } from "../components/Sidebar";
 import { analyzeProjectIntake } from "../projectTeams/intakeRuntime";
 import { loadOrganizationRuntimeSettings } from "../projectTeams/organization";
 import { startProjectWithIntake } from "../projectTeams/projectIntakeState";
+import { checkProjectRuntime } from "../projectTeams/runtime";
 import { getTeamName, loadProjectTeamsState } from "../projectTeams/store";
 import type { ProjectTeamsState } from "../projectTeams/types";
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
+}
+
+function preflightBlockers(preflight: Awaited<ReturnType<typeof checkProjectRuntime>>) {
+  const blockers: string[] = [];
+  if (!preflight.gitAvailable) blockers.push("git 없음");
+  if (!preflight.ghAvailable) blockers.push("gh 없음");
+  if (!preflight.ghAuthenticated) blockers.push("gh 로그인 필요");
+  if (!preflight.codexAvailable) blockers.push("Codex CLI 없음");
+  if (!preflight.codexChatgptAuth) blockers.push("Codex ChatGPT 로그인 필요");
+  if (!preflight.organizationAccessible) blockers.push(`${preflight.organization} 접근 불가`);
+  return blockers;
 }
 
 export function E2ECanaryPage({ onChangePage }: { onChangePage: (page: LunaPage) => void }) {
@@ -28,9 +40,17 @@ export function E2ECanaryPage({ onChangePage }: { onChangePage: (page: LunaPage)
     }
 
     setRunning(true);
-    setMessage("E2E Canary Organization Intake 실행 중 · 실제 요구사항 분석 후 대기 팀을 배정합니다.");
+    setMessage("E2E Canary preflight 실행 중 · git / gh / Codex / BloomBouquet 접근을 실제 확인합니다.");
 
     try {
+      const preflight = await checkProjectRuntime(runtimeSettings.organization);
+      const blockers = preflightBlockers(preflight);
+      if (blockers.length > 0) {
+        setMessage(`E2E Canary 시작 차단 · ${blockers.join(" · ")} · ${preflight.message}`);
+        return;
+      }
+
+      setMessage("E2E Canary preflight PASS · Organization Intake 실행 중 · 실제 요구사항 분석 후 대기 팀을 배정합니다.");
       const intake = await analyzeProjectIntake({
         organization: runtimeSettings.organization,
         workspaceRoot: runtimeSettings.workspaceRoot,
@@ -72,7 +92,7 @@ export function E2ECanaryPage({ onChangePage }: { onChangePage: (page: LunaPage)
         <div className="project-teams-runtime">
           <span className="project-teams-runtime-dot" />
           <div>
-            <strong>{running ? "Canary Intake 실행 중" : "실제 Runtime 사용"}</strong>
+            <strong>{running ? "Canary Runtime 확인 중" : "실제 Runtime 사용"}</strong>
             <span>mock orchestration이 아니라 기존 ChatGPT Codex + gh + BloomBouquet 경로를 사용</span>
           </div>
         </div>
@@ -95,6 +115,12 @@ export function E2ECanaryPage({ onChangePage }: { onChangePage: (page: LunaPage)
             <span className="project-policy-label">CANARY PRODUCT</span>
             <h3>PulseNote</h3>
             <p>React UI + backend HTTP API + SQLite persistence를 가진 작은 노트 CRUD 제품입니다. auth·결제·외부 API를 제외해 Runtime 자체의 실패를 제품 복잡도와 구분합니다.</p>
+          </section>
+
+          <section>
+            <span className="project-policy-label">PREFLIGHT</span>
+            <h3>실행 전 외부 의존성 확인</h3>
+            <p>git, gh, gh 인증, Codex CLI, ChatGPT Codex 인증, BloomBouquet 접근이 모두 실제 PASS해야 Intake를 시작합니다. 빠진 의존성을 mock으로 우회하지 않습니다.</p>
           </section>
 
           <section>
