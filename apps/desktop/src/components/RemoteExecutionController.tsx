@@ -115,8 +115,9 @@ export function RemoteExecutionController() {
         state = synced.state;
 
         if (synced.appliedTaskCount > 0 || synced.integrationApplied) {
+          const mergedPullRequestNumbers = synced.job.result?.mergedPullRequestNumbers ?? [];
           const integrationLabel = synced.integrationApplied
-            ? ` · develop 통합 ${synced.job.result?.mergedPullRequestNumbers.map((number) => `#${number}`).join(", ")}`
+            ? ` · develop 통합 ${mergedPullRequestNumbers.map((number) => `#${number}`).join(", ")}`
             : "";
           setMessage(
             `${project.plan?.projectName ?? project.id} · 원격 Agent 결과 ${synced.appliedTaskCount}개 반영${integrationLabel}`,
