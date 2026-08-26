@@ -17,6 +17,8 @@ function latestPmEscalation(project: ProjectState) {
 }
 
 function replanAttempt(project: ProjectState, route: FailureRouteRecord) {
+  const trackedAttempt = project.replanAttempts?.[route.id];
+  if (trackedAttempt !== undefined) return trackedAttempt;
   return (project.replans ?? []).filter(
     (record) => record.triggerRouteId === route.id,
   ).length + 1;
