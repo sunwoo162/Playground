@@ -22,6 +22,8 @@ type ProjectTaskQueueProps = {
   busy: boolean;
   onContinue: () => void;
   onRetryBlocked: () => void;
+  blockedActionLabel?: string;
+  blockedActionDisabled?: boolean;
 };
 
 export function ProjectTaskQueue({
@@ -29,6 +31,8 @@ export function ProjectTaskQueue({
   busy,
   onContinue,
   onRetryBlocked,
+  blockedActionLabel = "Debug Router로 재분석",
+  blockedActionDisabled = false,
 }: ProjectTaskQueueProps) {
   if (!project.plan || project.taskRuns.length === 0) return null;
 
@@ -90,14 +94,18 @@ export function ProjectTaskQueue({
           {busy ? "Agent 실행 중" : "Agent 실행 계속"}
         </button>
         {blockedCount > 0 && (
-          <button type="button" onClick={onRetryBlocked} disabled={busy}>
-            Debug Router로 재분석
+          <button
+            type="button"
+            onClick={onRetryBlocked}
+            disabled={busy || blockedActionDisabled}
+          >
+            {blockedActionLabel}
           </button>
         )}
       </div>
 
       <p className="project-task-note">
-        한 번에 최대 2개 Task만 실행합니다. 실패 Task는 같은 Agent를 바로 재실행하지 않고 Debug Router가 원인과 담당 Task를 먼저 판단합니다.
+        한 번에 최대 2개 Task만 실행합니다. 실패 Task는 Debug Router 진단 후 owner 재실행, PM 복구 재계획, 또는 Product Owner 결정으로 라우팅됩니다.
       </p>
     </section>
   );
