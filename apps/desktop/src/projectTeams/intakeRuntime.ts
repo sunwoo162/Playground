@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 
+import { loadProjectTeamsState } from "./store";
 import type { ProjectIntakeAnalysis, ProjectIntakeRecord } from "./types";
 
 export const PROJECT_INTAKE_AGENT_VERSION = "1.0.0";
@@ -23,6 +24,12 @@ function createIntakeId() {
   return `INTAKE-${time}-${random}`;
 }
 
+function hasIdleDeliveryTeam() {
+  return loadProjectTeamsState().teams.some(
+    (team) => team.status === "idle" && !team.activeProjectId,
+  );
+}
+
 export async function analyzeProjectIntake(
   input: AnalyzeProjectIntakeInput,
 ): Promise<ProjectIntakeRecord> {
@@ -32,6 +39,9 @@ export async function analyzeProjectIntake(
   }
   if (!input.workspaceRoot.trim()) {
     throw new Error("Workspace root를 먼저 설정해 주세요.");
+  }
+  if (!hasIdleDeliveryTeam()) {
+    throw new Error("현재 대기 중인 팀이 없어 Project Intake를 실행하지 않았습니다.");
   }
 
   const id = createIntakeId();
