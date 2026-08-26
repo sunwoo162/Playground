@@ -15,29 +15,38 @@ import type {
 
 const PROJECT_ID = "PROJECT-E2E-001";
 const REPOSITORY_NAME = "pulsenote-canary-project-e2e-001";
+const WRITER_ROLES = new Set<ExecutableAgentRole>([
+  "frontend",
+  "backend",
+  "data-marketing",
+  "documentation",
+]);
 
 function assert(condition: boolean, message: string) {
   if (!condition) throw new Error(message);
 }
 
 function taskRun(role: ExecutableAgentRole, index: number, done = true): ProjectTaskRun {
+  const writesRepository = WRITER_ROLES.has(role);
   return {
     taskId: `TASK-${index}`,
     role,
     agentId: `rose:${role}`,
     status: done ? "done" : "pending",
     attempts: 1,
-    branchName: `agent/rose/${role}/task-${index}`,
+    branchName: writesRepository ? `agent/rose/${role}/task-${index}` : null,
     worktreePath: `/tmp/task-${index}`,
     threadId: `thread-${index}`,
     sessionId: `session-${index}`,
     turnId: `turn-${index}`,
     eventsPath: `/tmp/task-${index}.events.jsonl`,
     stderrPath: `/tmp/task-${index}.stderr.log`,
-    commitSha: `commit-${index}`,
-    pullRequestNumber: index,
-    pullRequestUrl: `https://github.com/BloomBouquet/${REPOSITORY_NAME}/pull/${index}`,
-    reviewedPullRequests: role === "code-review" || role === "reviewer" || role === "qa" ? [1, 2] : [],
+    commitSha: writesRepository ? `commit-${index}` : null,
+    pullRequestNumber: writesRepository ? index : null,
+    pullRequestUrl: writesRepository
+      ? `https://github.com/BloomBouquet/${REPOSITORY_NAME}/pull/${index}`
+      : null,
+    reviewedPullRequests: role === "code-review" || role === "reviewer" || role === "qa" ? [1, 2, 3, 4] : [],
     summary: `${role} complete`,
     rationaleSummary: "Evidence verified",
     evidence: ["test evidence"],
@@ -179,7 +188,8 @@ function run() {
     report.repositoryFullName === `BloomBouquet/${REPOSITORY_NAME}`,
     "report must preserve the isolated actual repository",
   );
-  assert(report.pullRequests.length === requiredRoles.length, "report must preserve Agent PR evidence");
+  assert(report.pullRequests.length === WRITER_ROLES.size, "report must preserve writer Agent PR evidence only");
+  assert(report.commitShas.length === WRITER_ROLES.size, "report must preserve writer Agent commit evidence only");
 
   console.log("PASS  Luna E2E canary evidence scenarios passed.");
 }
