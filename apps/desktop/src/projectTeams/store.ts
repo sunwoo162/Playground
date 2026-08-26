@@ -1,6 +1,7 @@
 import { createInitialProjectTeamsState } from "./catalog";
 import { createAgentRuntimeIdentity } from "./permissions";
 import type { AgentTaskRunResult } from "./runtime";
+import { selectIdleTeamForProject } from "./teamAllocation";
 import type {
   AgentDecision,
   AgentRole,
@@ -219,10 +220,6 @@ export function resetProjectTeamsState() {
   return state;
 }
 
-function chooseIdleTeam(state: ProjectTeamsState) {
-  return state.teams.find((team) => team.status === "idle") ?? null;
-}
-
 function createProjectId() {
   const time = Date.now().toString(36).toUpperCase();
   const random = Math.random().toString(36).slice(2, 6).toUpperCase();
@@ -338,10 +335,11 @@ export function startProject(state: ProjectTeamsState, request: string): StartPr
     return { ok: false, state, message: "프로젝트 요구사항을 입력해 주세요." };
   }
 
-  const team = chooseIdleTeam(state);
-  if (!team) {
+  const allocation = selectIdleTeamForProject(state);
+  if (!allocation) {
     return { ok: false, state, message: "현재 대기 중인 팀이 없습니다." };
   }
+  const { team } = allocation;
 
   const project: ProjectState = {
     id: createProjectId(),
@@ -349,6 +347,7 @@ export function startProject(state: ProjectTeamsState, request: string): StartPr
     teamId: team.id,
     status: "queued",
     createdAt: new Date().toISOString(),
+    teamAllocation: allocation.record,
     authPolicyId: "bouquet",
     executionPolicyId: "iseol-workflow",
     autonomyPolicyId: "independent-agent",
@@ -362,7 +361,7 @@ export function startProject(state: ProjectTeamsState, request: string): StartPr
     workspacePath: null,
     pmSessionId: null,
     runtimeFailureSource: null,
-    runtimeMessage: "팀 배정 완료 · PM Codex 실행 준비",
+    runtimeMessage: `팀 배정 완료 · ${allocation.record.reason} · PM Codex 실행 준비`,
   };
 
   const nextState: ProjectTeamsState = {
