@@ -10,6 +10,8 @@ import {
 import { integrateProjectPullRequests } from "../projectTeams/integration";
 import { markProjectIntegrated } from "../projectTeams/integrationState";
 import { loadOrganizationRuntimeSettings } from "../projectTeams/organization";
+import { runProjectRetrospectives } from "../projectTeams/retrospective";
+import { completeProjectRetrospective } from "../projectTeams/retrospectiveState";
 import { dispatchAgentTask, startProjectRuntime } from "../projectTeams/runtime";
 import {
   beginAgentTasks,
@@ -73,8 +75,9 @@ export function ProjectTeamsPage() {
   const [awaitingRequirement, setAwaitingRequirement] = useState(false);
   const [launchingProject, setLaunchingProject] = useState(false);
   const [dispatchingAgents, setDispatchingAgents] = useState(false);
+  const [runningRetrospective, setRunningRetrospective] = useState(false);
   const [message, setMessage] = useState("/start로 새 프로젝트를 배정할 수 있습니다.");
-  const runtimeBusy = launchingProject || dispatchingAgents;
+  const runtimeBusy = launchingProject || dispatchingAgents || runningRetrospective;
 
   const selectedTeam = useMemo(
     () => state.teams.find((team) => team.id === selectedTeamId) ?? state.teams[0],
@@ -85,6 +88,29 @@ export function ProjectTeamsPage() {
     if (!selectedTeam?.activeProjectId) return null;
     return state.projects.find((project) => project.id === selectedTeam.activeProjectId) ?? null;
   }, [selectedTeam, state.projects]);
+
+  const runRetrospectiveStage = async (baseState: ProjectTeamsState, projectId: string) => {
+    const project = baseState.projects.find((item) => item.id === projectId);
+    if (!project || project.status !== "retrospective") return baseState;
+
+    setRunningRetrospective(true);
+    setMessage("참여 Agent별 독립 회고 실행 중 · 완료 후 Team Evolution Agent가 개선 제안을 검증합니다.");
+
+    try {
+      const result = await runProjectRetrospectives(baseState, projectId);
+      const nextState = completeProjectRetrospective(baseState, result);
+      setState(nextState);
+      setMessage(
+        `프로젝트 완료 · Agent 회고 ${result.retrospectives.length}개 저장 · Team Evolution 제안 ${result.evolution.playbookChanges.length + result.evolution.agentVersionChanges.length}개 저장 · 팀 대기 전환`,
+      );
+      return nextState;
+    } catch (error) {
+      setMessage(`회고 / Team Evolution Runtime 실패: ${errorMessage(error)} · 프로젝트는 회고 상태로 유지됩니다.`);
+      return baseState;
+    } finally {
+      setRunningRetrospective(false);
+    }
+  };
 
   const runAgentQueue = async (baseState: ProjectTeamsState, projectId: string) => {
     const runtimeSettings = loadOrganizationRuntimeSettings();
@@ -168,9 +194,8 @@ export function ProjectTeamsPage() {
           integration.mergedPullRequestNumbers,
         );
         setState(nextState);
-        setMessage(
-          `${integration.message} · 다음 단계: Agent 회고 / Team Evolution`,
-        );
+        setMessage(`${integration.message} · Agent 회고 / Team Evolution 시작`);
+        nextState = await runRetrospectiveStage(nextState, projectId);
       } catch (error) {
         setMessage(`PR 통합 Runtime 실패: ${errorMessage(error)}`);
       }
@@ -307,6 +332,11 @@ export function ProjectTeamsPage() {
     await runAgentQueue(nextState, activeProject.id);
   };
 
+  const handleRunRetrospective = async () => {
+    if (!activeProject || runtimeBusy || activeProject.status !== "retrospective") return;
+    await runRetrospectiveStage(state, activeProject.id);
+  };
+
   const handleReset = () => {
     if (runtimeBusy) return;
     const nextState = resetProjectTeamsState();
@@ -329,11 +359,13 @@ export function ProjectTeamsPage() {
           <span className="project-teams-runtime-dot" />
           <div>
             <strong>
-              {dispatchingAgents
-                ? "Agent Runtime 실행 중"
-                : launchingProject
-                  ? "PM Runtime 실행 중"
-                  : "Codex Runtime"}
+              {runningRetrospective
+                ? "Retrospective Runtime 실행 중"
+                : dispatchingAgents
+                  ? "Agent Runtime 실행 중"
+                  : launchingProject
+                    ? "PM Runtime 실행 중"
+                    : "Codex Runtime"}
             </strong>
             <span>ChatGPT Codex 인증과 BloomBouquet 로컬 Runtime을 사용</span>
           </div>
@@ -418,6 +450,16 @@ export function ProjectTeamsPage() {
                       disabled={runtimeBusy}
                     >
                       PM Runtime 다시 실행
+                    </button>
+                  )}
+                  {activeProject.status === "retrospective" && (
+                    <button
+                      className="project-reset-button project-runtime-retry-button"
+                      type="button"
+                      onClick={handleRunRetrospective}
+                      disabled={runtimeBusy}
+                    >
+                      Agent 회고 / Team Evolution 실행
                     </button>
                   )}
                 </div>
