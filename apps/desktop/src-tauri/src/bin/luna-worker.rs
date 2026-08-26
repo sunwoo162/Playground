@@ -2,6 +2,10 @@ use luna_lib::{
     agent_runtime::{
         dispatch_agent_task, AgentTaskRunResult, AgentTaskRuntimeInput, DependencyArtifact,
     },
+    failure_router_runtime::{
+        route_agent_failure, FailureOwnerCandidate, FailureVerification, RouteAgentFailureInput,
+        RouteAgentFailureResult,
+    },
     integration_runtime::{merge_project_pull_requests, MergeProjectPullRequestsInput},
     project_runtime::bootstrap_project_repository,
 };
@@ -23,6 +27,7 @@ const REPOSITORY_WRITER_ROLES: &[&str] = &[
     "documentation",
     "debug-router",
 ];
+const MAX_REMOTE_ROUTE_ATTEMPTS: u32 = 3;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -43,7 +48,7 @@ struct WorkerPayload {
     tasks: Vec<WorkerTask>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct WorkerTask {
     #[serde(default)]
@@ -53,8 +58,6 @@ struct WorkerTask {
 
 #[derive(Debug, Clone)]
 struct WorkerTaskMetadata {
-    task_id: String,
-    role: String,
     depends_on: Vec<String>,
 }
 
@@ -70,6 +73,7 @@ struct WorkerOutput {
     workspace_path: String,
     blocked_task_id: Option<String>,
     task_results: Vec<AgentTaskRunResult>,
+    failure_routes: Vec<RouteAgentFailureResult>,
     merged_pull_request_numbers: Vec<u64>,
 }
 
@@ -376,6 +380,147 @@ fn integrate_remote_pull_requests(
         .collect())
 }
 
+fn owner_candidate_ids(
+    metadata: &HashMap<String, WorkerTaskMetadata>,
+    failed_task_id: &str,
+) -> HashSet<String> {
+    let mut candidates = HashSet::from([failed_task_id.to_string()]);
+    let mut stack = metadata
+        .get(failed_task_id)
+        .map(|task| task.depends_on.clone())
+        .unwrap_or_default();
+    while let Some(task_id) = stack.pop() {
+        if !candidates.insert(task_id.clone()) {
+            continue;
+        }
+        if let Some(task) = metadata.get(&task_id) {
+            stack.extend(task.depends_on.iter().cloned());
+        }
+    }
+    candidates
+}
+
+fn route_blocked_agent(
+    blocked_result: &AgentTaskRunResult,
+    templates: &HashMap<String, WorkerTask>,
+    metadata: &HashMap<String, WorkerTaskMetadata>,
+    repository_full_name: &str,
+    workspace_path: &str,
+    route_attempt: u32,
+) -> Result<RouteAgentFailureResult, String> {
+    let failed_template = templates
+        .get(&blocked_result.task_id)
+        .ok_or_else(|| format!("missing task template for {}", blocked_result.task_id))?;
+    let candidate_ids = owner_candidate_ids(metadata, &blocked_result.task_id);
+    let mut candidate_owners = templates
+        .values()
+        .filter(|task| candidate_ids.contains(&task.runtime_input.task_id))
+        .map(|task| FailureOwnerCandidate {
+            task_id: task.runtime_input.task_id.clone(),
+            role: task.runtime_input.role.clone(),
+            title: task.runtime_input.title.clone(),
+            summary: task.runtime_input.summary.clone(),
+        })
+        .collect::<Vec<_>>();
+    candidate_owners.sort_by(|left, right| left.task_id.cmp(&right.task_id));
+
+    let verification = blocked_result
+        .report
+        .verification
+        .iter()
+        .map(|item| FailureVerification {
+            name: item.name.clone(),
+            status: item.status.clone(),
+            details: item.details.clone(),
+        })
+        .collect::<Vec<_>>();
+    let failure_reason = if blocked_result.report.blockers.is_empty() {
+        blocked_result.report.summary.clone()
+    } else {
+        blocked_result.report.blockers.join(" · ")
+    };
+
+    tauri::async_runtime::block_on(route_agent_failure(RouteAgentFailureInput {
+        project_id: blocked_result.project_id.clone(),
+        team_id: failed_template.runtime_input.team_id.clone(),
+        team_name: failed_template.runtime_input.team_name.clone(),
+        repository_full_name: repository_full_name.to_string(),
+        workspace_path: workspace_path.to_string(),
+        failed_task_id: blocked_result.task_id.clone(),
+        failed_role: blocked_result.role.clone(),
+        failure_reason,
+        blockers: blocked_result.report.blockers.clone(),
+        verification,
+        candidate_owners,
+        route_attempt,
+    }))
+}
+
+fn requeue_owner_scope(
+    owner_task_id: &str,
+    original_order: &[String],
+    templates: &HashMap<String, WorkerTask>,
+    metadata: &HashMap<String, WorkerTaskMetadata>,
+    pending: &mut Vec<WorkerTask>,
+    completed: &mut Vec<AgentTaskRunResult>,
+) -> Result<(), String> {
+    if !metadata.contains_key(owner_task_id) {
+        return Err(format!("Failure Router selected unknown owner task {owner_task_id}"));
+    }
+
+    let invalidated = original_order
+        .iter()
+        .filter(|task_id| {
+            task_id.as_str() == owner_task_id
+                || task_transitively_depends_on(metadata, task_id, owner_task_id)
+        })
+        .cloned()
+        .collect::<HashSet<_>>();
+
+    completed.retain(|result| !invalidated.contains(&result.task_id));
+    pending.retain(|task| !invalidated.contains(&task.runtime_input.task_id));
+
+    for task_id in original_order {
+        if !invalidated.contains(task_id) {
+            continue;
+        }
+        let template = templates
+            .get(task_id)
+            .ok_or_else(|| format!("missing retry template for {task_id}"))?;
+        pending.push(template.clone());
+    }
+    Ok(())
+}
+
+fn blocked_output(
+    envelope: &WorkerEnvelope,
+    repository_full_name: String,
+    workspace_path: String,
+    blocked_task_id: Option<String>,
+    message: String,
+    mut task_results: Vec<AgentTaskRunResult>,
+    blocked_result: Option<AgentTaskRunResult>,
+    failure_routes: Vec<RouteAgentFailureResult>,
+) -> WorkerOutput {
+    if let Some(result) = blocked_result {
+        task_results.retain(|existing| existing.task_id != result.task_id);
+        task_results.push(result);
+    }
+    WorkerOutput {
+        protocol_version: 1,
+        job_id: envelope.job_id.clone(),
+        project_id: envelope.project_id.clone(),
+        status: "blocked".to_string(),
+        message,
+        repository_full_name,
+        workspace_path,
+        blocked_task_id,
+        task_results,
+        failure_routes,
+        merged_pull_request_numbers: Vec::new(),
+    }
+}
+
 fn run_project(mut envelope: WorkerEnvelope) -> Result<WorkerOutput, String> {
     validate_envelope(&envelope)?;
 
@@ -384,6 +529,19 @@ fn run_project(mut envelope: WorkerEnvelope) -> Result<WorkerOutput, String> {
     let (repository_full_name, workspace_path) =
         bootstrap_remote_workspace(&organization, &repository_name)?;
 
+    for task in &mut envelope.payload.tasks {
+        task.runtime_input.organization = organization.clone();
+        task.runtime_input.repository_full_name = repository_full_name.clone();
+        task.runtime_input.workspace_path = workspace_path.clone();
+        task.runtime_input.dependencies = Vec::new();
+    }
+
+    let original_order = envelope
+        .payload
+        .tasks
+        .iter()
+        .map(|task| task.runtime_input.task_id.clone())
+        .collect::<Vec<_>>();
     let metadata = envelope
         .payload
         .tasks
@@ -392,23 +550,23 @@ fn run_project(mut envelope: WorkerEnvelope) -> Result<WorkerOutput, String> {
             (
                 task.runtime_input.task_id.clone(),
                 WorkerTaskMetadata {
-                    task_id: task.runtime_input.task_id.clone(),
-                    role: task.runtime_input.role.clone(),
                     depends_on: task.depends_on.clone(),
                 },
             )
         })
         .collect::<HashMap<_, _>>();
+    let templates = envelope
+        .payload
+        .tasks
+        .iter()
+        .cloned()
+        .map(|task| (task.runtime_input.task_id.clone(), task))
+        .collect::<HashMap<_, _>>();
 
     let mut pending = std::mem::take(&mut envelope.payload.tasks);
-    for task in &mut pending {
-        task.runtime_input.organization = organization.clone();
-        task.runtime_input.repository_full_name = repository_full_name.clone();
-        task.runtime_input.workspace_path = workspace_path.clone();
-        task.runtime_input.dependencies = Vec::new();
-    }
-
     let mut completed: Vec<AgentTaskRunResult> = Vec::new();
+    let mut route_attempts: HashMap<String, u32> = HashMap::new();
+    let mut failure_routes: Vec<RouteAgentFailureResult> = Vec::new();
 
     while !pending.is_empty() {
         let completed_ids = completed
@@ -424,7 +582,8 @@ fn run_project(mut envelope: WorkerEnvelope) -> Result<WorkerOutput, String> {
 
         let Some(ready_index) = ready_index else {
             return Err(
-                "Agent task graph has no runnable task; a dependency cycle is likely".to_string(),
+                "Agent task graph has no runnable task; a dependency cycle or invalid recovery state is likely"
+                    .to_string(),
             );
         };
 
@@ -443,25 +602,53 @@ fn run_project(mut envelope: WorkerEnvelope) -> Result<WorkerOutput, String> {
         let task_id = task.runtime_input.task_id.clone();
         let result = tauri::async_runtime::block_on(dispatch_agent_task(task.runtime_input))
             .map_err(|error| format!("Agent task {task_id} runtime failed: {error}"))?;
-        let blocked = result.report.status == "blocked";
-        completed.push(result);
 
-        if blocked {
-            return Ok(WorkerOutput {
-                protocol_version: 1,
-                job_id: envelope.job_id,
-                project_id: envelope.project_id,
-                status: "blocked".to_string(),
-                message: format!(
-                    "Agent task {task_id} reported a blocker; remaining tasks were not started"
-                ),
+        if result.report.status == "blocked" {
+            let attempt = route_attempts.entry(task_id.clone()).or_insert(0);
+            *attempt += 1;
+            let route_result = route_blocked_agent(
+                &result,
+                &templates,
+                &metadata,
+                &repository_full_name,
+                &workspace_path,
+                *attempt,
+            )?;
+            let route = route_result.decision.route.clone();
+            let recommended_action = route_result.decision.recommended_action.clone();
+            let owner_task_id = route_result.decision.owner_task_id.clone();
+            failure_routes.push(route_result);
+
+            if route == "retry-owner" && *attempt < MAX_REMOTE_ROUTE_ATTEMPTS {
+                let owner_task_id = owner_task_id
+                    .ok_or_else(|| "retry-owner route did not provide ownerTaskId".to_string())?;
+                requeue_owner_scope(
+                    &owner_task_id,
+                    &original_order,
+                    &templates,
+                    &metadata,
+                    &mut pending,
+                    &mut completed,
+                )?;
+                continue;
+            }
+
+            return Ok(blocked_output(
+                &envelope,
                 repository_full_name,
                 workspace_path,
-                blocked_task_id: Some(task_id),
-                task_results: completed,
-                merged_pull_request_numbers: Vec::new(),
-            });
+                Some(task_id.clone()),
+                format!(
+                    "Remote Failure Router selected {route} for {task_id}: {recommended_action}"
+                ),
+                completed,
+                Some(result),
+                failure_routes,
+            ));
         }
+
+        completed.retain(|existing| existing.task_id != result.task_id);
+        completed.push(result);
     }
 
     let merged_pull_request_numbers = match integrate_remote_pull_requests(
@@ -471,18 +658,16 @@ fn run_project(mut envelope: WorkerEnvelope) -> Result<WorkerOutput, String> {
     ) {
         Ok(numbers) => numbers,
         Err(error) => {
-            return Ok(WorkerOutput {
-                protocol_version: 1,
-                job_id: envelope.job_id,
-                project_id: envelope.project_id,
-                status: "blocked".to_string(),
-                message: error,
+            return Ok(blocked_output(
+                &envelope,
                 repository_full_name,
                 workspace_path,
-                blocked_task_id: None,
-                task_results: completed,
-                merged_pull_request_numbers: Vec::new(),
-            });
+                None,
+                error,
+                completed,
+                None,
+                failure_routes,
+            ));
         }
     };
 
@@ -492,13 +677,14 @@ fn run_project(mut envelope: WorkerEnvelope) -> Result<WorkerOutput, String> {
         project_id: envelope.project_id,
         status: "completed".to_string(),
         message: format!(
-            "All Agent tasks completed and {} PR(s) were integrated into develop",
+            "All Agent tasks completed, recovered blockers when safe, and integrated {} PR(s) into develop",
             merged_pull_request_numbers.len()
         ),
         repository_full_name,
         workspace_path,
         blocked_task_id: None,
         task_results: completed,
+        failure_routes,
         merged_pull_request_numbers,
     })
 }
