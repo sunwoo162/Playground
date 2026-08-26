@@ -1,0 +1,63 @@
+.remote-execution-banner {
+  width: min(1180px, 100%);
+  margin: 0 auto 16px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 10px;
+  background: var(--color-surface);
+}
+
+.remote-execution-banner > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.remote-execution-kicker {
+  color: var(--color-luna-soft);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.remote-execution-banner strong {
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: 11px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.remote-execution-banner small {
+  color: var(--color-text-muted);
+  font-size: 9px;
+}
+
+.remote-execution-banner button {
+  flex: 0 0 auto;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 7px;
+  background: var(--color-surface-soft);
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: 9px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.remote-execution-banner button:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+.remote-execution-banner button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
