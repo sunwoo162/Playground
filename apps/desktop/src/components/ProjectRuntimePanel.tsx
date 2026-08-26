@@ -12,6 +12,10 @@ function statusLabel(value: boolean) {
   return value ? "준비" : "필요";
 }
 
+function readyValue(value: boolean) {
+  return value ? "true" : "false";
+}
+
 export function ProjectRuntimePanel() {
   const [settings, setSettings] = useState<OrganizationRuntimeSettings>(() =>
     loadOrganizationRuntimeSettings(),
@@ -91,11 +95,11 @@ export function ProjectRuntimePanel() {
 
       {preflight && (
         <div className="project-runtime-checks" aria-label="로컬 Runtime 사전 점검 결과">
-          <div><span>Git</span><strong data-ready={preflight.gitAvailable}>{statusLabel(preflight.gitAvailable)}</strong></div>
-          <div><span>GitHub CLI</span><strong data-ready={preflight.ghAvailable}>{statusLabel(preflight.ghAvailable)}</strong></div>
-          <div><span>gh 인증</span><strong data-ready={preflight.ghAuthenticated}>{statusLabel(preflight.ghAuthenticated)}</strong></div>
-          <div><span>Codex CLI</span><strong data-ready={preflight.codexAvailable}>{statusLabel(preflight.codexAvailable)}</strong></div>
-          <div><span>Organization</span><strong data-ready={preflight.organizationAccessible}>{statusLabel(preflight.organizationAccessible)}</strong></div>
+          <div><span>Git</span><strong data-ready={readyValue(preflight.gitAvailable)}>{statusLabel(preflight.gitAvailable)}</strong></div>
+          <div><span>GitHub CLI</span><strong data-ready={readyValue(preflight.ghAvailable)}>{statusLabel(preflight.ghAvailable)}</strong></div>
+          <div><span>gh 인증</span><strong data-ready={readyValue(preflight.ghAuthenticated)}>{statusLabel(preflight.ghAuthenticated)}</strong></div>
+          <div><span>Codex CLI</span><strong data-ready={readyValue(preflight.codexAvailable)}>{statusLabel(preflight.codexAvailable)}</strong></div>
+          <div><span>Organization</span><strong data-ready={readyValue(preflight.organizationAccessible)}>{statusLabel(preflight.organizationAccessible)}</strong></div>
         </div>
       )}
 

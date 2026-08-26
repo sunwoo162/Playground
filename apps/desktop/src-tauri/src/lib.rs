@@ -89,7 +89,10 @@ fn remote_branch_exists(workspace: &Path, branch: &str) -> bool {
     let remote_ref = format!("refs/remotes/origin/{branch}");
     run_command(
         "git",
-        &git_args(workspace, &["rev-parse", "--verify", "--quiet", &remote_ref]),
+        &git_args(
+            workspace,
+            &["rev-parse", "--verify", "--quiet", remote_ref.as_str()],
+        ),
     )
     .map(|output| output.status.success())
     .unwrap_or(false)
@@ -110,7 +113,7 @@ fn ensure_expected_origin(workspace: &Path, organization: &str, repository: &str
     let expected_https = format!("github.com/{organization}/{repository}");
     let expected_ssh = format!("github.com:{organization}/{repository}");
 
-    if origin.contains(&expected_https) || origin.contains(&expected_ssh) {
+    if origin.contains(expected_https.as_str()) || origin.contains(expected_ssh.as_str()) {
         Ok(())
     } else {
         Err(format!(
@@ -267,7 +270,10 @@ fn bootstrap_project_repository(
             return Err("Repository 기본 브랜치를 확인하지 못했습니다.".to_string());
         }
         let source = format!("origin/{default_branch}");
-        run_checked("git", &git_args(&workspace, &["checkout", "-B", "main", &source]))?;
+        run_checked(
+            "git",
+            &git_args(&workspace, &["checkout", "-B", "main", source.as_str()]),
+        )?;
         run_checked("git", &git_args(&workspace, &["push", "-u", "origin", "main"]))?;
         run_checked("git", &git_args(&workspace, &["fetch", "origin"]))?;
     }
