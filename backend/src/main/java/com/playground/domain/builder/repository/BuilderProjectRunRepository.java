@@ -23,11 +23,17 @@ public interface BuilderProjectRunRepository extends JpaRepository<BuilderProjec
     Optional<BuilderProjectRun> findByIdAndProject_IdAndOwnerId(Long id, Long projectId, String ownerId);
 
     @Query(value = """
-            SELECT *
-            FROM builder_project_runs
-            WHERE status = 'queued'
-               OR (status = 'running' AND lease_expires_at IS NOT NULL AND lease_expires_at < CURRENT_TIMESTAMP)
-            ORDER BY CASE WHEN status = 'queued' THEN 0 ELSE 1 END, created_at ASC
+            SELECT run.*
+            FROM builder_project_runs run
+            INNER JOIN builder_projects project ON project.id = run.project_id
+            WHERE (run.status = 'queued' AND project.status = 'queued')
+               OR (
+                    run.status = 'running'
+                    AND project.status = 'running'
+                    AND run.lease_expires_at IS NOT NULL
+                    AND run.lease_expires_at < CURRENT_TIMESTAMP
+               )
+            ORDER BY CASE WHEN run.status = 'queued' THEN 0 ELSE 1 END, run.created_at ASC
             LIMIT 1
             FOR UPDATE SKIP LOCKED
             """, nativeQuery = true)
