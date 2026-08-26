@@ -2,11 +2,11 @@
 
 ## Product definition
 
-Luna Project Teams is a lightweight orchestration surface inside Luna's existing Tools area. The user starts a project with `/start`, Luna assigns one idle team, and the team's independent Agents later execute the project through a Codex-based runtime.
+Luna Project Teams is a lightweight orchestration surface inside Luna's existing Tools area. A user starts a project with `/start`, Luna assigns one idle team, runs that team's PM through Codex, prepares a real repository in `BloomBouquet`, and dispatches dependency-ready independent Agent tasks.
 
-The five equal teams are **장미, 백합, 튤립, 해바라기, 벚꽃**. Every team starts with the same playbook and 14 independent Agent states. Their versions and retrospectives are stored separately so teams can diverge based on actual project results rather than preassigned personalities.
+The five equal teams are **장미, 백합, 튤립, 해바라기, 벚꽃**. Every team starts with the same playbook and 14 independent Agent states. Their future versions and retrospectives are tracked separately so strengths can emerge from actual project evidence rather than preassigned personalities.
 
-Generated projects are expected to become real-use services or production candidates. Luna itself stays lightweight, but teams may add libraries, frameworks, databases, testing tools, or other proven dependencies when there is a concrete product reason.
+Generated projects are expected to become real-use services or production candidates. Luna itself stays lightweight, but project Agents may add libraries, frameworks, databases, testing tools, or other proven dependencies when there is a concrete product reason.
 
 ## Team Agents
 
@@ -27,140 +27,206 @@ Each team owns independent instances of:
 - User Agent B (experienced user)
 - Process Evaluator Agent
 
-A separate organization-level **Team Evolution Agent** compares project evaluations and retrospectives, proposes Agent/playbook version changes, and tracks whether those changes improve later projects.
+A separate organization-level **Team Evolution Agent** is reserved for cross-project evaluation, retrospective aggregation, and Agent/Playbook version-change proposals.
 
 ## Independent Agent autonomy
 
-Every Agent is treated as a separate worker rather than a role switch in one shared conversation. Each Agent keeps its own runtime/session state, role instructions, project memory, work history, retrospective history, version, and execution log.
+Every Agent is modeled as a separate worker, not as one model switching roles inside a shared conversation. Runtime state records Agent identity, role, task, session/thread identifiers, worktree, branch, evidence, verification, blockers, and available commit/PR references.
 
-Within its assigned project, an Agent can directly use repository and collaboration capabilities exposed by the runtime, including repository read/write, branch/worktree creation, command execution, dependency installation, build/test, browser/Figma access, commit, push, issue creation, PR creation/update/review, gated merge, and deployment preparation/publication.
+Repository-changing Agents use dedicated Git worktrees and the branch convention:
 
-The PM coordinates work but does not impersonate the worker. For example, a Frontend Agent that implements a task pushes its own branch and opens or updates its own PR. Code Review, Reviewer, QA, and Documentation run as separate Agent sessions and can independently request changes or block completion when evidence does not support it.
+```text
+agent/<team>/<role>/<task>
+```
 
-The runtime may authenticate to GitHub through one Luna GitHub App or runtime credential, but every action must retain the logical Agent ID in audit metadata. Separate public GitHub bot identities can be introduced later if distinct visible PR authors are required.
+They are instructed to inspect the real repository first, change actual files, run applicable verification, create small logical English commits, push their own branch, and open or update their own PR targeting `develop`.
+
+Review-style Agents such as Code Review, Reviewer, QA, User A/B, and Process Evaluator are separate sessions. By default they inspect repository/PR evidence without modifying the implementation branch. Sharing one GitHub credential does not make a native GitHub self-approval equivalent to an independent Agent judgment.
 
 ## Independent judgment and decision reasons
 
-No Agent is required to blindly trust another Agent just because that Agent is the PM, Code Reviewer, Reviewer, QA, Designer, Documentation Agent, or another specialist. Handoffs and review findings are inputs that must be checked against the actual requirement, repository, design evidence, test output, and product goal.
+No Agent blindly trusts PM, Reviewer, Code Review, QA, Designer, Documentation, or another specialist. Handoffs and review findings are evidence inputs that each Agent checks against the actual requirement, repository, diff, test output, design evidence, and product goal.
 
-Every material action must have a defensible reason. The runtime stores a concise decision record containing the action, rationale summary, evidence, alternatives considered, and which Agent inputs influenced the decision. This is an auditable explanation, not a dump of private chain-of-thought.
+Every material action must have a concise defensible reason. Agent outputs carry rationale summaries and evidence rather than private chain-of-thought. An Agent can disagree with another Agent when it has stronger evidence, but it must not silently ignore a finding.
 
-A developer may disagree with a Code Review or Reviewer finding when it has evidence. It must not silently ignore the finding: it responds with the reason, evidence, or a better alternative and requests another review. Likewise, reviewers must reconsider when new evidence is supplied instead of defending a previous opinion by default.
+Objective failures are different from opinions. A reproducible build/test failure, repository protection rule, security requirement, or explicit Product Owner decision cannot be bypassed simply because another Agent prefers a different outcome.
 
-Objective gates are different from opinions. A reproducible build/test failure, repository protection rule, security policy, or explicit user product decision cannot be bypassed merely because another Agent prefers a different result. Unresolved disagreements are compared by PM using evidence; high-risk or product-direction conflicts are escalated to the user.
+## PM planning runtime
+
+After `/start` and team assignment, the team's PM runs through ChatGPT-authenticated Codex in planning-only mode.
+
+PM output is constrained to a structured schema containing:
+
+- project name
+- lowercase kebab-case repository name
+- product summary
+- architecture summary
+- authentication requirement
+- technology decisions with reasons
+- Agent tasks
+- task role
+- task slug
+- dependency IDs
+- observable acceptance criteria
+
+Luna validates repository/task naming, allowed Agent roles, duplicate IDs/slugs, missing dependencies, self-dependencies, and cyclic dependency graphs before repository bootstrap begins.
+
+If authentication is required, PM must set the project to use the shared **꽃다발** authentication standard.
+
+## BloomBouquet repository runtime
+
+Once the PM plan is validated, Luna prepares the real project repository in the configured GitHub Organization, currently `BloomBouquet` by default.
+
+The runtime can:
+
+- create a private repository when it does not exist
+- clone it into the configured workspace root
+- verify an existing workspace origin before touching it
+- stop on uncommitted local changes instead of overwriting them
+- ensure `main`
+- create or track `develop`
+
+GitHub Connector access and Luna's local runtime credential are separate. The desktop runtime still requires an authenticated local `gh` session.
+
+## Agent task dispatcher
+
+PM tasks are converted into persisted task-run records. A task with no dependencies starts as `ready`; dependency-bound tasks remain `pending` until every dependency is `done`.
+
+The current scheduler intentionally limits execution to reduce collisions and subscription usage:
+
+- at most two tasks per wave
+- at most one running task for the same Agent role
+- only dependency-ready tasks may start
+- blocked tasks have bounded retries
+
+Each Agent task is executed through a dedicated Codex App Server thread/turn with its own role prompt, task contract, worktree, and dependency artifacts.
+
+Repository-changing Agents receive a dedicated worktree and branch. When an Agent claims completion, Luna does not trust the claim by itself. The runtime independently verifies:
+
+- the Agent stayed on the expected branch
+- the worktree is clean
+- the local HEAD exists
+- the remote Agent branch exists
+- a `develop`-targeting open PR exists
+
+The runtime then records the actual commit SHA and PR metadata it observed.
+
+Review/QA/User-style Agents report the PRs they actually examined and return structured evidence and verification results.
+
+## Runtime failure handling
+
+PM Runtime failures and Agent Runtime failures are tracked separately.
+
+A PM failure blocks the project before a valid plan exists and exposes the PM retry path. An Agent failure blocks the relevant task and uses the Agent retry path.
+
+If Luna is restarted or reloaded while a task is persisted as `running`, Luna does **not** assume the worker is still safely active and does not automatically duplicate the task. On hydration it converts the interrupted task to `blocked`, records an interruption reason, marks the project as an Agent Runtime failure, and requires the real worktree/PR state to be checked before retry.
+
+Automatic Agent retry is currently bounded to three attempts. Exhausted retries remain blocked for PM/Product Owner resolution.
+
+Full Debug / Problem Router reassignment is still a follow-up; current blocked-task handling is retry-oriented rather than root-cause rerouting.
 
 ## Documentation Agent
 
-Documentation Agent owns the accuracy and completeness of project documentation, not the implementation itself. It works from verified artifacts rather than copying other Agents' claims.
+Documentation Agent owns project documentation accuracy rather than blindly copying implementation reports.
 
 Typical outputs include:
 
 - product/user README and usage guide
-- local setup, run, build, test, and deployment instructions
+- setup, run, build, test, and deployment instructions
 - environment-variable names and secret-handling guidance
-- API contracts, request/response examples, auth behavior, and error states
-- architecture and important decision records
-- migration/operational notes when the project needs them
+- API contracts and examples
+- architecture and decision records
+- migration/operational notes
 - release/changelog notes
 
-Documentation Agent checks repository state, diffs, schemas, command results, QA evidence, and deployment results before writing facts. If documentation conflicts with implementation, it raises the mismatch to the responsible Agent instead of silently choosing one side. It never writes real secret values into documentation.
+Documentation Agent must reconcile statements with repository state, schemas, command/test evidence, QA results, and deployment evidence. It uses its own branch/worktree and PR when documentation changes are repository work.
 
-Like every other repository-changing Agent, Documentation Agent uses its own branch/worktree, small English commits, push, and PR. Its final release pass checks that commands, links, environment variables, API examples, and deployment paths match the release being shipped.
+## Design expectations
 
-## Execution workflow
+Design work must be grounded in the product's existing design system/Figma evidence and the actual user workflow. Generic AI-looking UI is not a design strategy.
 
-1. `/start` creates a project request.
-2. Luna assigns one idle team.
-3. PM Agent receives the project and runs the required Agents in order.
-4. Design work must be grounded in the product's Figma/design system and real product patterns. Generic AI-looking UI, emoji icons, decorative gradients, excessive cards/radius/glow, and unsupported visual decisions are rejected.
-5. Frontend and Backend work on real repository branches/worktrees.
-6. Every development task follows the same evidence-based workflow used for the Iseol bot: inspect the repository first, modify real files, run available verification, create small English commits, push the working branch, and open/update the Agent's own PR.
-7. Code Review Agent independently reviews PR-level code quality, likely bugs, security, performance, tests, dependency choices, and maintainability.
-8. Reviewer Agent independently checks requirement coverage, architecture, product behavior, and the broader change.
-9. The implementing Agent evaluates review findings and either applies them with a reason or responds with evidence and a justified alternative. Findings are never accepted or rejected only because of the reviewer's authority.
-10. QA independently validates build, tests, and actual behavior. A worker saying that a task is finished is never sufficient evidence by itself.
-11. Documentation Agent reconciles user/developer/operational documentation with verified repository, API, QA, and release state.
-12. Failures go to Debug / Problem Router, which sends the issue back to the Agent best able to fix it. Automatic retries are bounded; repeated failures escalate to PM and then to the user when a real product decision is needed.
-13. User Agent A and B validate first-time and experienced-user flows.
-14. Process Evaluator scores the result and the way the team worked.
-15. Every participating Agent writes an independent retrospective, including Documentation Agent.
-16. Team Evolution Agent turns repeated evidence into version-change candidates for Agents and the team playbook.
-17. After release/archival work is complete, the team returns to idle.
+Avoid unsupported patterns such as emoji icons, automatic purple/blue gradients, decorative glow/glassmorphism, excessive rounded cards, fake KPI dashboards, and generic AI marketing copy when the product behavior does not justify them.
+
+Design System and Designer are separate roles and may disagree through explicit evidence-based review.
 
 ## Production-service gate
 
-A project is not complete just because the generated code renders. Completion requires the level of work expected from an actual service:
+A project is not complete because generated code merely renders. Completion ultimately requires the level expected from a real service, including where applicable:
 
-- complete primary workflow from an empty state
-- appropriate persistent storage for long-lived/cross-device/collaborative data
+- complete primary user workflow
+- appropriate persistent storage
 - shared `꽃다발` auth when login/sign-up is required
-- loading, empty, error, invalid, permission, and retry states
-- responsive behavior for intended devices
+- loading, empty, invalid, error, permission, and retry states
+- intended-device responsiveness
 - accessibility for core actions
-- real external data/API integration when the product depends on it
-- secrets and environment-variable handling
-- security-sensitive validation/authorization boundaries
-- successful build and appropriate automated tests
+- real external data/API integration
+- secret/environment handling
+- security-sensitive authorization/validation boundaries
+- successful build and appropriate tests
 - browser/manual QA for user-facing flows
-- setup/API/deployment documentation matching the verified release
-- deployment path verified in the Luna/Playground apps portal
+- documentation matching the verified release
+- verified Luna apps portal deployment path
 
-A mock/local fallback can exist when an external account, credential, legal approval, paid provider, or real dataset is unavailable, but the project remains production-blocked and cannot be mislabeled complete.
-
-## Dependency rule
-
-Luna itself should remain small, but teams are free to add libraries or frameworks when they materially improve reliability, security, accessibility, maintainability, performance, or delivery speed. A major dependency should have a recorded reason, maintenance/security consideration, and bundle/runtime cost when relevant.
-
-Do not avoid a mature library only to keep dependency count low, and do not add dependencies that only duplicate existing code or decorate the UI.
+Unavailable credentials/providers/datasets may create a mock or local fallback, but the project must remain explicitly production-blocked instead of being mislabeled complete.
 
 ## Shared auth standard: 꽃다발
 
-Any generated project that needs login or sign-up must use the shared **꽃다발** auth standard instead of inventing a separate authentication flow per project.
+Any generated project that requires login or sign-up must use the shared **꽃다발** auth standard instead of inventing a new authentication process per project.
 
-The PM must apply this policy when authentication becomes part of project scope. Brand styling can vary, but authentication stages, states, error handling, and common behavior should remain shared. The first implementation in Luna records and exposes this policy; the reusable auth runtime/package is a follow-up integration.
+The current Luna runtime carries this as a project policy and PM planning requirement. The reusable auth package/runtime itself is still pending implementation.
 
 ## Release target
 
-User-facing web projects are published into the existing Luna/Playground app collection by default. Teams should reuse the repository's `/apps/<id>/` conventions and portal registration instead of creating a separate deployment platform without a product reason.
+User-facing web projects are intended to publish into the existing Luna/Playground app collection under `/apps/<id>/` by default.
 
-Release should record at least the deployed URL/path, project version, commit SHA, team/playbook version, verification result, and documentation verification result.
+Final release automation is not connected yet. A future release record should include at minimum deployed path/URL, project version, release commit SHA, team/playbook version, verification result, and documentation verification result.
 
-## Current lightweight MVP
+## Current implemented runtime
 
-Implemented locally inside the existing Tauri/React Luna app with minimal runtime weight:
+Implemented in the existing Tauri/React desktop app without adding a heavy orchestration framework:
 
-- Project Teams card in Tools
-- Five team pool with independent 14-Agent state records
+- five equal team pool
+- 14 independent Agent roles per team
 - `/start` intake and idle-team assignment
-- Local persistence with `localStorage`
-- Agent and Team Playbook version fields
-- independent Agent permission/autonomy model
-- Code Review and higher-level Reviewer roles separated
-- Documentation Agent role and evidence-based documentation policy
-- reasoned Agent decision policy and persisted decision-record model
-- Team Evolution Agent organization state
-- 꽃다발 auth policy attached to every project request as `when-auth-required`
-- Iseol-style execution policy attached to every project request
-- production-service and Luna apps portal policies attached to project state
-- Honest Runtime state: project assignment works, Codex workers are not yet connected
+- local state persistence
+- PM Codex planning runtime
+- structured PM schema and dependency validation
+- `BloomBouquet` repository bootstrap
+- `main` / `develop` setup
+- Agent task queue
+- dependency readiness
+- bounded parallel waves
+- dedicated Agent worktrees
+- `agent/<team>/<role>/<task>` branch convention
+- Codex App Server Agent threads/turns
+- structured Agent result schema
+- repository-changing Agent commit/push/PR contract
+- independent post-turn worktree/branch/PR verification
+- Code Review / Reviewer / QA / Documentation / User role separation
+- bounded blocked-task retry
+- interrupted `running` task recovery
+- PM vs Agent Runtime failure classification
+- Agent rationale/evidence/verification result persistence
 
-See [`AGENT_RUNTIME_POLICY.md`](./AGENT_RUNTIME_POLICY.md) for the detailed autonomy, permissions, dependency, production-quality, documentation, PR, decision, and release contract.
+See [`AGENT_RUNTIME_POLICY.md`](./AGENT_RUNTIME_POLICY.md) for the detailed autonomy, permission, decision, dependency, documentation, PR, and release contract.
 
-## Runtime blocker
+## Remaining runtime work
 
-The current repository does not include a Codex orchestration runtime that Luna can programmatically start, monitor, pause, route, and resume. Until that adapter exists, the UI must not pretend that Agents are modifying repositories. Assigned projects remain queued with the exact Runtime blocker visible.
+The following are not complete yet and must not be represented as finished:
 
-The next implementation layer is a small runtime adapter that can:
-
-- create project workspaces/worktrees
-- start independent Agent sessions with role instructions and project-scoped permissions
-- preserve the acting Agent identity in Git/PR/audit events
-- receive completion/failure events
-- dispatch code-review/reviewer/QA/documentation/retry stages
-- persist concise Agent decision records and disagreement resolutions
-- allow workers to push and open/update their own PRs
-- persist retrospective/version events
-- publish release-ready web projects into the Luna apps portal
+- automatic Code Review → Reviewer → QA merge gate based on actual findings
+- Debug / Problem Router root-cause classification and reassignment
+- disagreement/re-review protocol automation
+- pause/resume/stop with durable live-session recovery
+- persistent orchestration history beyond localStorage
+- per-Agent retrospectives
+- Process Evaluator project evaluation output
+- Team Evolution cross-project evidence analysis and version changes
+- reusable 꽃다발 authentication implementation
+- completed-worktree lifecycle cleanup/archive
+- final integration/merge orchestration
+- Luna apps portal release publication
+- full packaged Windows Tauri + Codex App Server verification
 
 ## Run and verification
 
