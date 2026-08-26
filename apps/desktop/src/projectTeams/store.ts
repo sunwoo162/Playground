@@ -13,6 +13,8 @@ import type {
 
 const STORAGE_KEY = "luna.project-teams.v1";
 const MAX_TASK_ATTEMPTS = 3;
+const INTERRUPTED_AGENT_REASON =
+  "Luna가 종료되거나 다시 로드되어 실행 중 Agent의 최종 상태를 확인할 수 없습니다. 실제 worktree와 PR 상태를 확인한 뒤 재시도하세요.";
 
 export type StartProjectResult =
   | { ok: true; state: ProjectTeamsState; project: ProjectState }
@@ -130,9 +132,52 @@ function hydrateState(state: ProjectTeamsState): ProjectTeamsState {
       repositoryFullName: project.repositoryFullName ?? null,
       workspacePath: project.workspacePath ?? null,
       pmSessionId: project.pmSessionId ?? null,
+      runtimeFailureSource: project.runtimeFailureSource ?? null,
     })),
     decisions: Array.isArray(state.decisions) ? state.decisions : [],
   };
+}
+
+function recoverInterruptedAgentTasks(state: ProjectTeamsState) {
+  const recoveredProjectIds: string[] = [];
+  const now = new Date().toISOString();
+
+  let nextState: ProjectTeamsState = {
+    ...state,
+    projects: state.projects.map((project) => {
+      if (!project.taskRuns.some((run) => run.status === "running")) {
+        return project;
+      }
+
+      recoveredProjectIds.push(project.id);
+      return {
+        ...project,
+        status: "blocked" as const,
+        runtimeFailureSource: "agent" as const,
+        runtimeMessage: `Agent Runtime 복구 필요 · ${INTERRUPTED_AGENT_REASON}`,
+        taskRuns: project.taskRuns.map((run) =>
+          run.status === "running"
+            ? {
+                ...run,
+                status: "blocked" as const,
+                lastError: INTERRUPTED_AGENT_REASON,
+                blockers: [INTERRUPTED_AGENT_REASON],
+                completedAt: now,
+              }
+            : run,
+        ),
+      };
+    }),
+  };
+
+  if (recoveredProjectIds.length === 0) {
+    return state;
+  }
+
+  recoveredProjectIds.forEach((projectId) => {
+    nextState = syncTeamAgentStatuses(nextState, projectId);
+  });
+  return nextState;
 }
 
 export function loadProjectTeamsState(): ProjectTeamsState {
@@ -150,7 +195,13 @@ export function loadProjectTeamsState(): ProjectTeamsState {
     if (parsed.schemaVersion !== 1 || !Array.isArray(parsed.teams) || !Array.isArray(parsed.projects)) {
       return createInitialProjectTeamsState();
     }
-    return hydrateState(parsed);
+
+    const hydrated = hydrateState(parsed);
+    const recovered = recoverInterruptedAgentTasks(hydrated);
+    if (recovered !== hydrated) {
+      saveProjectTeamsState(recovered);
+    }
+    return recovered;
   } catch {
     return createInitialProjectTeamsState();
   }
@@ -310,6 +361,7 @@ export function startProject(state: ProjectTeamsState, request: string): StartPr
     repositoryFullName: null,
     workspacePath: null,
     pmSessionId: null,
+    runtimeFailureSource: null,
     runtimeMessage: "팀 배정 완료 · PM Codex 실행 준비",
   };
 
@@ -344,6 +396,7 @@ export function beginProjectPlanning(state: ProjectTeamsState, projectId: string
   let nextState = updateProject(state, projectId, (currentProject) => ({
     ...currentProject,
     status: "planning",
+    runtimeFailureSource: null,
     runtimeMessage: "PM Codex가 프로젝트를 분석하고 실제 서비스 계획을 작성 중",
   }));
 
@@ -380,6 +433,7 @@ export function completeProjectPlanning(state: ProjectTeamsState, input: Complet
     repositoryFullName: input.repositoryFullName,
     workspacePath: input.workspacePath,
     pmSessionId: input.pmSessionId,
+    runtimeFailureSource: null,
     runtimeMessage: "PM 계획 및 repository 준비 완료 · 독립 Agent Task 실행 준비",
   }));
 
@@ -420,6 +474,7 @@ export function beginAgentTasks(state: ProjectTeamsState, projectId: string, tas
   let nextState = updateProject(state, projectId, (currentProject) => ({
     ...currentProject,
     status: projectStatusForRoles(roles),
+    runtimeFailureSource: null,
     runtimeMessage: `독립 Agent ${roles.length}개 Task 실행 중`,
     taskRuns: currentProject.taskRuns.map((run) =>
       selected.has(run.taskId) && run.status === "ready"
@@ -488,6 +543,7 @@ export function completeAgentTask(state: ProjectTeamsState, result: AgentTaskRun
   nextState = updateProject(nextState, result.projectId, (currentProject) => ({
     ...currentProject,
     status: hasBlocked ? "blocked" : allDone ? "review" : currentProject.status,
+    runtimeFailureSource: hasBlocked ? "agent" : null,
     runtimeMessage: hasBlocked
       ? "Agent Task가 막혔습니다 · 근거를 확인하고 재시도 또는 제품 결정을 진행해 주세요."
       : allDone
@@ -513,6 +569,7 @@ export function failAgentTask(
   let nextState = updateProject(state, projectId, (currentProject) => ({
     ...currentProject,
     status: "blocked",
+    runtimeFailureSource: "agent",
     runtimeMessage: `Agent Runtime 실패 · ${reason}`,
     taskRuns: currentProject.taskRuns.map((run) =>
       run.taskId === taskId
@@ -560,6 +617,7 @@ export function retryBlockedAgentTasks(state: ProjectTeamsState, projectId: stri
   nextState = updateProject(nextState, projectId, (currentProject) => ({
     ...currentProject,
     status: retryCount > 0 ? "development" : "blocked",
+    runtimeFailureSource: retryCount > 0 ? null : exhaustedCount > 0 ? "agent" : currentProject.runtimeFailureSource,
     runtimeMessage:
       retryCount > 0
         ? `막힌 Agent Task ${retryCount}개 재시도 준비`
@@ -580,6 +638,7 @@ export function failProjectRuntime(state: ProjectTeamsState, projectId: string, 
   let nextState = updateProject(state, projectId, (currentProject) => ({
     ...currentProject,
     status: "blocked",
+    runtimeFailureSource: "pm",
     runtimeMessage: reason,
   }));
 
