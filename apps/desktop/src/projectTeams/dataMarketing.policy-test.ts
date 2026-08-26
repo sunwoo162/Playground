@@ -87,8 +87,12 @@ function run() {
     assert(Boolean(reviewer), "Reviewer must follow marketing Code Review");
     assert(Boolean(qa), "QA must close the marketing documentation verification chain");
     assert(
-      marketing?.summary.includes(PRODUCT_MARKETING_POLICY.documentPath) ?? false,
-      "marketing task must own the standard go-to-market document path",
+      marketing?.summary.includes(PRODUCT_MARKETING_POLICY.analysisPath) ?? false,
+      "Data & Marketing task must own the evidence analysis document",
+    );
+    assert(
+      documentation?.summary.includes(PRODUCT_MARKETING_POLICY.documentPath) ?? false,
+      "Documentation task must own the final go-to-market document",
     );
     validateMarketingDocumentationPlan(plan);
 
