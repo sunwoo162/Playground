@@ -1,4 +1,6 @@
 import { ensureBouquetAuthPlan, validateBouquetAuthPlan } from "./bouquetAuth";
+import { ensureMarketingDocumentationPlan } from "./dataMarketing";
+import { validateProjectPlanReviewTopology } from "./planTopology";
 import type { ProjectPlan } from "./types";
 
 function assert(condition: boolean, message: string) {
@@ -45,6 +47,15 @@ assert(
   "Bouquet auth decision must be recorded",
 );
 validateBouquetAuthPlan(injected);
+
+const governed = ensureMarketingDocumentationPlan(injected);
+validateProjectPlanReviewTopology(governed);
+const marketingTask = governed.tasks.find((task) => task.role === "data-marketing");
+assert(Boolean(marketingTask), "governed auth plan must include Data & Marketing quality gate");
+assert(
+  Boolean(client && marketingTask?.dependsOn.includes(client.id)),
+  "marketing/documentation quality chain must wait for Bouquet client auth implementation",
+);
 
 const reinjected = ensureBouquetAuthPlan(injected);
 assert(
