@@ -27,5 +27,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build Luna desktop frontend
+        run: pnpm --dir apps/desktop run build
+
       - name: Run harness invariants
         run: pnpm run harness
