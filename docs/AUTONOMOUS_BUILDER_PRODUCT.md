@@ -80,6 +80,29 @@ Preview / Deployment
 
 The existing Tauri Agent Runtime is preserved during migration because it contains working orchestration behavior and safety gates. It becomes a reference/worker implementation while OS-bound commands are extracted behind server/worker interfaces. The Tauri desktop shell is not the target user-facing product.
 
+## Current migration checkpoint
+
+The web control plane now has a real server-side project and Run lifecycle rather than browser-only placeholders.
+
+Implemented:
+
+- owner-scoped Builder project records persist the user brief, platform, requested features, template, auth requirement, status, repository reference, and preview reference;
+- project creation in the web UI immediately creates or reuses a server-side Run request instead of pretending that an Agent is already executing;
+- Run records preserve separate execution attempts and keep `queued`, `running`, `completed`, and `failed` state independently from the Project record;
+- a worker-only internal API can claim queued work, heartbeat a 90-second lease, complete or fail a Run, and safely re-claim expired work;
+- row locks and lease ownership prevent two workers from legitimately owning the same Run at once, and stale or expired workers cannot revive or overwrite a newer execution;
+- unattended worker credentials use a dedicated `BUILDER_WORKER_TOKEN` boundary instead of reusing browser user JWT credentials;
+- the user-facing project detail can inspect the latest Run and continues to show `queued` until a real worker claim changes the server state to `running`.
+
+Not yet implemented:
+
+- no headless worker process currently polls the internal claim API and automatically invokes the existing Project Intake, PM planning, Agent DAG scheduler, review, QA, integration, or release gates;
+- the existing high-level scheduling and plan-policy pipeline is still coupled to the Tauri/React project-team layer even though the OS/Git/Codex execution primitives already live in Rust;
+- the browser still does not, and must not, execute Git, GitHub CLI, Codex, worktree, or filesystem mutation commands directly;
+- worker lifecycle state alone is not release evidence: `completed` must eventually be called only after the extracted headless orchestrator has passed the same repository, PR, review, QA, and integration evidence gates already used by the existing runtime.
+
+The next migration boundary is therefore to extract a reusable orchestration port/engine from the desktop UI layer, then connect a headless worker adapter to the server claim/heartbeat/terminal API without duplicating or weakening the existing safety policies.
+
 ## Agent organization
 
 The current independent-Agent model is retained.
