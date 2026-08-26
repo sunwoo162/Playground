@@ -1,4 +1,7 @@
-import { ensureMarketingDocumentationPlan } from "./dataMarketing";
+import {
+  ensureMarketingDocumentationPlan,
+  isMandatoryMarketingTask,
+} from "./dataMarketing";
 import { validateProjectPlanReviewTopology } from "./planTopology";
 import { getProductOwnerDecision } from "./productOwnerDecision";
 import { replanProjectFailure } from "./runtime";
@@ -123,7 +126,7 @@ export async function runProjectFailureReplan(
       const run = runByTaskId.get(task.id);
       return Boolean(
         run
-          && task.role !== "data-marketing"
+          && !isMandatoryMarketingTask(task)
           && run.status !== "done"
           && !hasExternalArtifacts(run),
       );
