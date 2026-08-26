@@ -7,6 +7,8 @@ import {
   EXECUTION_POLICY,
   WORKFLOW_STAGES,
 } from "../projectTeams/catalog";
+import { integrateProjectPullRequests } from "../projectTeams/integration";
+import { markProjectIntegrated } from "../projectTeams/integrationState";
 import { loadOrganizationRuntimeSettings } from "../projectTeams/organization";
 import { dispatchAgentTask, startProjectRuntime } from "../projectTeams/runtime";
 import {
@@ -141,8 +143,36 @@ export function ProjectTeamsPage() {
       }
 
       const finalProject = nextState.projects.find((item) => item.id === projectId);
-      if (finalProject) {
+      if (!finalProject) return nextState;
+
+      const allTasksDone = finalProject.taskRuns.length > 0
+        && finalProject.taskRuns.every((run) => run.status === "done");
+
+      if (!allTasksDone || finalProject.status === "blocked") {
         setMessage(finalProject.runtimeMessage);
+        return nextState;
+      }
+
+      setMessage("모든 Agent Task 완료 · Code Review / Reviewer / QA merge gate와 GitHub PR 상태 검증 중");
+
+      try {
+        const integration = await integrateProjectPullRequests(finalProject);
+        if (!integration.ok) {
+          setMessage(integration.message);
+          return nextState;
+        }
+
+        nextState = markProjectIntegrated(
+          nextState,
+          projectId,
+          integration.mergedPullRequestNumbers,
+        );
+        setState(nextState);
+        setMessage(
+          `${integration.message} · 다음 단계: Agent 회고 / Team Evolution`,
+        );
+      } catch (error) {
+        setMessage(`PR 통합 Runtime 실패: ${errorMessage(error)}`);
       }
     } finally {
       setDispatchingAgents(false);
