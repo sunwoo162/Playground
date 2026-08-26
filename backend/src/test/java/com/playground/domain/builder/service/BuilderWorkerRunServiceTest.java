@@ -149,6 +149,24 @@ class BuilderWorkerRunServiceTest {
     }
 
     @Test
+    void completeRejectsStaleWorkerAfterLeaseWasReclaimed() {
+        BuilderProject project = project(7L, "running");
+        BuilderProjectRun run = run(11L, project, "running", "worker-new");
+        when(runRepository.findByIdForUpdate(11L)).thenReturn(Optional.of(run));
+
+        IllegalStateException error = assertThrows(
+                IllegalStateException.class,
+                () -> service.complete(11L, "worker-old", null, null)
+        );
+
+        assertTrue(error.getMessage().contains("lease"));
+        assertEquals("running", run.getStatus());
+        assertEquals("running", project.getStatus());
+        verify(runRepository, never()).save(any());
+        verify(projectRepository, never()).save(any());
+    }
+
+    @Test
     void failMarksRunAndProjectFailedAndIsRetryableByUser() {
         BuilderProject project = project(7L, "running");
         BuilderProjectRun run = run(11L, project, "running", "worker-01");
@@ -162,6 +180,22 @@ class BuilderWorkerRunServiceTest {
         assertEquals("Codex app server exited unexpectedly", response.getFailureReason());
         assertNull(run.getLeaseExpiresAt());
         assertNotNull(run.getFinishedAt());
+    }
+
+    @Test
+    void failIsIdempotentForSameWorker() {
+        BuilderProject project = project(7L, "failed");
+        BuilderProjectRun run = run(11L, project, "failed", "worker-01");
+        run.setFailureReason("existing failure");
+        run.setFinishedAt(LocalDateTime.now().minusSeconds(2));
+        when(runRepository.findByIdForUpdate(11L)).thenReturn(Optional.of(run));
+
+        BuilderWorkerDto.RunStateResponse response = service.fail(11L, "worker-01", "duplicate retry");
+
+        assertEquals("failed", response.getStatus());
+        assertEquals("existing failure", response.getFailureReason());
+        verify(runRepository, never()).save(any());
+        verify(projectRepository, never()).save(any());
     }
 
     private BuilderProject project(Long id, String status) {
