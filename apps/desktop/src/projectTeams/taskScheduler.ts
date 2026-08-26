@@ -47,12 +47,25 @@ function evolutionContext(
   ].join("\n");
 }
 
-export function buildAgentTaskRuntimeInput(
+function taskRuntimeSummary(
+  state: ProjectTeamsState,
+  project: ProjectTeamsState["projects"][number],
+  run: ProjectTaskRun,
+  task: NonNullable<ProjectTeamsState["projects"][number]["plan"]>["tasks"][number],
+) {
+  return [
+    seniorAgentContext(task.role),
+    task.summary,
+    failureRecoveryContext(project, task.id),
+    evolutionContext(state, project, run),
+  ].filter((value): value is string => Boolean(value?.trim())).join("\n\n");
+}
+
+function resolveTaskContext(
   state: ProjectTeamsState,
   projectId: string,
   run: ProjectTaskRun,
-  runtimeSettings: OrganizationRuntimeSettings,
-): AgentTaskRuntimeInput {
+) {
   const project = state.projects.find((item) => item.id === projectId);
   if (!project?.plan || !project.repositoryFullName || !project.workspacePath) {
     throw new Error("PM 계획 또는 project repository/workspace가 준비되지 않았습니다.");
@@ -67,6 +80,17 @@ export function buildAgentTaskRuntimeInput(
   if (!task) {
     throw new Error(`PM Task를 찾을 수 없습니다: ${run.taskId}`);
   }
+
+  return { project, team, task };
+}
+
+export function buildAgentTaskRuntimeInput(
+  state: ProjectTeamsState,
+  projectId: string,
+  run: ProjectTaskRun,
+  runtimeSettings: OrganizationRuntimeSettings,
+): AgentTaskRuntimeInput {
+  const { project, team, task } = resolveTaskContext(state, projectId, run);
 
   const dependencies: DependencyArtifact[] = task.dependsOn.map((dependencyId) => {
     const dependencyRun = project.taskRuns.find((item) => item.taskId === dependencyId);
@@ -86,12 +110,34 @@ export function buildAgentTaskRuntimeInput(
     };
   });
 
-  const summary = [
-    seniorAgentContext(task.role),
-    task.summary,
-    failureRecoveryContext(project, task.id),
-    evolutionContext(state, project, run),
-  ].filter((value): value is string => Boolean(value?.trim())).join("\n\n");
+  return {
+    organization: runtimeSettings.organization,
+    projectId: project.id,
+    teamId: project.teamId,
+    teamName: team.name,
+    role: task.role,
+    agentId: run.agentId,
+    taskId: task.id,
+    taskSlug: task.taskSlug,
+    title: task.title,
+    summary: taskRuntimeSummary(state, project, run, task),
+    acceptanceCriteria: task.acceptanceCriteria,
+    userRequest: project.request,
+    productSummary: project.plan.productSummary,
+    architectureSummary: project.plan.architectureSummary,
+    repositoryFullName: project.repositoryFullName,
+    workspacePath: project.workspacePath,
+    dependencies,
+  };
+}
+
+export function buildRemoteAgentTaskRuntimeInput(
+  state: ProjectTeamsState,
+  projectId: string,
+  run: ProjectTaskRun,
+  runtimeSettings: OrganizationRuntimeSettings,
+): AgentTaskRuntimeInput {
+  const { project, team, task } = resolveTaskContext(state, projectId, run);
 
   return {
     organization: runtimeSettings.organization,
@@ -103,13 +149,13 @@ export function buildAgentTaskRuntimeInput(
     taskId: task.id,
     taskSlug: task.taskSlug,
     title: task.title,
-    summary,
+    summary: taskRuntimeSummary(state, project, run, task),
     acceptanceCriteria: task.acceptanceCriteria,
     userRequest: project.request,
     productSummary: project.plan.productSummary,
     architectureSummary: project.plan.architectureSummary,
     repositoryFullName: project.repositoryFullName,
     workspacePath: project.workspacePath,
-    dependencies,
+    dependencies: [],
   };
 }
