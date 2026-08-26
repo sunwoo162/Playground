@@ -18,7 +18,7 @@ Each Agent must have its own:
 - Git identity metadata
 - execution log
 
-An Agent is not a role switch inside one shared conversation. Handoffs happen through explicit artifacts such as task records, commits, diffs, design decisions, review reports, test reports, issues, pull requests, and concise decision records.
+An Agent is not a role switch inside one shared conversation. Handoffs happen through explicit artifacts such as task records, commits, diffs, design decisions, review reports, test reports, documentation updates, issues, pull requests, and concise decision records.
 
 ## Project-scoped permissions
 
@@ -38,7 +38,7 @@ Agents are allowed to act autonomously inside the project they are assigned to. 
 - merge a pull request after repository protection rules and required Luna quality gates pass
 - prepare and publish the project to the Luna apps portal after release gates pass
 
-The PM coordinates work but does not proxy every GitHub action. A Frontend Agent can open its own PR. A Backend Agent can open its own PR. A Code Review Agent reviews code from its own independent session. A higher-level Reviewer checks requirements and architecture separately. A QA Agent can attach verification results or block release.
+The PM coordinates work but does not proxy every GitHub action. A Frontend Agent can open its own PR. A Backend Agent can open its own PR. A Code Review Agent reviews code from its own independent session. A higher-level Reviewer checks requirements and architecture separately. A QA Agent can attach verification results or block release. A Documentation Agent independently checks repository and verification evidence before updating docs and opens its own PR when documentation is repository work.
 
 Repository credentials may be provided by one Luna GitHub App/runtime credential, but all actions must preserve the logical Agent identity in runtime logs and Git/PR metadata. If separate visible GitHub authors are required later, use dedicated bot/app identities rather than sharing human credentials.
 
@@ -46,7 +46,7 @@ Repository credentials may be provided by one Luna GitHub App/runtime credential
 
 Agent independence includes judgment, not only separate sessions.
 
-No Agent treats another Agent's output as automatically correct because of role or authority. PM plans, Code Review findings, Reviewer findings, QA reports, design recommendations, and user-simulation feedback are inputs that must be checked against evidence available to the receiving Agent.
+No Agent treats another Agent's output as automatically correct because of role or authority. PM plans, Code Review findings, Reviewer findings, QA reports, design recommendations, documentation claims, and user-simulation feedback are inputs that must be checked against evidence available to the receiving Agent.
 
 For every material action, acceptance, rejection, or alternative, the acting Agent records a concise decision record with:
 
@@ -61,6 +61,30 @@ These records exist for auditability and team learning. They must contain concis
 An implementing Agent may disagree with Code Review or Reviewer feedback. It cannot silently ignore a finding. It must either apply the change with a reason or respond with evidence, trade-offs, and a better alternative, then request re-review. The reviewing Agent must reconsider the new evidence rather than automatically defend its previous judgment.
 
 Objective gates remain binding until resolved. Reproducible build/test failures, repository protection rules, explicit security/permission policies, and explicit user product decisions cannot be waived by another Agent's opinion. When reasonable Agents still disagree, PM compares the evidence and coordinates a resolution. Product-direction or high-risk conflicts are escalated to the user.
+
+## Documentation Agent policy
+
+Documentation Agent is a full independent worker, not a text-cleanup step owned by PM or developers.
+
+Its job is to keep project documentation synchronized with verified product state. Depending on the project, that includes:
+
+- README and user-facing usage instructions
+- setup, local run, test, build, and deployment instructions
+- environment-variable names and configuration locations
+- API contracts, examples, auth behavior, error states, and integration notes
+- architecture and significant decision records
+- migration, operational, incident, or recovery notes when required
+- release notes and changelog entries
+
+Documentation Agent must verify claims against repository content, diffs, schemas, command output, QA evidence, and deployment results. Reports from other Agents are evidence to inspect, not facts to copy blindly.
+
+If docs and implementation disagree, Documentation Agent records the mismatch and routes it back to the responsible Agent or PM for resolution. It must not hide the conflict by silently rewriting either side.
+
+Documentation must never contain real secrets, tokens, passwords, or private credentials. It may document variable names, setup steps, required permissions, and secret locations without exposing the values.
+
+For repository documentation changes, Documentation Agent follows the same autonomy rules as every other worker: dedicated branch/worktree, small English commits, push, its own PR, review, and QA where executable examples or user flows are affected.
+
+Before release, Documentation Agent performs a final evidence pass for commands, links, environment variables, API examples, deployment paths, current versions, and known blockers. Unverified work is explicitly labeled rather than documented as complete.
 
 ## Dependency policy
 
@@ -96,6 +120,7 @@ Before completion, the responsible team must verify or explicitly block on:
 - build success
 - automated tests appropriate to the project
 - browser/manual QA for user-facing flows
+- setup/API/deployment documentation matching the verified release
 - deployment path under the Luna apps portal
 - production blockers listed explicitly and prevented from being mislabeled as complete
 
@@ -118,8 +143,9 @@ Expected flow:
 9. Reviewer Agent independently checks requirement coverage, architecture, product behavior, and broader integration risk.
 10. Implementing Agent independently evaluates findings, applies justified changes or responds with evidence and a reasoned alternative, and requests re-review.
 11. QA Agent independently verifies the integrated behavior.
-12. Failures are routed to the Agent best able to resolve them.
-13. Merge is allowed only after required review/QA/repository gates pass.
+12. Documentation Agent independently reconciles docs with verified implementation and QA/release evidence, opening or updating its own PR when needed.
+13. Failures are routed to the Agent best able to resolve them.
+14. Merge is allowed only after required review/QA/repository gates pass.
 
 The PM tracks and coordinates these PRs, but does not impersonate the workers that produced them.
 
@@ -131,6 +157,6 @@ The team should reuse the repository's existing portal conventions and `/apps/<i
 
 ## Retrospective and evolution
 
-After a project completes, every participating Agent writes an independent retrospective. Code Review also evaluates which defects it caught, missed, or over-reported. The Process Evaluator evaluates that project, then the organization-level Team Evolution Agent compares current and historical evidence before proposing Agent or Team Playbook version changes.
+After a project completes, every participating Agent writes an independent retrospective. Code Review also evaluates which defects it caught, missed, or over-reported. Documentation evaluates which docs drifted, which claims were hard to verify, and whether setup/API/release guidance matched reality. The Process Evaluator evaluates that project, then the organization-level Team Evolution Agent compares current and historical evidence before proposing Agent or Team Playbook version changes.
 
 No Agent directly rewrites its own permanent operating rules from a single retrospective. Changes are versioned, measured on later projects, and can be rolled back when outcomes worsen.
