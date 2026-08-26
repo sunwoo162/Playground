@@ -1,3 +1,4 @@
+import { createAgentRuntimeIdentity } from "./permissions";
 import type { AgentRole, AgentState, ProjectTeamsState, TeamId, TeamState } from "./types";
 
 export const BOUQUET_AUTH_POLICY = {
@@ -15,15 +16,17 @@ export const BOUQUET_AUTH_POLICY = {
 
 export const EXECUTION_POLICY = {
   id: "iseol-workflow" as const,
-  version: "1.0.0",
-  summary: "모든 개발 Agent는 이설 작업 방식처럼 실제 저장소를 기준으로 작업합니다.",
+  version: "1.1.0",
+  summary: "모든 Agent는 이설 작업 방식처럼 실제 저장소를 기준으로 독립적으로 작업합니다.",
   rules: [
     "작업 전 현재 저장소, 브랜치, 관련 규칙과 실제 파일을 확인합니다.",
     "Agent별 branch 또는 worktree에서 실제 파일을 수정합니다.",
+    "필요한 라이브러리나 프레임워크는 제품 이유가 명확하면 직접 추가하고 선택 근거를 기록합니다.",
     "가능한 lint, typecheck, test, build, 실행 검증을 실제 명령으로 수행합니다.",
     "검증하지 못한 항목은 성공했다고 기록하지 않고 정확한 blocker를 남깁니다.",
     "커밋은 작은 작업 단위로 나누고 영어 커밋 메시지를 사용합니다.",
-    "Developer 결과는 Reviewer와 QA를 통과해야 완료로 인정합니다.",
+    "작업한 Agent가 직접 branch push와 PR 생성/업데이트를 수행합니다.",
+    "Developer 결과는 독립 Reviewer와 QA를 통과해야 완료로 인정합니다.",
     "문제가 생기면 Debug / Problem Router가 해결 가능한 Agent로 다시 보냅니다.",
     "프로젝트 종료 후 모든 Agent는 개별 회고를 남기고 버전 개선 후보를 만듭니다.",
   ],
@@ -71,13 +74,19 @@ const teamCatalog: Array<{ id: TeamId; name: string }> = [
 ];
 
 function createAgents(teamId: TeamId): AgentState[] {
-  return agentCatalog.map((agent) => ({
-    id: `${teamId}:${agent.role}`,
-    ...agent,
-    version: "1.0.0",
-    status: "idle",
-    retrospectiveCount: 0,
-  }));
+  return agentCatalog.map((agent) => {
+    const identity = createAgentRuntimeIdentity(`${teamId}:${agent.role}`, agent.role);
+
+    return {
+      id: identity.agentId,
+      ...agent,
+      version: "1.0.0",
+      status: "idle",
+      retrospectiveCount: 0,
+      autonomy: identity.autonomy,
+      permissions: identity.permissions,
+    };
+  });
 }
 
 function createTeam(id: TeamId, name: string): TeamState {
