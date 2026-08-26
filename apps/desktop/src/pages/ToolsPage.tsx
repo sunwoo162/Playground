@@ -38,6 +38,17 @@ export function ToolsPage({ onChangePage }: ToolsPageProps) {
 
         <button
           className="tool-card"
+          onClick={() => onChangePage("market-discovery")}
+        >
+          <span className="tool-card-icon">MD</span>
+          <div>
+            <strong>Market Discovery</strong>
+            <span>시장 근거를 조사하고 실제 프로젝트 후보를 발굴합니다.</span>
+          </div>
+        </button>
+
+        <button
+          className="tool-card"
           onClick={() => onChangePage("project-teams")}
         >
           <span className="tool-card-icon">PT</span>
