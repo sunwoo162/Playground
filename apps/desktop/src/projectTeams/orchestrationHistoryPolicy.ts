@@ -24,8 +24,8 @@ export function isDurableOrchestrationSnapshot(
 }
 
 export function shouldRestoreDurableProjectState(
-  current: { projects: unknown[] },
+  current: { projects: unknown[] } | null,
   durable: DurableOrchestrationSnapshotLike,
 ) {
-  return current.projects.length === 0 && durable.projectTeamsState.projects.length > 0;
+  return current === null && durable.projectTeamsState.projects.length > 0;
 }

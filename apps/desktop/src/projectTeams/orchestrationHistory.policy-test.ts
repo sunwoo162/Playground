@@ -19,8 +19,12 @@ const durable = {
 
 assert(isDurableOrchestrationSnapshot(durable), "valid durable snapshot should be accepted");
 assert(
-  shouldRestoreDurableProjectState({ projects: [] }, durable),
-  "empty local state should restore a durable project snapshot",
+  shouldRestoreDurableProjectState(null, durable),
+  "missing or invalid local state should restore a durable project snapshot",
+);
+assert(
+  !shouldRestoreDurableProjectState({ projects: [] }, durable),
+  "an intentionally empty local state should remain authoritative",
 );
 assert(
   !shouldRestoreDurableProjectState({ projects: [{ id: "LOCAL" }] }, durable),

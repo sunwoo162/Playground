@@ -8,6 +8,7 @@ use std::{
 use tauri::{AppHandle, Manager};
 
 const SNAPSHOT_SCHEMA_VERSION: u32 = 1;
+const MAX_SNAPSHOT_BYTES: usize = 10 * 1024 * 1024;
 const MAX_HISTORY_BYTES: u64 = 25 * 1024 * 1024;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -117,6 +118,9 @@ fn read_snapshot_file(path: &Path) -> Result<Option<OrchestrationSnapshotEnvelop
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(format!("Orchestration snapshot 읽기 실패: {error}")),
     };
+    if content.len() > MAX_SNAPSHOT_BYTES * 2 {
+        return Err("Orchestration snapshot 파일이 안전 한도를 초과했습니다.".to_string());
+    }
     let envelope: OrchestrationSnapshotEnvelope = serde_json::from_str(&content)
         .map_err(|error| format!("Orchestration snapshot JSON 파싱 실패: {error}"))?;
     if envelope.schema_version != SNAPSHOT_SCHEMA_VERSION {
@@ -138,7 +142,7 @@ fn read_latest_history_line(path: &Path) -> Result<Option<OrchestrationSnapshotE
     let mut latest = None;
     for line in reader.lines() {
         let line = line.map_err(|error| format!("Orchestration history line 읽기 실패: {error}"))?;
-        if line.trim().is_empty() {
+        if line.trim().is_empty() || line.len() > MAX_SNAPSHOT_BYTES * 2 {
             continue;
         }
         if let Ok(candidate) = serde_json::from_str::<OrchestrationSnapshotEnvelope>(&line) {
@@ -150,13 +154,22 @@ fn read_latest_history_line(path: &Path) -> Result<Option<OrchestrationSnapshotE
     Ok(latest)
 }
 
-fn validate_record(recorded_at: &str, reason: &str) -> Result<(), String> {
+fn validate_record(recorded_at: &str, reason: &str, snapshot: &Value) -> Result<(), String> {
     if recorded_at.trim().is_empty() || recorded_at.len() > 80 {
         return Err("Orchestration snapshot recordedAt 형식이 잘못되었습니다.".to_string());
     }
     let reason = reason.trim();
     if reason.is_empty() || reason.len() > 160 {
         return Err("Orchestration snapshot reason은 1~160자여야 합니다.".to_string());
+    }
+    let snapshot_size = serde_json::to_vec(snapshot)
+        .map_err(|error| format!("Orchestration snapshot 크기 계산 실패: {error}"))?
+        .len();
+    if snapshot_size > MAX_SNAPSHOT_BYTES {
+        return Err(format!(
+            "Orchestration snapshot이 {}MB 안전 한도를 초과했습니다.",
+            MAX_SNAPSHOT_BYTES / 1024 / 1024
+        ));
     }
     Ok(())
 }
@@ -168,7 +181,7 @@ pub fn persist_orchestration_snapshot(
     recorded_at: String,
     reason: String,
 ) -> Result<PersistOrchestrationSnapshotResult, String> {
-    validate_record(&recorded_at, &reason)?;
+    validate_record(&recorded_at, &reason, &snapshot)?;
     let directory = orchestration_dir(&app)?;
     let envelope = OrchestrationSnapshotEnvelope {
         schema_version: SNAPSHOT_SCHEMA_VERSION,

@@ -12,6 +12,11 @@ import {
 import type { ProjectTeamsState } from "./types";
 
 const PROJECT_TEAMS_STORAGE_KEY = "luna.project-teams.v1";
+const EXECUTION_CONTROL_STORAGE_KEY = "luna.project-execution-control.v1";
+const WATCHED_STORAGE_KEYS = new Set([
+  PROJECT_TEAMS_STORAGE_KEY,
+  EXECUTION_CONTROL_STORAGE_KEY,
+]);
 
 export type DurableOrchestrationSnapshot = {
   schemaVersion: 1;
@@ -32,10 +37,34 @@ export type PersistOrchestrationSnapshotResult = {
   historyBytes: number;
 };
 
+export type DurableOrchestrationBootstrapResult = {
+  mode: "browser" | "tauri";
+  restoredProjectState: boolean;
+  restoredExecutionControls: boolean;
+  recordedAt: string | null;
+};
+
 let persistQueue: Promise<unknown> = Promise.resolve();
+let storageSyncInstalled = false;
+let pendingStorageSync = false;
 
 export function isTauriRuntime() {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
+function readProjectTeamsStateFromLocalStorage(): ProjectTeamsState | null {
+  if (typeof window === "undefined" || typeof window.localStorage === "undefined") return null;
+  const stored = window.localStorage.getItem(PROJECT_TEAMS_STORAGE_KEY);
+  if (!stored) return null;
+
+  try {
+    const parsed = JSON.parse(stored) as ProjectTeamsState;
+    if (parsed.schemaVersion !== 1) return null;
+    if (!Array.isArray(parsed.teams) || !Array.isArray(parsed.projects)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
 }
 
 export function createDurableOrchestrationSnapshot(
@@ -48,11 +77,9 @@ export function createDurableOrchestrationSnapshot(
   };
 }
 
-export function shouldRestoreFromDurableHistory(
-  current: ProjectTeamsState,
-  envelope: OrchestrationSnapshotEnvelope,
-) {
-  return shouldRestoreDurableProjectState(current, envelope.snapshot);
+function createDurableSnapshotFromLocalCache() {
+  const state = readProjectTeamsStateFromLocalStorage();
+  return state ? createDurableOrchestrationSnapshot(state) : null;
 }
 
 export function restoreDurableSnapshotToLocalCache(snapshot: unknown) {
@@ -84,16 +111,11 @@ export async function loadDurableOrchestrationSnapshot() {
   return envelope;
 }
 
-export function persistDurableOrchestrationSnapshot(
-  state: ProjectTeamsState,
-  reason = "project-teams-state-sync",
+function enqueuePersist(
+  snapshot: DurableOrchestrationSnapshot,
+  reason: string,
 ) {
-  if (!isTauriRuntime()) {
-    return Promise.resolve<PersistOrchestrationSnapshotResult | null>(null);
-  }
-
   const recordedAt = new Date().toISOString();
-  const snapshot = createDurableOrchestrationSnapshot(state);
   const job = persistQueue
     .catch(() => undefined)
     .then(() =>
@@ -105,4 +127,90 @@ export function persistDurableOrchestrationSnapshot(
     );
   persistQueue = job.then(() => undefined, () => undefined);
   return job;
+}
+
+export function persistDurableOrchestrationSnapshot(
+  state: ProjectTeamsState,
+  reason = "project-teams-state-sync",
+) {
+  if (!isTauriRuntime()) {
+    return Promise.resolve<PersistOrchestrationSnapshotResult | null>(null);
+  }
+  return enqueuePersist(createDurableOrchestrationSnapshot(state), reason);
+}
+
+export function persistDurableOrchestrationCache(
+  reason = "local-cache-sync",
+) {
+  if (!isTauriRuntime()) {
+    return Promise.resolve<PersistOrchestrationSnapshotResult | null>(null);
+  }
+  const snapshot = createDurableSnapshotFromLocalCache();
+  if (!snapshot) {
+    return Promise.resolve<PersistOrchestrationSnapshotResult | null>(null);
+  }
+  return enqueuePersist(snapshot, reason);
+}
+
+function scheduleStorageSync() {
+  if (pendingStorageSync) return;
+  pendingStorageSync = true;
+  queueMicrotask(() => {
+    pendingStorageSync = false;
+    void persistDurableOrchestrationCache("local-storage-change").catch((error) => {
+      console.warn("Luna durable orchestration sync failed", error);
+    });
+  });
+}
+
+function installDurableStorageSync() {
+  if (!isTauriRuntime() || storageSyncInstalled || typeof Storage === "undefined") return;
+  storageSyncInstalled = true;
+
+  const nativeSetItem = Storage.prototype.setItem;
+  Storage.prototype.setItem = function setItem(key: string, value: string) {
+    nativeSetItem.call(this, key, value);
+    if (this === window.localStorage && WATCHED_STORAGE_KEYS.has(key)) {
+      scheduleStorageSync();
+    }
+  };
+}
+
+export async function bootstrapDurableOrchestrationHistory(): Promise<DurableOrchestrationBootstrapResult> {
+  if (!isTauriRuntime()) {
+    return {
+      mode: "browser",
+      restoredProjectState: false,
+      restoredExecutionControls: false,
+      recordedAt: null,
+    };
+  }
+
+  let restoredProjectState = false;
+  let restoredExecutionControls = false;
+  let recordedAt: string | null = null;
+  const durable = await loadDurableOrchestrationSnapshot();
+  const localState = readProjectTeamsStateFromLocalStorage();
+
+  if (durable) {
+    recordedAt = durable.recordedAt;
+    if (shouldRestoreDurableProjectState(localState, durable.snapshot)) {
+      restoredProjectState = restoreDurableSnapshotToLocalCache(durable.snapshot);
+      restoredExecutionControls = restoredProjectState;
+    } else {
+      restoredExecutionControls = restoreDurableExecutionControlsIfMissing(durable.snapshot);
+    }
+  }
+
+  installDurableStorageSync();
+  await persistDurableOrchestrationCache(
+    restoredProjectState ? "app-start-disk-recovery" : "app-start-sync",
+  );
+
+  return {
+    mode: "tauri",
+    restoredProjectState,
+    restoredExecutionControls,
+    recordedAt,
+  };
 }
