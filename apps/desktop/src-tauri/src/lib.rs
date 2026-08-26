@@ -1,4 +1,4 @@
-mod agent_runtime;
+pub mod agent_runtime;
 mod failure_router_runtime;
 mod intake_runtime;
 mod integration_runtime;
