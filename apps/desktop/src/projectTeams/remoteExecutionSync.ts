@@ -1,4 +1,6 @@
 import { markProjectIntegrated } from "./integrationState";
+import { saveProjectRetrospectives } from "./retrospective";
+import { completeProjectRetrospective } from "./retrospectiveState";
 import {
   getRemoteRunnerJob,
   type RemoteRunnerJob,
@@ -18,14 +20,25 @@ export type RemoteExecutionSyncResult = {
   record: RemoteExecutionRecord | null;
   appliedTaskCount: number;
   integrationApplied: boolean;
+  retrospectiveApplied: boolean;
 };
 
 export function applyRemoteJobResult(
   state: ProjectTeamsState,
   job: RemoteRunnerJob,
-): { state: ProjectTeamsState; appliedTaskCount: number; integrationApplied: boolean } {
+): {
+  state: ProjectTeamsState;
+  appliedTaskCount: number;
+  integrationApplied: boolean;
+  retrospectiveApplied: boolean;
+} {
   if (job.status !== "succeeded" || !job.result) {
-    return { state, appliedTaskCount: 0, integrationApplied: false };
+    return {
+      state,
+      appliedTaskCount: 0,
+      integrationApplied: false,
+      retrospectiveApplied: false,
+    };
   }
 
   let nextState = state;
@@ -62,10 +75,23 @@ export function applyRemoteJobResult(
     );
   }
 
+  const projectAfterIntegration = nextState.projects.find((item) => item.id === job.projectId);
+  const shouldApplyRetrospective =
+    job.result.status === "completed"
+    && Boolean(job.result.retrospective)
+    && projectAfterIntegration !== undefined
+    && projectAfterIntegration.status !== "completed";
+
+  if (shouldApplyRetrospective && job.result.retrospective) {
+    saveProjectRetrospectives(job.result.retrospective);
+    nextState = completeProjectRetrospective(nextState, job.result.retrospective);
+  }
+
   return {
     state: nextState,
     appliedTaskCount,
     integrationApplied: shouldApplyIntegration,
+    retrospectiveApplied: shouldApplyRetrospective,
   };
 }
 
@@ -90,5 +116,6 @@ export async function syncRemoteExecution(
     record,
     appliedTaskCount: applied.appliedTaskCount,
     integrationApplied: applied.integrationApplied,
+    retrospectiveApplied: applied.retrospectiveApplied,
   };
 }
