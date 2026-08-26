@@ -7,6 +7,8 @@ use std::{
     process::{ChildStdin, Command, Output, Stdio},
 };
 
+const MAX_JSONL_LINE_BYTES: usize = 10 * 1024 * 1024;
+
 const AGENT_RESULT_SCHEMA: &str = r#"{
   "type": "object",
   "additionalProperties": false,
@@ -292,10 +294,10 @@ fn prepare_agent_worktree(input: &AgentTaskRuntimeInput) -> Result<(PathBuf, Opt
         return Err("origin/develop 브랜치를 찾을 수 없습니다.".to_string());
     }
 
-    let parent = workspace
+    let workspace_root = workspace
         .parent()
         .ok_or_else(|| "workspace 상위 경로를 확인할 수 없습니다.".to_string())?;
-    let worktree = parent
+    let worktree = workspace_root
         .join(".luna-worktrees")
         .join(&input.project_id)
         .join(&input.task_id);
@@ -492,6 +494,9 @@ fn read_json_line(reader: &mut BufReader<impl std::io::Read>, log: &mut File) ->
     if read == 0 {
         return Err("Codex app-server가 예상보다 일찍 종료되었습니다.".to_string());
     }
+    if line.len() > MAX_JSONL_LINE_BYTES {
+        return Err("Codex app-server JSONL 메시지가 10MB 안전 한도를 초과했습니다.".to_string());
+    }
     let trimmed = line.trim();
     append_event(log, trimmed)?;
     serde_json::from_str(trimmed)
@@ -526,7 +531,11 @@ fn run_app_server_agent(
     worktree: &Path,
     branch: Option<&str>,
 ) -> Result<(String, String, String, AgentTaskReport, String, String), String> {
-    let runtime_dir = PathBuf::from(&input.workspace_path)
+    let workspace = PathBuf::from(input.workspace_path.trim());
+    let workspace_root = workspace
+        .parent()
+        .ok_or_else(|| "workspace 상위 경로를 확인할 수 없습니다.".to_string())?;
+    let runtime_dir = workspace_root
         .join(".luna-runtime")
         .join("projects")
         .join(&input.project_id)
@@ -546,6 +555,7 @@ fn run_app_server_agent(
         .map_err(|error| format!("Agent event log 생성 실패: {error}"))?;
     let stderr_file = File::create(&stderr_path)
         .map_err(|error| format!("Agent stderr log 생성 실패: {error}"))?;
+    let git_metadata_root = workspace.join(".git");
 
     let mut child = Command::new("codex")
         .args(["app-server", "--listen", "stdio://"])
@@ -577,7 +587,8 @@ fn run_app_server_agent(
                         "name": "luna_project_teams",
                         "title": "Luna Project Teams",
                         "version": "0.1.0"
-                    }
+                    },
+                    "capabilities": {}
                 }
             }),
         )?;
@@ -592,7 +603,7 @@ fn run_app_server_agent(
                 "params": {
                     "cwd": worktree.to_string_lossy(),
                     "approvalPolicy": "never",
-                    "sandbox": "workspaceWrite",
+                    "sandbox": "workspace-write",
                     "serviceName": "luna_project_teams"
                 }
             }),
@@ -605,11 +616,6 @@ fn run_app_server_agent(
             .get("id")
             .and_then(Value::as_str)
             .ok_or_else(|| "Codex app-server thread ID가 없습니다.".to_string())?
-            .to_string();
-        let session_id = thread
-            .get("sessionId")
-            .and_then(Value::as_str)
-            .unwrap_or(thread_id.as_str())
             .to_string();
 
         let schema: Value = serde_json::from_str(AGENT_RESULT_SCHEMA)
@@ -624,11 +630,17 @@ fn run_app_server_agent(
                     "threadId": thread_id,
                     "input": [{ "type": "text", "text": prompt }],
                     "cwd": worktree.to_string_lossy(),
+                    "title": format!("{}: {}", input.task_id, input.title),
                     "approvalPolicy": "never",
                     "sandboxPolicy": {
                         "type": "workspaceWrite",
-                        "writableRoots": [worktree.to_string_lossy()],
-                        "networkAccess": true
+                        "writableRoots": [
+                            worktree.to_string_lossy(),
+                            git_metadata_root.to_string_lossy()
+                        ],
+                        "networkAccess": true,
+                        "excludeTmpdirEnvVar": false,
+                        "excludeSlashTmp": false
                     },
                     "outputSchema": schema
                 }
@@ -641,6 +653,7 @@ fn run_app_server_agent(
             .and_then(Value::as_str)
             .ok_or_else(|| "Codex app-server turn ID가 없습니다.".to_string())?
             .to_string();
+        let session_id = format!("{thread_id}-{turn_id}");
 
         let mut final_message: Option<String> = None;
         let mut turn_status: Option<String> = None;
