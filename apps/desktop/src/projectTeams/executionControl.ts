@@ -17,6 +17,13 @@ export type ProjectExecutionControlRecord = {
 };
 
 const STORAGE_KEY = "luna.project-execution-control.v1";
+const CONTROL_STATES: ProjectExecutionControlState[] = [
+  "running",
+  "pause-requested",
+  "paused",
+  "stop-requested",
+  "stopped",
+];
 let memoryControls: Record<string, ProjectExecutionControlRecord> = {};
 
 function canUseStorage() {
@@ -29,8 +36,7 @@ function loadControlMap() {
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY);
     if (!stored) return {};
-    const parsed = JSON.parse(stored) as Record<string, ProjectExecutionControlRecord>;
-    return parsed && typeof parsed === "object" ? parsed : {};
+    return normalizeProjectExecutionControlsSnapshot(JSON.parse(stored));
   } catch {
     return {};
   }
@@ -50,6 +56,44 @@ function initialControl(projectId: string, now: string): ProjectExecutionControl
     requestedAt: null,
     updatedAt: now,
   };
+}
+
+export function normalizeProjectExecutionControlsSnapshot(
+  value: unknown,
+): Record<string, ProjectExecutionControlRecord> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+
+  const normalized: Record<string, ProjectExecutionControlRecord> = {};
+  Object.entries(value as Record<string, unknown>).forEach(([projectId, raw]) => {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return;
+    const record = raw as Partial<ProjectExecutionControlRecord>;
+    if (record.projectId !== projectId) return;
+    if (!CONTROL_STATES.includes(record.state as ProjectExecutionControlState)) return;
+    if (typeof record.updatedAt !== "string" || !record.updatedAt.trim()) return;
+    if (record.requestedAt !== null && typeof record.requestedAt !== "string") return;
+
+    normalized[projectId] = {
+      projectId,
+      state: record.state as ProjectExecutionControlState,
+      requestedAt: record.requestedAt ?? null,
+      updatedAt: record.updatedAt,
+    };
+  });
+  return normalized;
+}
+
+export function getProjectExecutionControlsSnapshot() {
+  return { ...loadControlMap() };
+}
+
+export function hasStoredProjectExecutionControls() {
+  return Object.keys(loadControlMap()).length > 0;
+}
+
+export function restoreProjectExecutionControlsSnapshot(value: unknown) {
+  const normalized = normalizeProjectExecutionControlsSnapshot(value);
+  saveControlMap(normalized);
+  return normalized;
 }
 
 export function transitionProjectExecutionControl(

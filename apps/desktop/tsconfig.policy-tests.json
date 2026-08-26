@@ -22,6 +22,8 @@
     "src/projectTeams/e2eSmoke.ts",
     "src/projectTeams/e2eSmoke.policy-test.ts",
     "src/projectTeams/executionControl.ts",
-    "src/projectTeams/executionControl.policy-test.ts"
+    "src/projectTeams/executionControl.policy-test.ts",
+    "src/projectTeams/orchestrationHistoryPolicy.ts",
+    "src/projectTeams/orchestrationHistory.policy-test.ts"
   ]
 }
