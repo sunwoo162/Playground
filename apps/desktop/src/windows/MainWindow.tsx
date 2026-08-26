@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { RemoteExecutionController } from "../components/RemoteExecutionController";
 import { Sidebar, type LunaPage } from "../components/Sidebar";
 import { HomePage } from "../pages/HomePage";
 import { FocusPage } from "../pages/FocusPage";
@@ -22,6 +23,7 @@ import { reconcileInterruptedAgentsOnStartup } from "../projectTeams/startupReco
 
 export function MainWindow() {
   const [currentPage, setCurrentPage] = useState<LunaPage>("character");
+  const [runtimeReady, setRuntimeReady] = useState(false);
 
   useEffect(() => {
     let disposed = false;
@@ -47,12 +49,14 @@ export function MainWindow() {
         stopMirror = startProjectTeamsDurableMirror((error) => {
           console.warn("Luna durable project state mirror 실패", error);
         });
+        if (!disposed) setRuntimeReady(true);
       } catch (error) {
         console.warn("Luna durable project state 초기화/복구 실패", error);
         if (!disposed) {
           stopMirror = startProjectTeamsDurableMirror((mirrorError) => {
             console.warn("Luna durable project state mirror 실패", mirrorError);
           });
+          setRuntimeReady(true);
         }
       }
     };
@@ -113,6 +117,7 @@ export function MainWindow() {
       />
 
       <section className="luna-main">
+        {runtimeReady && <RemoteExecutionController />}
         {renderPage()}
       </section>
     </div>
