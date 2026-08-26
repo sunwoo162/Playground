@@ -98,6 +98,21 @@ class BuilderWorkerRunServiceTest {
     }
 
     @Test
+    void heartbeatRejectsExpiredLeaseEvenForSameWorker() {
+        BuilderProjectRun run = run(11L, project(7L, "running"), "running", "worker-01");
+        run.setLeaseExpiresAt(LocalDateTime.now().minusSeconds(1));
+        when(runRepository.findByIdForUpdate(11L)).thenReturn(Optional.of(run));
+
+        IllegalStateException error = assertThrows(
+                IllegalStateException.class,
+                () -> service.heartbeat(11L, "worker-01")
+        );
+
+        assertTrue(error.getMessage().contains("만료"));
+        verify(runRepository, never()).save(any());
+    }
+
+    @Test
     void heartbeatExtendsLeaseForOwningWorker() {
         BuilderProjectRun run = run(11L, project(7L, "running"), "running", "worker-01");
         run.setLeaseExpiresAt(LocalDateTime.now().plusSeconds(5));
@@ -167,6 +182,24 @@ class BuilderWorkerRunServiceTest {
     }
 
     @Test
+    void completeRejectsExpiredLeaseForSameWorker() {
+        BuilderProject project = project(7L, "running");
+        BuilderProjectRun run = run(11L, project, "running", "worker-01");
+        run.setLeaseExpiresAt(LocalDateTime.now().minusSeconds(1));
+        when(runRepository.findByIdForUpdate(11L)).thenReturn(Optional.of(run));
+
+        IllegalStateException error = assertThrows(
+                IllegalStateException.class,
+                () -> service.complete(11L, "worker-01", null, null)
+        );
+
+        assertTrue(error.getMessage().contains("만료"));
+        assertEquals("running", project.getStatus());
+        verify(runRepository, never()).save(any());
+        verify(projectRepository, never()).save(any());
+    }
+
+    @Test
     void failMarksRunAndProjectFailedAndIsRetryableByUser() {
         BuilderProject project = project(7L, "running");
         BuilderProjectRun run = run(11L, project, "running", "worker-01");
@@ -213,12 +246,16 @@ class BuilderWorkerRunServiceTest {
     }
 
     private BuilderProjectRun run(Long id, BuilderProject project, String status, String workerId) {
-        return BuilderProjectRun.builder()
+        BuilderProjectRun run = BuilderProjectRun.builder()
                 .id(id)
                 .project(project)
                 .ownerId("user-1")
                 .status(status)
                 .workerId(workerId)
                 .build();
+        if ("running".equals(status)) {
+            run.setLeaseExpiresAt(LocalDateTime.now().plusSeconds(60));
+        }
+        return run;
     }
 }
