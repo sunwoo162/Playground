@@ -69,5 +69,15 @@ assert(
   }, run).action === "block",
   "missing PM task metadata must be blocked",
 );
+assert(
+  classifyInterruptedTaskRecovery({
+    ...project,
+    plan: {
+      ...project.plan!,
+      tasks: project.plan!.tasks.map((task) => ({ ...task, taskSlug: "" })),
+    },
+  }, run).action === "block",
+  "empty task slug must not reach the reconciliation runtime",
+);
 
 console.log("sessionReconciliation.policy-test: PASS");
