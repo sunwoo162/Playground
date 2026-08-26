@@ -1,5 +1,6 @@
 import type {
   ExecutableAgentRole,
+  ProjectPlan,
   ProjectState,
   ProjectTeamsState,
   ProjectTaskRun,
@@ -9,6 +10,12 @@ export const E2E_CANARY_MARKER = "[LUNA-E2E-CANARY:v1]";
 
 export const E2E_CANARY_REQUEST = `${E2E_CANARY_MARKER}
 Build a deliberately small but production-quality full-stack web product named PulseNote so Luna can prove its complete project runtime end to end.
+
+Repository isolation rule:
+- The PM receives the Luna Project ID separately in its planning context.
+- For this Canary, repositoryName must be exactly \`pulsenote-canary-<lowercase Luna Project ID>\`.
+- Example: Project ID \`PROJECT-ABC-123\` means repositoryName \`pulsenote-canary-project-abc-123\`.
+- Never reuse an earlier PulseNote Canary repository. Every Canary run must bootstrap a fresh repository so stale branches, commits, PRs, docs, or test output cannot create a false pass.
 
 Product goal:
 - A single user can create, edit, delete, and browse short daily notes.
@@ -190,6 +197,18 @@ function simpleStage(
   return { id, label, status: "pending", evidence: pendingEvidence };
 }
 
+function normalizeProjectIdForRepository(projectId: string) {
+  return projectId
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+export function expectedE2ECanaryRepositoryName(projectId: string) {
+  return `pulsenote-canary-${normalizeProjectIdForRepository(projectId)}`;
+}
+
 export function isE2ECanaryProject(project: Pick<ProjectState, "request">) {
   return project.request.includes(E2E_CANARY_MARKER);
 }
@@ -198,12 +217,28 @@ export function findLatestE2ECanaryProject(state: ProjectTeamsState) {
   return state.projects.find(isE2ECanaryProject) ?? null;
 }
 
-export function validateE2ECanaryPlan(project: ProjectState) {
-  if (!isE2ECanaryProject(project) || !project.plan) return [];
-  const roles = new Set(project.plan.tasks.map((task) => task.role));
-  return [...REQUIRED_IMPLEMENTATION_ROLES, ...REQUIRED_GOVERNANCE_ROLES]
+export function validateE2ECanaryRuntimePlan(
+  projectId: string,
+  request: string,
+  plan: ProjectPlan,
+) {
+  if (!request.includes(E2E_CANARY_MARKER)) return [];
+
+  const roles = new Set(plan.tasks.map((task) => task.role));
+  const roleErrors = [...REQUIRED_IMPLEMENTATION_ROLES, ...REQUIRED_GOVERNANCE_ROLES]
     .filter((role) => !roles.has(role))
     .map((role) => `필수 E2E 역할 ${role} Task가 PM 계획에 없습니다.`);
+  const expectedRepository = expectedE2ECanaryRepositoryName(projectId);
+  const repositoryErrors = plan.repositoryName === expectedRepository
+    ? []
+    : [`E2E Canary repositoryName은 ${expectedRepository}여야 하지만 ${plan.repositoryName}입니다.`];
+
+  return [...repositoryErrors, ...roleErrors];
+}
+
+export function validateE2ECanaryPlan(project: ProjectState) {
+  if (!isE2ECanaryProject(project) || !project.plan) return [];
+  return validateE2ECanaryRuntimePlan(project.id, project.request, project.plan);
 }
 
 export function evaluateE2ECanaryProject(project: ProjectState): E2ECanaryReport {
