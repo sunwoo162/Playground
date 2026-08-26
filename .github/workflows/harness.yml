@@ -30,6 +30,9 @@ jobs:
       - name: Build Luna desktop frontend
         run: pnpm --dir apps/desktop run build
 
+      - name: Run Luna allocation policy tests
+        run: pnpm --dir apps/desktop run test:allocation
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 

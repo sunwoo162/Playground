@@ -18,6 +18,8 @@ export type AgentRole =
   | "user-b"
   | "process-evaluator";
 
+export type ExecutableAgentRole = Exclude<AgentRole, "pm">;
+
 export type AgentPermission =
   | "repository:read"
   | "repository:create"
@@ -58,6 +60,44 @@ export type ProjectStatus =
 
 export type RuntimeFailureSource = "pm" | "agent";
 
+export type ProjectIntakeComplexity = "small" | "medium" | "large";
+export type ProjectIntakeRiskFlag =
+  | "auth"
+  | "security"
+  | "external-api"
+  | "realtime"
+  | "payments"
+  | "data-persistence"
+  | "deployment"
+  | "accessibility"
+  | "performance"
+  | "unknown";
+
+export type ProjectIntakeAnalysis = {
+  summary: string;
+  primaryUser: string;
+  primaryJob: string;
+  complexity: ProjectIntakeComplexity;
+  requiredRoles: ExecutableAgentRole[];
+  criticalRoles: ExecutableAgentRole[];
+  needsAuth: boolean;
+  userFacing: boolean;
+  externalDependencies: string[];
+  riskFlags: ProjectIntakeRiskFlag[];
+  assumptions: string[];
+  missingInputs: string[];
+  rationaleSummary: string;
+};
+
+export type ProjectIntakeRecord = ProjectIntakeAnalysis & {
+  id: string;
+  agentVersion: string;
+  sessionId: string | null;
+  eventsPath: string;
+  outputPath: string;
+  createdAt: string;
+};
+
 export type TechnologyDecision = {
   area: string;
   choice: string;
@@ -67,7 +107,7 @@ export type TechnologyDecision = {
 export type ProjectTaskPlan = {
   id: string;
   title: string;
-  role: Exclude<AgentRole, "pm">;
+  role: ExecutableAgentRole;
   taskSlug: string;
   summary: string;
   dependsOn: string[];
@@ -95,7 +135,7 @@ export type AgentTaskVerification = {
 
 export type ProjectTaskRun = {
   taskId: string;
-  role: Exclude<AgentRole, "pm">;
+  role: ExecutableAgentRole;
   agentId: string;
   status: TaskRunStatus;
   attempts: number;
@@ -148,7 +188,7 @@ export type FailureRouteDecision = {
 export type FailureRouteRecord = FailureRouteDecision & {
   id: string;
   failedTaskId: string;
-  failedRole: Exclude<AgentRole, "pm">;
+  failedRole: ExecutableAgentRole;
   routeAttempt: number;
   routerAgentId: string;
   routerSessionId: string | null;
@@ -216,7 +256,7 @@ export type EvolutionExperiment = {
 };
 
 export type TeamRolePerformance = {
-  role: Exclude<AgentRole, "pm">;
+  role: ExecutableAgentRole;
   projectCount: number;
   taskCount: number;
   retryCount: number;
@@ -231,7 +271,7 @@ export type TeamRolePerformance = {
 export type TeamStrengthConfidence = "emerging" | "established";
 
 export type TeamStrengthEvidence = {
-  role: Exclude<AgentRole, "pm">;
+  role: ExecutableAgentRole;
   confidence: TeamStrengthConfidence;
   projectCount: number;
   taskCount: number;
@@ -272,11 +312,22 @@ export type TeamState = {
   agents: AgentState[];
 };
 
+export type TeamAllocationEvidence = {
+  role: ExecutableAgentRole;
+  advantage: number;
+  taskCount: number;
+};
+
 export type TeamAllocationRecord = {
-  strategy: "least-assigned-oldest-idle";
+  strategy: "least-assigned-oldest-idle" | "fairness-guarded-evidence";
   assignmentCountBefore: number;
   completedProjectsBefore: number;
   lastAssignedAt: string | null;
+  intakeId?: string | null;
+  consideredRoles?: ExecutableAgentRole[];
+  establishedStrengthMatches?: TeamAllocationEvidence[];
+  fairnessPoolSize?: number;
+  maxAssignmentGap?: number;
   reason: string;
 };
 
@@ -299,6 +350,7 @@ export type ProjectState = {
   status: ProjectStatus;
   createdAt: string;
   completedAt?: string | null;
+  intake?: ProjectIntakeRecord | null;
   teamAllocation?: TeamAllocationRecord | null;
   authPolicyId: "bouquet";
   executionPolicyId: "iseol-workflow";
@@ -327,5 +379,6 @@ export type ProjectTeamsState = {
   projects: ProjectState[];
   decisions: AgentDecision[];
   evolutionAgentVersion: string;
+  intakeAgentVersion?: string;
   evolutionExperiments?: EvolutionExperiment[];
 };
