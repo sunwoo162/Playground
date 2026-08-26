@@ -6,7 +6,12 @@ import {
   EXECUTION_POLICY,
   WORKFLOW_STAGES,
 } from "../projectTeams/catalog";
+import { loadOrganizationRuntimeSettings } from "../projectTeams/organization";
+import { startProjectRuntime } from "../projectTeams/runtime";
 import {
+  beginProjectPlanning,
+  completeProjectPlanning,
+  failProjectRuntime,
   getTeamName,
   loadProjectTeamsState,
   resetProjectTeamsState,
@@ -48,11 +53,16 @@ function agentStatusLabel(status: ProjectTeamsState["teams"][number]["agents"][n
   }
 }
 
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export function ProjectTeamsPage() {
   const [state, setState] = useState<ProjectTeamsState>(() => loadProjectTeamsState());
   const [selectedTeamId, setSelectedTeamId] = useState<TeamId>(state.teams[0]?.id ?? "rose");
   const [command, setCommand] = useState("/start");
   const [awaitingRequirement, setAwaitingRequirement] = useState(false);
+  const [launchingProject, setLaunchingProject] = useState(false);
   const [message, setMessage] = useState("/start로 새 프로젝트를 배정할 수 있습니다.");
 
   const selectedTeam = useMemo(
@@ -65,7 +75,64 @@ export function ProjectTeamsPage() {
     return state.projects.find((project) => project.id === selectedTeam.activeProjectId) ?? null;
   }, [selectedTeam, state.projects]);
 
-  const submitRequirement = (request: string) => {
+  const launchProjectRuntime = async (baseState: ProjectTeamsState, projectId: string) => {
+    const project = baseState.projects.find((item) => item.id === projectId);
+    if (!project) {
+      setMessage("실행할 프로젝트를 찾지 못했습니다.");
+      return;
+    }
+
+    const runtimeSettings = loadOrganizationRuntimeSettings();
+    if (!runtimeSettings.workspaceRoot) {
+      setMessage("Workspace root를 저장한 뒤 PM Runtime을 실행해 주세요.");
+      return;
+    }
+
+    const teamName = getTeamName(baseState, project.teamId);
+    let nextState = beginProjectPlanning(baseState, project.id);
+    setState(nextState);
+    setSelectedTeamId(project.teamId);
+    setLaunchingProject(true);
+    setMessage(`${teamName}팀 PM Codex가 프로젝트를 분석 중입니다.`);
+
+    try {
+      const runtimeResult = await startProjectRuntime({
+        organization: runtimeSettings.organization,
+        workspaceRoot: runtimeSettings.workspaceRoot,
+        projectId: project.id,
+        teamId: project.teamId,
+        teamName,
+        request: project.request,
+      });
+
+      nextState = completeProjectPlanning(nextState, {
+        projectId: project.id,
+        plan: runtimeResult.pm.plan,
+        repositoryFullName: runtimeResult.repository.repository,
+        workspacePath: runtimeResult.repository.workspacePath,
+        pmSessionId: runtimeResult.pm.sessionId,
+      });
+      setState(nextState);
+      setMessage(
+        `${teamName}팀 PM 계획 완료 · ${runtimeResult.repository.repository} 준비 완료 · 독립 Agent dispatch 대기`,
+      );
+    } catch (error) {
+      const reason = `PM Runtime 실패: ${errorMessage(error)}`;
+      nextState = failProjectRuntime(nextState, project.id, reason);
+      setState(nextState);
+      setMessage(reason);
+    } finally {
+      setLaunchingProject(false);
+    }
+  };
+
+  const submitRequirement = async (request: string) => {
+    const runtimeSettings = loadOrganizationRuntimeSettings();
+    if (!runtimeSettings.workspaceRoot) {
+      setMessage("Workspace root를 저장한 뒤 새 프로젝트를 시작해 주세요.");
+      return;
+    }
+
     const result = startProject(state, request);
     setState(result.state);
 
@@ -77,17 +144,17 @@ export function ProjectTeamsPage() {
     setSelectedTeamId(result.project.teamId);
     setAwaitingRequirement(false);
     setCommand("/start");
-    setMessage(
-      `${getTeamName(result.state, result.project.teamId)}팀에 프로젝트를 배정했습니다. 실행 Runtime이 연결되면 PM Agent부터 시작합니다.`,
-    );
+    await launchProjectRuntime(result.state, result.project.id);
   };
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (launchingProject) return;
+
     const value = command.trim();
 
     if (awaitingRequirement) {
-      submitRequirement(value);
+      await submitRequirement(value);
       return;
     }
 
@@ -99,14 +166,20 @@ export function ProjectTeamsPage() {
     }
 
     if (value.startsWith("/start ")) {
-      submitRequirement(value.slice(7));
+      await submitRequirement(value.slice(7));
       return;
     }
 
     setMessage("현재는 /start 명령만 준비되어 있습니다.");
   };
 
+  const handleRetryRuntime = async () => {
+    if (!activeProject || launchingProject) return;
+    await launchProjectRuntime(state, activeProject.id);
+  };
+
   const handleReset = () => {
+    if (launchingProject) return;
     const nextState = resetProjectTeamsState();
     setState(nextState);
     setSelectedTeamId(nextState.teams[0].id);
@@ -126,8 +199,8 @@ export function ProjectTeamsPage() {
         <div className="project-teams-runtime">
           <span className="project-teams-runtime-dot" />
           <div>
-            <strong>Runtime 연결 대기</strong>
-            <span>BloomBouquet 연결과 로컬 CLI 상태를 아래에서 확인</span>
+            <strong>{launchingProject ? "PM Runtime 실행 중" : "Codex Runtime"}</strong>
+            <span>ChatGPT Codex 인증과 BloomBouquet 로컬 Runtime을 사용</span>
           </div>
         </div>
       </header>
@@ -142,8 +215,11 @@ export function ProjectTeamsPage() {
           value={command}
           onChange={(event) => setCommand(event.target.value)}
           placeholder={awaitingRequirement ? "무엇을 만들지 입력하세요" : "/start"}
+          disabled={launchingProject}
         />
-        <button type="submit">실행</button>
+        <button type="submit" disabled={launchingProject}>
+          {launchingProject ? "분석 중" : "실행"}
+        </button>
       </form>
 
       <p className="project-command-message">{message}</p>
@@ -182,11 +258,25 @@ export function ProjectTeamsPage() {
             {activeProject ? (
               <div className="project-active-project">
                 <div className="project-active-project-topline">
-                  <strong>{activeProject.id}</strong>
+                  <strong>{activeProject.plan?.projectName ?? activeProject.id}</strong>
                   <span>{activeProject.status}</span>
                 </div>
-                <p>{activeProject.request}</p>
-                <small>{activeProject.runtimeMessage}</small>
+                <p>{activeProject.plan?.productSummary ?? activeProject.request}</p>
+                <small>
+                  {activeProject.repositoryFullName
+                    ? `${activeProject.repositoryFullName} · ${activeProject.plan?.tasks.length ?? 0} tasks · ${activeProject.runtimeMessage}`
+                    : activeProject.runtimeMessage}
+                </small>
+                {activeProject.status === "blocked" && (
+                  <button
+                    className="project-reset-button project-runtime-retry-button"
+                    type="button"
+                    onClick={handleRetryRuntime}
+                    disabled={launchingProject}
+                  >
+                    PM Runtime 다시 실행
+                  </button>
+                )}
               </div>
             ) : (
               <div className="project-empty-state">
@@ -247,7 +337,7 @@ export function ProjectTeamsPage() {
               </div>
             </section>
 
-            <button className="project-reset-button" onClick={handleReset} type="button">
+            <button className="project-reset-button" onClick={handleReset} type="button" disabled={launchingProject}>
               로컬 상태 초기화
             </button>
           </aside>
