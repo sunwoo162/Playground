@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Sidebar, type LunaPage } from "../components/Sidebar";
 import { HomePage } from "../pages/HomePage";
@@ -14,9 +14,42 @@ import { ProjectTeamsPage } from "../pages/ProjectTeamsPage";
 import { InventoryPage } from "../pages/InventoryPage";
 import { ShopPage } from "../pages/ShopPage";
 import { SettingsPage } from "../pages/SettingsPage";
+import {
+  restoreProjectTeamsStateFromDurableFile,
+  startProjectTeamsDurableMirror,
+} from "../projectTeams/durableState";
 
 export function MainWindow() {
   const [currentPage, setCurrentPage] = useState<LunaPage>("character");
+
+  useEffect(() => {
+    let disposed = false;
+    let stopMirror = () => undefined;
+
+    const initializeDurableState = async () => {
+      try {
+        const restored = await restoreProjectTeamsStateFromDurableFile();
+        if (disposed) return;
+        if (restored) {
+          window.location.reload();
+          return;
+        }
+
+        stopMirror = startProjectTeamsDurableMirror((error) => {
+          console.warn("Luna durable project state mirror 실패", error);
+        });
+      } catch (error) {
+        console.warn("Luna durable project state 초기화 실패", error);
+      }
+    };
+
+    void initializeDurableState();
+
+    return () => {
+      disposed = true;
+      stopMirror();
+    };
+  }, []);
 
   const renderPage = () => {
     switch (currentPage) {
