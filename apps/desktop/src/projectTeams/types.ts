@@ -77,6 +77,18 @@ export type TeamState = {
   agents: AgentState[];
 };
 
+export type AgentDecision = {
+  id: string;
+  projectId: string;
+  agentId: string;
+  action: string;
+  rationaleSummary: string;
+  evidence: string[];
+  alternativesConsidered: string[];
+  sourceAgentIds: string[];
+  createdAt: string;
+};
+
 export type ProjectState = {
   id: string;
   request: string;
@@ -86,6 +98,7 @@ export type ProjectState = {
   authPolicyId: "bouquet";
   executionPolicyId: "iseol-workflow";
   autonomyPolicyId: "independent-agent";
+  decisionPolicyId: "reasoned-agent-decisions";
   qualityPolicyId: "production-service";
   deploymentPolicyId: "luna-apps-portal";
   runtimeMessage: string;
@@ -95,5 +108,6 @@ export type ProjectTeamsState = {
   schemaVersion: 1;
   teams: TeamState[];
   projects: ProjectState[];
+  decisions: AgentDecision[];
   evolutionAgentVersion: string;
 };

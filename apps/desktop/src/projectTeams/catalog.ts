@@ -110,6 +110,7 @@ export function createInitialProjectTeamsState(): ProjectTeamsState {
     schemaVersion: 1,
     teams: teamCatalog.map((team) => createTeam(team.id, team.name)),
     projects: [],
+    decisions: [],
     evolutionAgentVersion: "1.0.0",
   };
 }

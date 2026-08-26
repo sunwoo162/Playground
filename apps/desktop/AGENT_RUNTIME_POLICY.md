@@ -18,7 +18,7 @@ Each Agent must have its own:
 - Git identity metadata
 - execution log
 
-An Agent is not a role switch inside one shared conversation. Handoffs happen through explicit artifacts such as task records, commits, diffs, design decisions, review reports, test reports, issues, and pull requests.
+An Agent is not a role switch inside one shared conversation. Handoffs happen through explicit artifacts such as task records, commits, diffs, design decisions, review reports, test reports, issues, pull requests, and concise decision records.
 
 ## Project-scoped permissions
 
@@ -38,9 +38,29 @@ Agents are allowed to act autonomously inside the project they are assigned to. 
 - merge a pull request after repository protection rules and required Luna quality gates pass
 - prepare and publish the project to the Luna apps portal after release gates pass
 
-The PM coordinates work but does not proxy every GitHub action. A Frontend Agent can open its own PR. A Backend Agent can open its own PR. A Reviewer Agent reviews those PRs from its own independent session. A QA Agent can attach verification results or block release.
+The PM coordinates work but does not proxy every GitHub action. A Frontend Agent can open its own PR. A Backend Agent can open its own PR. A Code Review Agent reviews code from its own independent session. A higher-level Reviewer checks requirements and architecture separately. A QA Agent can attach verification results or block release.
 
 Repository credentials may be provided by one Luna GitHub App/runtime credential, but all actions must preserve the logical Agent identity in runtime logs and Git/PR metadata. If separate visible GitHub authors are required later, use dedicated bot/app identities rather than sharing human credentials.
+
+## Independent judgment policy
+
+Agent independence includes judgment, not only separate sessions.
+
+No Agent treats another Agent's output as automatically correct because of role or authority. PM plans, Code Review findings, Reviewer findings, QA reports, design recommendations, and user-simulation feedback are inputs that must be checked against evidence available to the receiving Agent.
+
+For every material action, acceptance, rejection, or alternative, the acting Agent records a concise decision record with:
+
+- the action or decision
+- a short rationale summary
+- evidence used to support it
+- relevant alternatives considered
+- source Agent IDs whose input affected the decision
+
+These records exist for auditability and team learning. They must contain concise, externally verifiable reasons rather than private chain-of-thought.
+
+An implementing Agent may disagree with Code Review or Reviewer feedback. It cannot silently ignore a finding. It must either apply the change with a reason or respond with evidence, trade-offs, and a better alternative, then request re-review. The reviewing Agent must reconsider the new evidence rather than automatically defend its previous judgment.
+
+Objective gates remain binding until resolved. Reproducible build/test failures, repository protection rules, explicit security/permission policies, and explicit user product decisions cannot be waived by another Agent's opinion. When reasonable Agents still disagree, PM compares the evidence and coordinates a resolution. Product-direction or high-risk conflicts are escalated to the user.
 
 ## Dependency policy
 
@@ -94,10 +114,12 @@ Expected flow:
 5. Agent creates small English commits.
 6. Agent pushes its branch.
 7. Agent opens or updates its own PR using the repository PR template/rules.
-8. Reviewer Agent independently reviews the diff.
-9. QA Agent independently verifies the integrated behavior.
-10. Failures are routed to the Agent best able to resolve them.
-11. Merge is allowed only after required review/QA/repository gates pass.
+8. Code Review Agent independently reviews code-level quality, bugs, security, performance, tests, and dependency choices.
+9. Reviewer Agent independently checks requirement coverage, architecture, product behavior, and broader integration risk.
+10. Implementing Agent independently evaluates findings, applies justified changes or responds with evidence and a reasoned alternative, and requests re-review.
+11. QA Agent independently verifies the integrated behavior.
+12. Failures are routed to the Agent best able to resolve them.
+13. Merge is allowed only after required review/QA/repository gates pass.
 
 The PM tracks and coordinates these PRs, but does not impersonate the workers that produced them.
 
@@ -109,6 +131,6 @@ The team should reuse the repository's existing portal conventions and `/apps/<i
 
 ## Retrospective and evolution
 
-After a project completes, every participating Agent writes an independent retrospective. The Process Evaluator evaluates that project, then the organization-level Team Evolution Agent compares current and historical evidence before proposing Agent or Team Playbook version changes.
+After a project completes, every participating Agent writes an independent retrospective. Code Review also evaluates which defects it caught, missed, or over-reported. The Process Evaluator evaluates that project, then the organization-level Team Evolution Agent compares current and historical evidence before proposing Agent or Team Playbook version changes.
 
 No Agent directly rewrites its own permanent operating rules from a single retrospective. Changes are versioned, measured on later projects, and can be rolled back when outcomes worsen.
