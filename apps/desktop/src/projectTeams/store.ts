@@ -1,4 +1,5 @@
 import { createInitialProjectTeamsState } from "./catalog";
+import { createAgentRuntimeIdentity } from "./permissions";
 import type { ProjectState, ProjectTeamsState, TeamId } from "./types";
 
 const STORAGE_KEY = "luna.project-teams.v1";
@@ -9,6 +10,29 @@ export type StartProjectResult =
 
 function canUseStorage() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+}
+
+function hydrateState(state: ProjectTeamsState): ProjectTeamsState {
+  return {
+    ...state,
+    teams: state.teams.map((team) => ({
+      ...team,
+      agents: team.agents.map((agent) => {
+        const identity = createAgentRuntimeIdentity(agent.id, agent.role);
+        return {
+          ...agent,
+          autonomy: identity.autonomy,
+          permissions: identity.permissions,
+        };
+      }),
+    })),
+    projects: state.projects.map((project) => ({
+      ...project,
+      autonomyPolicyId: project.autonomyPolicyId ?? "independent-agent",
+      qualityPolicyId: project.qualityPolicyId ?? "production-service",
+      deploymentPolicyId: project.deploymentPolicyId ?? "luna-apps-portal",
+    })),
+  };
 }
 
 export function loadProjectTeamsState(): ProjectTeamsState {
@@ -26,7 +50,7 @@ export function loadProjectTeamsState(): ProjectTeamsState {
     if (parsed.schemaVersion !== 1 || !Array.isArray(parsed.teams) || !Array.isArray(parsed.projects)) {
       return createInitialProjectTeamsState();
     }
-    return parsed;
+    return hydrateState(parsed);
   } catch {
     return createInitialProjectTeamsState();
   }
