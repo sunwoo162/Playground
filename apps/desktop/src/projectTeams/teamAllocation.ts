@@ -17,10 +17,16 @@ export type TeamAllocationSelection = {
   record: TeamAllocationRecord;
 };
 
+function timestampOrNever(value: string | null | undefined) {
+  if (!value) return Number.NEGATIVE_INFINITY;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : Number.NEGATIVE_INFINITY;
+}
+
 function assignmentsForTeam(projects: ProjectState[], teamId: TeamState["id"]) {
   return projects
     .filter((project) => project.teamId === teamId)
-    .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
+    .sort((left, right) => timestampOrNever(right.createdAt) - timestampOrNever(left.createdAt));
 }
 
 function compareCandidates(left: TeamAllocationCandidate, right: TeamAllocationCandidate) {
@@ -28,8 +34,8 @@ function compareCandidates(left: TeamAllocationCandidate, right: TeamAllocationC
     return left.assignmentCount - right.assignmentCount;
   }
 
-  const leftTime = left.lastAssignedAt ? Date.parse(left.lastAssignedAt) : Number.NEGATIVE_INFINITY;
-  const rightTime = right.lastAssignedAt ? Date.parse(right.lastAssignedAt) : Number.NEGATIVE_INFINITY;
+  const leftTime = timestampOrNever(left.lastAssignedAt);
+  const rightTime = timestampOrNever(right.lastAssignedAt);
   if (leftTime !== rightTime) {
     return leftTime - rightTime;
   }
