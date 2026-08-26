@@ -7,6 +7,7 @@ import {
   type OrganizationRuntimeSettings,
 } from "../projectTeams/organization";
 import { checkProjectRuntime, type ProjectRuntimePreflight } from "../projectTeams/runtime";
+import { TeamPerformanceOverview } from "./TeamPerformanceOverview";
 
 function statusLabel(value: boolean) {
   return value ? "준비" : "필요";
@@ -58,59 +59,63 @@ export function ProjectRuntimePanel() {
   };
 
   return (
-    <section className="project-runtime-panel-section">
-      <span className="project-policy-label">GITHUB ORGANIZATION</span>
-      <div className="project-runtime-org-row">
-        <h3>{settings.organization}</h3>
-        <span>연결 대상</span>
-      </div>
-      <p>
-        프로젝트 저장소는 기본적으로 이 Organization에 만들고, Agent별 작업은 독립 branch/worktree에서 진행합니다.
-      </p>
-
-      <label className="project-runtime-field">
-        <span>Workspace root</span>
-        <input
-          value={workspaceRoot}
-          onChange={(event) => setWorkspaceRoot(event.target.value)}
-          placeholder="C:\\Users\\user\\Documents\\luna-workspaces"
-        />
-      </label>
-
-      <div className="project-runtime-rule">
-        <span>release</span>
-        <strong>{settings.releaseBranch}</strong>
-      </div>
-      <div className="project-runtime-rule">
-        <span>integration</span>
-        <strong>{settings.integrationBranch}</strong>
-      </div>
-      <div className="project-runtime-rule">
-        <span>Agent branch</span>
-        <strong>{settings.agentBranchPattern}</strong>
-      </div>
-
-      <div className="project-runtime-actions">
-        <button type="button" onClick={saveSettings}>
-          설정 저장
-        </button>
-        <button type="button" onClick={runPreflight} disabled={checking}>
-          {checking ? "확인 중" : "Runtime 확인"}
-        </button>
-      </div>
-
-      {preflight && (
-        <div className="project-runtime-checks" aria-label="로컬 Runtime 사전 점검 결과">
-          <div><span>Git</span><strong data-ready={readyValue(preflight.gitAvailable)}>{statusLabel(preflight.gitAvailable)}</strong></div>
-          <div><span>GitHub CLI</span><strong data-ready={readyValue(preflight.ghAvailable)}>{statusLabel(preflight.ghAvailable)}</strong></div>
-          <div><span>gh 인증</span><strong data-ready={readyValue(preflight.ghAuthenticated)}>{statusLabel(preflight.ghAuthenticated)}</strong></div>
-          <div><span>Codex CLI</span><strong data-ready={readyValue(preflight.codexAvailable)}>{statusLabel(preflight.codexAvailable)}</strong></div>
-          <div><span>Codex 인증</span><strong data-ready={readyValue(preflight.codexChatgptAuth)}>{codexAuthLabel(preflight)}</strong></div>
-          <div><span>Organization</span><strong data-ready={readyValue(preflight.organizationAccessible)}>{statusLabel(preflight.organizationAccessible)}</strong></div>
+    <>
+      <section className="project-runtime-panel-section">
+        <span className="project-policy-label">GITHUB ORGANIZATION</span>
+        <div className="project-runtime-org-row">
+          <h3>{settings.organization}</h3>
+          <span>연결 대상</span>
         </div>
-      )}
+        <p>
+          프로젝트 저장소는 기본적으로 이 Organization에 만들고, Agent별 작업은 독립 branch/worktree에서 진행합니다.
+        </p>
 
-      <p className="project-runtime-note">{message}</p>
-    </section>
+        <label className="project-runtime-field">
+          <span>Workspace root</span>
+          <input
+            value={workspaceRoot}
+            onChange={(event) => setWorkspaceRoot(event.target.value)}
+            placeholder="C:\\Users\\user\\Documents\\luna-workspaces"
+          />
+        </label>
+
+        <div className="project-runtime-rule">
+          <span>release</span>
+          <strong>{settings.releaseBranch}</strong>
+        </div>
+        <div className="project-runtime-rule">
+          <span>integration</span>
+          <strong>{settings.integrationBranch}</strong>
+        </div>
+        <div className="project-runtime-rule">
+          <span>Agent branch</span>
+          <strong>{settings.agentBranchPattern}</strong>
+        </div>
+
+        <div className="project-runtime-actions">
+          <button type="button" onClick={saveSettings}>
+            설정 저장
+          </button>
+          <button type="button" onClick={runPreflight} disabled={checking}>
+            {checking ? "확인 중" : "Runtime 확인"}
+          </button>
+        </div>
+
+        {preflight && (
+          <div className="project-runtime-checks" aria-label="로컬 Runtime 사전 점검 결과">
+            <div><span>Git</span><strong data-ready={readyValue(preflight.gitAvailable)}>{statusLabel(preflight.gitAvailable)}</strong></div>
+            <div><span>GitHub CLI</span><strong data-ready={readyValue(preflight.ghAvailable)}>{statusLabel(preflight.ghAvailable)}</strong></div>
+            <div><span>gh 인증</span><strong data-ready={readyValue(preflight.ghAuthenticated)}>{statusLabel(preflight.ghAuthenticated)}</strong></div>
+            <div><span>Codex CLI</span><strong data-ready={readyValue(preflight.codexAvailable)}>{statusLabel(preflight.codexAvailable)}</strong></div>
+            <div><span>Codex 인증</span><strong data-ready={readyValue(preflight.codexChatgptAuth)}>{codexAuthLabel(preflight)}</strong></div>
+            <div><span>Organization</span><strong data-ready={readyValue(preflight.organizationAccessible)}>{statusLabel(preflight.organizationAccessible)}</strong></div>
+          </div>
+        )}
+
+        <p className="project-runtime-note">{message}</p>
+      </section>
+
+      <TeamPerformanceOverview />
+    </>
   );
 }
