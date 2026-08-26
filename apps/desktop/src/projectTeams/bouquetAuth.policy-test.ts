@@ -76,6 +76,19 @@ const completedPair = ensureBouquetAuthPlan(existingServerOnly);
 const existingServer = completedPair.tasks.find((task) => task.id === "AUTH-100");
 const injectedClient = completedPair.tasks.find((task) => task.taskSlug.startsWith("bouquet-auth-client"));
 assert(Boolean(existingServer && injectedClient?.dependsOn.includes(existingServer.id)), "existing Bouquet server must be reused");
+assert(
+  Boolean(existingServer?.acceptanceCriteria.includes("server auth works")),
+  "existing project-specific auth criteria must be preserved",
+);
+assert(
+  Boolean(existingServer?.acceptanceCriteria.some((criterion) => criterion.includes("HttpOnly/Secure"))),
+  "existing Bouquet server task must receive mandatory cookie/session criteria",
+);
+assert(
+  Boolean(existingServer?.acceptanceCriteria.some((criterion) => criterion.includes("returnTo/redirect"))),
+  "existing Bouquet server task must receive mandatory redirect validation criteria",
+);
+validateBouquetAuthPlan(completedPair);
 
 const brokenDependency = ensureBouquetAuthPlan(basePlan(true));
 const brokenClient = brokenDependency.tasks.find((task) => task.taskSlug.startsWith("bouquet-auth-client"));
@@ -89,6 +102,21 @@ const repaired = ensureBouquetAuthPlan({
 const repairedServer = repaired.tasks.find((task) => task.taskSlug.startsWith("bouquet-auth-server"));
 const repairedClient = repaired.tasks.find((task) => task.taskSlug.startsWith("bouquet-auth-client"));
 assert(Boolean(repairedServer && repairedClient?.dependsOn.includes(repairedServer.id)), "Bouquet dependency must be repaired");
+
+let strippedCriteriaRejected = false;
+try {
+  validateBouquetAuthPlan({
+    ...injected,
+    tasks: injected.tasks.map((task) =>
+      task.taskSlug.startsWith("bouquet-auth-server")
+        ? { ...task, acceptanceCriteria: ["server auth works"] }
+        : task,
+    ),
+  });
+} catch {
+  strippedCriteriaRejected = true;
+}
+assert(strippedCriteriaRejected, "Bouquet tasks without mandatory security criteria must be rejected");
 
 let duplicateRejected = false;
 try {
