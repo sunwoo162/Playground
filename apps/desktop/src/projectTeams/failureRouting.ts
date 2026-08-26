@@ -12,8 +12,12 @@ function teamName(state: ProjectTeamsState, project: ProjectState) {
   return state.teams.find((team) => team.id === project.teamId)?.name ?? project.teamId;
 }
 
+function routes(project: ProjectState) {
+  return project.failureRoutes ?? [];
+}
+
 function routeAttempt(project: ProjectState, taskId: string) {
-  return project.failureRoutes.filter((route) => route.failedTaskId === taskId).length + 1;
+  return routes(project).filter((route) => route.failedTaskId === taskId).length + 1;
 }
 
 function candidateOwners(project: ProjectState, failedTaskId: string) {
@@ -37,7 +41,7 @@ function candidateOwners(project: ProjectState, failedTaskId: string) {
 }
 
 export function latestFailureRoute(project: ProjectState, ownerTaskId: string) {
-  return project.failureRoutes.find(
+  return routes(project).find(
     (route) => route.route === "retry-owner" && route.ownerTaskId === ownerTaskId,
   ) ?? null;
 }
@@ -88,10 +92,11 @@ export async function diagnoseBlockedTask(
     throw new Error(`${taskId} 실패를 라우팅할 owner 후보가 없습니다.`);
   }
 
-  const failureReason = run.lastError
-    ?? run.blockers.join(" · ")
-    ?? run.summary
-    ?? "Agent가 blocked 상태를 반환했지만 구체적인 실패 원인을 남기지 않았습니다.";
+  const joinedBlockers = run.blockers.join(" · ").trim();
+  const failureReason = run.lastError?.trim()
+    || joinedBlockers
+    || run.summary?.trim()
+    || "Agent가 blocked 상태를 반환했지만 구체적인 실패 원인을 남기지 않았습니다.";
 
   return routeAgentFailure({
     projectId: project.id,
