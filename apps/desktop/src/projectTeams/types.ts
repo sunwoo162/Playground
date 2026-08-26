@@ -56,6 +56,8 @@ export type ProjectStatus =
   | "completed"
   | "blocked";
 
+export type RuntimeFailureSource = "pm" | "agent";
+
 export type TechnologyDecision = {
   area: string;
   choice: string;
@@ -171,6 +173,7 @@ export type ProjectState = {
   repositoryFullName: string | null;
   workspacePath: string | null;
   pmSessionId: string | null;
+  runtimeFailureSource: RuntimeFailureSource | null;
   runtimeMessage: string;
 };
 
