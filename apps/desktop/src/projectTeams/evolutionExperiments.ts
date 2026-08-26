@@ -41,6 +41,48 @@ function bumpMinor(version: string) {
   return `${parsed[0]}.${parsed[1] + 1}.0`;
 }
 
+function nextUnusedMinorVersion(version: string, usedVersions: Set<string>) {
+  let candidate = bumpMinor(version);
+  if (candidate === version) return version;
+  while (usedVersions.has(candidate)) {
+    const next = bumpMinor(candidate);
+    if (next === candidate) return version;
+    candidate = next;
+  }
+  return candidate;
+}
+
+function usedPlaybookVersions(state: ProjectTeamsState, teamId: TeamState["id"]) {
+  const versions = new Set<string>();
+  for (const experiment of state.evolutionExperiments ?? []) {
+    if (experiment.teamId !== teamId) continue;
+    versions.add(experiment.baseline.playbookVersion);
+    versions.add(experiment.candidate.playbookVersion);
+  }
+  const team = state.teams.find((item) => item.id === teamId);
+  if (team) versions.add(team.playbookVersion);
+  return versions;
+}
+
+function usedAgentVersions(
+  state: ProjectTeamsState,
+  teamId: TeamState["id"],
+  agentId: string,
+) {
+  const versions = new Set<string>();
+  for (const experiment of state.evolutionExperiments ?? []) {
+    if (experiment.teamId !== teamId) continue;
+    const baseline = experiment.baseline.agentVersions[agentId];
+    const candidate = experiment.candidate.agentVersions[agentId];
+    if (baseline) versions.add(baseline);
+    if (candidate) versions.add(candidate);
+  }
+  const team = state.teams.find((item) => item.id === teamId);
+  const agent = team?.agents.find((item) => item.id === agentId);
+  if (agent) versions.add(agent.version);
+  return versions;
+}
+
 export function snapshotTeamVersions(team: TeamState): EvolutionVersionSnapshot {
   return {
     playbookVersion: team.playbookVersion,
@@ -156,10 +198,14 @@ export function createEvolutionExperimentCandidate(
     const projectVersion = sourceSnapshot.agentVersions[agent.id] ?? agent.version;
     if (proposal.currentVersion !== projectVersion) return [];
 
+    const usedVersions = usedAgentVersions(state, team.id, agent.id);
     const recommendedComparison = compareSemver(proposal.recommendedVersion, agent.version);
-    const toVersion = recommendedComparison !== null && recommendedComparison > 0
+    const recommendedIsUsable = recommendedComparison !== null
+      && recommendedComparison > 0
+      && !usedVersions.has(proposal.recommendedVersion);
+    const toVersion = recommendedIsUsable
       ? proposal.recommendedVersion
-      : bumpMinor(agent.version);
+      : nextUnusedMinorVersion(agent.version, usedVersions);
     const reason = proposal.reason.trim();
     if (toVersion === agent.version || !reason) return [];
 
@@ -193,7 +239,7 @@ export function createEvolutionExperimentCandidate(
     baseline,
     candidate: {
       playbookVersion: playbookChanges.length > 0
-        ? bumpMinor(baseline.playbookVersion)
+        ? nextUnusedMinorVersion(baseline.playbookVersion, usedPlaybookVersions(state, team.id))
         : baseline.playbookVersion,
       agentVersions: candidateAgentVersions,
     },
@@ -235,6 +281,7 @@ export function getProjectEvolutionInstructions(
   return {
     experimentId: experiment.id,
     playbookVersion: experiment.candidate.playbookVersion,
+    agentVersion: experiment.candidate.agentVersions[agentId] ?? null,
     playbookChanges: experiment.playbookChanges,
     agentInstructions: agentChange?.instructionChanges ?? [],
   };
