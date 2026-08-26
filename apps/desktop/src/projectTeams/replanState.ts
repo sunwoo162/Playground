@@ -1,5 +1,8 @@
 import { taskTransitivelyDependsOn } from "./planTopology";
-import type { ProjectFailureReplanOutcome } from "./replanning";
+import {
+  getPmRecoveryTrigger,
+  type ProjectFailureReplanOutcome,
+} from "./replanning";
 import { saveProjectTeamsState } from "./store";
 import type {
   AgentRole,
@@ -122,10 +125,15 @@ export function beginProjectFailureReplan(
   projectId: string,
 ) {
   const project = state.projects.find((item) => item.id === projectId);
-  const route = project?.failureRoutes?.find((item) => item.route === "escalate-pm") ?? null;
-  if (!project || !route) return state;
+  if (!project) return state;
+  const trigger = getPmRecoveryTrigger(state, project);
+  if (!trigger) return state;
 
+  const { route, productOwnerDecision } = trigger;
   const nextAttempt = (project.replanAttempts?.[route.id] ?? 0) + 1;
+  const sourceLabel = productOwnerDecision
+    ? `Product Owner 결정 ${productOwnerDecision.id}`
+    : "Debug Router escalation";
   const nextState: ProjectTeamsState = {
     ...state,
     projects: state.projects.map((item) =>
@@ -138,7 +146,7 @@ export function beginProjectFailureReplan(
             },
             status: "planning",
             runtimeFailureSource: "pm",
-            runtimeMessage: `Debug Router escalation · PM Codex 복구 재계획 ${nextAttempt}회차 생성 중`,
+            runtimeMessage: `${sourceLabel} · PM Codex 복구 재계획 ${nextAttempt}회차 생성 중`,
           }
         : item,
     ),
