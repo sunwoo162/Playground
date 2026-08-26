@@ -73,7 +73,10 @@ export function startProject(state: ProjectTeamsState, request: string): StartPr
     createdAt: new Date().toISOString(),
     authPolicyId: "bouquet",
     executionPolicyId: "iseol-workflow",
-    runtimeMessage: "팀 배정 완료 · Codex 실행 Runtime 연결 대기",
+    autonomyPolicyId: "independent-agent",
+    qualityPolicyId: "production-service",
+    deploymentPolicyId: "luna-apps-portal",
+    runtimeMessage: "팀 배정 완료 · 독립 Agent 실행 Runtime 연결 대기",
   };
 
   const nextState: ProjectTeamsState = {
