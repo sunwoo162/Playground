@@ -1,8 +1,10 @@
 import {
   E2E_CANARY_REQUEST,
   evaluateE2ECanaryProject,
+  expectedE2ECanaryRepositoryName,
   isE2ECanaryProject,
   validateE2ECanaryPlan,
+  validateE2ECanaryRuntimePlan,
 } from "./e2eCanary";
 import type {
   ExecutableAgentRole,
@@ -10,6 +12,9 @@ import type {
   ProjectState,
   ProjectTaskRun,
 } from "./types";
+
+const PROJECT_ID = "PROJECT-E2E-001";
+const REPOSITORY_NAME = "pulsenote-canary-project-e2e-001";
 
 function assert(condition: boolean, message: string) {
   if (!condition) throw new Error(message);
@@ -31,7 +36,7 @@ function taskRun(role: ExecutableAgentRole, index: number, done = true): Project
     stderrPath: `/tmp/task-${index}.stderr.log`,
     commitSha: `commit-${index}`,
     pullRequestNumber: index,
-    pullRequestUrl: `https://github.com/BloomBouquet/pulsenote/pull/${index}`,
+    pullRequestUrl: `https://github.com/BloomBouquet/${REPOSITORY_NAME}/pull/${index}`,
     reviewedPullRequests: role === "code-review" || role === "reviewer" || role === "qa" ? [1, 2] : [],
     summary: `${role} complete`,
     rationaleSummary: "Evidence verified",
@@ -44,10 +49,10 @@ function taskRun(role: ExecutableAgentRole, index: number, done = true): Project
   };
 }
 
-function plan(roles: ExecutableAgentRole[]): ProjectPlan {
+function plan(roles: ExecutableAgentRole[], repositoryName = REPOSITORY_NAME): ProjectPlan {
   return {
     projectName: "PulseNote",
-    repositoryName: "pulsenote",
+    repositoryName,
     productSummary: "E2E canary product",
     architectureSummary: "React + API + SQLite",
     needsAuth: false,
@@ -66,7 +71,7 @@ function plan(roles: ExecutableAgentRole[]): ProjectPlan {
 
 function project(projectPlan: ProjectPlan | null, taskRuns: ProjectTaskRun[], status: ProjectState["status"]): ProjectState {
   return {
-    id: "PROJECT-E2E-001",
+    id: PROJECT_ID,
     request: E2E_CANARY_REQUEST,
     teamId: "rose",
     status,
@@ -111,8 +116,8 @@ function project(projectPlan: ProjectPlan | null, taskRuns: ProjectTaskRun[], st
     taskRuns,
     failureRoutes: [],
     replans: [],
-    repositoryFullName: projectPlan ? "BloomBouquet/pulsenote" : null,
-    workspacePath: projectPlan ? "/workspace/pulsenote" : null,
+    repositoryFullName: projectPlan ? `BloomBouquet/${projectPlan.repositoryName}` : null,
+    workspacePath: projectPlan ? `/workspace/${projectPlan.repositoryName}` : null,
     pmSessionId: projectPlan ? "pm-session" : null,
     runtimeFailureSource: null,
     runtimeMessage: status === "completed" ? "Agent 회고 및 Team Evolution 저장 완료" : "runtime active",
@@ -121,6 +126,29 @@ function project(projectPlan: ProjectPlan | null, taskRuns: ProjectTaskRun[], st
 
 function run() {
   assert(isE2ECanaryProject(project(null, [], "queued")), "canary marker must identify the project");
+  assert(
+    expectedE2ECanaryRepositoryName(PROJECT_ID) === REPOSITORY_NAME,
+    "canary repository must be deterministically derived from the Project ID",
+  );
+
+  const requiredRoles: ExecutableAgentRole[] = [
+    "frontend",
+    "backend",
+    "data-marketing",
+    "documentation",
+    "code-review",
+    "reviewer",
+    "qa",
+  ];
+  const staleRepositoryErrors = validateE2ECanaryRuntimePlan(
+    PROJECT_ID,
+    E2E_CANARY_REQUEST,
+    plan(requiredRoles, "pulsenote"),
+  );
+  assert(
+    staleRepositoryErrors.some((error) => error.includes(REPOSITORY_NAME)),
+    "reusing a generic PulseNote repository must fail the canary plan gate",
+  );
 
   const missingBackend = plan([
     "frontend",
@@ -138,26 +166,20 @@ function run() {
     "missing implementation role must surface as blocked development stage",
   );
 
-  const roles: ExecutableAgentRole[] = [
-    "frontend",
-    "backend",
-    "data-marketing",
-    "documentation",
-    "code-review",
-    "reviewer",
-    "qa",
-  ];
   const completeProject = project(
-    plan(roles),
-    roles.map((role, index) => taskRun(role, index + 1)),
+    plan(requiredRoles),
+    requiredRoles.map((role, index) => taskRun(role, index + 1)),
     "completed",
   );
   const report = evaluateE2ECanaryProject(completeProject);
   assert(report.passed, "completed canary with all required evidence must pass");
   assert(report.stages.length === 12, "canary must expose all 12 E2E stages");
   assert(report.stages.every((stage) => stage.status === "passed"), "completed canary stages must all pass");
-  assert(report.repositoryFullName === "BloomBouquet/pulsenote", "report must preserve the actual repository");
-  assert(report.pullRequests.length === roles.length, "report must preserve Agent PR evidence");
+  assert(
+    report.repositoryFullName === `BloomBouquet/${REPOSITORY_NAME}`,
+    "report must preserve the isolated actual repository",
+  );
+  assert(report.pullRequests.length === requiredRoles.length, "report must preserve Agent PR evidence");
 
   console.log("PASS  Luna E2E canary evidence scenarios passed.");
 }
