@@ -11,11 +11,17 @@ import { diagnoseBlockedTask, toFailureRouteRecord } from "../projectTeams/failu
 import { applyFailureRoute, beginFailureRouting, failFailureRouting } from "../projectTeams/failureState";
 import { integrateProjectPullRequests } from "../projectTeams/integration";
 import { markProjectIntegrated } from "../projectTeams/integrationState";
+import {
+  analyzeProjectIntake,
+  PROJECT_INTAKE_AGENT_VERSION,
+} from "../projectTeams/intakeRuntime";
+import { startProjectRuntimeWithIntake } from "../projectTeams/intakePlanning";
 import { loadOrganizationRuntimeSettings } from "../projectTeams/organization";
 import {
   getProductOwnerDecision,
   recordProductOwnerRecoveryDecision,
 } from "../projectTeams/productOwnerDecision";
+import { startProjectWithIntake } from "../projectTeams/projectIntakeState";
 import {
   getPmRecoveryTrigger,
   runProjectFailureReplan,
@@ -27,7 +33,7 @@ import {
 } from "../projectTeams/replanState";
 import { runProjectRetrospectives } from "../projectTeams/retrospective";
 import { completeProjectRetrospective } from "../projectTeams/retrospectiveState";
-import { dispatchAgentTask, startProjectRuntime } from "../projectTeams/runtime";
+import { dispatchAgentTask } from "../projectTeams/runtime";
 import {
   beginAgentTasks,
   beginProjectPlanning,
@@ -39,7 +45,6 @@ import {
   getTeamName,
   loadProjectTeamsState,
   resetProjectTeamsState,
-  startProject,
 } from "../projectTeams/store";
 import { buildAgentTaskRuntimeInput } from "../projectTeams/taskScheduler";
 import type { ProjectTeamsState, TeamId } from "../projectTeams/types";
@@ -88,12 +93,17 @@ export function ProjectTeamsPage() {
   const [command, setCommand] = useState("/start");
   const [awaitingRequirement, setAwaitingRequirement] = useState(false);
   const [awaitingDecision, setAwaitingDecision] = useState(false);
+  const [runningIntake, setRunningIntake] = useState(false);
   const [launchingProject, setLaunchingProject] = useState(false);
   const [dispatchingAgents, setDispatchingAgents] = useState(false);
   const [runningReplan, setRunningReplan] = useState(false);
   const [runningRetrospective, setRunningRetrospective] = useState(false);
-  const [message, setMessage] = useState("/start로 새 프로젝트를 배정할 수 있습니다.");
-  const runtimeBusy = launchingProject || dispatchingAgents || runningReplan || runningRetrospective;
+  const [message, setMessage] = useState("/start로 요구사항을 조직 분석한 뒤 적합한 대기 팀을 배정할 수 있습니다.");
+  const runtimeBusy = runningIntake
+    || launchingProject
+    || dispatchingAgents
+    || runningReplan
+    || runningRetrospective;
 
   const selectedTeam = useMemo(
     () => state.teams.find((team) => team.id === selectedTeamId) ?? state.teams[0],
@@ -331,17 +341,17 @@ export function ProjectTeamsPage() {
     setState(nextState);
     setSelectedTeamId(project.teamId);
     setLaunchingProject(true);
-    setMessage(`${teamName}팀 PM Codex가 프로젝트를 분석 중입니다.`);
+    setMessage(`${teamName}팀 PM Codex가 Organization Intake 근거를 독립 검증하고 프로젝트를 계획 중입니다.`);
 
     try {
-      const runtimeResult = await startProjectRuntime({
+      const runtimeResult = await startProjectRuntimeWithIntake({
         organization: runtimeSettings.organization,
         workspaceRoot: runtimeSettings.workspaceRoot,
         projectId: project.id,
         teamId: project.teamId,
         teamName,
         request: project.request,
-      });
+      }, project.intake);
 
       nextState = completeProjectPlanning(nextState, {
         projectId: project.id,
@@ -381,7 +391,24 @@ export function ProjectTeamsPage() {
       return;
     }
 
-    const result = startProject(state, request);
+    setRunningIntake(true);
+    setMessage("Organization Project Intake Agent가 팀을 선택하기 전에 사용자·범위·복잡도·필요 역할·위험을 분석 중입니다.");
+
+    let intake;
+    try {
+      intake = await analyzeProjectIntake({
+        organization: runtimeSettings.organization,
+        workspaceRoot: runtimeSettings.workspaceRoot,
+        request,
+      });
+    } catch (error) {
+      setMessage(`Project Intake Runtime 실패: ${errorMessage(error)} · 팀은 아직 배정되지 않았습니다.`);
+      return;
+    } finally {
+      setRunningIntake(false);
+    }
+
+    const result = startProjectWithIntake(state, request, intake);
     setState(result.state);
 
     if (!result.ok) {
@@ -393,6 +420,9 @@ export function ProjectTeamsPage() {
     setAwaitingRequirement(false);
     setAwaitingDecision(false);
     setCommand("/start");
+    setMessage(
+      `Intake ${intake.id} 완료 · ${intake.complexity} · 핵심 역할 ${intake.criticalRoles.join(", ") || "없음"} · ${getTeamName(result.state, result.project.teamId)}팀 배정`,
+    );
     await launchProjectRuntime(result.state, result.project.id);
   };
 
@@ -445,7 +475,7 @@ export function ProjectTeamsPage() {
       setAwaitingRequirement(true);
       setAwaitingDecision(false);
       setCommand("");
-      setMessage("프로젝트 요구사항을 입력해 주세요.");
+      setMessage("프로젝트 요구사항을 입력해 주세요. 입력 후 Organization Intake가 먼저 실행됩니다.");
       return;
     }
 
@@ -550,21 +580,23 @@ export function ProjectTeamsPage() {
         <div>
           <span className="project-teams-kicker">PROJECT TEAMS</span>
           <h1>프로젝트 팀</h1>
-          <p>다섯 개의 독립 팀을 배정하고 Agent 상태와 프로젝트 기준을 관리합니다.</p>
+          <p>요구사항을 조직 레벨에서 먼저 분석한 뒤, 다섯 동급 팀 중 근거가 있는 대기 팀을 배정합니다.</p>
         </div>
         <div className="project-teams-runtime">
           <span className="project-teams-runtime-dot" />
           <div>
             <strong>
-              {runningReplan
-                ? "PM Recovery Replan 실행 중"
-                : runningRetrospective
-                  ? "Retrospective Runtime 실행 중"
-                  : dispatchingAgents
-                    ? "Agent Runtime 실행 중"
-                    : launchingProject
-                      ? "PM Runtime 실행 중"
-                      : "Codex Runtime"}
+              {runningIntake
+                ? "Organization Intake 실행 중"
+                : runningReplan
+                  ? "PM Recovery Replan 실행 중"
+                  : runningRetrospective
+                    ? "Retrospective Runtime 실행 중"
+                    : dispatchingAgents
+                      ? "Agent Runtime 실행 중"
+                      : launchingProject
+                        ? "PM Runtime 실행 중"
+                        : "Codex Runtime"}
             </strong>
             <span>ChatGPT Codex 인증과 BloomBouquet 로컬 Runtime을 사용</span>
           </div>
@@ -578,7 +610,7 @@ export function ProjectTeamsPage() {
             {awaitingDecision
               ? "Product Owner 결정 입력"
               : awaitingRequirement
-                ? "프로젝트 요구사항 입력"
+                ? "요구사항 입력 → 조직 분석 → 팀 배정"
                 : "새 프로젝트 시작 / 복구 결정"}
           </small>
         </div>
@@ -646,6 +678,11 @@ export function ProjectTeamsPage() {
                       ? `${activeProject.repositoryFullName} · ${activeProject.plan?.tasks.length ?? 0} tasks · ${activeProject.runtimeMessage}`
                       : activeProject.runtimeMessage}
                   </small>
+                  {activeProject.intake && (
+                    <small>
+                      Intake {activeProject.intake.id} · {activeProject.intake.complexity} · 핵심 역할 {activeProject.intake.criticalRoles.join(", ") || "없음"} · risk {activeProject.intake.riskFlags.join(", ") || "없음"}
+                    </small>
+                  )}
                   {activeProject.status === "blocked" && activeProject.runtimeFailureSource && (
                     <small>
                       실패 단계: {activeProject.runtimeFailureSource === "pm" ? "PM Runtime" : "Agent Runtime"}
@@ -728,6 +765,13 @@ export function ProjectTeamsPage() {
 
           <aside className="project-policy-panel">
             <ProjectRuntimePanel />
+
+            <section>
+              <span className="project-policy-label">ORGANIZATION</span>
+              <h3>Project Intake Agent</h3>
+              <p>팀 배정 전에 요구사항, 사용자, 복잡도, 필요한 역할과 위험을 분석합니다. 특정 팀을 직접 고르지 않으며 결과는 PM이 독립 검증하는 evidence로만 사용합니다.</p>
+              <div className="project-policy-meta">v{state.intakeAgentVersion ?? PROJECT_INTAKE_AGENT_VERSION}</div>
+            </section>
 
             <section>
               <span className="project-policy-label">ORGANIZATION</span>
