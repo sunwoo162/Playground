@@ -6,6 +6,7 @@ export type LunaPage =
   | "tools"
   | "project-teams"
   | "market-discovery"
+  | "e2e-smoke"
   | "inventory"
   | "shop"
   | "settings";

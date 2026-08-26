@@ -1,0 +1,153 @@
+.e2e-smoke-page {
+  display: grid;
+  gap: 18px;
+  padding-bottom: 32px;
+}
+
+.e2e-smoke-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.e2e-smoke-header h1 {
+  margin: 6px 0 8px;
+}
+
+.e2e-smoke-header p,
+.e2e-smoke-run-card > p,
+.e2e-smoke-note p {
+  margin: 0;
+  max-width: 760px;
+  line-height: 1.65;
+  color: var(--text-muted, #666);
+}
+
+.e2e-smoke-header button,
+.e2e-smoke-actions button {
+  border: 1px solid var(--border-soft, #d8d8d8);
+  background: var(--surface, #fff);
+  border-radius: 8px;
+  padding: 9px 12px;
+  cursor: pointer;
+}
+
+.e2e-smoke-run-card,
+.e2e-smoke-audit,
+.e2e-smoke-note {
+  border-top: 1px solid var(--border-soft, #dedede);
+  padding-top: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.e2e-smoke-section-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.e2e-smoke-section-title span {
+  font-size: 11px;
+  color: var(--text-muted, #777);
+}
+
+.e2e-smoke-section-title h2 {
+  margin: 3px 0 0;
+  font-size: 18px;
+}
+
+.e2e-smoke-section-title small,
+.e2e-smoke-actions span {
+  color: var(--text-muted, #777);
+  font-size: 12px;
+}
+
+.e2e-smoke-section-title > strong {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+.e2e-smoke-section-title > strong[data-result="pass"] {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.e2e-smoke-run-card textarea {
+  min-height: 180px;
+  width: 100%;
+  resize: vertical;
+  box-sizing: border-box;
+  border: 1px solid var(--border-soft, #dadada);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+  color: inherit;
+  padding: 12px;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.e2e-smoke-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.e2e-smoke-empty,
+.e2e-smoke-project-summary {
+  border: 1px solid var(--border-soft, #dedede);
+  border-radius: 8px;
+  padding: 13px;
+}
+
+.e2e-smoke-project-summary {
+  display: grid;
+  gap: 4px;
+}
+
+.e2e-smoke-project-summary > span,
+.e2e-smoke-project-summary > small {
+  font-size: 12px;
+  color: var(--text-muted, #777);
+}
+
+.e2e-smoke-checks {
+  display: grid;
+  border-top: 1px solid var(--border-soft, #e2e2e2);
+}
+
+.e2e-smoke-check {
+  display: grid;
+  grid-template-columns: 50px 1fr;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--border-soft, #ececec);
+}
+
+.e2e-smoke-check > span {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  padding-top: 2px;
+}
+
+.e2e-smoke-check[data-status="fail"] > span {
+  font-weight: 700;
+}
+
+.e2e-smoke-check > div {
+  display: grid;
+  gap: 3px;
+}
+
+.e2e-smoke-check small {
+  color: var(--text-muted, #777);
+  line-height: 1.45;
+}
+
+.e2e-smoke-note strong {
+  font-size: 13px;
+}
