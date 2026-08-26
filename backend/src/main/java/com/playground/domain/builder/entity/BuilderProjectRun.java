@@ -12,7 +12,8 @@ import java.time.LocalDateTime;
         name = "builder_project_runs",
         indexes = {
                 @Index(name = "idx_builder_run_project_created", columnList = "project_id,created_at"),
-                @Index(name = "idx_builder_run_owner_status", columnList = "owner_id,status")
+                @Index(name = "idx_builder_run_owner_status", columnList = "owner_id,status"),
+                @Index(name = "idx_builder_run_status_lease", columnList = "status,lease_expires_at")
         }
 )
 @Getter
@@ -40,6 +41,16 @@ public class BuilderProjectRun {
 
     @Column(name = "failure_reason", length = 1000)
     private String failureReason;
+
+    @Column(name = "heartbeat_at")
+    private LocalDateTime heartbeatAt;
+
+    @Column(name = "lease_expires_at")
+    private LocalDateTime leaseExpiresAt;
+
+    @Builder.Default
+    @Column(name = "claim_count", nullable = false, columnDefinition = "int default 0")
+    private int claimCount = 0;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
