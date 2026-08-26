@@ -172,6 +172,49 @@ export type ProjectReplanRecord = {
   createdAt: string;
 };
 
+export type EvolutionExperimentStatus = "proposed" | "active" | "kept" | "rolled-back";
+
+export type EvolutionMetrics = {
+  taskCount: number;
+  totalAttempts: number;
+  retryCount: number;
+  failureRouteCount: number;
+  replanCount: number;
+  failedVerificationCount: number;
+  blockedVerificationCount: number;
+};
+
+export type EvolutionVersionSnapshot = {
+  playbookVersion: string;
+  agentVersions: Record<string, string>;
+};
+
+export type EvolutionAgentChange = {
+  agentId: string;
+  fromVersion: string;
+  toVersion: string;
+  reason: string;
+  instructionChanges: string[];
+};
+
+export type EvolutionExperiment = {
+  id: string;
+  teamId: TeamId;
+  sourceProjectId: string;
+  targetProjectId: string | null;
+  status: EvolutionExperimentStatus;
+  playbookChanges: string[];
+  agentChanges: EvolutionAgentChange[];
+  baseline: EvolutionVersionSnapshot;
+  candidate: EvolutionVersionSnapshot;
+  baselineMetrics: EvolutionMetrics;
+  experimentMetrics: EvolutionMetrics | null;
+  verdictReason: string | null;
+  createdAt: string;
+  activatedAt: string | null;
+  completedAt: string | null;
+};
+
 export type AgentState = {
   id: string;
   role: AgentRole;
@@ -213,6 +256,7 @@ export type ProjectState = {
   teamId: TeamId;
   status: ProjectStatus;
   createdAt: string;
+  completedAt?: string | null;
   authPolicyId: "bouquet";
   executionPolicyId: "iseol-workflow";
   autonomyPolicyId: "independent-agent";
@@ -225,6 +269,8 @@ export type ProjectState = {
   failureRoutes?: FailureRouteRecord[];
   replans?: ProjectReplanRecord[];
   replanAttempts?: Record<string, number>;
+  evolutionExperimentId?: string | null;
+  versionSnapshot?: EvolutionVersionSnapshot | null;
   repositoryFullName: string | null;
   workspacePath: string | null;
   pmSessionId: string | null;
@@ -238,4 +284,5 @@ export type ProjectTeamsState = {
   projects: ProjectState[];
   decisions: AgentDecision[];
   evolutionAgentVersion: string;
+  evolutionExperiments?: EvolutionExperiment[];
 };
