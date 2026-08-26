@@ -82,6 +82,42 @@ export type ProjectPlan = {
   tasks: ProjectTaskPlan[];
 };
 
+export type TaskRunStatus = "pending" | "ready" | "running" | "blocked" | "done";
+export type VerificationStatus = "passed" | "failed" | "blocked" | "not-run";
+
+export type AgentTaskVerification = {
+  name: string;
+  status: VerificationStatus;
+  details: string;
+};
+
+export type ProjectTaskRun = {
+  taskId: string;
+  role: Exclude<AgentRole, "pm">;
+  agentId: string;
+  status: TaskRunStatus;
+  attempts: number;
+  branchName: string | null;
+  worktreePath: string | null;
+  threadId: string | null;
+  sessionId: string | null;
+  turnId: string | null;
+  eventsPath: string | null;
+  stderrPath: string | null;
+  commitSha: string | null;
+  pullRequestNumber: number | null;
+  pullRequestUrl: string | null;
+  reviewedPullRequests: number[];
+  summary: string | null;
+  rationaleSummary: string | null;
+  evidence: string[];
+  verification: AgentTaskVerification[];
+  blockers: string[];
+  lastError: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+};
+
 export type AgentState = {
   id: string;
   role: AgentRole;
@@ -131,6 +167,7 @@ export type ProjectState = {
   qualityPolicyId: "production-service";
   deploymentPolicyId: "luna-apps-portal";
   plan: ProjectPlan | null;
+  taskRuns: ProjectTaskRun[];
   repositoryFullName: string | null;
   workspacePath: string | null;
   pmSessionId: string | null;
