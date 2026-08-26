@@ -188,3 +188,28 @@ export function refreshTeamPerformanceProfiles(
     })),
   };
 }
+
+export function ensureTeamPerformanceProfiles(state: ProjectTeamsState) {
+  const completedProjects = state.projects.filter((project) => project.status === "completed");
+  if (completedProjects.length === 0) return state;
+
+  const needsRefresh = state.teams.some((team) => {
+    const measuredProjectCount = completedProjects.filter((project) => project.teamId === team.id).length;
+    return !team.performanceProfile
+      || team.performanceProfile.measuredProjectCount !== measuredProjectCount
+      || !Array.isArray(team.performanceProfile.rolePerformance)
+      || !Array.isArray(team.performanceProfile.strengths);
+  });
+  if (!needsRefresh) return state;
+
+  const latestEvidenceAt = completedProjects.reduce((latest, project) => {
+    const candidate = project.completedAt ?? project.createdAt;
+    if (!latest) return candidate;
+    return Date.parse(candidate) > Date.parse(latest) ? candidate : latest;
+  }, "");
+
+  return refreshTeamPerformanceProfiles(
+    state,
+    latestEvidenceAt || new Date().toISOString(),
+  );
+}
