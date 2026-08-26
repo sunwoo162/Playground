@@ -24,7 +24,7 @@ export function MainWindow() {
 
   useEffect(() => {
     let disposed = false;
-    let stopMirror = () => undefined;
+    let stopMirror: () => void = () => undefined;
 
     const initializeDurableState = async () => {
       try {
