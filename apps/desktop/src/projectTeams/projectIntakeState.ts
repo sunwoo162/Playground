@@ -1,4 +1,7 @@
-import { intakeNeedsClarification } from "./intakeClarification";
+import {
+  formatIntakeClarificationPrompt,
+  intakeNeedsClarification,
+} from "./intakeClarification";
 import { saveProjectTeamsState } from "./store";
 import { selectIdleTeamForProject } from "./teamAllocation";
 import { ensureTeamPerformanceProfiles } from "./teamPerformance";
@@ -31,7 +34,7 @@ export function startProjectWithIntake(
     return {
       ok: false,
       state,
-      message: "Project Intake에 아직 Product Owner 확인이 필요한 입력이 있어 팀을 배정하지 않았습니다.",
+      message: `Project Intake 확인 필요 · 팀은 아직 배정되지 않았습니다. ${formatIntakeClarificationPrompt(intake)} · 답변을 요구사항에 포함해 다시 입력해 주세요.`,
     };
   }
 
