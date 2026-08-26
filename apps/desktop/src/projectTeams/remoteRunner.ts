@@ -1,4 +1,5 @@
 import type { OrganizationRuntimeSettings } from "./organization";
+import type { RunProjectRetrospectivesResult } from "./retrospective";
 import {
   loadRemoteRunnerSettings,
   normalizeRemoteRunnerBaseUrl,
@@ -60,6 +61,7 @@ export type RemoteWorkerResult = {
   taskResults: AgentTaskRunResult[];
   failureRoutes?: RemoteFailureRoute[];
   mergedPullRequestNumbers?: number[];
+  retrospective?: RunProjectRetrospectivesResult | null;
 };
 
 export type RemoteRunnerJob = {
@@ -133,6 +135,10 @@ export function buildRemoteProjectJob(
   if (!project?.plan || !project.repositoryFullName || !project.workspacePath) {
     throw new Error("Remote Runner에 넘길 PM 계획 또는 repository 정보가 없습니다.");
   }
+  const team = state.teams.find((item) => item.id === project.teamId);
+  if (!team) {
+    throw new Error(`Remote Runner Team을 찾을 수 없습니다: ${project.teamId}`);
+  }
 
   const taskRuns = new Map(project.taskRuns.map((run) => [run.taskId, run]));
   const tasks = project.plan.tasks.map((task) => {
@@ -166,6 +172,16 @@ export function buildRemoteProjectJob(
       organization: runtimeSettings.organization,
       repositoryName: project.plan.repositoryName,
       tasks,
+      retrospectiveContext: {
+        projectName: project.plan.projectName,
+        playbookVersion: team.playbookVersion,
+        evolutionAgentVersion: state.evolutionAgentVersion,
+        agentVersions: team.agents.map((agent) => ({
+          agentId: agent.id,
+          role: agent.role,
+          version: agent.version,
+        })),
+      },
     },
   };
 }
