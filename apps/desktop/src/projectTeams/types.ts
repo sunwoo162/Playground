@@ -9,6 +9,7 @@ export type AgentRole =
   | "designer"
   | "frontend"
   | "backend"
+  | "code-review"
   | "reviewer"
   | "qa"
   | "debug-router"

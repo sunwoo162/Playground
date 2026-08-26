@@ -16,7 +16,7 @@ export const BOUQUET_AUTH_POLICY = {
 
 export const EXECUTION_POLICY = {
   id: "iseol-workflow" as const,
-  version: "1.1.0",
+  version: "1.2.0",
   summary: "모든 Agent는 이설 작업 방식처럼 실제 저장소를 기준으로 독립적으로 작업합니다.",
   rules: [
     "작업 전 현재 저장소, 브랜치, 관련 규칙과 실제 파일을 확인합니다.",
@@ -26,7 +26,8 @@ export const EXECUTION_POLICY = {
     "검증하지 못한 항목은 성공했다고 기록하지 않고 정확한 blocker를 남깁니다.",
     "커밋은 작은 작업 단위로 나누고 영어 커밋 메시지를 사용합니다.",
     "작업한 Agent가 직접 branch push와 PR 생성/업데이트를 수행합니다.",
-    "Developer 결과는 독립 Reviewer와 QA를 통과해야 완료로 인정합니다.",
+    "Code Review Agent가 코드 품질을 독립 검토하고 Reviewer Agent가 기능/요구사항/구조를 별도로 검토합니다.",
+    "Developer 결과는 Code Review, Reviewer, QA를 통과해야 완료로 인정합니다.",
     "문제가 생기면 Debug / Problem Router가 해결 가능한 Agent로 다시 보냅니다.",
     "프로젝트 종료 후 모든 Agent는 개별 회고를 남기고 버전 개선 후보를 만듭니다.",
   ],
@@ -38,6 +39,7 @@ export const WORKFLOW_STAGES = [
   "Design System",
   "Designer",
   "Frontend / Backend",
+  "Code Review",
   "Reviewer",
   "QA",
   "User A / User B",
@@ -57,7 +59,8 @@ const agentCatalog: Array<{
   { role: "designer", label: "Designer Agent", description: "제품 화면과 상호작용을 설계" },
   { role: "frontend", label: "Frontend Agent", description: "실제 프론트엔드 저장소를 구현" },
   { role: "backend", label: "Backend Agent", description: "API, DB, 서버 영역을 구현" },
-  { role: "reviewer", label: "Reviewer Agent", description: "diff와 요구사항을 기준으로 코드 리뷰" },
+  { role: "code-review", label: "Code Review Agent", description: "PR diff의 코드 품질, 버그, 보안, 성능, 테스트 누락을 독립 검토" },
+  { role: "reviewer", label: "Reviewer Agent", description: "기능, 요구사항, 구조와 제품 완성도를 독립 검토" },
   { role: "qa", label: "QA Agent", description: "build, test, 실제 동작을 검증" },
   { role: "debug-router", label: "Debug / Problem Router", description: "문제 원인을 분류하고 적합한 Agent로 재배정" },
   { role: "user-a", label: "User Agent A", description: "처음 사용하는 사용자 관점으로 검증" },
