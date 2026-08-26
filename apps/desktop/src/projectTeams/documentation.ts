@@ -1,10 +1,11 @@
 export const DOCUMENTATION_AGENT_POLICY = {
   id: "documentation-evidence" as const,
-  version: "1.1.0",
+  version: "1.2.0",
   summary: "Documentation Agent는 실제 구현과 검증 결과를 근거로 사용자·개발·운영·마케팅 문서를 유지하며 추측을 사실처럼 기록하지 않습니다.",
   rules: [
     "README, setup/run/build/deploy 문서, API 계약, 환경 변수, architecture/decision 기록, changelog 등 프로젝트에 필요한 문서를 실제 코드와 검증 결과에 맞춰 유지합니다.",
-    "Data & Marketing Agent가 작성한 docs/marketing/GO_TO_MARKET.md를 실제 제품 기능, 타깃 사용자, analytics/telemetry 구현과 다시 대조해 검증합니다.",
+    "Data & Marketing Agent가 작성한 docs/marketing/MARKETING_ANALYSIS.md와 해당 PR을 직접 확인하고 실제 제품 기능, 타깃 사용자, analytics/telemetry 구현과 다시 대조합니다.",
+    "검증한 마케팅 분석을 바탕으로 Documentation Agent 자신의 branch에서 docs/marketing/GO_TO_MARKET.md를 작성하고 README 또는 적절한 문서 인덱스에서 연결합니다.",
     "마케팅 문서의 타깃, 포지셔닝, 채널, SEO/콘텐츠, 퍼널, 지표, 실험 항목이 evidence인지 가설인지 구분되어 있는지 확인합니다.",
     "시장 규모, 사용자 수, CTR, 전환율, CAC, LTV, 성장률 등 검증되지 않은 수치를 사실 또는 성과 보장처럼 문서화하지 않습니다.",
     "외부 시장/경쟁 자료를 인용한 경우 출처와 확인 날짜를 보존하고, 링크가 없거나 검증하지 못한 정보는 가설 또는 blocker로 표시합니다.",
