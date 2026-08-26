@@ -1,0 +1,110 @@
+.team-performance-overview {
+  padding: 16px;
+  border-top: 1px solid var(--color-border);
+}
+
+.team-performance-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.team-performance-heading h3 {
+  margin: 4px 0 0;
+  font-size: 14px;
+}
+
+.team-performance-policy {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--color-text-muted);
+  font-size: 9px;
+}
+
+.team-performance-intro {
+  margin: 9px 0 12px;
+  color: var(--color-text-muted);
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.team-performance-list {
+  border-top: 1px solid var(--color-border);
+}
+
+.team-performance-row {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.team-performance-teamline,
+.team-performance-strength > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.team-performance-teamline strong {
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.team-performance-teamline span {
+  color: var(--color-text-muted);
+  font-size: 9px;
+}
+
+.team-performance-strengths {
+  display: grid;
+  gap: 5px;
+  margin-top: 7px;
+}
+
+.team-performance-strength {
+  padding-left: 9px;
+  border-left: 2px solid var(--color-border-strong);
+}
+
+.team-performance-strength > div strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.team-performance-strength > div span {
+  flex: 0 0 auto;
+  font-size: 9px;
+}
+
+.team-performance-strength > div span[data-confidence="established"] {
+  color: var(--color-luna-soft);
+}
+
+.team-performance-strength > div span[data-confidence="emerging"] {
+  color: var(--color-warm);
+}
+
+.team-performance-strength small,
+.team-performance-empty small {
+  display: block;
+  margin-top: 3px;
+  color: var(--color-text-muted);
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.team-performance-empty {
+  margin-top: 6px;
+}
+
+.team-performance-empty > span {
+  color: var(--color-text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+}
