@@ -30,6 +30,15 @@ jobs:
       - name: Build builder web control plane
         run: pnpm run build
 
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Test builder backend
+        run: ./backend/gradlew -p backend test --no-daemon
+
       - name: Build legacy desktop agent runtime
         run: pnpm --dir apps/desktop run build
 
