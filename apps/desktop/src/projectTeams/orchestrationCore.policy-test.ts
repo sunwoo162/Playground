@@ -127,17 +127,24 @@ function testDependencyReadiness() {
 }
 
 function testBoundedRoleExclusiveWave() {
-  const wave = selectOrchestrationWave([
+  const candidates = [
     taskRun("FE-001", "frontend", "ready"),
     taskRun("FE-002", "frontend", "ready"),
     taskRun("BE-001", "backend", "ready"),
     taskRun("DS-001", "designer", "ready"),
-  ]);
+  ];
+  const wave = selectOrchestrationWave(candidates);
 
   assert(ORCHESTRATION_MAX_PARALLEL_TASKS === 2, "default orchestration concurrency must remain two");
   assert(wave.length === 2, "default wave must contain at most two tasks");
   assert(wave[0].taskId === "FE-001", "wave selection must preserve task order");
   assert(wave[1].taskId === "BE-001", "same-role ready task must be skipped within the same wave");
+
+  const oversizedRequest = selectOrchestrationWave(candidates, 10);
+  assert(
+    oversizedRequest.length === ORCHESTRATION_MAX_PARALLEL_TASKS,
+    "caller-provided limit must never raise concurrency above the orchestration hard cap",
+  );
 
   const withBusyFrontend = selectOrchestrationWave([
     taskRun("FE-RUNNING", "frontend", "running"),
