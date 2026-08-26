@@ -72,6 +72,21 @@ function run() {
     assert(threw, "empty clarification answer must be rejected");
   }
 
+  {
+    let threw = false;
+    try {
+      appendProductOwnerClarification(
+        "test",
+        intake(["question"]),
+        "answer",
+        MAX_INTAKE_CLARIFICATION_ROUNDS + 1,
+      );
+    } catch {
+      threw = true;
+    }
+    assert(threw, "clarification rounds above the cap must be rejected");
+  }
+
   assert(MAX_INTAKE_CLARIFICATION_ROUNDS === 3, "clarification loop must have a finite retry cap");
   console.log("PASS  Luna intake clarification policy scenarios passed.");
 }
