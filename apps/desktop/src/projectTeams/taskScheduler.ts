@@ -71,17 +71,27 @@ function resolveTaskContext(
     throw new Error("PM 계획 또는 project repository/workspace가 준비되지 않았습니다.");
   }
 
+  const plan = project.plan;
+  const repositoryFullName = project.repositoryFullName;
+  const workspacePath = project.workspacePath;
   const team = state.teams.find((item) => item.id === project.teamId);
   if (!team) {
     throw new Error(`프로젝트 팀을 찾을 수 없습니다: ${project.teamId}`);
   }
 
-  const task = project.plan.tasks.find((item) => item.id === run.taskId);
+  const task = plan.tasks.find((item) => item.id === run.taskId);
   if (!task) {
     throw new Error(`PM Task를 찾을 수 없습니다: ${run.taskId}`);
   }
 
-  return { project, team, task };
+  return {
+    project,
+    plan,
+    repositoryFullName,
+    workspacePath,
+    team,
+    task,
+  };
 }
 
 export function buildAgentTaskRuntimeInput(
@@ -90,11 +100,18 @@ export function buildAgentTaskRuntimeInput(
   run: ProjectTaskRun,
   runtimeSettings: OrganizationRuntimeSettings,
 ): AgentTaskRuntimeInput {
-  const { project, team, task } = resolveTaskContext(state, projectId, run);
+  const {
+    project,
+    plan,
+    repositoryFullName,
+    workspacePath,
+    team,
+    task,
+  } = resolveTaskContext(state, projectId, run);
 
   const dependencies: DependencyArtifact[] = task.dependsOn.map((dependencyId) => {
     const dependencyRun = project.taskRuns.find((item) => item.taskId === dependencyId);
-    const dependencyTask = project.plan?.tasks.find((item) => item.id === dependencyId);
+    const dependencyTask = plan.tasks.find((item) => item.id === dependencyId);
     if (!dependencyRun || !dependencyTask || dependencyRun.status !== "done") {
       throw new Error(`${task.id}의 dependency ${dependencyId}가 완료되지 않았습니다.`);
     }
@@ -123,10 +140,10 @@ export function buildAgentTaskRuntimeInput(
     summary: taskRuntimeSummary(state, project, run, task),
     acceptanceCriteria: task.acceptanceCriteria,
     userRequest: project.request,
-    productSummary: project.plan.productSummary,
-    architectureSummary: project.plan.architectureSummary,
-    repositoryFullName: project.repositoryFullName,
-    workspacePath: project.workspacePath,
+    productSummary: plan.productSummary,
+    architectureSummary: plan.architectureSummary,
+    repositoryFullName,
+    workspacePath,
     dependencies,
   };
 }
@@ -137,7 +154,14 @@ export function buildRemoteAgentTaskRuntimeInput(
   run: ProjectTaskRun,
   runtimeSettings: OrganizationRuntimeSettings,
 ): AgentTaskRuntimeInput {
-  const { project, team, task } = resolveTaskContext(state, projectId, run);
+  const {
+    project,
+    plan,
+    repositoryFullName,
+    workspacePath,
+    team,
+    task,
+  } = resolveTaskContext(state, projectId, run);
 
   return {
     organization: runtimeSettings.organization,
@@ -152,10 +176,10 @@ export function buildRemoteAgentTaskRuntimeInput(
     summary: taskRuntimeSummary(state, project, run, task),
     acceptanceCriteria: task.acceptanceCriteria,
     userRequest: project.request,
-    productSummary: project.plan.productSummary,
-    architectureSummary: project.plan.architectureSummary,
-    repositoryFullName: project.repositoryFullName,
-    workspacePath: project.workspacePath,
+    productSummary: plan.productSummary,
+    architectureSummary: plan.architectureSummary,
+    repositoryFullName,
+    workspacePath,
     dependencies: [],
   };
 }
