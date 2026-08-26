@@ -120,6 +120,43 @@ export type ProjectTaskRun = {
   completedAt: string | null;
 };
 
+export type FailureRouteAction = "retry-owner" | "escalate-pm" | "needs-human";
+export type FailureType =
+  | "implementation"
+  | "test"
+  | "build"
+  | "dependency"
+  | "environment"
+  | "requirements"
+  | "security"
+  | "external-service"
+  | "unknown";
+export type FailureSeverity = "low" | "medium" | "high" | "critical";
+
+export type FailureRouteDecision = {
+  route: FailureRouteAction;
+  failureType: FailureType;
+  severity: FailureSeverity;
+  ownerTaskId: string | null;
+  ownerRole: Exclude<AgentRole, "pm" | "debug-router"> | null;
+  summary: string;
+  rationaleSummary: string;
+  evidence: string[];
+  recommendedAction: string;
+};
+
+export type FailureRouteRecord = FailureRouteDecision & {
+  id: string;
+  failedTaskId: string;
+  failedRole: Exclude<AgentRole, "pm">;
+  routeAttempt: number;
+  routerAgentId: string;
+  routerSessionId: string | null;
+  eventsPath: string;
+  outputPath: string;
+  createdAt: string;
+};
+
 export type AgentState = {
   id: string;
   role: AgentRole;
@@ -170,6 +207,7 @@ export type ProjectState = {
   deploymentPolicyId: "luna-apps-portal";
   plan: ProjectPlan | null;
   taskRuns: ProjectTaskRun[];
+  failureRoutes?: FailureRouteRecord[];
   repositoryFullName: string | null;
   workspacePath: string | null;
   pmSessionId: string | null;

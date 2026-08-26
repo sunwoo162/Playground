@@ -7,6 +7,8 @@ import {
   EXECUTION_POLICY,
   WORKFLOW_STAGES,
 } from "../projectTeams/catalog";
+import { diagnoseBlockedTask, toFailureRouteRecord } from "../projectTeams/failureRouting";
+import { applyFailureRoute, beginFailureRouting, failFailureRouting } from "../projectTeams/failureState";
 import { integrateProjectPullRequests } from "../projectTeams/integration";
 import { markProjectIntegrated } from "../projectTeams/integrationState";
 import { loadOrganizationRuntimeSettings } from "../projectTeams/organization";
@@ -24,7 +26,6 @@ import {
   getTeamName,
   loadProjectTeamsState,
   resetProjectTeamsState,
-  retryBlockedAgentTasks,
   startProject,
 } from "../projectTeams/store";
 import { buildAgentTaskRuntimeInput } from "../projectTeams/taskScheduler";
@@ -112,6 +113,32 @@ export function ProjectTeamsPage() {
     }
   };
 
+  const routeBlockedTask = async (
+    baseState: ProjectTeamsState,
+    projectId: string,
+    taskId: string,
+  ) => {
+    let nextState = beginFailureRouting(baseState, projectId, taskId);
+    setState(nextState);
+    setMessage(`${taskId} 실패 · Debug / Problem Router Agent가 로그와 검증 근거를 분석 중`);
+
+    try {
+      const result = await diagnoseBlockedTask(nextState, projectId, taskId);
+      const project = nextState.projects.find((item) => item.id === projectId);
+      if (!project) return nextState;
+      const route = toFailureRouteRecord(project, result);
+      nextState = applyFailureRoute(nextState, projectId, route);
+      setState(nextState);
+      setMessage(nextState.projects.find((item) => item.id === projectId)?.runtimeMessage ?? route.summary);
+      return nextState;
+    } catch (error) {
+      nextState = failFailureRouting(nextState, projectId, taskId, errorMessage(error));
+      setState(nextState);
+      setMessage(nextState.projects.find((item) => item.id === projectId)?.runtimeMessage ?? errorMessage(error));
+      return nextState;
+    }
+  };
+
   const runAgentQueue = async (baseState: ProjectTeamsState, projectId: string) => {
     const runtimeSettings = loadOrganizationRuntimeSettings();
     let nextState = baseState;
@@ -134,8 +161,9 @@ export function ProjectTeamsPage() {
           const reason = `Agent Task 입력 구성 실패: ${errorMessage(error)}`;
           nextState = failAgentTask(nextState, projectId, wave[0].taskId, reason);
           setState(nextState);
-          setMessage(reason);
-          break;
+          nextState = await routeBlockedTask(nextState, projectId, wave[0].taskId);
+          if (nextState.projects.find((item) => item.id === projectId)?.status === "blocked") break;
+          continue;
         }
 
         nextState = beginAgentTasks(
@@ -163,6 +191,21 @@ export function ProjectTeamsPage() {
           }
         });
         setState(nextState);
+
+        const blockedTaskIds = wave
+          .map((task) => task.taskId)
+          .filter((taskId) =>
+            nextState.projects
+              .find((item) => item.id === projectId)
+              ?.taskRuns.find((run) => run.taskId === taskId)?.status === "blocked",
+          );
+
+        for (const taskId of blockedTaskIds) {
+          nextState = await routeBlockedTask(nextState, projectId, taskId);
+          if (nextState.projects.find((item) => item.id === projectId)?.status === "blocked") {
+            break;
+          }
+        }
 
         const updatedProject = nextState.projects.find((item) => item.id === projectId);
         if (!updatedProject || updatedProject.status === "blocked") break;
@@ -327,9 +370,22 @@ export function ProjectTeamsPage() {
 
   const handleRetryBlockedAgents = async () => {
     if (!activeProject || runtimeBusy || !activeProject.plan) return;
-    const nextState = retryBlockedAgentTasks(state, activeProject.id);
-    setState(nextState);
-    await runAgentQueue(nextState, activeProject.id);
+    let nextState = state;
+    const blockedTaskIds = activeProject.taskRuns
+      .filter((run) => run.status === "blocked")
+      .map((run) => run.taskId);
+
+    for (const taskId of blockedTaskIds) {
+      nextState = await routeBlockedTask(nextState, activeProject.id, taskId);
+      if (nextState.projects.find((item) => item.id === activeProject.id)?.status === "blocked") {
+        break;
+      }
+    }
+
+    const project = nextState.projects.find((item) => item.id === activeProject.id);
+    if (project && project.status !== "blocked") {
+      await runAgentQueue(nextState, activeProject.id);
+    }
   };
 
   const handleRunRetrospective = async () => {

@@ -55,6 +55,9 @@ export function ProjectTaskQueue({
       <div className="project-task-rows">
         {project.taskRuns.map((run) => {
           const task = taskById.get(run.taskId);
+          const latestRoute = (project.failureRoutes ?? []).find(
+            (route) => route.failedTaskId === run.taskId,
+          );
           return (
             <div className="project-task-row" key={run.taskId}>
               <div className="project-task-main">
@@ -66,7 +69,9 @@ export function ProjectTaskQueue({
                 <small>
                   {run.pullRequestNumber
                     ? `PR #${run.pullRequestNumber}${run.commitSha ? ` · ${run.commitSha.slice(0, 7)}` : ""}`
-                    : run.lastError ?? run.summary ?? task?.summary ?? ""}
+                    : latestRoute
+                      ? `Debug Router: ${latestRoute.route} · ${latestRoute.failureType} · ${latestRoute.recommendedAction}`
+                      : run.lastError ?? run.summary ?? task?.summary ?? ""}
                 </small>
               </div>
               <div className="project-task-meta">
@@ -86,13 +91,13 @@ export function ProjectTaskQueue({
         </button>
         {blockedCount > 0 && (
           <button type="button" onClick={onRetryBlocked} disabled={busy}>
-            막힌 Task 재시도
+            Debug Router로 재분석
           </button>
         )}
       </div>
 
       <p className="project-task-note">
-        한 번에 최대 2개 Task만 실행합니다. 같은 역할의 Agent는 동시에 두 Task를 맡지 않습니다.
+        한 번에 최대 2개 Task만 실행합니다. 실패 Task는 같은 Agent를 바로 재실행하지 않고 Debug Router가 원인과 담당 Task를 먼저 판단합니다.
       </p>
     </section>
   );

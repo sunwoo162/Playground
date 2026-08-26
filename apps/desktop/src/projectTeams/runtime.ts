@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { validateProjectPlanReviewTopology } from "./planTopology";
 import type {
   AgentTaskVerification,
+  FailureRouteDecision,
   ProjectPlan,
   TeamId,
 } from "./types";
@@ -114,6 +115,38 @@ export type AgentTaskRunResult = {
   report: AgentTaskReport;
 };
 
+export type FailureOwnerCandidate = {
+  taskId: string;
+  role: string;
+  title: string;
+  summary: string;
+};
+
+export type RouteAgentFailureInput = {
+  projectId: string;
+  teamId: string;
+  teamName: string;
+  repositoryFullName: string;
+  workspacePath: string;
+  failedTaskId: string;
+  failedRole: string;
+  failureReason: string;
+  blockers: string[];
+  verification: AgentTaskVerification[];
+  candidateOwners: FailureOwnerCandidate[];
+  routeAttempt: number;
+};
+
+export type RouteAgentFailureResult = {
+  projectId: string;
+  failedTaskId: string;
+  routerAgentId: string;
+  sessionId: string | null;
+  eventsPath: string;
+  outputPath: string;
+  decision: FailureRouteDecision;
+};
+
 export type MergeProjectPullRequestsInput = {
   repositoryFullName: string;
   pullRequestNumbers: number[];
@@ -147,6 +180,10 @@ export async function startProjectRuntime(input: StartProjectRuntimeInput) {
 
 export async function dispatchAgentTask(input: AgentTaskRuntimeInput) {
   return invoke<AgentTaskRunResult>("dispatch_agent_task", { input });
+}
+
+export async function routeAgentFailure(input: RouteAgentFailureInput) {
+  return invoke<RouteAgentFailureResult>("route_agent_failure", { input });
 }
 
 export async function mergeProjectPullRequests(input: MergeProjectPullRequestsInput) {

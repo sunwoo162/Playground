@@ -1,3 +1,4 @@
+import { failureRecoveryContext } from "./failureRouting";
 import type { OrganizationRuntimeSettings } from "./organization";
 import type { AgentTaskRuntimeInput, DependencyArtifact } from "./runtime";
 import type { ProjectTaskRun, ProjectTeamsState } from "./types";
@@ -55,6 +56,11 @@ export function buildAgentTaskRuntimeInput(
     };
   });
 
+  const recoveryContext = failureRecoveryContext(project, task.id);
+  const summary = recoveryContext
+    ? `${task.summary}\n\n${recoveryContext}`
+    : task.summary;
+
   return {
     organization: runtimeSettings.organization,
     projectId: project.id,
@@ -65,7 +71,7 @@ export function buildAgentTaskRuntimeInput(
     taskId: task.id,
     taskSlug: task.taskSlug,
     title: task.title,
-    summary: task.summary,
+    summary,
     acceptanceCriteria: task.acceptanceCriteria,
     userRequest: project.request,
     productSummary: project.plan.productSummary,
