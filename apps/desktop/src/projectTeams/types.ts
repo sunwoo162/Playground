@@ -16,6 +16,28 @@ export type AgentRole =
   | "user-b"
   | "process-evaluator";
 
+export type AgentPermission =
+  | "repository:read"
+  | "repository:write"
+  | "branch:create"
+  | "worktree:create"
+  | "command:run"
+  | "dependency:install"
+  | "test:run"
+  | "build:run"
+  | "browser:use"
+  | "figma:read"
+  | "commit:create"
+  | "push"
+  | "issue:create"
+  | "issue:update"
+  | "pull-request:create"
+  | "pull-request:update"
+  | "pull-request:review"
+  | "pull-request:merge"
+  | "deployment:prepare"
+  | "deployment:publish";
+
 export type AgentStatus = "idle" | "ready" | "working" | "blocked" | "review" | "done";
 
 export type ProjectStatus =
@@ -39,6 +61,8 @@ export type AgentState = {
   version: string;
   status: AgentStatus;
   retrospectiveCount: number;
+  autonomy: "independent";
+  permissions: AgentPermission[];
 };
 
 export type TeamState = {
@@ -60,6 +84,9 @@ export type ProjectState = {
   createdAt: string;
   authPolicyId: "bouquet";
   executionPolicyId: "iseol-workflow";
+  autonomyPolicyId: "independent-agent";
+  qualityPolicyId: "production-service";
+  deploymentPolicyId: "luna-apps-portal";
   runtimeMessage: string;
 };
 
