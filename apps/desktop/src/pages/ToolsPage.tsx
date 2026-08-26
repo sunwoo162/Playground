@@ -57,6 +57,17 @@ export function ToolsPage({ onChangePage }: ToolsPageProps) {
             <span>프로젝트 팀과 Agent 실행 상태를 관리합니다.</span>
           </div>
         </button>
+
+        <button
+          className="tool-card"
+          onClick={() => onChangePage("e2e-smoke")}
+        >
+          <span className="tool-card-icon">E2E</span>
+          <div>
+            <strong>Live E2E Smoke</strong>
+            <span>/start부터 Team Evolution까지 실제 Runtime evidence를 점검합니다.</span>
+          </div>
+        </button>
       </div>
     </div>
   );
