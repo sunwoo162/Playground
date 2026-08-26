@@ -19,13 +19,13 @@ export type ProjectExecutionControlResult = {
 function updateProjectRuntimeMessage(
   state: ProjectTeamsState,
   projectId: string,
-  control: ProjectExecutionControlRecord,
+  message: string,
 ) {
   return {
     ...state,
     projects: state.projects.map((project) =>
       project.id === projectId
-        ? { ...project, runtimeMessage: executionControlMessage(control) }
+        ? { ...project, runtimeMessage: message }
         : project,
     ),
   };
@@ -51,8 +51,11 @@ function persistControlResult(
   state: ProjectTeamsState,
   project: ProjectState,
   control: ProjectExecutionControlRecord,
+  message: string | null,
 ): ProjectExecutionControlResult {
-  let nextState = updateProjectRuntimeMessage(state, project.id, control);
+  let nextState = message
+    ? updateProjectRuntimeMessage(state, project.id, message)
+    : state;
   if (control.state === "stopped") {
     nextState = releaseStoppedProjectTeam(nextState, project);
   }
@@ -74,7 +77,8 @@ export function pauseProjectExecution(
 ): ProjectExecutionControlResult {
   const project = projectOrNull(state, projectId);
   if (!project) return { state, control: getProjectExecutionControl(projectId) };
-  return persistControlResult(state, project, requestProjectPause(project));
+  const control = requestProjectPause(project);
+  return persistControlResult(state, project, control, executionControlMessage(control));
 }
 
 export function resumeProjectExecution(
@@ -83,7 +87,11 @@ export function resumeProjectExecution(
 ): ProjectExecutionControlResult {
   const project = projectOrNull(state, projectId);
   if (!project) return { state, control: getProjectExecutionControl(projectId) };
-  return persistControlResult(state, project, requestProjectResume(project));
+  const control = requestProjectResume(project);
+  const message = project.status === "blocked"
+    ? "재개 요청됨 · 프로젝트가 blocked 상태이므로 Debug Router 또는 PM 복구를 먼저 완료해야 합니다."
+    : "Agent 실행 재개 · dependency-ready Task부터 계속 실행합니다.";
+  return persistControlResult(state, project, control, message);
 }
 
 export function stopProjectExecution(
@@ -92,7 +100,8 @@ export function stopProjectExecution(
 ): ProjectExecutionControlResult {
   const project = projectOrNull(state, projectId);
   if (!project) return { state, control: getProjectExecutionControl(projectId) };
-  return persistControlResult(state, project, requestProjectStop(project));
+  const control = requestProjectStop(project);
+  return persistControlResult(state, project, control, executionControlMessage(control));
 }
 
 export function reconcileProjectExecutionControl(
@@ -101,7 +110,13 @@ export function reconcileProjectExecutionControl(
 ): ProjectExecutionControlResult {
   const project = projectOrNull(state, projectId);
   if (!project) return { state, control: getProjectExecutionControl(projectId) };
-  return persistControlResult(state, project, settleProjectExecutionControl(project));
+  const control = settleProjectExecutionControl(project);
+  return persistControlResult(
+    state,
+    project,
+    control,
+    control.state === "running" ? null : executionControlMessage(control),
+  );
 }
 
 export function resetProjectExecutionControlState() {
