@@ -2,18 +2,20 @@ import type { ProjectPlan, ProjectTaskPlan } from "./types";
 
 export const PRODUCT_MARKETING_POLICY = {
   id: "data-marketing-evidence" as const,
-  version: "1.0.0",
+  version: "1.1.0",
+  analysisPath: "docs/marketing/MARKETING_ANALYSIS.md",
   documentPath: "docs/marketing/GO_TO_MARKET.md",
-  summary: "모든 제품은 출시 전 Data & Marketing Agent가 제품 근거와 실제 데이터를 기준으로 마케팅 전략을 분석하고 Documentation Agent가 이를 검증·정리한 문서를 repository에 남깁니다.",
+  summary: "모든 제품은 출시 전 Data & Marketing Agent가 제품 근거와 실제 데이터를 분석하고 Documentation Agent가 그 분석과 실제 release를 독립 검증해 최종 마케팅 문서를 repository에 남깁니다.",
   rules: [
-    "타깃 사용자, 핵심 문제, 가치 제안, 포지셔닝, 획득 채널, 활성화/전환/유지 퍼널을 제품 근거로 분석합니다.",
+    "Data & Marketing Agent는 MARKETING_ANALYSIS.md에 타깃 사용자, 핵심 문제, 가치 제안, 포지셔닝, 획득 채널, 활성화/전환/유지 퍼널을 분석합니다.",
+    "Documentation Agent는 마케팅 분석 PR과 실제 제품을 대조해 최종 GO_TO_MARKET.md를 작성하고 제품 문서에서 연결합니다.",
     "SEO, 콘텐츠, 커뮤니티, 파트너십, 유료 채널은 제품 특성과 타깃 사용자에 맞을 때만 제안합니다.",
     "시장 규모, 사용자 수, CTR, 전환율, CAC, LTV 등 실제로 측정하지 않은 숫자는 만들어내지 않습니다.",
     "관찰된 사실, repository/telemetry에서 확인한 데이터, 외부 출처, 추론, 실험 가설을 명확히 구분합니다.",
     "분석 가능한 데이터가 없다면 필요한 analytics event, north-star/guardrail metric, 실험 설계와 수집 계획을 문서화합니다.",
     "개인정보나 민감정보를 마케팅 편의 때문에 과도하게 수집하지 않으며 측정 계획에 데이터 최소화와 보존 원칙을 포함합니다.",
     "경쟁/시장 자료를 사용하면 출처와 확인 날짜를 남기고 확인할 수 없는 주장을 사실처럼 쓰지 않습니다.",
-    "최종 마케팅 산출물은 Documentation Agent가 실제 release와 일치하는지 다시 검증하고 사용자·개발·운영 문서와 연결합니다.",
+    "최종 마케팅 산출물은 Code Review → Reviewer → QA 경로에서 실제 release와 다시 검증합니다.",
   ],
 };
 
@@ -59,6 +61,14 @@ function terminalTaskIds(tasks: ProjectTaskPlan[]) {
   return tasks.filter((task) => !referenced.has(task.id)).map((task) => task.id);
 }
 
+export function isMandatoryMarketingTask(task: ProjectTaskPlan) {
+  return task.role === "data-marketing"
+    || task.taskSlug.startsWith("marketing-documentation")
+    || task.taskSlug.startsWith("marketing-docs-code-review")
+    || task.taskSlug.startsWith("marketing-product-review")
+    || task.taskSlug.startsWith("product-marketing-strategy");
+}
+
 export function validateMarketingDocumentationPlan(plan: ProjectPlan) {
   const marketingTasks = plan.tasks.filter((task) => task.role === "data-marketing");
   if (marketingTasks.length === 0) {
@@ -81,7 +91,7 @@ export function validateMarketingDocumentationPlan(plan: ProjectPlan) {
         && documentation.some((doc) => transitiveDependsOn(plan, task.id, doc.id)),
     );
     if (codeReviews.length === 0) {
-      errors.push(`${marketing.id} 마케팅 문서와 Documentation 산출물을 함께 검토하는 Code Review Task가 없습니다.`);
+      errors.push(`${marketing.id} 마케팅 분석과 Documentation 산출물을 함께 검토하는 Code Review Task가 없습니다.`);
       continue;
     }
 
@@ -125,13 +135,13 @@ export function ensureMarketingDocumentationPlan(plan: ProjectPlan): ProjectPlan
 
   const marketingTask: ProjectTaskPlan = {
     id: nextTaskId(tasks, "MKT"),
-    title: "제품 데이터 및 마케팅 전략 수립",
+    title: "제품 데이터 및 마케팅 분석",
     role: "data-marketing",
     taskSlug: nextTaskSlug(tasks, "product-marketing-strategy"),
-    summary: `실제 제품 구현, 사용자 흐름, 검증 결과와 접근 가능한 데이터를 분석해 ${PRODUCT_MARKETING_POLICY.documentPath}에 출시/성장 전략을 작성합니다. 타깃 사용자, 포지셔닝, 채널, SEO/콘텐츠, 퍼널, 핵심 지표, analytics event, 실험 backlog, 개인정보 고려사항을 포함하고 확인되지 않은 수치는 가설로 명시합니다.`,
+    summary: `실제 제품 구현, 사용자 흐름, 검증 결과와 접근 가능한 데이터를 분석해 ${PRODUCT_MARKETING_POLICY.analysisPath}에 근거 중심의 마케팅 분석을 작성합니다. 타깃 사용자, 포지셔닝, 채널, SEO/콘텐츠, 퍼널, 핵심 지표, analytics event, 실험 backlog, 개인정보 고려사항을 포함하고 확인되지 않은 수치는 가설로 명시합니다. 최종 사용자용 go-to-market 문서는 Documentation Agent가 별도 branch에서 이 분석 PR을 검증한 뒤 작성합니다.`,
     dependsOn: upstream,
     acceptanceCriteria: [
-      `${PRODUCT_MARKETING_POLICY.documentPath}가 실제 repository에 존재하고 현재 제품 기능/타깃 사용자와 일치한다.`,
+      `${PRODUCT_MARKETING_POLICY.analysisPath}가 실제 repository에 존재하고 현재 제품 기능/타깃 사용자와 일치한다.`,
       "관찰 사실·실제 데이터·외부 출처·추론·실험 가설이 구분되어 있으며 확인되지 않은 시장/성과 수치를 사실처럼 사용하지 않는다.",
       "타깃 세그먼트, 핵심 가치 제안, 포지셔닝, 획득 채널 우선순위와 채널 선택 근거가 포함된다.",
       "activation/conversion/retention 퍼널과 north-star/guardrail metric, 필요한 analytics event 정의가 포함된다.",
@@ -146,10 +156,11 @@ export function ensureMarketingDocumentationPlan(plan: ProjectPlan): ProjectPlan
     title: "마케팅 전략 문서 검증 및 제품 문서 통합",
     role: "documentation",
     taskSlug: nextTaskSlug(tasks, "marketing-documentation"),
-    summary: `Data & Marketing Agent의 ${PRODUCT_MARKETING_POLICY.documentPath} 산출물과 실제 release repository를 독립 검증합니다. 과장되거나 근거 없는 주장을 제거하고 사용자·개발·운영 문서에서 필요한 마케팅/측정/출시 문서 링크와 책임 경계를 정리합니다.`,
+    summary: `Data & Marketing Agent의 ${PRODUCT_MARKETING_POLICY.analysisPath} PR을 직접 확인하고 실제 release repository와 독립 대조합니다. 검증 가능한 내용만 사용해 ${PRODUCT_MARKETING_POLICY.documentPath}를 작성하고 과장되거나 근거 없는 주장을 제거하며 README 또는 적절한 문서 인덱스에서 최종 전략을 연결합니다.`,
     dependsOn: [marketingTask.id],
     acceptanceCriteria: [
-      `Documentation Agent가 ${PRODUCT_MARKETING_POLICY.documentPath}의 제품 사실, 기능명, 링크, 측정 항목을 실제 구현과 대조한다.`,
+      `Documentation Agent가 Data & Marketing PR의 ${PRODUCT_MARKETING_POLICY.analysisPath}와 실제 제품 기능, 기능명, 링크, 측정 항목을 대조한다.`,
+      `${PRODUCT_MARKETING_POLICY.documentPath}가 Documentation Agent branch에서 생성되고 evidence와 hypothesis 구분을 보존한다.`,
       "마케팅 주장이 실제 evidence인지 가설인지 구분되어 있고 출처 없는 숫자/성과 보장은 제거된다.",
       "README 또는 적절한 문서 인덱스에서 마케팅/출시 전략 문서를 찾을 수 있도록 연결한다.",
       "analytics/marketing 설정에 외부 계정이나 credential이 필요하면 변수/설정 위치만 문서화하고 secret 값은 기록하지 않는다.",
@@ -162,10 +173,11 @@ export function ensureMarketingDocumentationPlan(plan: ProjectPlan): ProjectPlan
     title: "마케팅 및 문서 PR 코드 리뷰",
     role: "code-review",
     taskSlug: nextTaskSlug(tasks, "marketing-docs-code-review"),
-    summary: "Data & Marketing Agent와 Documentation Agent의 실제 PR diff를 함께 검토해 문서 정확성, analytics 변경, 개인정보/보안 위험, 깨진 링크, 근거 없는 주장과 repository 일관성을 독립 확인합니다.",
+    summary: "Data & Marketing Agent와 Documentation Agent의 실제 PR diff를 함께 검토해 분석 정확성, 최종 문서 정확성, analytics 변경, 개인정보/보안 위험, 깨진 링크, 근거 없는 주장과 repository 일관성을 독립 확인합니다.",
     dependsOn: [marketingTask.id, documentationTask.id],
     acceptanceCriteria: [
       "두 Agent의 실제 PR을 모두 확인하고 reviewedPullRequests에 기록한다.",
+      "분석 문서와 최종 go-to-market 문서가 역할을 분리하면서도 서로 모순되지 않는지 확인한다.",
       "문서/analytics 변경이 실제 코드와 충돌하지 않는지 확인하고 근거 있는 verdict를 남긴다.",
     ],
   };
@@ -190,10 +202,10 @@ export function ensureMarketingDocumentationPlan(plan: ProjectPlan): ProjectPlan
     title: "마케팅 문서 및 측정 계획 QA",
     role: "qa",
     taskSlug: nextTaskSlug(tasks, "marketing-documentation-qa"),
-    summary: "최종 마케팅/문서화 결과의 파일 존재, 링크, 제품 사실, analytics event/측정 계획, 민감정보 노출 여부를 실제 repository에서 검증합니다.",
+    summary: "최종 마케팅/문서화 결과의 파일 존재, 링크, 제품 사실, analytics event/측정 계획, 민감정보 노출 여부를 실제 repository와 두 upstream PR에서 검증합니다.",
     dependsOn: [reviewerTask.id],
     acceptanceCriteria: [
-      `${PRODUCT_MARKETING_POLICY.documentPath}와 연결된 문서 경로가 실제로 열리고 깨진 내부 링크가 없다.`,
+      `${PRODUCT_MARKETING_POLICY.analysisPath}와 ${PRODUCT_MARKETING_POLICY.documentPath}의 책임 분리가 명확하고 최종 통합 후 두 경로가 실제로 열릴 수 있다.`,
       "문서에 secret, 실제 토큰, 비밀번호 또는 검증되지 않은 성과 수치가 포함되지 않는다.",
       "제품 기능/출시 상태와 마케팅 문서가 일치하며 검증하지 못한 외부 조건은 blocker 또는 가설로 표시된다.",
     ],
