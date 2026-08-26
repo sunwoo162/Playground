@@ -73,3 +73,5 @@ The following are still outside the implemented reconciliation scope:
 - claiming completion when terminal App Server evidence or required writer repository evidence is missing.
 
 These limitations should remain explicit in product and operations documentation.
+
+For the wider Project Teams architecture and current remaining work, see [`PROJECT_TEAMS.md`](./PROJECT_TEAMS.md).
