@@ -55,17 +55,25 @@ fn git_args(worktree: &Path, tail: &[&str]) -> Vec<String> {
 
 fn ensure_expected_origin(worktree: &Path, repository_full_name: &str) -> Result<(), String> {
     let output = run_checked("git", &git_args(worktree, &["remote", "get-url", "origin"]))?;
-    let origin = String::from_utf8_lossy(&output.stdout).trim().to_lowercase();
-    let repository = repository_full_name.trim().to_lowercase();
-    let expected_https = format!("github.com/{repository}");
-    let expected_ssh = format!("github.com:{repository}");
+    let origin = String::from_utf8_lossy(&output.stdout)
+        .trim()
+        .trim_end_matches('/')
+        .trim_end_matches(".git")
+        .to_lowercase();
+    let repository = repository_full_name
+        .trim()
+        .trim_matches('/')
+        .trim_end_matches(".git")
+        .to_lowercase();
+    let expected_https_suffix = format!("github.com/{repository}");
+    let expected_ssh_suffix = format!("github.com:{repository}");
 
-    if origin.contains(&expected_https) || origin.contains(&expected_ssh) {
+    if origin.ends_with(&expected_https_suffix) || origin.ends_with(&expected_ssh_suffix) {
         return Ok(());
     }
 
     Err(format!(
-        "Agent worktree origin이 예상 repository와 일치하지 않습니다. expected={repository_full_name}, actual={origin}"
+        "Agent workspace origin이 예상 repository와 일치하지 않습니다. expected={repository_full_name}, actual={origin}"
     ))
 }
 
@@ -152,10 +160,7 @@ fn verify_writer_repository_evidence(
     Ok(())
 }
 
-fn validate_reconciliation_identity(
-    team_id: &str,
-    role: &str,
-) -> Result<(), String> {
+fn validate_reconciliation_identity(team_id: &str, role: &str) -> Result<(), String> {
     if !ALLOWED_TEAMS.contains(&team_id) {
         return Err(format!("허용되지 않은 reconciliation Team ID입니다: {team_id}"));
     }
@@ -170,6 +175,7 @@ pub async fn dispatch_agent_task(
     input: agent_runtime::AgentTaskRuntimeInput,
 ) -> Result<agent_runtime::AgentTaskRunResult, String> {
     let repository_full_name = input.repository_full_name.clone();
+    ensure_expected_origin(Path::new(input.workspace_path.trim()), &repository_full_name)?;
     let result = agent_runtime::dispatch_agent_task(input).await?;
 
     if result.report.status == "completed" {
@@ -193,6 +199,7 @@ pub async fn reconcile_interrupted_agent_task(
 ) -> Result<agent_reconciliation::ReconcileInterruptedAgentTaskResult, String> {
     validate_reconciliation_identity(input.team_id.trim(), input.role.trim())?;
     let repository_full_name = input.repository_full_name.clone();
+    ensure_expected_origin(Path::new(input.workspace_path.trim()), &repository_full_name)?;
     let result = agent_reconciliation::reconcile_interrupted_agent_task(input).await?;
 
     if result.outcome == "recovered" {
