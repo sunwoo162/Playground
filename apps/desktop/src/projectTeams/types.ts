@@ -56,6 +56,32 @@ export type ProjectStatus =
   | "completed"
   | "blocked";
 
+export type TechnologyDecision = {
+  area: string;
+  choice: string;
+  reason: string;
+};
+
+export type ProjectTaskPlan = {
+  id: string;
+  title: string;
+  role: Exclude<AgentRole, "pm">;
+  taskSlug: string;
+  summary: string;
+  dependsOn: string[];
+  acceptanceCriteria: string[];
+};
+
+export type ProjectPlan = {
+  projectName: string;
+  repositoryName: string;
+  productSummary: string;
+  architectureSummary: string;
+  needsAuth: boolean;
+  technologyDecisions: TechnologyDecision[];
+  tasks: ProjectTaskPlan[];
+};
+
 export type AgentState = {
   id: string;
   role: AgentRole;
@@ -104,6 +130,10 @@ export type ProjectState = {
   documentationPolicyId: "documentation-evidence";
   qualityPolicyId: "production-service";
   deploymentPolicyId: "luna-apps-portal";
+  plan: ProjectPlan | null;
+  repositoryFullName: string | null;
+  workspacePath: string | null;
+  pmSessionId: string | null;
   runtimeMessage: string;
 };
 
