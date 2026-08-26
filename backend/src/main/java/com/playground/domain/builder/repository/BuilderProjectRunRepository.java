@@ -1,7 +1,11 @@
 package com.playground.domain.builder.repository;
 
 import com.playground.domain.builder.entity.BuilderProjectRun;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
 import java.util.List;
@@ -17,4 +21,19 @@ public interface BuilderProjectRunRepository extends JpaRepository<BuilderProjec
     List<BuilderProjectRun> findAllByProject_IdAndOwnerIdOrderByCreatedAtDesc(Long projectId, String ownerId);
 
     Optional<BuilderProjectRun> findByIdAndProject_IdAndOwnerId(Long id, Long projectId, String ownerId);
+
+    @Query(value = """
+            SELECT *
+            FROM builder_project_runs
+            WHERE status = 'queued'
+               OR (status = 'running' AND lease_expires_at IS NOT NULL AND lease_expires_at < CURRENT_TIMESTAMP)
+            ORDER BY CASE WHEN status = 'queued' THEN 0 ELSE 1 END, created_at ASC
+            LIMIT 1
+            FOR UPDATE SKIP LOCKED
+            """, nativeQuery = true)
+    Optional<BuilderProjectRun> claimNextAvailableForUpdate();
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select run from BuilderProjectRun run where run.id = :runId")
+    Optional<BuilderProjectRun> findByIdForUpdate(@Param("runId") Long runId);
 }
