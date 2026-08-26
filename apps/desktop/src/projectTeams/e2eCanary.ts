@@ -90,6 +90,10 @@ function anyRunsBlocked(runs: ProjectTaskRun[]) {
   return runs.some((run) => run.status === "blocked");
 }
 
+function blockedRunEvidence(run: ProjectTaskRun) {
+  return run.lastError ?? (run.blockers.join(", ") || "blocked");
+}
+
 function roleStage(
   project: ProjectState,
   id: E2ECanaryStageId,
@@ -111,7 +115,7 @@ function roleStage(
   if (anyRunsBlocked(runs)) {
     const failures = runs
       .filter((run) => run.status === "blocked")
-      .map((run) => `${run.taskId}: ${run.lastError ?? run.blockers.join(", ") || "blocked"}`)
+      .map((run) => `${run.taskId}: ${blockedRunEvidence(run)}`)
       .join(" · ");
     return { id, label, status: "blocked", evidence: failures };
   }
@@ -153,7 +157,7 @@ function implementationStage(project: ProjectState): E2ECanaryStage {
       status: "blocked",
       evidence: runs
         .filter((run) => run.status === "blocked")
-        .map((run) => `${run.taskId}: ${run.lastError ?? "blocked"}`)
+        .map((run) => `${run.taskId}: ${blockedRunEvidence(run)}`)
         .join(" · "),
     };
   }
@@ -194,6 +198,14 @@ export function findLatestE2ECanaryProject(state: ProjectTeamsState) {
   return state.projects.find(isE2ECanaryProject) ?? null;
 }
 
+export function validateE2ECanaryPlan(project: ProjectState) {
+  if (!isE2ECanaryProject(project) || !project.plan) return [];
+  const roles = new Set(project.plan.tasks.map((task) => task.role));
+  return [...REQUIRED_IMPLEMENTATION_ROLES, ...REQUIRED_GOVERNANCE_ROLES]
+    .filter((role) => !roles.has(role))
+    .map((role) => `필수 E2E 역할 ${role} Task가 PM 계획에 없습니다.`);
+}
+
 export function evaluateE2ECanaryProject(project: ProjectState): E2ECanaryReport {
   const intake = simpleStage(
     "intake",
@@ -201,7 +213,7 @@ export function evaluateE2ECanaryProject(project: ProjectState): E2ECanaryReport
     Boolean(project.intake),
     project.status === "queued" && !project.intake,
     project.status === "blocked" && !project.intake,
-    project.intake ? `Intake ${project.intake.id} · ${project.intake.complexity}` : "Intake 완료" ,
+    project.intake ? `Intake ${project.intake.id} · ${project.intake.complexity}` : "Intake 완료",
     project.runtimeMessage,
   );
   const allocation = simpleStage(
@@ -281,9 +293,11 @@ export function evaluateE2ECanaryProject(project: ProjectState): E2ECanaryReport
   const commitShas = Array.from(new Set(
     project.taskRuns.flatMap((run) => run.commitSha ? [run.commitSha] : []),
   ));
-  const blockers = stages
+  const planBlockers = validateE2ECanaryPlan(project);
+  const stageBlockers = stages
     .filter((stage) => stage.status === "blocked")
     .map((stage) => `${stage.label}: ${stage.evidence}`);
+  const blockers = Array.from(new Set([...planBlockers, ...stageBlockers]));
 
   return {
     projectId: project.id,
@@ -291,7 +305,7 @@ export function evaluateE2ECanaryProject(project: ProjectState): E2ECanaryReport
     repositoryFullName: project.repositoryFullName,
     teamId: project.teamId,
     status: project.status,
-    passed: project.status === "completed" && stages.every((stage) => stage.status === "passed"),
+    passed: project.status === "completed" && blockers.length === 0 && stages.every((stage) => stage.status === "passed"),
     startedAt: project.createdAt,
     completedAt: project.completedAt ?? null,
     stages,
@@ -301,12 +315,4 @@ export function evaluateE2ECanaryProject(project: ProjectState): E2ECanaryReport
     replanCount: project.replans?.length ?? 0,
     blockers,
   };
-}
-
-export function validateE2ECanaryPlan(project: ProjectState) {
-  if (!isE2ECanaryProject(project) || !project.plan) return [];
-  const roles = new Set(project.plan.tasks.map((task) => task.role));
-  return [...REQUIRED_IMPLEMENTATION_ROLES, ...REQUIRED_GOVERNANCE_ROLES]
-    .filter((role) => !roles.has(role))
-    .map((role) => `필수 E2E 역할 ${role} Task가 PM 계획에 없습니다.`);
 }
