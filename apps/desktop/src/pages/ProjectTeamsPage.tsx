@@ -166,6 +166,7 @@ export function ProjectTeamsPage() {
 
     const teamName = getTeamName(baseState, project.teamId);
     let nextState = beginProjectPlanning(baseState, project.id);
+    let plannedState: ProjectTeamsState | null = null;
     setState(nextState);
     setSelectedTeamId(project.teamId);
     setLaunchingProject(true);
@@ -188,18 +189,27 @@ export function ProjectTeamsPage() {
         workspacePath: runtimeResult.repository.workspacePath,
         pmSessionId: runtimeResult.pm.sessionId,
       });
+      plannedState = nextState;
       setState(nextState);
       setMessage(
         `${teamName}팀 PM 계획 완료 · ${runtimeResult.repository.repository} 준비 완료 · Agent 실행 시작`,
       );
-      await runAgentQueue(nextState, project.id);
     } catch (error) {
       const reason = `PM Runtime 실패: ${errorMessage(error)}`;
       nextState = failProjectRuntime(nextState, project.id, reason);
       setState(nextState);
       setMessage(reason);
+      return;
     } finally {
       setLaunchingProject(false);
+    }
+
+    if (!plannedState) return;
+
+    try {
+      await runAgentQueue(plannedState, project.id);
+    } catch (error) {
+      setMessage(`Agent Runtime 실행 실패: ${errorMessage(error)}`);
     }
   };
 
@@ -363,7 +373,14 @@ export function ProjectTeamsPage() {
                       ? `${activeProject.repositoryFullName} · ${activeProject.plan?.tasks.length ?? 0} tasks · ${activeProject.runtimeMessage}`
                       : activeProject.runtimeMessage}
                   </small>
-                  {activeProject.status === "blocked" && !activeProject.plan && (
+                  {activeProject.status === "blocked" && activeProject.runtimeFailureSource && (
+                    <small>
+                      실패 단계: {activeProject.runtimeFailureSource === "pm" ? "PM Runtime" : "Agent Runtime"}
+                    </small>
+                  )}
+                  {activeProject.status === "blocked"
+                    && (activeProject.runtimeFailureSource === "pm"
+                      || (!activeProject.plan && activeProject.runtimeFailureSource === null)) && (
                     <button
                       className="project-reset-button project-runtime-retry-button"
                       type="button"
