@@ -12,7 +12,6 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -25,6 +24,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
+    private final BuilderWorkerTokenFilter builderWorkerTokenFilter;
     private final JwtAuthFilter jwtAuthFilter;
 
     @Value("${app.cors.allowed-origins}")
@@ -46,10 +46,12 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/me", "/api/auth/refresh").permitAll()
                 .requestMatchers("/api/push/subscriptions/**").permitAll()
+                .requestMatchers("/internal/builder/worker/**").permitAll()
                 .requestMatchers("/api/**").authenticated()
                 .anyRequest().permitAll()
             )
-            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterBefore(builderWorkerTokenFilter, JwtAuthFilter.class)
+            .addFilterBefore(jwtAuthFilter, org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class)
             .exceptionHandling(ex -> ex
                 .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
             );
@@ -65,7 +67,7 @@ public class SecurityConfig {
                 .filter(origin -> !origin.isBlank() && !"*".equals(origin))
                 .toList());
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
-        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With"));
+        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With", "X-Builder-Worker-Token"));
         config.setExposedHeaders(List.of("Set-Cookie"));
         config.setAllowCredentials(true);
         config.setMaxAge(3600L);
