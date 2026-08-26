@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { ProjectRuntimePanel } from "../components/ProjectRuntimePanel";
 import { ProjectTaskQueue } from "../components/ProjectTaskQueue";
@@ -18,6 +18,13 @@ import {
 import { startProjectRuntimeWithIntake } from "../projectTeams/intakePlanning";
 import { loadOrganizationRuntimeSettings } from "../projectTeams/organization";
 import {
+  clearProjectExecutionControls,
+  loadProjectExecutionControl,
+  pauseProjectExecution,
+  resumeProjectExecution,
+  stopProjectExecution,
+} from "../projectTeams/projectControl";
+import {
   getProductOwnerDecision,
   recordProductOwnerRecoveryDecision,
 } from "../projectTeams/productOwnerDecision";
@@ -33,7 +40,7 @@ import {
 } from "../projectTeams/replanState";
 import { runProjectRetrospectives } from "../projectTeams/retrospective";
 import { completeProjectRetrospective } from "../projectTeams/retrospectiveState";
-import { dispatchAgentTask } from "../projectTeams/runtime";
+import { dispatchAgentTask, setRuntimeKeepAwake } from "../projectTeams/runtime";
 import {
   beginAgentTasks,
   beginProjectPlanning,
@@ -87,6 +94,18 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
+function executionStateLabel(state: "running" | "paused" | "stopped") {
+  switch (state) {
+    case "paused":
+      return "일시정지";
+    case "stopped":
+      return "중지됨";
+    case "running":
+    default:
+      return "실행 중";
+  }
+}
+
 export function ProjectTeamsPage() {
   const [state, setState] = useState<ProjectTeamsState>(() => loadProjectTeamsState());
   const [selectedTeamId, setSelectedTeamId] = useState<TeamId>(
@@ -107,6 +126,18 @@ export function ProjectTeamsPage() {
     || runningReplan
     || runningRetrospective;
 
+  useEffect(() => {
+    void setRuntimeKeepAwake(runtimeBusy).catch((error) => {
+      console.warn("Luna runtime keep-awake 변경 실패", error);
+    });
+
+    return () => {
+      if (runtimeBusy) {
+        void setRuntimeKeepAwake(false).catch(() => undefined);
+      }
+    };
+  }, [runtimeBusy]);
+
   const selectedTeam = useMemo(
     () => state.teams.find((team) => team.id === selectedTeamId) ?? state.teams[0],
     [selectedTeamId, state.teams],
@@ -116,6 +147,10 @@ export function ProjectTeamsPage() {
     if (!selectedTeam?.activeProjectId) return null;
     return state.projects.find((project) => project.id === selectedTeam.activeProjectId) ?? null;
   }, [selectedTeam, state.projects]);
+
+  const activeExecutionControl = activeProject
+    ? loadProjectExecutionControl(activeProject.id)
+    : null;
 
   const latestFailureRoute = activeProject?.failureRoutes?.[0] ?? null;
   const latestProductOwnerDecision = activeProject && latestFailureRoute?.route === "needs-human"
@@ -217,10 +252,31 @@ export function ProjectTeamsPage() {
   const runAgentQueue = async (baseState: ProjectTeamsState, projectId: string) => {
     const runtimeSettings = loadOrganizationRuntimeSettings();
     let nextState = baseState;
+    const initialControl = loadProjectExecutionControl(projectId);
+
+    if (initialControl.state !== "running") {
+      setMessage(
+        initialControl.state === "paused"
+          ? "프로젝트가 일시정지 상태입니다. 재개하면 완료된 작업을 유지하고 남은 Agent Task부터 이어서 실행합니다."
+          : "프로젝트가 중지 상태입니다. 재개를 눌러야 Agent 실행을 다시 시작합니다.",
+      );
+      return nextState;
+    }
+
     setDispatchingAgents(true);
 
     try {
       while (true) {
+        const executionControl = loadProjectExecutionControl(projectId);
+        if (executionControl.state !== "running") {
+          setMessage(
+            executionControl.state === "paused"
+              ? "일시정지 적용 완료 · 현재까지의 Git/PR/Task 상태를 보존했습니다."
+              : "중지 적용 완료 · 현재까지의 Git/PR/Task 상태를 보존했습니다.",
+          );
+          break;
+        }
+
         const currentProject = nextState.projects.find((item) => item.id === projectId);
         if (!currentProject || currentProject.status === "blocked") break;
 
@@ -288,6 +344,16 @@ export function ProjectTeamsPage() {
 
       const finalProject = nextState.projects.find((item) => item.id === projectId);
       if (!finalProject) return nextState;
+
+      const finalExecutionControl = loadProjectExecutionControl(projectId);
+      if (finalExecutionControl.state !== "running") {
+        setMessage(
+          finalExecutionControl.state === "paused"
+            ? "프로젝트 일시정지됨 · 재개 시 남은 Task부터 계속합니다."
+            : "프로젝트 중지됨 · 재개 전까지 추가 Agent/PR 통합 작업을 시작하지 않습니다.",
+        );
+        return nextState;
+      }
 
       const allTasksDone = finalProject.taskRuns.length > 0
         && finalProject.taskRuns.every((run) => run.status === "done");
@@ -418,6 +484,7 @@ export function ProjectTeamsPage() {
       return;
     }
 
+    resumeProjectExecution(result.project.id);
     setSelectedTeamId(result.project.teamId);
     setAwaitingRequirement(false);
     setAwaitingDecision(false);
@@ -522,6 +589,7 @@ export function ProjectTeamsPage() {
 
   const handleContinueAgents = async () => {
     if (!activeProject || runtimeBusy || !activeProject.plan) return;
+    resumeProjectExecution(activeProject.id);
     await runAgentQueue(state, activeProject.id);
   };
 
@@ -565,9 +633,40 @@ export function ProjectTeamsPage() {
     await runRetrospectiveStage(state, activeProject.id);
   };
 
+  const handlePauseProject = () => {
+    if (!activeProject) return;
+    pauseProjectExecution(activeProject.id);
+    setMessage(
+      runtimeBusy
+        ? "일시정지 요청 저장됨 · 현재 실행 중인 Agent wave가 안전하게 끝난 뒤 다음 Task부터 멈춥니다."
+        : "프로젝트를 일시정지했습니다. 재개하면 남은 Task부터 이어서 실행합니다.",
+    );
+  };
+
+  const handleResumeProject = async () => {
+    if (!activeProject) return;
+    resumeProjectExecution(activeProject.id);
+    setMessage("프로젝트 재개 · 완료된 작업과 PR을 유지하고 남은 Task부터 계속합니다.");
+
+    if (!runtimeBusy && activeProject.plan && activeProject.status !== "completed") {
+      await runAgentQueue(state, activeProject.id);
+    }
+  };
+
+  const handleStopProject = () => {
+    if (!activeProject) return;
+    stopProjectExecution(activeProject.id);
+    setMessage(
+      runtimeBusy
+        ? "중지 요청 저장됨 · 현재 실행 중인 Agent wave를 마무리한 뒤 추가 Task/PR 통합을 시작하지 않습니다."
+        : "프로젝트를 중지했습니다. Git/PR/Task 기록은 보존되며 재개 전까지 실행하지 않습니다.",
+    );
+  };
+
   const handleReset = () => {
     if (runtimeBusy) return;
     const nextState = resetProjectTeamsState();
+    clearProjectExecutionControls();
     setState(nextState);
     setSelectedTeamId(nextState.teams[0].id);
     setAwaitingRequirement(false);
@@ -588,19 +687,23 @@ export function ProjectTeamsPage() {
           <span className="project-teams-runtime-dot" />
           <div>
             <strong>
-              {runningIntake
-                ? "Organization Intake 실행 중"
-                : runningReplan
-                  ? "PM Recovery Replan 실행 중"
-                  : runningRetrospective
-                    ? "Retrospective Runtime 실행 중"
-                    : dispatchingAgents
-                      ? "Agent Runtime 실행 중"
-                      : launchingProject
-                        ? "PM Runtime 실행 중"
-                        : "Codex Runtime"}
+              {activeExecutionControl?.state === "paused"
+                ? "프로젝트 일시정지"
+                : activeExecutionControl?.state === "stopped"
+                  ? "프로젝트 중지됨"
+                  : runningIntake
+                    ? "Organization Intake 실행 중"
+                    : runningReplan
+                      ? "PM Recovery Replan 실행 중"
+                      : runningRetrospective
+                        ? "Retrospective Runtime 실행 중"
+                        : dispatchingAgents
+                          ? "Agent Runtime 실행 중"
+                          : launchingProject
+                            ? "PM Runtime 실행 중"
+                            : "Codex Runtime"}
             </strong>
-            <span>ChatGPT Codex 인증과 BloomBouquet 로컬 Runtime을 사용</span>
+            <span>실행 중 Windows 절전 방지 · 덮개 동작은 '아무 것도 안 함' 설정 필요</span>
           </div>
         </div>
       </header>
@@ -685,6 +788,43 @@ export function ProjectTeamsPage() {
                       Intake {activeProject.intake.id} · {activeProject.intake.complexity} · 핵심 역할 {activeProject.intake.criticalRoles.join(", ") || "없음"} · risk {activeProject.intake.riskFlags.join(", ") || "없음"}
                     </small>
                   )}
+
+                  <div className="project-execution-controls">
+                    <div className="project-execution-state">
+                      <span>Execution</span>
+                      <strong>{executionStateLabel(activeExecutionControl?.state ?? "running")}</strong>
+                    </div>
+                    <div className="project-execution-actions">
+                      <button
+                        className="project-reset-button"
+                        type="button"
+                        onClick={handlePauseProject}
+                        disabled={activeExecutionControl?.state === "paused"}
+                      >
+                        일시정지
+                      </button>
+                      <button
+                        className="project-reset-button"
+                        type="button"
+                        onClick={() => void handleResumeProject()}
+                        disabled={activeExecutionControl?.state === "running" && runtimeBusy}
+                      >
+                        재개
+                      </button>
+                      <button
+                        className="project-reset-button"
+                        type="button"
+                        onClick={handleStopProject}
+                        disabled={activeExecutionControl?.state === "stopped"}
+                      >
+                        중지
+                      </button>
+                    </div>
+                  </div>
+                  <small className="project-lid-note">
+                    덮개를 닫아도 계속 실행하려면 Windows 전원 옵션에서 덮개를 닫을 때 동작을 '아무 것도 안 함'으로 설정하고 전원을 연결해 두세요. Luna는 Agent Runtime 실행 중 시스템 절전을 별도로 방지합니다.
+                  </small>
+
                   {activeProject.status === "queued" && !activeProject.plan && (
                     <button
                       className="project-reset-button project-runtime-retry-button"
