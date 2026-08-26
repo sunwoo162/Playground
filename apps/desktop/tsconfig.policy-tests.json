@@ -13,6 +13,8 @@
     "src/projectTeams/teamAllocation.ts",
     "src/projectTeams/teamAllocation.policy-test.ts",
     "src/projectTeams/intakeClarification.ts",
-    "src/projectTeams/intakeClarification.policy-test.ts"
+    "src/projectTeams/intakeClarification.policy-test.ts",
+    "src/projectTeams/dataMarketing.ts",
+    "src/projectTeams/dataMarketing.policy-test.ts"
   ]
 }
