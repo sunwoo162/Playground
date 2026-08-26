@@ -1,5 +1,6 @@
 import { FormEvent, useMemo, useState } from "react";
 
+import { ProjectRuntimePanel } from "../components/ProjectRuntimePanel";
 import {
   BOUQUET_AUTH_POLICY,
   EXECUTION_POLICY,
@@ -126,7 +127,7 @@ export function ProjectTeamsPage() {
           <span className="project-teams-runtime-dot" />
           <div>
             <strong>Runtime 연결 대기</strong>
-            <span>현재는 로컬 팀 배정과 상태 저장까지 동작</span>
+            <span>BloomBouquet 연결과 로컬 CLI 상태를 아래에서 확인</span>
           </div>
         </div>
       </header>
@@ -211,6 +212,8 @@ export function ProjectTeamsPage() {
           </section>
 
           <aside className="project-policy-panel">
+            <ProjectRuntimePanel />
+
             <section>
               <span className="project-policy-label">ORGANIZATION</span>
               <h3>Team Evolution Agent</h3>
