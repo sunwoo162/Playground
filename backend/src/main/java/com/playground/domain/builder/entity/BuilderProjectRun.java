@@ -49,7 +49,7 @@ public class BuilderProjectRun {
     private LocalDateTime leaseExpiresAt;
 
     @Builder.Default
-    @Column(name = "claim_count", nullable = false)
+    @Column(name = "claim_count", nullable = false, columnDefinition = "int default 0")
     private int claimCount = 0;
 
     @CreationTimestamp
