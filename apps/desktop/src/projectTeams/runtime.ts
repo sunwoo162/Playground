@@ -305,3 +305,7 @@ export async function replanProjectFailure(input: ReplanProjectInput) {
 export async function mergeProjectPullRequests(input: MergeProjectPullRequestsInput) {
   return invoke<MergeProjectPullRequestsResult>("merge_project_pull_requests", { input });
 }
+
+export async function setRuntimeKeepAwake(enabled: boolean) {
+  return invoke<boolean>("set_runtime_keep_awake", { enabled });
+}
