@@ -1,8 +1,10 @@
 import {
   PRODUCT_MARKETING_POLICY,
   ensureMarketingDocumentationPlan,
+  isMandatoryMarketingTask,
   validateMarketingDocumentationPlan,
 } from "./dataMarketing";
+import { validateProjectPlanReviewTopology } from "./planTopology";
 import type { ProjectPlan, ProjectTaskPlan } from "./types";
 
 function assert(condition: boolean, message: string) {
@@ -94,7 +96,16 @@ function run() {
       documentation?.summary.includes(PRODUCT_MARKETING_POLICY.documentPath) ?? false,
       "Documentation task must own the final go-to-market document",
     );
+
+    const governanceTasks = [marketing, documentation, codeReview, reviewer, qa]
+      .filter((task): task is ProjectTaskPlan => Boolean(task));
+    assert(
+      governanceTasks.length === 5 && governanceTasks.every(isMandatoryMarketingTask),
+      "all five injected marketing governance tasks must be protected during replanning",
+    );
+
     validateMarketingDocumentationPlan(plan);
+    validateProjectPlanReviewTopology(plan);
 
     const secondPass = ensureMarketingDocumentationPlan(plan);
     assert(
