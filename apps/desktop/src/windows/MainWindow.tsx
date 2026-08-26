@@ -18,6 +18,7 @@ import {
   restoreProjectTeamsStateFromDurableFile,
   startProjectTeamsDurableMirror,
 } from "../projectTeams/durableState";
+import { reconcileInterruptedAgentsOnStartup } from "../projectTeams/startupReconciliation";
 
 export function MainWindow() {
   const [currentPage, setCurrentPage] = useState<LunaPage>("character");
@@ -30,7 +31,15 @@ export function MainWindow() {
       try {
         const restored = await restoreProjectTeamsStateFromDurableFile();
         if (disposed) return;
-        if (restored) {
+
+        const reconciliation = await reconcileInterruptedAgentsOnStartup();
+        if (disposed) return;
+
+        if (restored || reconciliation.changed) {
+          console.info(
+            "Luna startup reconciliation",
+            reconciliation,
+          );
           window.location.reload();
           return;
         }
@@ -39,7 +48,12 @@ export function MainWindow() {
           console.warn("Luna durable project state mirror 실패", error);
         });
       } catch (error) {
-        console.warn("Luna durable project state 초기화 실패", error);
+        console.warn("Luna durable project state 초기화/복구 실패", error);
+        if (!disposed) {
+          stopMirror = startProjectTeamsDurableMirror((mirrorError) => {
+            console.warn("Luna durable project state mirror 실패", mirrorError);
+          });
+        }
       }
     };
 
