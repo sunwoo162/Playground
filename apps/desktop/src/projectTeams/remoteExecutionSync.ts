@@ -1,3 +1,4 @@
+import { markProjectIntegrated } from "./integrationState";
 import {
   getRemoteRunnerJob,
   type RemoteRunnerJob,
@@ -16,14 +17,15 @@ export type RemoteExecutionSyncResult = {
   job: RemoteRunnerJob;
   record: RemoteExecutionRecord | null;
   appliedTaskCount: number;
+  integrationApplied: boolean;
 };
 
 export function applyRemoteJobResult(
   state: ProjectTeamsState,
   job: RemoteRunnerJob,
-): { state: ProjectTeamsState; appliedTaskCount: number } {
+): { state: ProjectTeamsState; appliedTaskCount: number; integrationApplied: boolean } {
   if (job.status !== "succeeded" || !job.result) {
-    return { state, appliedTaskCount: 0 };
+    return { state, appliedTaskCount: 0, integrationApplied: false };
   }
 
   let nextState = state;
@@ -43,7 +45,27 @@ export function applyRemoteJobResult(
     appliedTaskCount += 1;
   }
 
-  return { state: nextState, appliedTaskCount };
+  const project = nextState.projects.find((item) => item.id === job.projectId);
+  const shouldApplyIntegration =
+    job.result.status === "completed"
+    && job.result.mergedPullRequestNumbers.length > 0
+    && project !== undefined
+    && project.status !== "retrospective"
+    && project.status !== "completed";
+
+  if (shouldApplyIntegration) {
+    nextState = markProjectIntegrated(
+      nextState,
+      job.projectId,
+      job.result.mergedPullRequestNumbers,
+    );
+  }
+
+  return {
+    state: nextState,
+    appliedTaskCount,
+    integrationApplied: shouldApplyIntegration,
+  };
 }
 
 export async function syncRemoteExecution(
@@ -66,5 +88,6 @@ export async function syncRemoteExecution(
     job,
     record,
     appliedTaskCount: applied.appliedTaskCount,
+    integrationApplied: applied.integrationApplied,
   };
 }
