@@ -72,13 +72,24 @@ export function saveOrganizationRuntimeSettings(settings: OrganizationRuntimeSet
   return normalized;
 }
 
+function fallbackTaskSlug(value: string) {
+  let hash = 2166136261;
+  for (const character of value) {
+    hash ^= character.codePointAt(0) ?? 0;
+    hash = Math.imul(hash, 16777619);
+  }
+  return `task-${(hash >>> 0).toString(36)}`;
+}
+
 function toBranchSlug(value: string) {
-  return value
+  const normalized = value
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
-    .slice(0, 48) || "task";
+    .slice(0, 48);
+
+  return normalized || fallbackTaskSlug(value);
 }
 
 export function buildAgentBranchName(teamId: TeamId, role: AgentRole, task: string) {

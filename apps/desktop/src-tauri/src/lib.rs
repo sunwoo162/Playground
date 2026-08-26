@@ -64,6 +64,9 @@ fn validate_github_name(value: &str, label: &str) -> Result<(), String> {
     if value.is_empty() {
         return Err(format!("{label} 값이 비어 있습니다."));
     }
+    if matches!(value, "." | "..") {
+        return Err(format!("{label} 값으로 {value}를 사용할 수 없습니다."));
+    }
     if value.len() > 100 {
         return Err(format!("{label} 값이 너무 깁니다."));
     }
@@ -83,12 +86,10 @@ fn git_args(workspace: &Path, tail: &[&str]) -> Vec<String> {
 }
 
 fn remote_branch_exists(workspace: &Path, branch: &str) -> bool {
+    let remote_ref = format!("refs/remotes/origin/{branch}");
     run_command(
         "git",
-        &git_args(
-            workspace,
-            &["rev-parse", "--verify", "--quiet", &format!("refs/remotes/origin/{branch}")],
-        ),
+        &git_args(workspace, &["rev-parse", "--verify", "--quiet", &remote_ref]),
     )
     .map(|output| output.status.success())
     .unwrap_or(false)
@@ -100,6 +101,21 @@ fn ensure_clean_workspace(workspace: &Path) -> Result<(), String> {
         Ok(())
     } else {
         Err("기존 프로젝트 workspace에 커밋되지 않은 변경이 있어 자동 bootstrap을 중단했습니다.".to_string())
+    }
+}
+
+fn ensure_expected_origin(workspace: &Path, organization: &str, repository: &str) -> Result<(), String> {
+    let output = run_checked("git", &git_args(workspace, &["remote", "get-url", "origin"]))?;
+    let origin = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let expected_https = format!("github.com/{organization}/{repository}");
+    let expected_ssh = format!("github.com:{organization}/{repository}");
+
+    if origin.contains(&expected_https) || origin.contains(&expected_ssh) {
+        Ok(())
+    } else {
+        Err(format!(
+            "기존 workspace의 origin이 {organization}/{repository}와 일치하지 않아 자동 작업을 중단했습니다: {origin}"
+        ))
     }
 }
 
@@ -217,6 +233,7 @@ fn bootstrap_project_repository(
                 workspace.to_string_lossy()
             ));
         }
+        ensure_expected_origin(&workspace, &organization, &repository)?;
         ensure_clean_workspace(&workspace)?;
         run_checked("git", &git_args(&workspace, &["fetch", "origin", "--prune"]))?;
     } else {
