@@ -1,3 +1,4 @@
+mod agent_reconciliation;
 mod agent_runtime;
 mod failure_router_runtime;
 mod intake_runtime;
@@ -21,6 +22,7 @@ pub fn run() {
             intake_runtime::analyze_project_intake,
             market_discovery_runtime::run_market_discovery,
             agent_runtime::dispatch_agent_task,
+            agent_reconciliation::reconcile_interrupted_agent_task,
             failure_router_runtime::route_agent_failure,
             replan_runtime::replan_project_failure,
             integration_runtime::merge_project_pull_requests,
