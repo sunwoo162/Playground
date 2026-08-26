@@ -36,6 +36,7 @@ function evolutionContext(
   return [
     `TEAM EVOLUTION EXPERIMENT ${experiment.experimentId}`,
     `Candidate team playbook version: ${experiment.playbookVersion}`,
+    `Candidate Agent version: ${experiment.agentVersion ?? "unchanged"}`,
     "이 변경은 이전 프로젝트 회고에서 나온 가설이며 권위가 아닙니다. 실제 repository/테스트/요구사항과 충돌하면 근거를 남기고 안전한 쪽을 우선하세요.",
     "Experimental team playbook changes:",
     playbook,
