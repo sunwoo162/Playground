@@ -19,6 +19,9 @@ public class BuilderProjectRunDto {
         private LocalDateTime createdAt;
         private LocalDateTime updatedAt;
         private LocalDateTime startedAt;
+        private LocalDateTime heartbeatAt;
+        private LocalDateTime leaseExpiresAt;
         private LocalDateTime finishedAt;
+        private int claimCount;
     }
 }
