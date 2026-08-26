@@ -35,6 +35,17 @@ export function ToolsPage({ onChangePage }: ToolsPageProps) {
             <span>Manage what you need to do.</span>
           </div>
         </button>
+
+        <button
+          className="tool-card"
+          onClick={() => onChangePage("project-teams")}
+        >
+          <span className="tool-card-icon">PT</span>
+          <div>
+            <strong>Project Teams</strong>
+            <span>프로젝트 팀과 Agent 실행 상태를 관리합니다.</span>
+          </div>
+        </button>
       </div>
     </div>
   );

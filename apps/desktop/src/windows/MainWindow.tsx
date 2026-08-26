@@ -6,6 +6,7 @@ import { FocusPage } from "../pages/FocusPage";
 import { TasksPage } from "../pages/TasksPage";
 import { ActivityPage } from "../pages/ActivityPage";
 import { ToolsPage } from "../pages/ToolsPage";
+import { ProjectTeamsPage } from "../pages/ProjectTeamsPage";
 import { InventoryPage } from "../pages/InventoryPage";
 import { ShopPage } from "../pages/ShopPage";
 import { SettingsPage } from "../pages/SettingsPage";
@@ -23,6 +24,8 @@ export function MainWindow() {
         return <ActivityPage />;
       case "tools":
         return <ToolsPage onChangePage={setCurrentPage} />;
+      case "project-teams":
+        return <ProjectTeamsPage />;
       case "inventory":
         return <InventoryPage />;
       case "shop":

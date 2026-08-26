@@ -4,6 +4,7 @@ import { PetWindow } from "./windows/PetWindow";
 import { MainWindow } from "./windows/MainWindow";
 
 import "./App.css";
+import "./ProjectTeams.css";
 
 function App() {
   const label = getCurrentWindow().label;
