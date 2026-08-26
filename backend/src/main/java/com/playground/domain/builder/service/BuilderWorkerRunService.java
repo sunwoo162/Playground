@@ -140,6 +140,10 @@ public class BuilderWorkerRunService {
         if (!worker.equals(run.getWorkerId())) {
             throw new IllegalStateException("현재 실행 lease를 소유한 worker가 아닙니다.");
         }
+        LocalDateTime leaseExpiresAt = run.getLeaseExpiresAt();
+        if (leaseExpiresAt == null || !leaseExpiresAt.isAfter(LocalDateTime.now())) {
+            throw new IllegalStateException("실행 lease가 만료되어 다시 claim해야 합니다.");
+        }
     }
 
     private String requireWorkerId(String workerId) {
