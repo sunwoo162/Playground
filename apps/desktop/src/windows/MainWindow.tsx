@@ -7,6 +7,7 @@ import { TasksPage } from "../pages/TasksPage";
 import { ActivityPage } from "../pages/ActivityPage";
 import { ToolsPage } from "../pages/ToolsPage";
 import { MarketDiscoveryPage } from "../pages/MarketDiscoveryPage";
+import { E2ECanaryPage } from "../pages/E2ECanaryPage";
 import { ProjectTeamsPage } from "../pages/ProjectTeamsPage";
 import { InventoryPage } from "../pages/InventoryPage";
 import { ShopPage } from "../pages/ShopPage";
@@ -27,6 +28,8 @@ export function MainWindow() {
         return <ToolsPage onChangePage={setCurrentPage} />;
       case "market-discovery":
         return <MarketDiscoveryPage onChangePage={setCurrentPage} />;
+      case "e2e-canary":
+        return <E2ECanaryPage onChangePage={setCurrentPage} />;
       case "project-teams":
         return <ProjectTeamsPage />;
       case "inventory":

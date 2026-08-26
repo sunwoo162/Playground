@@ -49,6 +49,17 @@ export function ToolsPage({ onChangePage }: ToolsPageProps) {
 
         <button
           className="tool-card"
+          onClick={() => onChangePage("e2e-canary")}
+        >
+          <span className="tool-card-icon">E2E</span>
+          <div>
+            <strong>Live E2E Canary</strong>
+            <span>실제 프로젝트 하나로 Intake부터 Team Evolution까지 전체 체인을 검증합니다.</span>
+          </div>
+        </button>
+
+        <button
+          className="tool-card"
           onClick={() => onChangePage("project-teams")}
         >
           <span className="tool-card-icon">PT</span>

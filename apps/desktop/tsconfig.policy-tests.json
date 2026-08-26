@@ -17,6 +17,8 @@
     "src/projectTeams/dataMarketing.ts",
     "src/projectTeams/dataMarketing.policy-test.ts",
     "src/projectTeams/seniorAgent.ts",
-    "src/projectTeams/seniorAgent.policy-test.ts"
+    "src/projectTeams/seniorAgent.policy-test.ts",
+    "src/projectTeams/e2eCanary.ts",
+    "src/projectTeams/e2eCanary.policy-test.ts"
   ]
 }

@@ -1,0 +1,121 @@
+.e2e-canary-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.e2e-canary-panel > p {
+  margin: 0;
+  color: var(--text-muted, #6d6d6d);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.e2e-canary-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.e2e-canary-heading h3 {
+  margin: 3px 0 0;
+}
+
+.e2e-canary-heading > span {
+  border: 1px solid var(--border-soft, #d7d7d7);
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.e2e-canary-heading > span.passed {
+  border-color: #73a47a;
+}
+
+.e2e-canary-heading > span.blocked {
+  border-color: #b77a72;
+}
+
+.e2e-canary-meta,
+.e2e-canary-evidence,
+.e2e-canary-actions {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.e2e-canary-meta span,
+.e2e-canary-evidence span {
+  border: 1px solid var(--border-soft, #dedede);
+  border-radius: 7px;
+  padding: 4px 7px;
+  font-size: 10px;
+  color: var(--text-muted, #666);
+}
+
+.e2e-canary-stages {
+  display: grid;
+  gap: 5px;
+}
+
+.e2e-canary-stage {
+  display: grid;
+  grid-template-columns: 42px 1fr;
+  gap: 8px;
+  align-items: start;
+  border-top: 1px solid var(--border-soft, #ececec);
+  padding-top: 7px;
+}
+
+.e2e-canary-stage > span {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: var(--text-muted, #777);
+}
+
+.e2e-canary-stage[data-status="passed"] > span {
+  color: #557f5b;
+}
+
+.e2e-canary-stage[data-status="blocked"] > span {
+  color: #9a5f58;
+}
+
+.e2e-canary-stage[data-status="running"] > span {
+  color: var(--text-strong, #252525);
+}
+
+.e2e-canary-stage div {
+  display: grid;
+  gap: 2px;
+}
+
+.e2e-canary-stage strong {
+  font-size: 11px;
+}
+
+.e2e-canary-stage small {
+  font-size: 10px;
+  line-height: 1.45;
+  color: var(--text-muted, #777);
+}
+
+.e2e-canary-blockers {
+  display: grid;
+  gap: 4px;
+  border-top: 1px solid var(--border-soft, #e5e5e5);
+  padding-top: 9px;
+}
+
+.e2e-canary-blockers strong {
+  font-size: 11px;
+}
+
+.e2e-canary-blockers span {
+  font-size: 10px;
+  line-height: 1.45;
+  color: var(--text-muted, #6c6c6c);
+}
