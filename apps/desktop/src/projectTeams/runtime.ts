@@ -1,7 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 
+import { ensureMarketingDocumentationPlan } from "./dataMarketing";
 import { getProjectEvolutionInstructions } from "./evolutionExperiments";
 import { validateProjectPlanReviewTopology } from "./planTopology";
+import { seniorAgentContext } from "./seniorAgent";
 import { loadProjectTeamsState } from "./store";
 import type {
   AgentTaskVerification,
@@ -218,6 +220,18 @@ export type MergeProjectPullRequestsResult = {
   mergedPullRequests: MergedPullRequest[];
 };
 
+function withSeniorPmStandard(input: StartProjectRuntimeInput): StartProjectRuntimeInput {
+  const internalContext = [
+    seniorAgentContext("pm"),
+    "Luna will append a mandatory Data & Marketing → Documentation → Code Review → Reviewer → QA chain after your plan. Plan the product normally and do not fabricate market metrics or user research to compensate for missing evidence.",
+  ].join("\n\n");
+
+  return {
+    ...input,
+    request: `${input.request}\n\n${internalContext}`,
+  };
+}
+
 function withPmEvolutionExperiment(input: StartProjectRuntimeInput): StartProjectRuntimeInput {
   const state = loadProjectTeamsState();
   const project = state.projects.find((item) => item.id === input.projectId);
@@ -260,12 +274,20 @@ export async function bootstrapProjectRepository(input: BootstrapProjectReposito
 }
 
 export async function startProjectRuntime(input: StartProjectRuntimeInput) {
+  const preparedInput = withPmEvolutionExperiment(withSeniorPmStandard(input));
   const result = await invoke<StartProjectRuntimeResult>(
     "start_project_runtime",
-    withPmEvolutionExperiment(input),
+    preparedInput,
   );
-  validateProjectPlanReviewTopology(result.pm.plan);
-  return result;
+  const plan = ensureMarketingDocumentationPlan(result.pm.plan);
+  validateProjectPlanReviewTopology(plan);
+  return {
+    ...result,
+    pm: {
+      ...result.pm,
+      plan,
+    },
+  };
 }
 
 export async function dispatchAgentTask(input: AgentTaskRuntimeInput) {

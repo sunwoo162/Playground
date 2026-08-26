@@ -70,6 +70,7 @@ const ALLOWED_ROLES: &[&str] = &[
     "designer",
     "frontend",
     "backend",
+    "data-marketing",
     "code-review",
     "reviewer",
     "qa",
@@ -252,7 +253,13 @@ fn validate_organization(value: &str) -> Result<(), String> {
 fn is_repository_writer(role: &str) -> bool {
     matches!(
         role,
-        "design-system" | "designer" | "frontend" | "backend" | "documentation" | "debug-router"
+        "design-system"
+            | "designer"
+            | "frontend"
+            | "backend"
+            | "data-marketing"
+            | "documentation"
+            | "debug-router"
     )
 }
 
@@ -438,6 +445,7 @@ Independent-agent contract:
 - This must target a real production service, not a demo. Do not mark mock-only or unverified behavior complete.
 - You may add libraries/frameworks when there is a concrete reliability, security, accessibility, maintainability, performance, or delivery reason. Record that reason.
 - Login/sign-up work must follow the shared 꽃다발 authentication standard.
+- Data & Marketing work must distinguish observed product facts, actual measured data, sourced external evidence, inference, and experiment hypotheses. Never invent market size, user counts, CTR, conversion, CAC, LTV, growth, or competitor facts.
 - Do not reveal secrets or commit credentials.
 - If a required external credential/provider/decision is unavailable, return `blocked` with exact evidence instead of faking completion.
 - Do not request interactive user input from Codex tools during this turn. If a real product-owner decision is required, return `blocked` and explain it.

@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 
+import { seniorAgentContext } from "./seniorAgent";
 import type { AgentRole, ProjectTeamsState } from "./types";
 
 const STORAGE_KEY = "luna.project-retrospectives.v1";
@@ -225,7 +226,7 @@ export function buildRetrospectiveInput(
     teamName: team.name,
     repositoryFullName: project.repositoryFullName,
     workspacePath: project.workspacePath,
-    userRequest: project.request,
+    userRequest: `${project.request}\n\n${seniorAgentContext("retrospective-and-team-evolution")}`,
     productSummary: project.plan.productSummary,
     playbookVersion: team.playbookVersion,
     evolutionAgentVersion: state.evolutionAgentVersion,

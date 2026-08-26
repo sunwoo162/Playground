@@ -9,6 +9,7 @@ export type AgentRole =
   | "designer"
   | "frontend"
   | "backend"
+  | "data-marketing"
   | "code-review"
   | "reviewer"
   | "qa"
@@ -296,6 +297,8 @@ export type AgentState = {
   version: string;
   status: AgentStatus;
   retrospectiveCount: number;
+  seniority: "senior-10-plus";
+  minimumExperienceYears: 10;
   autonomy: "independent";
   permissions: AgentPermission[];
 };

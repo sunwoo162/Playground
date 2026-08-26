@@ -1,6 +1,11 @@
+import {
+  ensureMarketingDocumentationPlan,
+  isMandatoryMarketingTask,
+} from "./dataMarketing";
 import { validateProjectPlanReviewTopology } from "./planTopology";
 import { getProductOwnerDecision } from "./productOwnerDecision";
 import { replanProjectFailure } from "./runtime";
+import { seniorAgentContext } from "./seniorAgent";
 import type {
   AgentDecision,
   FailureRouteRecord,
@@ -61,13 +66,14 @@ function composeRevisedPlan(
   newTasks: ProjectPlan["tasks"],
 ) {
   const retired = new Set(retireTaskIds);
-  const revisedPlan: ProjectPlan = {
+  const rawPlan: ProjectPlan = {
     ...plan,
     tasks: [
       ...plan.tasks.filter((task) => !retired.has(task.id)),
       ...newTasks,
     ],
   };
+  const revisedPlan = ensureMarketingDocumentationPlan(rawPlan);
   validateProjectPlanReviewTopology(revisedPlan);
   return revisedPlan;
 }
@@ -118,7 +124,12 @@ export async function runProjectFailureReplan(
   const retirableTaskIds = project.plan.tasks
     .filter((task) => {
       const run = runByTaskId.get(task.id);
-      return Boolean(run && run.status !== "done" && !hasExternalArtifacts(run));
+      return Boolean(
+        run
+          && !isMandatoryMarketingTask(task)
+          && run.status !== "done"
+          && !hasExternalArtifacts(run),
+      );
     })
     .map((task) => task.id);
 
@@ -144,7 +155,7 @@ export async function runProjectFailureReplan(
     teamName: team.name,
     repositoryFullName: project.repositoryFullName,
     workspacePath: project.workspacePath,
-    userRequest: project.request,
+    userRequest: `${project.request}\n\n${seniorAgentContext("pm")}`,
     productSummary: project.plan.productSummary,
     architectureSummary: project.plan.architectureSummary,
     failureRoute: {

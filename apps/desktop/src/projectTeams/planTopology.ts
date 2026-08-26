@@ -1,3 +1,4 @@
+import { validateMarketingDocumentationPlan } from "./dataMarketing";
 import type { AgentRole, ProjectPlan } from "./types";
 
 export const REPOSITORY_WRITER_ROLES: Array<Exclude<AgentRole, "pm">> = [
@@ -5,6 +6,7 @@ export const REPOSITORY_WRITER_ROLES: Array<Exclude<AgentRole, "pm">> = [
   "designer",
   "frontend",
   "backend",
+  "data-marketing",
   "documentation",
   "debug-router",
 ];
@@ -50,6 +52,8 @@ function downstreamTasks(
 }
 
 export function validateProjectPlanReviewTopology(plan: ProjectPlan) {
+  validateMarketingDocumentationPlan(plan);
+
   const repositoryWriters = plan.tasks.filter((task) =>
     REPOSITORY_WRITER_ROLES.includes(task.role),
   );
@@ -95,7 +99,7 @@ export function validateProjectPlanReviewTopology(plan: ProjectPlan) {
     throw new Error(
       `PM Task DAG의 PR 검증 경로가 불완전합니다. ${errors.join(" ")} `
       + "Repository 변경 Task마다 downstream Code Review → Reviewer → QA 경로가 필요합니다. "
-      + "Documentation이 QA 이후 PR을 만들면 그 Documentation Task 뒤에 별도의 Review/QA 경로를 추가해야 합니다.",
+      + "Documentation 또는 Data & Marketing Agent가 QA 이후 PR을 만들면 해당 Task 뒤에 별도의 Review/QA 경로가 필요합니다.",
     );
   }
 }
