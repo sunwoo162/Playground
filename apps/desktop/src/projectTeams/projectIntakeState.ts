@@ -1,3 +1,7 @@
+import {
+  formatIntakeClarificationPrompt,
+  intakeNeedsClarification,
+} from "./intakeClarification";
 import { saveProjectTeamsState } from "./store";
 import { selectIdleTeamForProject } from "./teamAllocation";
 import { ensureTeamPerformanceProfiles } from "./teamPerformance";
@@ -25,6 +29,13 @@ export function startProjectWithIntake(
   const normalizedRequest = request.trim();
   if (!normalizedRequest) {
     return { ok: false, state, message: "프로젝트 요구사항을 입력해 주세요." };
+  }
+  if (intakeNeedsClarification(intake)) {
+    return {
+      ok: false,
+      state,
+      message: `Project Intake 확인 필요 · 팀은 아직 배정되지 않았습니다. ${formatIntakeClarificationPrompt(intake)} · 답변을 요구사항에 포함해 다시 입력해 주세요.`,
+    };
   }
 
   const profiledState = ensureTeamPerformanceProfiles(state);

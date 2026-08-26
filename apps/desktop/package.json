@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "test:allocation": "node -e \"require('fs').rmSync('../../.tmp/luna-policy-tests',{recursive:true,force:true})\" && tsc -p tsconfig.policy-tests.json && node ../../.tmp/luna-policy-tests/teamAllocation.policy-test.js",
+    "test:allocation": "node -e \"require('fs').rmSync('../../.tmp/luna-policy-tests',{recursive:true,force:true})\" && tsc -p tsconfig.policy-tests.json && node ../../.tmp/luna-policy-tests/teamAllocation.policy-test.js && node ../../.tmp/luna-policy-tests/intakeClarification.policy-test.js",
     "preview": "vite preview",
     "tauri": "tauri"
   },

@@ -11,6 +11,8 @@
   "include": [
     "src/projectTeams/types.ts",
     "src/projectTeams/teamAllocation.ts",
-    "src/projectTeams/teamAllocation.policy-test.ts"
+    "src/projectTeams/teamAllocation.policy-test.ts",
+    "src/projectTeams/intakeClarification.ts",
+    "src/projectTeams/intakeClarification.policy-test.ts"
   ]
 }
