@@ -9,7 +9,7 @@ Luna is a lightweight Tauri desktop companion with a React/TypeScript management
 - TypeScript
 - Vite
 
-No extra framework is added for Project Teams. The first orchestration surface uses plain React state plus localStorage so the desktop bundle stays small.
+Luna itself should stay lightweight. Project Teams currently uses plain React state plus localStorage and does not pull in a heavy orchestration framework before the runtime actually needs one. Generated projects, however, may add libraries/frameworks when they materially improve production reliability, security, accessibility, maintainability, or delivery speed.
 
 ## Current tools
 
@@ -23,12 +23,16 @@ Project Teams manages five equal development teams: **장미, 백합, 튤립, �
 
 `/start` currently creates a project request, assigns the first idle team, persists that assignment locally, and prepares that team's PM Agent. The actual Codex execution runtime is intentionally not faked; until a runtime adapter is connected, projects remain queued with the blocker visible in the UI.
 
-All generated projects carry two organization policies:
+Each Agent is modeled as an independent worker with its own role/session state, version, retrospective history, project-scoped permissions, and future branch/worktree. Agents are expected to perform their own repository actions, including commit/push and opening or updating their own PRs. Reviewer and QA run independently rather than being simulated by the PM.
+
+All generated projects carry organization policies for:
 
 - **꽃다발**: shared login/sign-up standard applied whenever authentication is required.
-- **이설 방식**: inspect the real repository first, work on actual files/branches or worktrees, run available verification, use small English commits, pass Reviewer/QA, reroute failures, and write per-Agent retrospectives after completion.
+- **이설 방식**: inspect the real repository first, work on actual files/branches or worktrees, run available verification, use small English commits, open/update the working Agent's own PR, pass Reviewer/QA, reroute failures, and write per-Agent retrospectives after completion.
+- **Production service**: generated projects must target actual service quality rather than mock/demo completion.
+- **Luna apps portal**: user-facing web projects deploy into the existing `/apps/<id>/` collection by default.
 
-See [`PROJECT_TEAMS.md`](./PROJECT_TEAMS.md) for the full workflow and current runtime blocker.
+See [`PROJECT_TEAMS.md`](./PROJECT_TEAMS.md) for the full workflow and [`AGENT_RUNTIME_POLICY.md`](./AGENT_RUNTIME_POLICY.md) for Agent autonomy, permissions, dependency, PR, and release rules.
 
 ## Local run
 
@@ -56,7 +60,8 @@ pnpm tauri build
 ## Production blockers
 
 - Connect a supported Codex runtime adapter for independent Agent execution and lifecycle events.
+- Give the runtime project-scoped GitHub credentials (prefer a Luna GitHub App) so Agents can branch, push, create/update/review PRs, and merge only after repository/quality gates pass.
 - Move long-lived orchestration history from localStorage to durable storage before treating team history as production data.
 - Implement the reusable 꽃다발 authentication package/runtime before generated projects can consume it directly.
-- Add workspace/worktree lifecycle management, bounded retries, pause/resume, and user approval gates around destructive operations.
+- Add workspace/worktree lifecycle management, bounded retries, pause/resume, Agent audit logging, and release publication into the Luna apps portal.
 - Run packaged Tauri verification on Windows before release.
