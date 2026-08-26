@@ -10,6 +10,7 @@ const ROLE_LABELS: Record<Exclude<AgentRole, "pm">, string> = {
   designer: "Designer",
   frontend: "Frontend",
   backend: "Backend",
+  "data-marketing": "Data & Marketing",
   "code-review": "Code Review",
   reviewer: "Reviewer",
   qa: "QA",
