@@ -45,6 +45,13 @@ function syncTeam(state: ProjectTeamsState, projectId: string, debugStatus?: "wo
 }
 
 export function beginFailureRouting(state: ProjectTeamsState, projectId: string, taskId: string) {
+  const target = state.projects
+    .find((project) => project.id === projectId)
+    ?.taskRuns.find((run) => run.taskId === taskId);
+  if (!target || target.status !== "blocked") {
+    return state;
+  }
+
   const nextState: ProjectTeamsState = {
     ...state,
     projects: state.projects.map((project) =>
@@ -210,6 +217,13 @@ export function failFailureRouting(
   taskId: string,
   reason: string,
 ) {
+  const target = state.projects
+    .find((project) => project.id === projectId)
+    ?.taskRuns.find((run) => run.taskId === taskId);
+  if (!target || target.status !== "blocked") {
+    return state;
+  }
+
   const nextState: ProjectTeamsState = {
     ...state,
     projects: state.projects.map((project) =>
