@@ -15,6 +15,8 @@
     "src/projectTeams/intakeClarification.ts",
     "src/projectTeams/intakeClarification.policy-test.ts",
     "src/projectTeams/dataMarketing.ts",
-    "src/projectTeams/dataMarketing.policy-test.ts"
+    "src/projectTeams/dataMarketing.policy-test.ts",
+    "src/projectTeams/seniorAgent.ts",
+    "src/projectTeams/seniorAgent.policy-test.ts"
   ]
 }
