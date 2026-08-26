@@ -50,6 +50,10 @@ assert(
   "running task without repository metadata must be blocked",
 );
 assert(
+  classifyInterruptedTaskRecovery({ ...project, workspacePath: null }, run).action === "block",
+  "running task without workspace metadata must be blocked",
+);
+assert(
   classifyInterruptedTaskRecovery({
     ...project,
     plan: {
