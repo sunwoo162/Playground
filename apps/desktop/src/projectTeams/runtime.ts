@@ -120,6 +120,23 @@ export type AgentTaskRunResult = {
   report: AgentTaskReport;
 };
 
+export type ReconcileAgentTaskInput = {
+  projectId: string;
+  teamId: TeamId;
+  role: string;
+  agentId: string;
+  taskId: string;
+  taskSlug: string;
+  repositoryFullName: string;
+  workspacePath: string;
+};
+
+export type ReconcileAgentTaskResult = {
+  outcome: "completed" | "blocked" | "retry";
+  message: string;
+  recovered: AgentTaskRunResult | null;
+};
+
 export type FailureOwnerCandidate = {
   taskId: string;
   role: string;
@@ -292,6 +309,10 @@ export async function startProjectRuntime(input: StartProjectRuntimeInput) {
 
 export async function dispatchAgentTask(input: AgentTaskRuntimeInput) {
   return invoke<AgentTaskRunResult>("dispatch_agent_task", { input });
+}
+
+export async function reconcileAgentTask(input: ReconcileAgentTaskInput) {
+  return invoke<ReconcileAgentTaskResult>("reconcile_agent_task", { input });
 }
 
 export async function routeAgentFailure(input: RouteAgentFailureInput) {
