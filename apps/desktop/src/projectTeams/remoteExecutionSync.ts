@@ -45,10 +45,11 @@ export function applyRemoteJobResult(
     appliedTaskCount += 1;
   }
 
+  const mergedPullRequestNumbers = job.result.mergedPullRequestNumbers ?? [];
   const project = nextState.projects.find((item) => item.id === job.projectId);
   const shouldApplyIntegration =
     job.result.status === "completed"
-    && job.result.mergedPullRequestNumbers.length > 0
+    && mergedPullRequestNumbers.length > 0
     && project !== undefined
     && project.status !== "retrospective"
     && project.status !== "completed";
@@ -57,7 +58,7 @@ export function applyRemoteJobResult(
     nextState = markProjectIntegrated(
       nextState,
       job.projectId,
-      job.result.mergedPullRequestNumbers,
+      mergedPullRequestNumbers,
     );
   }
 
