@@ -1,12 +1,14 @@
 import { createInitialProjectTeamsState } from "./catalog";
 import { createAgentRuntimeIdentity } from "./permissions";
-import type { ProjectState, ProjectTeamsState, TeamId } from "./types";
+import type { AgentDecision, ProjectState, ProjectTeamsState, TeamId } from "./types";
 
 const STORAGE_KEY = "luna.project-teams.v1";
 
 export type StartProjectResult =
   | { ok: true; state: ProjectTeamsState; project: ProjectState }
   | { ok: false; state: ProjectTeamsState; message: string };
+
+export type RecordDecisionInput = Omit<AgentDecision, "id" | "createdAt">;
 
 function canUseStorage() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -29,9 +31,11 @@ function hydrateState(state: ProjectTeamsState): ProjectTeamsState {
     projects: state.projects.map((project) => ({
       ...project,
       autonomyPolicyId: project.autonomyPolicyId ?? "independent-agent",
+      decisionPolicyId: project.decisionPolicyId ?? "reasoned-agent-decisions",
       qualityPolicyId: project.qualityPolicyId ?? "production-service",
       deploymentPolicyId: project.deploymentPolicyId ?? "luna-apps-portal",
     })),
+    decisions: Array.isArray(state.decisions) ? state.decisions : [],
   };
 }
 
@@ -78,6 +82,28 @@ function createProjectId() {
   return `PROJECT-${time}-${random}`;
 }
 
+function createDecisionId() {
+  const time = Date.now().toString(36).toUpperCase();
+  const random = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `DECISION-${time}-${random}`;
+}
+
+export function recordAgentDecision(state: ProjectTeamsState, input: RecordDecisionInput) {
+  const decision: AgentDecision = {
+    ...input,
+    id: createDecisionId(),
+    createdAt: new Date().toISOString(),
+  };
+
+  const nextState: ProjectTeamsState = {
+    ...state,
+    decisions: [decision, ...state.decisions],
+  };
+
+  saveProjectTeamsState(nextState);
+  return { state: nextState, decision };
+}
+
 export function startProject(state: ProjectTeamsState, request: string): StartProjectResult {
   const normalizedRequest = request.trim();
   if (!normalizedRequest) {
@@ -98,6 +124,7 @@ export function startProject(state: ProjectTeamsState, request: string): StartPr
     authPolicyId: "bouquet",
     executionPolicyId: "iseol-workflow",
     autonomyPolicyId: "independent-agent",
+    decisionPolicyId: "reasoned-agent-decisions",
     qualityPolicyId: "production-service",
     deploymentPolicyId: "luna-apps-portal",
     runtimeMessage: "팀 배정 완료 · 독립 Agent 실행 Runtime 연결 대기",
