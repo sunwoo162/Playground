@@ -1,9 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 
+import { seniorAgentContext } from "./seniorAgent";
 import { loadProjectTeamsState } from "./store";
 import type { ProjectIntakeAnalysis, ProjectIntakeRecord } from "./types";
 
-export const PROJECT_INTAKE_AGENT_VERSION = "1.0.0";
+export const PROJECT_INTAKE_AGENT_VERSION = "1.1.0";
 
 export type AnalyzeProjectIntakeInput = {
   organization: string;
@@ -49,7 +50,7 @@ export async function analyzeProjectIntake(
     organization: input.organization,
     workspaceRoot: input.workspaceRoot,
     intakeId: id,
-    request,
+    request: `${request}\n\n${seniorAgentContext("organization-project-intake")}`,
   });
 
   return {
