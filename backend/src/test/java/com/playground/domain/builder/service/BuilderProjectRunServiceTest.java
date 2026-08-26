@@ -113,6 +113,24 @@ class BuilderProjectRunServiceTest {
     }
 
     @Test
+    void requestRunRejectsQueuedProjectWithoutActiveRun() {
+        BuilderProject project = project(7L, "queued");
+        when(projectRepository.findByIdAndOwnerIdForUpdate(7L, "user-1")).thenReturn(Optional.of(project));
+        when(runRepository.findFirstByProject_IdAndOwnerIdAndStatusInOrderByCreatedAtDesc(
+                eq(7L), eq("user-1"), anyCollection()))
+                .thenReturn(Optional.empty());
+
+        IllegalStateException error = assertThrows(
+                IllegalStateException.class,
+                () -> service.requestRun("user-1", 7L)
+        );
+
+        assertTrue(error.getMessage().contains("일관되지"));
+        verify(runRepository, never()).save(any());
+        verify(projectRepository, never()).save(any(BuilderProject.class));
+    }
+
+    @Test
     void listRunsIsScopedToOwnedProject() {
         BuilderProject project = project(7L, "queued");
         when(projectRepository.findByIdAndOwnerId(7L, "user-1")).thenReturn(Optional.of(project));
