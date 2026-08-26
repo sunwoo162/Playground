@@ -1,4 +1,5 @@
 mod agent_runtime;
+mod failure_router_runtime;
 mod integration_runtime;
 mod project_runtime;
 mod retrospective_runtime;
@@ -13,6 +14,7 @@ pub fn run() {
             project_runtime::bootstrap_project_repository,
             project_runtime::start_project_runtime,
             agent_runtime::dispatch_agent_task,
+            failure_router_runtime::route_agent_failure,
             integration_runtime::merge_project_pull_requests,
             retrospective_runtime::run_project_retrospectives
         ])
