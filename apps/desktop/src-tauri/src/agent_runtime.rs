@@ -412,69 +412,28 @@ fn agent_prompt(input: &AgentTaskRuntimeInput, branch: Option<&str>) -> String {
     } else if is_review_role(&input.role) {
         "You are an independent verification/review worker. Do not modify product source files or create a feature branch. Inspect the actual repository and dependency PRs directly. Run the checks appropriate to your role. When reviewing a PR, leave a concise top-level PR comment prefixed with your Luna Agent ID and an evidence-based verdict. Do not pretend GitHub native self-approval is an independent approval when all agents share one GitHub credential.".to_string()
     } else {
-        "You are an independent analysis worker. Inspect available repository and dependency evidence, produce a concrete task result, and do not invent implementation or verification claims.".to_string()
+        "You are an independent analysis worker. Inspect available repository and dependency evidence, produce a concrete task result, and do not modify product source files unless the task contract explicitly requires repository changes.".to_string()
     };
 
     format!(
-        r#"You are Luna Agent `{agent_id}`, an independent `{role}` Agent in team {team_name} ({team_id}).
-
-Project: {project_id}
-Repository: {repository}
-Original user request:
-{user_request}
-
-Product summary:
-{product_summary}
-
-Architecture summary:
-{architecture_summary}
-
-Task {task_id}: {title}
-{task_summary}
-
-Acceptance criteria:
-{criteria}
-
-Dependency artifacts:
-{dependencies}
-
-Independent-agent contract:
-- Do not blindly trust PM, reviewers, prior agents, or dependency summaries. Verify material claims against the actual repository, PR diff, commands, tests, or product evidence available to you.
-- Every material action must have a defensible reason. Your final rationale must be concise and auditable; do not expose private chain-of-thought.
-- If another Agent's conclusion is wrong, disagree with evidence instead of copying it.
-- This must target a real production service, not a demo. Do not mark mock-only or unverified behavior complete.
-- You may add libraries/frameworks when there is a concrete reliability, security, accessibility, maintainability, performance, or delivery reason. Record that reason.
-- Login/sign-up work must follow the shared 꽃다발 authentication standard.
-- Data & Marketing work must distinguish observed product facts, actual measured data, sourced external evidence, inference, and experiment hypotheses. Never invent market size, user counts, CTR, conversion, CAC, LTV, growth, or competitor facts.
-- Do not reveal secrets or commit credentials.
-- If a required external credential/provider/decision is unavailable, return `blocked` with exact evidence instead of faking completion.
-- Do not request interactive user input from Codex tools during this turn. If a real product-owner decision is required, return `blocked` and explain it.
-
-Execution mode:
-{mode}
-
-Final-output contract:
-- Return only the structured result required by the supplied output schema.
-- `verification` must distinguish passed, failed, blocked, and not-run checks truthfully.
-- For repository-changing work, report commit/PR identifiers only after they actually exist. Luna will independently verify the branch, clean worktree, commit SHA, remote branch SHA, and PR after your turn.
-- For review/QA/user-test work, include every dependency PR you actually examined in `reviewedPullRequests`.
-"#,
+        "You are Luna Agent `{agent_id}` ({team_name} / {role}).\n\n{mode}\n\nTask: {task_id} — {title}\n{summary}\n\nAcceptance criteria:\n{criteria}\n\nOriginal Product Owner request:\n{user_request}\n\nProduct summary:\n{product_summary}\n\nArchitecture summary:\n{architecture_summary}\n\nDependency evidence:\n{dependencies}\n\nRules:\n- Inspect real repository evidence before material decisions.\n- Do not blindly trust PM, Reviewer, Code Review, QA, or another Agent; independently verify relevant claims.\n- Every material action must have a defensible reason based on requirements, repository state, tests, runtime evidence, or explicit Product Owner direction.\n- Do not invent test results, metrics, user research, credentials, deployments, or external-service state.\n- If verification cannot be run, record the exact blocker instead of calling it passed.\n- Never expose secrets in logs, commits, PRs, reports, or documentation.\n- Return only the structured JSON report required by Luna.\n",
         agent_id = input.agent_id,
-        role = input.role,
         team_name = input.team_name,
-        team_id = input.team_id,
-        project_id = input.project_id,
-        repository = input.repository_full_name,
+        role = input.role,
+        task_id = input.task_id,
+        title = input.title,
+        summary = input.summary,
         user_request = input.user_request,
         product_summary = input.product_summary,
         architecture_summary = input.architecture_summary,
-        task_id = input.task_id,
-        title = input.title,
-        task_summary = input.summary,
-        criteria = criteria,
-        dependencies = dependencies,
-        mode = mode,
     )
+}
+
+fn append_event(log: &mut File, line: &str) -> Result<(), String> {
+    log.write_all(line.as_bytes())
+        .and_then(|_| log.write_all(b"\n"))
+        .and_then(|_| log.flush())
+        .map_err(|error| format!("Agent event log 기록 실패: {error}"))
 }
 
 fn write_json_line(stdin: &mut ChildStdin, value: &Value) -> Result<(), String> {
@@ -482,19 +441,14 @@ fn write_json_line(stdin: &mut ChildStdin, value: &Value) -> Result<(), String> 
         .map_err(|error| format!("Codex app-server 요청 직렬화 실패: {error}"))?;
     stdin
         .write_all(b"\n")
-        .map_err(|error| format!("Codex app-server 요청 전송 실패: {error}"))?;
-    stdin
-        .flush()
-        .map_err(|error| format!("Codex app-server 요청 flush 실패: {error}"))
+        .and_then(|_| stdin.flush())
+        .map_err(|error| format!("Codex app-server 요청 전송 실패: {error}"))
 }
 
-fn append_event(log: &mut File, line: &str) -> Result<(), String> {
-    log.write_all(line.as_bytes())
-        .and_then(|_| log.write_all(b"\n"))
-        .map_err(|error| format!("Codex app-server event log 저장 실패: {error}"))
-}
-
-fn read_json_line(reader: &mut BufReader<impl std::io::Read>, log: &mut File) -> Result<Value, String> {
+fn read_json_line(
+    reader: &mut BufReader<impl std::io::Read>,
+    log: &mut File,
+) -> Result<Value, String> {
     let mut line = String::new();
     let read = reader
         .read_line(&mut line)
@@ -874,7 +828,6 @@ fn dispatch_agent_task_blocking(input: AgentTaskRuntimeInput) -> Result<AgentTas
     })
 }
 
-#[tauri::command]
 pub async fn dispatch_agent_task(input: AgentTaskRuntimeInput) -> Result<AgentTaskRunResult, String> {
     tauri::async_runtime::spawn_blocking(move || dispatch_agent_task_blocking(input))
         .await

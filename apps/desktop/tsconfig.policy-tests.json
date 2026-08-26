@@ -28,6 +28,8 @@
     "src/projectTeams/worktreeLifecyclePolicy.ts",
     "src/projectTeams/worktreeLifecycle.policy-test.ts",
     "src/projectTeams/bouquetAuth.ts",
-    "src/projectTeams/bouquetAuth.policy-test.ts"
+    "src/projectTeams/bouquetAuth.policy-test.ts",
+    "src/projectTeams/sessionReconciliationPolicy.ts",
+    "src/projectTeams/sessionReconciliation.policy-test.ts"
   ]
 }
