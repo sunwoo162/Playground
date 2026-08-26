@@ -83,7 +83,8 @@
   margin-top: 10px;
 }
 
-.project-runtime-actions button {
+.project-runtime-actions button,
+.project-runtime-mode button {
   height: 32px;
   padding: 0 8px;
   border: 1px solid var(--color-border-strong);
@@ -96,7 +97,8 @@
   cursor: pointer;
 }
 
-.project-runtime-actions button:hover:not(:disabled) {
+.project-runtime-actions button:hover:not(:disabled),
+.project-runtime-mode button:hover {
   background: var(--color-surface-hover);
   color: var(--color-text);
 }
@@ -140,4 +142,21 @@
 
 .project-runtime-note {
   margin-top: 9px !important;
+}
+
+.project-remote-runtime-section {
+  padding-top: 16px !important;
+}
+
+.project-runtime-mode {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.project-runtime-mode button.active {
+  border-color: rgba(169, 199, 255, 0.38);
+  background: rgba(169, 199, 255, 0.1);
+  color: var(--color-luna-soft);
 }
