@@ -1,7 +1,11 @@
-use luna_lib::agent_runtime::{
-    dispatch_agent_task, AgentTaskRunResult, AgentTaskRuntimeInput, DependencyArtifact,
+use luna_lib::{
+    agent_runtime::{
+        dispatch_agent_task, AgentTaskRunResult, AgentTaskRuntimeInput, DependencyArtifact,
+    },
+    project_runtime::bootstrap_project_repository,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::{
     collections::HashSet,
     env,
@@ -23,6 +27,8 @@ struct WorkerEnvelope {
 struct WorkerPayload {
     protocol_version: u32,
     kind: String,
+    organization: String,
+    repository_name: String,
     tasks: Vec<WorkerTask>,
 }
 
@@ -42,6 +48,8 @@ struct WorkerOutput {
     project_id: String,
     status: String,
     message: String,
+    repository_full_name: String,
+    workspace_path: String,
     blocked_task_id: Option<String>,
     task_results: Vec<AgentTaskRunResult>,
 }
@@ -87,6 +95,11 @@ fn validate_envelope(envelope: &WorkerEnvelope) -> Result<(), String> {
     }
     if envelope.job_id.trim().is_empty() || envelope.project_id.trim().is_empty() {
         return Err("jobId and projectId are required".to_string());
+    }
+    if envelope.payload.organization.trim().is_empty()
+        || envelope.payload.repository_name.trim().is_empty()
+    {
+        return Err("organization and repositoryName are required".to_string());
     }
     if envelope.payload.tasks.is_empty() {
         return Err("project-execution requires at least one Agent task".to_string());
@@ -154,10 +167,53 @@ fn write_output(path: &Path, output: &WorkerOutput) -> Result<(), String> {
         .map_err(|error| format!("worker output commit failed: {error}"))
 }
 
+fn bootstrap_remote_workspace(
+    organization: &str,
+    repository_name: &str,
+) -> Result<(String, String), String> {
+    let workspace_root = env::var("LUNA_RUNNER_WORKSPACE_ROOT")
+        .map_err(|_| "LUNA_RUNNER_WORKSPACE_ROOT is required for remote execution".to_string())?;
+    if workspace_root.trim().is_empty() {
+        return Err("LUNA_RUNNER_WORKSPACE_ROOT cannot be empty".to_string());
+    }
+
+    let bootstrap = bootstrap_project_repository(
+        organization.to_string(),
+        repository_name.to_string(),
+        workspace_root,
+    )?;
+    let value = serde_json::to_value(bootstrap)
+        .map_err(|error| format!("repository bootstrap serialization failed: {error}"))?;
+    let repository_full_name = value
+        .get("repository")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "repository bootstrap result is missing repository".to_string())?
+        .to_string();
+    let workspace_path = value
+        .get("workspacePath")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "repository bootstrap result is missing workspacePath".to_string())?
+        .to_string();
+
+    Ok((repository_full_name, workspace_path))
+}
+
 fn run_project(mut envelope: WorkerEnvelope) -> Result<WorkerOutput, String> {
     validate_envelope(&envelope)?;
 
+    let organization = envelope.payload.organization.trim().to_string();
+    let repository_name = envelope.payload.repository_name.trim().to_string();
+    let (repository_full_name, workspace_path) =
+        bootstrap_remote_workspace(&organization, &repository_name)?;
+
     let mut pending = std::mem::take(&mut envelope.payload.tasks);
+    for task in &mut pending {
+        task.runtime_input.organization = organization.clone();
+        task.runtime_input.repository_full_name = repository_full_name.clone();
+        task.runtime_input.workspace_path = workspace_path.clone();
+        task.runtime_input.dependencies = Vec::new();
+    }
+
     let mut completed: Vec<AgentTaskRunResult> = Vec::new();
 
     while !pending.is_empty() {
@@ -205,6 +261,8 @@ fn run_project(mut envelope: WorkerEnvelope) -> Result<WorkerOutput, String> {
                 message: format!(
                     "Agent task {task_id} reported a blocker; remaining tasks were not started"
                 ),
+                repository_full_name,
+                workspace_path,
                 blocked_task_id: Some(task_id),
                 task_results: completed,
             });
@@ -217,6 +275,8 @@ fn run_project(mut envelope: WorkerEnvelope) -> Result<WorkerOutput, String> {
         project_id: envelope.project_id,
         status: "completed".to_string(),
         message: "All dependency-ready Agent tasks completed on the remote worker".to_string(),
+        repository_full_name,
+        workspace_path,
         blocked_task_id: None,
         task_results: completed,
     })
