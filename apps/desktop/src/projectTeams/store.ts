@@ -13,19 +13,36 @@ function canUseStorage() {
 }
 
 function hydrateState(state: ProjectTeamsState): ProjectTeamsState {
+  const initialState = createInitialProjectTeamsState();
+
   return {
     ...state,
-    teams: state.teams.map((team) => ({
-      ...team,
-      agents: team.agents.map((agent) => {
-        const identity = createAgentRuntimeIdentity(agent.id, agent.role);
-        return {
-          ...agent,
-          autonomy: identity.autonomy,
-          permissions: identity.permissions,
-        };
-      }),
-    })),
+    teams: initialState.teams.map((templateTeam) => {
+      const storedTeam = state.teams.find((team) => team.id === templateTeam.id);
+      if (!storedTeam) {
+        return templateTeam;
+      }
+
+      const storedAgents = new Map(storedTeam.agents.map((agent) => [agent.role, agent]));
+
+      return {
+        ...templateTeam,
+        ...storedTeam,
+        agents: templateTeam.agents.map((templateAgent) => {
+          const storedAgent = storedAgents.get(templateAgent.role) ?? templateAgent;
+          const identity = createAgentRuntimeIdentity(templateAgent.id, templateAgent.role);
+
+          return {
+            ...templateAgent,
+            ...storedAgent,
+            id: templateAgent.id,
+            role: templateAgent.role,
+            autonomy: identity.autonomy,
+            permissions: identity.permissions,
+          };
+        }),
+      };
+    }),
     projects: state.projects.map((project) => ({
       ...project,
       autonomyPolicyId: project.autonomyPolicyId ?? "independent-agent",
