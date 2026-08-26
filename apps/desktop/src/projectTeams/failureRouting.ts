@@ -1,5 +1,6 @@
 import { taskTransitivelyDependsOn } from "./planTopology";
 import { routeAgentFailure } from "./runtime";
+import { seniorAgentContext } from "./seniorAgent";
 import type { FailureRouteRecord, ProjectState, ProjectTeamsState } from "./types";
 
 const MAX_ROUTE_ATTEMPTS = 3;
@@ -105,7 +106,7 @@ export async function diagnoseBlockedTask(
     workspacePath: project.workspacePath,
     failedTaskId: task.id,
     failedRole: run.role,
-    failureReason,
+    failureReason: `${failureReason}\n\n${seniorAgentContext("debug-router")}`,
     blockers: run.blockers,
     verification: run.verification,
     candidateOwners: owners,
