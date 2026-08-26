@@ -114,13 +114,16 @@ export function RemoteExecutionController() {
         if (!synced) continue;
         state = synced.state;
 
-        if (synced.appliedTaskCount > 0 || synced.integrationApplied) {
+        if (synced.appliedTaskCount > 0 || synced.integrationApplied || synced.retrospectiveApplied) {
           const mergedPullRequestNumbers = synced.job.result?.mergedPullRequestNumbers ?? [];
           const integrationLabel = synced.integrationApplied
             ? ` · develop 통합 ${mergedPullRequestNumbers.map((number) => `#${number}`).join(", ")}`
             : "";
+          const retrospectiveLabel = synced.retrospectiveApplied
+            ? " · Agent 회고/Team Evolution 반영 완료"
+            : "";
           setMessage(
-            `${project.plan?.projectName ?? project.id} · 원격 Agent 결과 ${synced.appliedTaskCount}개 반영${integrationLabel}`,
+            `${project.plan?.projectName ?? project.id} · 원격 Agent 결과 ${synced.appliedTaskCount}개 반영${integrationLabel}${retrospectiveLabel}`,
           );
           window.setTimeout(() => window.location.reload(), 80);
           return;
@@ -137,7 +140,9 @@ export function RemoteExecutionController() {
           setMessage(
             remoteResult?.status === "blocked"
               ? `${project.plan?.projectName ?? project.id} · Remote Runtime 차단 · ${remoteResult.message}`
-              : `${project.plan?.projectName ?? project.id} · 원격 Agent 실행/PR 통합 완료 · Luna 상태 동기화 완료`,
+              : remoteResult?.retrospective
+                ? `${project.plan?.projectName ?? project.id} · 원격 Agent/PR/회고/Team Evolution 완료 · Luna 상태 동기화 완료`
+                : `${project.plan?.projectName ?? project.id} · 원격 Agent/PR 통합 완료 · 회고 결과 없음`,
           );
         } else {
           setMessage(
