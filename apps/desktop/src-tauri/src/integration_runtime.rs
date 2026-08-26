@@ -155,7 +155,6 @@ fn merge_pull_request(repository: &str, number: u64) -> Result<Option<String>, S
             "--repo".to_string(),
             repository.to_string(),
             "--merge".to_string(),
-            "--delete-branch=false".to_string(),
         ],
     )?;
 
@@ -198,15 +197,10 @@ pub fn merge_project_pull_requests(
     numbers.sort_unstable();
     numbers.dedup();
 
-    let mut inspected = Vec::with_capacity(numbers.len());
-    for number in &numbers {
-        let pr = inspect_pull_request(&input.repository_full_name, *number)?;
-        let (url, head_branch) = verify_pull_request_gate(&pr, *number)?;
-        inspected.push((*number, url, head_branch));
-    }
-
-    let mut merged_pull_requests = Vec::with_capacity(inspected.len());
-    for (number, url, head_branch) in inspected {
+    let mut merged_pull_requests = Vec::with_capacity(numbers.len());
+    for number in numbers {
+        let pr = inspect_pull_request(&input.repository_full_name, number)?;
+        let (url, head_branch) = verify_pull_request_gate(&pr, number)?;
         let merge_commit_sha = merge_pull_request(&input.repository_full_name, number)?;
         merged_pull_requests.push(MergedPullRequest {
             number,
