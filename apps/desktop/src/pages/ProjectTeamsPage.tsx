@@ -12,7 +12,14 @@ import { applyFailureRoute, beginFailureRouting, failFailureRouting } from "../p
 import { integrateProjectPullRequests } from "../projectTeams/integration";
 import { markProjectIntegrated } from "../projectTeams/integrationState";
 import { loadOrganizationRuntimeSettings } from "../projectTeams/organization";
-import { runProjectFailureReplan } from "../projectTeams/replanning";
+import {
+  getProductOwnerDecision,
+  recordProductOwnerRecoveryDecision,
+} from "../projectTeams/productOwnerDecision";
+import {
+  getPmRecoveryTrigger,
+  runProjectFailureReplan,
+} from "../projectTeams/replanning";
 import {
   applyProjectFailureReplan,
   beginProjectFailureReplan,
@@ -80,6 +87,7 @@ export function ProjectTeamsPage() {
   const [selectedTeamId, setSelectedTeamId] = useState<TeamId>(state.teams[0]?.id ?? "rose");
   const [command, setCommand] = useState("/start");
   const [awaitingRequirement, setAwaitingRequirement] = useState(false);
+  const [awaitingDecision, setAwaitingDecision] = useState(false);
   const [launchingProject, setLaunchingProject] = useState(false);
   const [dispatchingAgents, setDispatchingAgents] = useState(false);
   const [runningReplan, setRunningReplan] = useState(false);
@@ -98,10 +106,18 @@ export function ProjectTeamsPage() {
   }, [selectedTeam, state.projects]);
 
   const latestFailureRoute = activeProject?.failureRoutes?.[0] ?? null;
+  const latestProductOwnerDecision = activeProject && latestFailureRoute?.route === "needs-human"
+    ? getProductOwnerDecision(state, activeProject.id, latestFailureRoute.id)
+    : null;
+  const pmRecoveryTrigger = activeProject
+    ? getPmRecoveryTrigger(state, activeProject)
+    : null;
   const blockedActionLabel = latestFailureRoute?.route === "escalate-pm"
     ? "PM 복구 재계획"
     : latestFailureRoute?.route === "needs-human"
-      ? "Product Owner 결정 필요"
+      ? latestProductOwnerDecision
+        ? "결정 기반 PM 복구 재계획"
+        : "Product Owner 결정: /decide"
       : "Debug Router로 재분석";
 
   const runRetrospectiveStage = async (baseState: ProjectTeamsState, projectId: string) => {
@@ -134,7 +150,7 @@ export function ProjectTeamsPage() {
     let nextState = beginProjectFailureReplan(baseState, projectId);
     setState(nextState);
     setRunningReplan(true);
-    setMessage("Debug Router escalation · PM Codex가 기존 repository와 Git 작업을 보존한 복구 재계획을 생성 중");
+    setMessage("복구 trigger 확인 완료 · PM Codex가 기존 repository와 Git 작업을 보존한 재계획을 생성 중");
 
     try {
       const outcome = await runProjectFailureReplan(nextState, projectId);
@@ -168,7 +184,11 @@ export function ProjectTeamsPage() {
       const route = toFailureRouteRecord(project, result);
       nextState = applyFailureRoute(nextState, projectId, route);
       setState(nextState);
-      setMessage(nextState.projects.find((item) => item.id === projectId)?.runtimeMessage ?? route.summary);
+      setMessage(
+        route.route === "needs-human"
+          ? `Product Owner 결정 필요 · ${route.recommendedAction} · /decide 로 결정을 입력하세요.`
+          : nextState.projects.find((item) => item.id === projectId)?.runtimeMessage ?? route.summary,
+      );
 
       if (route.route === "escalate-pm") {
         nextState = await runFailureReplanStage(nextState, projectId);
@@ -371,8 +391,38 @@ export function ProjectTeamsPage() {
 
     setSelectedTeamId(result.project.teamId);
     setAwaitingRequirement(false);
+    setAwaitingDecision(false);
     setCommand("/start");
     await launchProjectRuntime(result.state, result.project.id);
+  };
+
+  const submitProductOwnerDecision = async (decisionText: string) => {
+    if (!activeProject || latestFailureRoute?.route !== "needs-human") {
+      setMessage("현재 Product Owner 결정을 기다리는 프로젝트가 없습니다.");
+      return;
+    }
+
+    try {
+      const result = recordProductOwnerRecoveryDecision(
+        state,
+        activeProject.id,
+        latestFailureRoute.id,
+        decisionText,
+      );
+      let nextState = result.state;
+      setState(nextState);
+      setAwaitingDecision(false);
+      setCommand("/start");
+      setMessage(`Product Owner 결정 기록 완료 · ${result.decision.rationaleSummary} · PM 복구 재계획 시작`);
+
+      nextState = await runFailureReplanStage(nextState, activeProject.id);
+      const project = nextState.projects.find((item) => item.id === activeProject.id);
+      if (project && project.status !== "blocked") {
+        await runAgentQueue(nextState, activeProject.id);
+      }
+    } catch (error) {
+      setMessage(`Product Owner 결정 처리 실패: ${errorMessage(error)}`);
+    }
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -381,6 +431,11 @@ export function ProjectTeamsPage() {
 
     const value = command.trim();
 
+    if (awaitingDecision) {
+      await submitProductOwnerDecision(value);
+      return;
+    }
+
     if (awaitingRequirement) {
       await submitRequirement(value);
       return;
@@ -388,6 +443,7 @@ export function ProjectTeamsPage() {
 
     if (value === "/start") {
       setAwaitingRequirement(true);
+      setAwaitingDecision(false);
       setCommand("");
       setMessage("프로젝트 요구사항을 입력해 주세요.");
       return;
@@ -398,14 +454,30 @@ export function ProjectTeamsPage() {
       return;
     }
 
-    setMessage("현재는 /start 명령만 준비되어 있습니다.");
+    if (value === "/decide") {
+      if (!activeProject || latestFailureRoute?.route !== "needs-human") {
+        setMessage("현재 Product Owner 결정을 기다리는 프로젝트가 없습니다.");
+        return;
+      }
+      setAwaitingDecision(true);
+      setAwaitingRequirement(false);
+      setCommand("");
+      setMessage(`Product Owner 결정을 입력해 주세요 · 요청: ${latestFailureRoute.recommendedAction}`);
+      return;
+    }
+
+    if (value.startsWith("/decide ")) {
+      await submitProductOwnerDecision(value.slice(8));
+      return;
+    }
+
+    setMessage("현재는 /start, /decide 명령을 사용할 수 있습니다.");
   };
 
   const handleRetryPmRuntime = async () => {
     if (!activeProject || runtimeBusy) return;
     if (activeProject.plan) {
-      const route = activeProject.failureRoutes?.[0];
-      if (route?.route !== "escalate-pm") return;
+      if (!getPmRecoveryTrigger(state, activeProject)) return;
       const nextState = await runFailureReplanStage(state, activeProject.id);
       const project = nextState.projects.find((item) => item.id === activeProject.id);
       if (project && project.status !== "blocked") {
@@ -425,11 +497,11 @@ export function ProjectTeamsPage() {
     if (!activeProject || runtimeBusy || !activeProject.plan) return;
 
     const route = activeProject.failureRoutes?.[0];
-    if (route?.route === "needs-human") {
-      setMessage(`Product Owner 결정 필요 · ${route.recommendedAction}`);
+    if (route?.route === "needs-human" && !latestProductOwnerDecision) {
+      setMessage(`Product Owner 결정 필요 · ${route.recommendedAction} · /decide 로 결정을 입력하세요.`);
       return;
     }
-    if (route?.route === "escalate-pm") {
+    if (route?.route === "escalate-pm" || (route?.route === "needs-human" && latestProductOwnerDecision)) {
       const nextState = await runFailureReplanStage(state, activeProject.id);
       const project = nextState.projects.find((item) => item.id === activeProject.id);
       if (project && project.status !== "blocked") {
@@ -467,6 +539,7 @@ export function ProjectTeamsPage() {
     setState(nextState);
     setSelectedTeamId(nextState.teams[0].id);
     setAwaitingRequirement(false);
+    setAwaitingDecision(false);
     setCommand("/start");
     setMessage("로컬 팀 상태를 초기화했습니다.");
   };
@@ -501,13 +574,25 @@ export function ProjectTeamsPage() {
       <form className="project-command" onSubmit={handleSubmit}>
         <div className="project-command-label">
           <span>Command</span>
-          <small>{awaitingRequirement ? "프로젝트 요구사항 입력" : "새 프로젝트 시작"}</small>
+          <small>
+            {awaitingDecision
+              ? "Product Owner 결정 입력"
+              : awaitingRequirement
+                ? "프로젝트 요구사항 입력"
+                : "새 프로젝트 시작 / 복구 결정"}
+          </small>
         </div>
         <input
           aria-label="프로젝트 팀 명령"
           value={command}
           onChange={(event) => setCommand(event.target.value)}
-          placeholder={awaitingRequirement ? "무엇을 만들지 입력하세요" : "/start"}
+          placeholder={
+            awaitingDecision
+              ? "결정 내용을 입력하세요"
+              : awaitingRequirement
+                ? "무엇을 만들지 입력하세요"
+                : "/start 또는 /decide"
+          }
           disabled={runtimeBusy}
         />
         <button type="submit" disabled={runtimeBusy}>
@@ -567,7 +652,11 @@ export function ProjectTeamsPage() {
                     </small>
                   )}
                   {activeProject.status === "blocked" && latestFailureRoute?.route === "needs-human" && (
-                    <small>Product Owner 결정 필요: {latestFailureRoute.recommendedAction}</small>
+                    <small>
+                      {latestProductOwnerDecision
+                        ? `Product Owner 결정 기록: ${latestProductOwnerDecision.rationaleSummary}`
+                        : `Product Owner 결정 필요: ${latestFailureRoute.recommendedAction} · /decide`}
+                    </small>
                   )}
                   {activeProject.status === "blocked" && !activeProject.plan && (
                     <button
@@ -581,14 +670,16 @@ export function ProjectTeamsPage() {
                   )}
                   {activeProject.status === "blocked"
                     && activeProject.plan
-                    && latestFailureRoute?.route === "escalate-pm" && (
+                    && pmRecoveryTrigger && (
                     <button
                       className="project-reset-button project-runtime-retry-button"
                       type="button"
                       onClick={handleRetryPmRuntime}
                       disabled={runtimeBusy}
                     >
-                      PM 복구 재계획 다시 실행
+                      {latestFailureRoute?.route === "needs-human"
+                        ? "Product Owner 결정 기반 PM 재계획"
+                        : "PM 복구 재계획 다시 실행"}
                     </button>
                   )}
                   {activeProject.status === "retrospective" && (
@@ -609,7 +700,7 @@ export function ProjectTeamsPage() {
                   onContinue={handleContinueAgents}
                   onRetryBlocked={handleRetryBlockedAgents}
                   blockedActionLabel={blockedActionLabel}
-                  blockedActionDisabled={latestFailureRoute?.route === "needs-human"}
+                  blockedActionDisabled={latestFailureRoute?.route === "needs-human" && !latestProductOwnerDecision}
                 />
               </>
             ) : (
