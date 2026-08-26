@@ -30,6 +30,8 @@
     "src/projectTeams/bouquetAuth.ts",
     "src/projectTeams/bouquetAuth.policy-test.ts",
     "src/projectTeams/sessionReconciliationPolicy.ts",
-    "src/projectTeams/sessionReconciliation.policy-test.ts"
+    "src/projectTeams/sessionReconciliation.policy-test.ts",
+    "src/projectTeams/orchestrationCore.ts",
+    "src/projectTeams/orchestrationCore.policy-test.ts"
   ]
 }
