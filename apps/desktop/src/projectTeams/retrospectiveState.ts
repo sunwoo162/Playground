@@ -3,6 +3,7 @@ import {
   finalizeActiveEvolutionExperiment,
 } from "./evolutionExperiments";
 import { saveProjectTeamsState } from "./store";
+import { refreshTeamPerformanceProfiles } from "./teamPerformance";
 import type { RunProjectRetrospectivesResult } from "./retrospective";
 import type { ProjectTeamsState } from "./types";
 
@@ -52,6 +53,7 @@ export function completeProjectRetrospective(
 
   nextState = finalizeActiveEvolutionExperiment(nextState, result.projectId);
   nextState = createEvolutionExperimentCandidate(nextState, result);
+  nextState = refreshTeamPerformanceProfiles(nextState, completedAt);
 
   const stagedExperiment = (nextState.evolutionExperiments ?? []).find(
     (experiment) => experiment.sourceProjectId === result.projectId && experiment.status === "proposed",
