@@ -4,7 +4,7 @@
 
 Luna Project Teams is a lightweight orchestration surface inside Luna's existing Tools area. The user starts a project with `/start`, Luna assigns one idle team, and the team's independent Agents later execute the project through a Codex-based runtime.
 
-The five equal teams are **장미, 백합, 튤립, 해바라기, 벚꽃**. Every team starts with the same playbook and 12 independent Agent states. Their versions and retrospectives are stored separately so teams can diverge based on actual project results rather than preassigned personalities.
+The five equal teams are **장미, 백합, 튤립, 해바라기, 벚꽃**. Every team starts with the same playbook and 13 independent Agent states. Their versions and retrospectives are stored separately so teams can diverge based on actual project results rather than preassigned personalities.
 
 Generated projects are expected to become real-use services or production candidates. Luna itself stays lightweight, but teams may add libraries, frameworks, databases, testing tools, or other proven dependencies when there is a concrete product reason.
 
@@ -18,6 +18,7 @@ Each team owns independent instances of:
 - Designer Agent
 - Frontend Agent
 - Backend Agent
+- Code Review Agent
 - Reviewer Agent
 - QA Agent
 - Debug / Problem Router Agent
@@ -33,9 +34,19 @@ Every Agent is treated as a separate worker rather than a role switch in one sha
 
 Within its assigned project, an Agent can directly use repository and collaboration capabilities exposed by the runtime, including repository read/write, branch/worktree creation, command execution, dependency installation, build/test, browser/Figma access, commit, push, issue creation, PR creation/update/review, gated merge, and deployment preparation/publication.
 
-The PM coordinates work but does not impersonate the worker. For example, a Frontend Agent that implements a task pushes its own branch and opens or updates its own PR. Reviewer and QA run as separate Agent sessions and can independently block that change.
+The PM coordinates work but does not impersonate the worker. For example, a Frontend Agent that implements a task pushes its own branch and opens or updates its own PR. Code Review, Reviewer, and QA run as separate Agent sessions and can independently block that change.
 
 The runtime may authenticate to GitHub through one Luna GitHub App or runtime credential, but every action must retain the logical Agent ID in audit metadata. Separate public GitHub bot identities can be introduced later if distinct visible PR authors are required.
+
+## Independent judgment and decision reasons
+
+No Agent is required to blindly trust another Agent just because that Agent is the PM, Code Reviewer, Reviewer, QA, Designer, or another specialist. Handoffs and review findings are inputs that must be checked against the actual requirement, repository, design evidence, test output, and product goal.
+
+Every material action must have a defensible reason. The runtime stores a concise decision record containing the action, rationale summary, evidence, alternatives considered, and which Agent inputs influenced the decision. This is an auditable explanation, not a dump of private chain-of-thought.
+
+A developer may disagree with a Code Review or Reviewer finding when it has evidence. It must not silently ignore the finding: it responds with the reason, evidence, or a better alternative and requests another review. Likewise, reviewers must reconsider when new evidence is supplied instead of defending a previous opinion by default.
+
+Objective gates are different from opinions. A reproducible build/test failure, repository protection rule, security policy, or explicit user product decision cannot be bypassed merely because another Agent prefers a different result. Unresolved disagreements are compared by PM using evidence; high-risk or product-direction conflicts are escalated to the user.
 
 ## Execution workflow
 
@@ -45,13 +56,16 @@ The runtime may authenticate to GitHub through one Luna GitHub App or runtime cr
 4. Design work must be grounded in the product's Figma/design system and real product patterns. Generic AI-looking UI, emoji icons, decorative gradients, excessive cards/radius/glow, and unsupported visual decisions are rejected.
 5. Frontend and Backend work on real repository branches/worktrees.
 6. Every development task follows the same evidence-based workflow used for the Iseol bot: inspect the repository first, modify real files, run available verification, create small English commits, push the working branch, and open/update the Agent's own PR.
-7. Reviewer and QA independently validate the change. A worker saying that a task is finished is never sufficient evidence by itself.
-8. Failures go to Debug / Problem Router, which sends the issue back to the Agent best able to fix it. Automatic retries are bounded; repeated failures escalate to PM/Reviewer and then to the user when a real product decision is needed.
-9. User Agent A and B validate first-time and experienced-user flows.
-10. Process Evaluator scores the result and the way the team worked.
-11. Every participating Agent writes an independent retrospective.
-12. Team Evolution Agent turns repeated evidence into version-change candidates for Agents and the team playbook.
-13. After release/archival work is complete, the team returns to idle.
+7. Code Review Agent independently reviews PR-level code quality, likely bugs, security, performance, tests, dependency choices, and maintainability.
+8. Reviewer Agent independently checks requirement coverage, architecture, product behavior, and the broader change.
+9. The implementing Agent evaluates review findings and either applies them with a reason or responds with evidence and a justified alternative. Findings are never accepted or rejected only because of the reviewer's authority.
+10. QA independently validates build, tests, and actual behavior. A worker saying that a task is finished is never sufficient evidence by itself.
+11. Failures go to Debug / Problem Router, which sends the issue back to the Agent best able to fix it. Automatic retries are bounded; repeated failures escalate to PM and then to the user when a real product decision is needed.
+12. User Agent A and B validate first-time and experienced-user flows.
+13. Process Evaluator scores the result and the way the team worked.
+14. Every participating Agent writes an independent retrospective.
+15. Team Evolution Agent turns repeated evidence into version-change candidates for Agents and the team playbook.
+16. After release/archival work is complete, the team returns to idle.
 
 ## Production-service gate
 
@@ -95,18 +109,20 @@ Release should record at least the deployed URL/path, project version, commit SH
 Implemented locally inside the existing Tauri/React Luna app with minimal runtime weight:
 
 - Project Teams card in Tools
-- Five team pool with independent 12-Agent state records
+- Five team pool with independent 13-Agent state records
 - `/start` intake and idle-team assignment
 - Local persistence with `localStorage`
 - Agent and Team Playbook version fields
 - independent Agent permission/autonomy model
+- Code Review and higher-level Reviewer roles separated
+- reasoned Agent decision policy and persisted decision-record model
 - Team Evolution Agent organization state
 - 꽃다발 auth policy attached to every project request as `when-auth-required`
 - Iseol-style execution policy attached to every project request
 - production-service and Luna apps portal policies attached to project state
 - Honest Runtime state: project assignment works, Codex workers are not yet connected
 
-See [`AGENT_RUNTIME_POLICY.md`](./AGENT_RUNTIME_POLICY.md) for the detailed autonomy, permissions, dependency, production-quality, PR, and release contract.
+See [`AGENT_RUNTIME_POLICY.md`](./AGENT_RUNTIME_POLICY.md) for the detailed autonomy, permissions, dependency, production-quality, PR, decision, and release contract.
 
 ## Runtime blocker
 
@@ -118,7 +134,8 @@ The next implementation layer is a small runtime adapter that can:
 - start independent Agent sessions with role instructions and project-scoped permissions
 - preserve the acting Agent identity in Git/PR/audit events
 - receive completion/failure events
-- dispatch review/QA/retry stages
+- dispatch code-review/reviewer/QA/retry stages
+- persist concise Agent decision records and disagreement resolutions
 - allow workers to push and open/update their own PRs
 - persist retrospective/version events
 - publish release-ready web projects into the Luna apps portal
