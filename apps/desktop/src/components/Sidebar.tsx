@@ -4,6 +4,7 @@ export type LunaPage =
   | "tasks"
   | "activity"
   | "tools"
+  | "project-teams"
   | "inventory"
   | "shop"
   | "settings";
