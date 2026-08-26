@@ -4,7 +4,7 @@ mod intake_runtime;
 mod integration_runtime;
 mod market_discovery_runtime;
 mod power_runtime;
-mod project_runtime;
+pub mod project_runtime;
 mod reconciliation_runtime;
 mod replan_runtime;
 mod retrospective_runtime;
