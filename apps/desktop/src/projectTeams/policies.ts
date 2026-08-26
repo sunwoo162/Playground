@@ -40,15 +40,17 @@ export const SENIOR_AGENT_POLICY = {
 
 export const DATA_MARKETING_POLICY = {
   id: "data-marketing-evidence" as const,
-  version: "1.0.0",
-  summary: "모든 제품은 Data & Marketing Agent가 실제 제품과 데이터 근거를 바탕으로 출시/성장 전략을 만들고 Documentation Agent가 검증해 repository에 문서화합니다.",
+  version: "1.1.0",
+  summary: "모든 제품은 Data & Marketing Agent가 실제 제품과 데이터 근거를 분석하고 Documentation Agent가 이를 독립 검증해 최종 출시/성장 문서로 정리합니다.",
   rules: [
-    "표준 산출물은 docs/marketing/GO_TO_MARKET.md입니다.",
+    "Data & Marketing Agent 표준 산출물은 docs/marketing/MARKETING_ANALYSIS.md입니다.",
+    "Documentation Agent 표준 최종 산출물은 docs/marketing/GO_TO_MARKET.md입니다.",
     "타깃 사용자, 가치 제안, 포지셔닝, 획득 채널, SEO/콘텐츠, activation/conversion/retention 퍼널, north-star/guardrail metric, analytics event, 실험 backlog를 다룹니다.",
     "실제 데이터가 없으면 수치를 지어내지 않고 측정 계획과 가설을 명시합니다.",
     "외부 시장/경쟁 자료를 쓰면 출처와 확인 날짜를 기록합니다.",
     "개인정보 최소 수집과 민감정보 제외 원칙을 마케팅 측정에도 적용합니다.",
-    "Documentation Agent는 마케팅 산출물을 실제 release와 대조하고 Code Review → Reviewer → QA 검증 경로를 거칩니다.",
+    "Documentation Agent는 Data & Marketing PR과 실제 release를 대조한 뒤 별도 branch에서 최종 문서를 작성합니다.",
+    "두 산출물은 Code Review → Reviewer → QA 검증 경로를 거칩니다.",
   ],
 };
 
@@ -111,7 +113,7 @@ export const PRODUCTION_SERVICE_POLICY = {
     "loading, empty, error, invalid, permission, retry 상태를 실제 제품 수준으로 구현합니다.",
     "외부 데이터가 핵심이면 실제 연동을 사용하고 mock-only 상태는 production 완료로 인정하지 않습니다.",
     "build와 적절한 테스트, 브라우저 QA, 보안/입력 검증, 배포 경로 확인을 완료 조건에 포함합니다.",
-    "출시 대상 제품은 Data & Marketing Agent의 근거 기반 go-to-market/measurement 문서와 Documentation Agent 검증을 완료 조건에 포함합니다.",
+    "출시 대상 제품은 Data & Marketing Agent의 근거 기반 분석과 Documentation Agent의 최종 go-to-market/measurement 문서 검증을 완료 조건에 포함합니다.",
     "필요한 라이브러리나 프레임워크는 신뢰성, 보안, 유지보수성, 접근성, 성능에 도움이 되면 추가할 수 있습니다.",
     "필수 외부 계정이나 자격 증명이 없으면 blocker를 명시하고 production complete 상태로 표시하지 않습니다.",
   ],
