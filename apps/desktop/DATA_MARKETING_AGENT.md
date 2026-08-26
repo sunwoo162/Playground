@@ -6,6 +6,47 @@ Every Luna delivery team has its own independent **Data & Marketing Agent**. The
 
 The five teams remain equal-status peers. Marketing expertise may become an observed team strength only after completed-project evidence supports it. No team receives a predefined marketing specialty.
 
+Luna also has an **organization-level Market Discovery pair** before a delivery team is selected:
+
+- `organization:data-marketing` searches current public market evidence and identifies opportunity spaces.
+- `organization:idea` independently turns defensible opportunities into concrete software-product candidates.
+
+These organization-level workers do not belong to 장미/백합/튤립/해바라기/벚꽃 and therefore cannot bias team allocation. Selecting a candidate sends it through the normal Organization Project Intake and equal-team allocation flow.
+
+## Pre-project Market Discovery
+
+Market Discovery is optional and starts from a market/problem topic rather than an already-decided product requirement.
+
+```text
+Product Owner topic
+  ↓
+organization:data-marketing
+  ↓
+current public web evidence
+  ↓
+market signals / opportunities / gaps
+  ↓
+organization:idea
+  ↓
+3–5 project candidates
+  ↓
+Product Owner selection
+  ↓
+Organization Project Intake
+  ↓
+equal-team allocation
+  ↓
+team PM / normal project runtime
+```
+
+The market worker must search real public sources when Codex hosted web search is available. Every external claim used to support an opportunity must preserve a URL and checked date. Repeated pain, demand, alternatives, competition, distribution, monetization evidence/hypotheses, privacy/legal/platform constraints, data availability, and seasonality should be considered when relevant.
+
+The Idea Agent receives the market report as evidence, not authority. It may reject weak opportunities, must cite the market source IDs it actually relies on, and must label candidates as `build`, `explore`, or `watch` instead of pretending every idea should immediately ship.
+
+A `build` recommendation is not automatic project approval. Product Owner selection remains mandatory before the candidate enters Project Intake.
+
+See [`MARKET_DISCOVERY.md`](./MARKET_DISCOVERY.md) for the Runtime contract and handoff details.
+
 ## Required project workflow
 
 Every product plan receives a mandatory post-product chain:
@@ -73,13 +114,13 @@ Marketing output must explicitly distinguish:
 4. inference
 5. experiment hypotheses
 
-Market size, user counts, CTR, conversion rate, CAC, LTV, growth rate, retention, competitor performance, or similar figures must never be invented. External market or competitor evidence should record its source and date checked. When evidence is unavailable, say so and propose how to measure it.
+Market size, user counts, CTR, conversion rate, CAC, LTV, growth rate, retention, competitor performance, search volume, or similar figures must never be invented. External market or competitor evidence should record its source and date checked. When evidence is unavailable, say so and propose how to measure it.
 
 Marketing measurement must follow data minimization. Sensitive or unnecessary personal data should not be collected merely because it could improve targeting.
 
 ## Git and review contract
 
-Data & Marketing Agent is a repository-changing Agent and therefore gets its own worktree and branch:
+Delivery-team Data & Marketing Agent is a repository-changing Agent and therefore gets its own worktree and branch:
 
 ```text
 agent/<team>/data-marketing/<task>
@@ -87,7 +128,9 @@ agent/<team>/data-marketing/<task>
 
 It inspects the actual repository, creates the analysis document, commits with small English commits, pushes its branch, and opens its own PR to `develop`.
 
-Documentation Agent then receives the marketing PR as a dependency artifact and performs its own repository/document work in a separate branch. The downstream Code Review task depends on both PR-producing tasks so it can inspect both PRs. Reviewer and QA then verify product/marketing alignment, links, metrics, privacy assumptions, and unsupported claims before integration.
+Organization-level Market Discovery occurs before a project repository exists, so it does not create branches, commits, PRs, repositories, issues, accounts, or deployments. Its auditable artifacts are stored under Luna Runtime state instead.
+
+Documentation Agent then receives the delivery-team marketing PR as a dependency artifact and performs its own repository/document work in a separate branch. The downstream Code Review task depends on both PR-producing tasks so it can inspect both PRs. Reviewer and QA then verify product/marketing alignment, links, metrics, privacy assumptions, and unsupported claims before integration.
 
 ## Completion rule
 

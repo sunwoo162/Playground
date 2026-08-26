@@ -89,7 +89,9 @@ function errorMessage(error: unknown) {
 
 export function ProjectTeamsPage() {
   const [state, setState] = useState<ProjectTeamsState>(() => loadProjectTeamsState());
-  const [selectedTeamId, setSelectedTeamId] = useState<TeamId>(state.teams[0]?.id ?? "rose");
+  const [selectedTeamId, setSelectedTeamId] = useState<TeamId>(
+    state.teams.find((team) => team.activeProjectId)?.id ?? state.teams[0]?.id ?? "rose",
+  );
   const [command, setCommand] = useState("/start");
   const [awaitingRequirement, setAwaitingRequirement] = useState(false);
   const [awaitingDecision, setAwaitingDecision] = useState(false);
@@ -682,6 +684,16 @@ export function ProjectTeamsPage() {
                     <small>
                       Intake {activeProject.intake.id} · {activeProject.intake.complexity} · 핵심 역할 {activeProject.intake.criticalRoles.join(", ") || "없음"} · risk {activeProject.intake.riskFlags.join(", ") || "없음"}
                     </small>
+                  )}
+                  {activeProject.status === "queued" && !activeProject.plan && (
+                    <button
+                      className="project-reset-button project-runtime-retry-button"
+                      type="button"
+                      onClick={handleRetryPmRuntime}
+                      disabled={runtimeBusy}
+                    >
+                      PM Runtime 실행
+                    </button>
                   )}
                   {activeProject.status === "blocked" && activeProject.runtimeFailureSource && (
                     <small>

@@ -2,6 +2,7 @@ mod agent_runtime;
 mod failure_router_runtime;
 mod intake_runtime;
 mod integration_runtime;
+mod market_discovery_runtime;
 mod project_runtime;
 mod replan_runtime;
 mod retrospective_runtime;
@@ -16,6 +17,7 @@ pub fn run() {
             project_runtime::bootstrap_project_repository,
             project_runtime::start_project_runtime,
             intake_runtime::analyze_project_intake,
+            market_discovery_runtime::run_market_discovery,
             agent_runtime::dispatch_agent_task,
             failure_router_runtime::route_agent_failure,
             replan_runtime::replan_project_failure,
