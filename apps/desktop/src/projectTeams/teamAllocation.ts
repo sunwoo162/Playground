@@ -34,10 +34,6 @@ function compareCandidates(left: TeamAllocationCandidate, right: TeamAllocationC
     return leftTime - rightTime;
   }
 
-  if (left.team.completedProjects !== right.team.completedProjects) {
-    return left.team.completedProjects - right.team.completedProjects;
-  }
-
   return left.catalogIndex - right.catalogIndex;
 }
 
