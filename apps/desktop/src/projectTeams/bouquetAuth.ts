@@ -33,6 +33,25 @@ export const BOUQUET_AUTH_STANDARD = {
 
 const SERVER_SLUG = "bouquet-auth-server";
 const CLIENT_SLUG = "bouquet-auth-client";
+const SERVER_ACCEPTANCE_CRITERIA = [
+  "인증 provider 선택 근거와 provider adapter 경계가 명확하며 provider-specific 응답이 제품 전역으로 누출되지 않는다.",
+  "session 조회, 로그인, 회원가입, callback, 로그아웃과 보호 API의 authenticated/anonymous/error 계약이 실제 서버에 구현된다.",
+  "브라우저에 provider access/refresh token 또는 auth secret을 영속 저장하지 않고 server-owned session을 사용한다.",
+  "production session cookie가 HttpOnly/Secure/명시적 SameSite와 필요한 최소 Path/Domain 범위를 사용하며 로그인 시 session identifier를 회전한다.",
+  "returnTo/redirect 입력은 같은 origin의 허용된 로컬 경로만 통과하고 absolute/external/scheme-relative redirect를 거부한다.",
+  "logout이 서버 세션을 실제로 무효화하고 만료/변조/누락 credential 요청은 안정적인 401/403 또는 명시적 auth error로 처리된다.",
+  "provider/session secret은 환경변수 또는 secret store로만 주입되고 repository, client bundle, 로그, 문서에 실제 값이 남지 않는다.",
+  "정상 로그인, 익명 session, 로그아웃, 만료/변조 session, 잘못된 callback/redirect에 대한 자동화 검증 또는 재현 가능한 서버 검증을 수행한다.",
+] as const;
+const CLIENT_ACCEPTANCE_CRITERIA = [
+  `클라이언트 인증 상태가 ${BOUQUET_AUTH_STANDARD.sessionStates.join(", ")}를 구분하고 초기 checking 중 보호 콘텐츠가 잠깐 노출되는 auth flash가 없다.`,
+  "로그인/회원가입/로그아웃 동작이 서버 session 계약과 연결되고 성공 후 session을 서버에서 다시 확인한다.",
+  "보호 화면과 요청이 anonymous/401 상태에서 명확한 재인증 경로를 제공하고 무한 redirect/retry loop를 만들지 않는다.",
+  "오류 상태에 사용자 재시도 경로가 있으며 계정 존재 여부, provider 내부 오류, token/secret 값을 UI에 노출하지 않는다.",
+  "access/refresh token이나 provider secret을 localStorage/sessionStorage/URL query에 저장하지 않는다.",
+  "로그인·회원가입 폼/버튼/오류 피드백은 키보드 사용, focus 이동, label과 적절한 접근성 상태를 지원한다.",
+  "익명→로그인→보호 화면→로그아웃과 session 만료/401 재동기화 흐름을 실제 브라우저 또는 동등한 사용자 흐름 테스트로 검증한다.",
+] as const;
 
 function nextTaskId(tasks: ProjectTaskPlan[], prefix: string) {
   const used = new Set(tasks.map((task) => task.id));
@@ -61,8 +80,18 @@ function isClientTask(task: ProjectTaskPlan) {
   return task.role === "frontend" && task.taskSlug.startsWith(CLIENT_SLUG);
 }
 
-function unique(values: string[]) {
+function unique(values: readonly string[]) {
   return [...new Set(values)];
+}
+
+function mergeRequiredCriteria(
+  task: ProjectTaskPlan,
+  required: readonly string[],
+): ProjectTaskPlan {
+  return {
+    ...task,
+    acceptanceCriteria: unique([...task.acceptanceCriteria, ...required]),
+  };
 }
 
 function authTechnologyDecision(plan: ProjectPlan) {
@@ -91,16 +120,7 @@ function createServerTask(tasks: ProjectTaskPlan[]): ProjectTaskPlan {
     taskSlug: nextTaskSlug(tasks, SERVER_SLUG),
     summary: `${BOUQUET_AUTH_STANDARD.name} v${BOUQUET_AUTH_STANDARD.version} 서버 계약을 실제 프로젝트 기술 스택에 구현합니다. Provider adapter와 관계없이 session 조회, 로그인/회원가입 시작 및 callback, 로그아웃, 보호 API 인증 경계를 일관되게 제공하고 server-owned session과 redirect/secret 보안 규칙을 지킵니다. 공통 route 의미는 ${Object.values(BOUQUET_AUTH_STANDARD.routeContract).join(", ")}이며 framework routing 규칙 때문에 실제 URL이 달라지면 문서에 대응 관계를 명시합니다.`,
     dependsOn: [],
-    acceptanceCriteria: [
-      "인증 provider 선택 근거와 provider adapter 경계가 명확하며 provider-specific 응답이 제품 전역으로 누출되지 않는다.",
-      "session 조회, 로그인, 회원가입, callback, 로그아웃과 보호 API의 authenticated/anonymous/error 계약이 실제 서버에 구현된다.",
-      "브라우저에 provider access/refresh token 또는 auth secret을 영속 저장하지 않고 server-owned session을 사용한다.",
-      "production session cookie가 HttpOnly/Secure/명시적 SameSite와 필요한 최소 Path/Domain 범위를 사용하며 로그인 시 session identifier를 회전한다.",
-      "returnTo/redirect 입력은 같은 origin의 허용된 로컬 경로만 통과하고 absolute/external/scheme-relative redirect를 거부한다.",
-      "logout이 서버 세션을 실제로 무효화하고 만료/변조/누락 credential 요청은 안정적인 401/403 또는 명시적 auth error로 처리된다.",
-      "provider/session secret은 환경변수 또는 secret store로만 주입되고 repository, client bundle, 로그, 문서에 실제 값이 남지 않는다.",
-      "정상 로그인, 익명 session, 로그아웃, 만료/변조 session, 잘못된 callback/redirect에 대한 자동화 검증 또는 재현 가능한 서버 검증을 수행한다.",
-    ],
+    acceptanceCriteria: [...SERVER_ACCEPTANCE_CRITERIA],
   };
 }
 
@@ -112,16 +132,12 @@ function createClientTask(tasks: ProjectTaskPlan[], serverTaskId: string): Proje
     taskSlug: nextTaskSlug(tasks, CLIENT_SLUG),
     summary: `${BOUQUET_AUTH_STANDARD.name} 공통 session state(${BOUQUET_AUTH_STANDARD.sessionStates.join(", ")})를 실제 UI에 연결합니다. 로그인/회원가입/로그아웃, 보호 경로, 401 재동기화, 오류와 재시도 상태를 제품 디자인에 맞게 표현하되 인증 단계와 상태 의미는 공통 계약을 유지합니다.`,
     dependsOn: [serverTaskId],
-    acceptanceCriteria: [
-      `클라이언트 인증 상태가 ${BOUQUET_AUTH_STANDARD.sessionStates.join(", ")}를 구분하고 초기 checking 중 보호 콘텐츠가 잠깐 노출되는 auth flash가 없다.`,
-      "로그인/회원가입/로그아웃 동작이 서버 session 계약과 연결되고 성공 후 session을 서버에서 다시 확인한다.",
-      "보호 화면과 요청이 anonymous/401 상태에서 명확한 재인증 경로를 제공하고 무한 redirect/retry loop를 만들지 않는다.",
-      "오류 상태에 사용자 재시도 경로가 있으며 계정 존재 여부, provider 내부 오류, token/secret 값을 UI에 노출하지 않는다.",
-      "access/refresh token이나 provider secret을 localStorage/sessionStorage/URL query에 저장하지 않는다.",
-      "로그인·회원가입 폼/버튼/오류 피드백은 키보드 사용, focus 이동, label과 적절한 접근성 상태를 지원한다.",
-      "익명→로그인→보호 화면→로그아웃과 session 만료/401 재동기화 흐름을 실제 브라우저 또는 동등한 사용자 흐름 테스트로 검증한다.",
-    ],
+    acceptanceCriteria: [...CLIENT_ACCEPTANCE_CRITERIA],
   };
+}
+
+function missingCriteria(task: ProjectTaskPlan, required: readonly string[]) {
+  return required.filter((criterion) => !task.acceptanceCriteria.includes(criterion));
 }
 
 export function validateBouquetAuthPlan(plan: ProjectPlan) {
@@ -139,6 +155,12 @@ export function validateBouquetAuthPlan(plan: ProjectPlan) {
   const client = clientTasks[0];
   if (!client.dependsOn.includes(server.id)) {
     throw new Error("꽃다발 Frontend 인증 Task는 Backend 인증 계약 Task에 직접 의존해야 합니다.");
+  }
+  if (missingCriteria(server, SERVER_ACCEPTANCE_CRITERIA).length > 0) {
+    throw new Error("꽃다발 Backend 인증 Task에 공통 server/session/security acceptance criteria가 누락되었습니다.");
+  }
+  if (missingCriteria(client, CLIENT_ACCEPTANCE_CRITERIA).length > 0) {
+    throw new Error("꽃다발 Frontend 인증 Task에 공통 session/UI/security acceptance criteria가 누락되었습니다.");
   }
 
   const hasDecision = plan.technologyDecisions.some((decision) =>
@@ -158,19 +180,23 @@ export function ensureBouquetAuthPlan(plan: ProjectPlan): ProjectPlan {
   if (!server) {
     server = createServerTask(tasks);
     tasks.push(server);
+  } else {
+    server = mergeRequiredCriteria(server, SERVER_ACCEPTANCE_CRITERIA);
+    const serverId = server.id;
+    tasks = tasks.map((task) => task.id === serverId ? server! : task);
   }
 
   let client = tasks.find(isClientTask);
   if (!client) {
     client = createClientTask(tasks, server.id);
     tasks.push(client);
-  } else if (!client.dependsOn.includes(server.id)) {
+  } else {
+    client = {
+      ...mergeRequiredCriteria(client, CLIENT_ACCEPTANCE_CRITERIA),
+      dependsOn: unique([...client.dependsOn, server.id]),
+    };
     const clientId = client.id;
-    tasks = tasks.map((task) =>
-      task.id === clientId
-        ? { ...task, dependsOn: unique([...task.dependsOn, server!.id]) }
-        : task,
-    );
+    tasks = tasks.map((task) => task.id === clientId ? client! : task);
   }
 
   const nextPlan: ProjectPlan = {
