@@ -98,6 +98,18 @@ Repository-changing Agents receive dedicated worktrees/branches. When an Agent c
 
 Review/QA/User-style Agents report the dependency PRs they actually examined and return structured evidence and verification results.
 
+## Execution control
+
+Project Teams supports `/pause`, `/resume`, and `/stop` for an active planned project. Execution control is persisted independently from the project's delivery/failure status so a deliberate pause is not misclassified as an Agent failure.
+
+`/pause` is cooperative at the Agent-wave boundary. If no Agent Task is running, the project pauses immediately. If a wave is already running, Luna records `pause-requested`, accepts the results from that already-dispatched wave, and prevents Debug Router work or a new dependency-ready wave from starting. `/resume` restores scheduling from the preserved Task DAG and can also cancel a pending pause request before the current wave finishes.
+
+`/stop` follows the same safe boundary rule but is terminal for that project execution. After the current wave settles, Luna stops dispatching new Agent work and releases the assigned team back to `idle`. Existing task evidence, branches, commits, PR references, and project history are preserved rather than rolled back.
+
+The control states are `running`, `pause-requested`, `paused`, `stop-requested`, and `stopped`. They are stored under a dedicated local persistence record so the asynchronous queue can observe a user request even while its current React execution closure is waiting for Agent results.
+
+This is not a claim of true in-turn process suspension. Luna does not currently freeze and later continue the same in-flight Codex turn; process-level interruption/reconnect reconciliation remains separate runtime work. If Luna itself exits while a Task is recorded as `running`, the existing interrupted-task recovery still marks that Task blocked so repository evidence can be checked before retrying.
+
 ## Data & Marketing workflow
 
 Every team has its own independent **Data & Marketing Agent**. It is a repository-changing Agent and works in:
@@ -206,6 +218,7 @@ Implemented in the existing Tauri/React desktop app includes:
 - mandatory marketing/documentation governance plan injection
 - `BloomBouquet` repository bootstrap and `main`/`develop` setup
 - dependency-aware Agent task queue with bounded parallel waves
+- cooperative `/pause` / `/resume` / `/stop` execution control with persisted wave-boundary reconciliation
 - dedicated Agent worktrees and `agent/<team>/<role>/<task>` branches
 - Codex App Server Agent threads/turns
 - repository writer commit/push/PR contract with independent post-turn verification
@@ -224,7 +237,7 @@ See [`AGENT_RUNTIME_POLICY.md`](./AGENT_RUNTIME_POLICY.md) for the detailed auto
 
 The following still require dedicated verification or implementation and must not be represented as finished:
 
-- pause/resume/stop with durable live-session reconciliation
+- true in-turn Codex App Server pause/interruption/reconnect reconciliation beyond the implemented cooperative wave-boundary controls
 - persistent orchestration history beyond localStorage
 - completed-worktree lifecycle cleanup/archive
 - reusable 꽃다발 authentication implementation
