@@ -472,7 +472,6 @@ fn reconcile_interrupted_agent_task_blocking(
     })
 }
 
-#[tauri::command]
 pub async fn reconcile_interrupted_agent_task(
     input: ReconcileInterruptedAgentTaskInput,
 ) -> Result<ReconcileInterruptedAgentTaskResult, String> {
