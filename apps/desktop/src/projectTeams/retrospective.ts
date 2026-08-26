@@ -87,6 +87,65 @@ function evidenceForRun(run: ProjectTeamsState["projects"][number]["taskRuns"][n
   return Array.from(new Set(evidence)).slice(0, 40);
 }
 
+function appendFailureRouteParticipants(
+  state: ProjectTeamsState,
+  projectId: string,
+  participants: Map<string, RetrospectiveParticipantInput>,
+) {
+  const project = state.projects.find((item) => item.id === projectId);
+  if (!project?.plan || !project.failureRoutes?.length) return;
+  const team = state.teams.find((item) => item.id === project.teamId);
+  if (!team) return;
+
+  const router = team.agents.find((agent) => agent.role === "debug-router");
+  if (router) {
+    const existing = participants.get(router.id) ?? {
+      agentId: router.id,
+      role: router.role,
+      version: router.version,
+      taskSummaries: [],
+      evidence: [],
+      pullRequestNumbers: [],
+    };
+
+    for (const route of project.failureRoutes) {
+      existing.taskSummaries.push(
+        `${route.id}: ${route.failedTaskId} [${route.failedRole}] → ${route.route}${route.ownerTaskId ? ` → ${route.ownerTaskId} [${route.ownerRole}]` : ""}`,
+      );
+      existing.evidence.push(
+        `Failure classification: ${route.failureType} / ${route.severity}`,
+        `Diagnosis: ${route.summary}`,
+        `Recommended action: ${route.recommendedAction}`,
+        ...route.evidence,
+      );
+    }
+    participants.set(router.id, existing);
+  }
+
+  for (const route of project.failureRoutes) {
+    if (!route.ownerTaskId || !route.ownerRole) continue;
+    const ownerRun = project.taskRuns.find((run) => run.taskId === route.ownerTaskId);
+    const ownerAgent = ownerRun
+      ? team.agents.find((agent) => agent.id === ownerRun.agentId)
+      : team.agents.find((agent) => agent.role === route.ownerRole);
+    if (!ownerAgent) continue;
+
+    const existing = participants.get(ownerAgent.id) ?? {
+      agentId: ownerAgent.id,
+      role: ownerAgent.role,
+      version: ownerAgent.version,
+      taskSummaries: [],
+      evidence: [],
+      pullRequestNumbers: [],
+    };
+    existing.evidence.push(
+      `Debug Router assigned ${route.id}: ${route.failureType} / ${route.severity} · ${route.recommendedAction}`,
+      ...route.evidence,
+    );
+    participants.set(ownerAgent.id, existing);
+  }
+}
+
 export function buildRetrospectiveInput(
   state: ProjectTeamsState,
   projectId: string,
@@ -146,6 +205,8 @@ export function buildRetrospectiveInput(
     existing.pullRequestNumbers.push(...run.reviewedPullRequests);
     participants.set(agent.id, existing);
   }
+
+  appendFailureRouteParticipants(state, projectId, participants);
 
   const normalizedParticipants = Array.from(participants.values()).map((participant) => ({
     ...participant,
