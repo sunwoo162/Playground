@@ -1,3 +1,4 @@
+import { intakeNeedsClarification } from "./intakeClarification";
 import { saveProjectTeamsState } from "./store";
 import { selectIdleTeamForProject } from "./teamAllocation";
 import { ensureTeamPerformanceProfiles } from "./teamPerformance";
@@ -25,6 +26,13 @@ export function startProjectWithIntake(
   const normalizedRequest = request.trim();
   if (!normalizedRequest) {
     return { ok: false, state, message: "프로젝트 요구사항을 입력해 주세요." };
+  }
+  if (intakeNeedsClarification(intake)) {
+    return {
+      ok: false,
+      state,
+      message: "Project Intake에 아직 Product Owner 확인이 필요한 입력이 있어 팀을 배정하지 않았습니다.",
+    };
   }
 
   const profiledState = ensureTeamPerformanceProfiles(state);
