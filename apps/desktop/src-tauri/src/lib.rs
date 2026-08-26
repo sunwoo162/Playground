@@ -1,5 +1,5 @@
 pub mod agent_runtime;
-mod failure_router_runtime;
+pub mod failure_router_runtime;
 mod intake_runtime;
 pub mod integration_runtime;
 mod market_discovery_runtime;
