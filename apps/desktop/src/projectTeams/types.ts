@@ -224,6 +224,7 @@ export type ProjectState = {
   taskRuns: ProjectTaskRun[];
   failureRoutes?: FailureRouteRecord[];
   replans?: ProjectReplanRecord[];
+  replanAttempts?: Record<string, number>;
   repositoryFullName: string | null;
   workspacePath: string | null;
   pmSessionId: string | null;
