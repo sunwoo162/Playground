@@ -2,6 +2,20 @@ import type { OrganizationRuntimeSettings } from "./organization";
 import type { AgentTaskRuntimeInput, DependencyArtifact } from "./runtime";
 import type { ProjectTaskRun, ProjectTeamsState } from "./types";
 
+function dependencySummary(
+  run: ProjectTaskRun,
+  fallbackSummary: string,
+) {
+  const base = run.summary ?? fallbackSummary;
+  if (run.reviewedPullRequests.length === 0) {
+    return base;
+  }
+
+  return `${base} | upstream reviewed PRs: ${run.reviewedPullRequests
+    .map((number) => `#${number}`)
+    .join(", ")}`;
+}
+
 export function buildAgentTaskRuntimeInput(
   state: ProjectTeamsState,
   projectId: string,
@@ -33,7 +47,7 @@ export function buildAgentTaskRuntimeInput(
     return {
       taskId: dependencyId,
       role: dependencyRun.role,
-      summary: dependencyRun.summary ?? dependencyTask.summary,
+      summary: dependencySummary(dependencyRun, dependencyTask.summary),
       branchName: dependencyRun.branchName,
       commitSha: dependencyRun.commitSha,
       pullRequestNumber: dependencyRun.pullRequestNumber,
