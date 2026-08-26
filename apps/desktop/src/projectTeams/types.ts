@@ -12,6 +12,7 @@ export type AgentRole =
   | "code-review"
   | "reviewer"
   | "qa"
+  | "documentation"
   | "debug-router"
   | "user-a"
   | "user-b"
@@ -99,6 +100,7 @@ export type ProjectState = {
   executionPolicyId: "iseol-workflow";
   autonomyPolicyId: "independent-agent";
   decisionPolicyId: "reasoned-agent-decisions";
+  documentationPolicyId: "documentation-evidence";
   qualityPolicyId: "production-service";
   deploymentPolicyId: "luna-apps-portal";
   runtimeMessage: string;
