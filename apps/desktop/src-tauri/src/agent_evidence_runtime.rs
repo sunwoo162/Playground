@@ -53,22 +53,35 @@ fn git_args(worktree: &Path, tail: &[&str]) -> Vec<String> {
     args
 }
 
-fn ensure_expected_origin(worktree: &Path, repository_full_name: &str) -> Result<(), String> {
-    let output = run_checked("git", &git_args(worktree, &["remote", "get-url", "origin"]))?;
-    let origin = String::from_utf8_lossy(&output.stdout)
+fn normalize_repository(value: &str) -> String {
+    value
+        .trim()
+        .trim_matches('/')
+        .trim_end_matches(".git")
+        .to_lowercase()
+}
+
+fn origin_matches_repository(origin: &str, repository_full_name: &str) -> bool {
+    let repository = normalize_repository(repository_full_name);
+    let origin = origin
         .trim()
         .trim_end_matches('/')
         .trim_end_matches(".git")
         .to_lowercase();
-    let repository = repository_full_name
-        .trim()
-        .trim_matches('/')
-        .trim_end_matches(".git")
-        .to_lowercase();
-    let expected_https_suffix = format!("github.com/{repository}");
-    let expected_ssh_suffix = format!("github.com:{repository}");
+    let allowed = [
+        format!("https://github.com/{repository}"),
+        format!("git@github.com:{repository}"),
+        format!("ssh://git@github.com/{repository}"),
+    ];
 
-    if origin.ends_with(&expected_https_suffix) || origin.ends_with(&expected_ssh_suffix) {
+    allowed.iter().any(|expected| origin == *expected)
+}
+
+fn ensure_expected_origin(worktree: &Path, repository_full_name: &str) -> Result<(), String> {
+    let output = run_checked("git", &git_args(worktree, &["remote", "get-url", "origin"]))?;
+    let origin = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
+    if origin_matches_repository(&origin, repository_full_name) {
         return Ok(());
     }
 
