@@ -27,10 +27,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build Luna desktop frontend
+      - name: Build builder web control plane
+        run: pnpm run build
+
+      - name: Build legacy desktop agent runtime
         run: pnpm --dir apps/desktop run build
 
-      - name: Run Luna allocation policy tests
+      - name: Run agent runtime policy tests
         run: pnpm --dir apps/desktop run test:allocation
 
       - name: Setup Rust
@@ -45,7 +48,7 @@ jobs:
             librsvg2-dev \
             patchelf
 
-      - name: Check Luna Tauri runtime
+      - name: Check desktop worker runtime
         run: cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml
 
       - name: Run harness invariants
