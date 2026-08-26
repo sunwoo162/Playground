@@ -74,9 +74,9 @@ After Intake and team assignment, the team's PM runs through ChatGPT-authenticat
 
 PM output is constrained to structured project/product/architecture/technology decisions and a dependency DAG of independently reviewable Agent tasks. Luna validates naming, roles, duplicates, missing/self dependencies, cycles, and review topology.
 
-The runtime then applies organization policy. In particular, release-target product plans receive a mandatory Data & Marketing → Documentation → Code Review → Reviewer → QA chain. This policy is injected after the PM plan so marketing governance cannot disappear just because a PM omitted it.
+If authentication is required, Luna applies the shared **꽃다발** authentication runtime before release-governance tasks are appended. A `needsAuth=true` plan must contain one Backend `bouquet-auth-server` Task and one Frontend `bouquet-auth-client` Task. Missing Tasks are injected automatically, an existing standard Task is hardened with mandatory acceptance criteria rather than blindly trusted, the Frontend Task directly depends on the Backend contract, and the authentication technology decision is persisted in the plan. See [`BOUQUET_AUTH.md`](./BOUQUET_AUTH.md).
 
-If authentication is required, the project must use the shared **꽃다발** authentication standard.
+The runtime then applies organization policy. In particular, release-target product plans receive a mandatory Data & Marketing → Documentation → Code Review → Reviewer → QA chain. This policy is injected after the product/auth plan so authentication implementation is part of the same downstream review and QA topology rather than bypassing it.
 
 ## BloomBouquet repository runtime
 
@@ -250,7 +250,11 @@ Unavailable credentials/providers/datasets/analytics may produce explicit blocke
 
 ## Shared auth standard: 꽃다발
 
-Any generated project that requires login or sign-up must use the shared **꽃다발** auth standard instead of inventing a new authentication process per project. The current runtime carries this as policy; the reusable auth package/runtime itself remains separate work.
+Any generated project that requires login or sign-up uses the shared **꽃다발** auth runtime instead of inventing a new authentication process per project. `needsAuth=true` causes Luna to enforce a Backend server-session Task and a dependent Frontend session/UI Task, preserve the authentication technology decision, and reject plans that omit or weaken mandatory auth criteria.
+
+The shared client state model is `checking`, `anonymous`, `submitting`, `authenticated`, and `error`. The common route meanings cover session lookup, sign-in, sign-up, callback, and sign-out. Server-owned sessions, production `HttpOnly`/`Secure`/explicit `SameSite` cookies, session rotation, same-origin local redirect validation, secret isolation, stable auth errors, and consistent protected-request handling are mandatory acceptance criteria.
+
+Provider choice remains project-specific. GitHub, Google, email/password, or another provider can be implemented behind an adapter when product evidence supports it. The current Luna implementation is therefore a **provider/framework-neutral contract, planning runtime, enforcement layer, and policy test suite**, not a claim that one universal provider SDK is already installed into every generated project. See [`BOUQUET_AUTH.md`](./BOUQUET_AUTH.md).
 
 ## Release target
 
@@ -267,6 +271,7 @@ Implemented in the existing Tauri/React desktop app includes:
 - local state persistence and interrupted-task recovery
 - durable app-data orchestration snapshots and append-only history beyond localStorage
 - PM Codex planning runtime and dependency validation
+- shared 꽃다발 authentication contract with `needsAuth` Backend/Frontend Task injection and mandatory security criteria enforcement
 - mandatory marketing/documentation governance plan injection
 - `BloomBouquet` repository bootstrap and `main`/`develop` setup
 - dependency-aware Agent task queue with bounded parallel waves
@@ -291,7 +296,6 @@ See [`AGENT_RUNTIME_POLICY.md`](./AGENT_RUNTIME_POLICY.md) for the detailed auto
 The following still require dedicated verification or implementation and must not be represented as finished:
 
 - true in-turn Codex App Server pause/interruption/reconnect reconciliation beyond the implemented cooperative wave-boundary controls
-- reusable 꽃다발 authentication implementation
 - final Luna apps portal release publication
 - managed unattended GitHub identity/credential strategy
 - full packaged Windows Tauri + Codex App Server end-to-end verification
