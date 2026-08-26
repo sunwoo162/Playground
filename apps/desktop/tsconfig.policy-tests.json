@@ -24,6 +24,8 @@
     "src/projectTeams/executionControl.ts",
     "src/projectTeams/executionControl.policy-test.ts",
     "src/projectTeams/orchestrationHistoryPolicy.ts",
-    "src/projectTeams/orchestrationHistory.policy-test.ts"
+    "src/projectTeams/orchestrationHistory.policy-test.ts",
+    "src/projectTeams/worktreeLifecyclePolicy.ts",
+    "src/projectTeams/worktreeLifecycle.policy-test.ts"
   ]
 }
