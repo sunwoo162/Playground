@@ -1,3 +1,4 @@
+import { validateE2ECanaryRuntimePlan } from "./e2eCanary";
 import {
   startProjectRuntime,
   type StartProjectRuntimeInput,
@@ -41,14 +42,26 @@ function intakeContext(intake: ProjectIntakeRecord) {
   ].join("\n");
 }
 
+function assertE2ECanaryPlan(input: StartProjectRuntimeInput, result: StartProjectRuntimeResult) {
+  const errors = validateE2ECanaryRuntimePlan(input.projectId, input.request, result.pm.plan);
+  if (errors.length === 0) return;
+  throw new Error(
+    `E2E Canary PM 계획 검증 실패: ${errors.join(" ")} `
+    + "Canary는 잘못된 repository/role 계획으로 Agent 실행을 계속하지 않습니다.",
+  );
+}
+
 export async function startProjectRuntimeWithIntake(
   input: StartProjectRuntimeInput,
   intake: ProjectIntakeRecord | null | undefined,
 ): Promise<StartProjectRuntimeResult> {
-  if (!intake) return startProjectRuntime(input);
+  const result = !intake
+    ? await startProjectRuntime(input)
+    : await startProjectRuntime({
+        ...input,
+        request: `${input.request}\n\n${intakeContext(intake)}`,
+      });
 
-  return startProjectRuntime({
-    ...input,
-    request: `${input.request}\n\n${intakeContext(intake)}`,
-  });
+  assertE2ECanaryPlan(input, result);
+  return result;
 }
