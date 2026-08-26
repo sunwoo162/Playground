@@ -16,6 +16,12 @@ function readyValue(value: boolean) {
   return value ? "true" : "false";
 }
 
+function codexAuthLabel(preflight: ProjectRuntimePreflight) {
+  if (!preflight.codexAuthenticated) return "로그인 필요";
+  if (!preflight.codexChatgptAuth) return "API 인증 차단";
+  return "ChatGPT";
+}
+
 export function ProjectRuntimePanel() {
   const [settings, setSettings] = useState<OrganizationRuntimeSettings>(() =>
     loadOrganizationRuntimeSettings(),
@@ -99,6 +105,7 @@ export function ProjectRuntimePanel() {
           <div><span>GitHub CLI</span><strong data-ready={readyValue(preflight.ghAvailable)}>{statusLabel(preflight.ghAvailable)}</strong></div>
           <div><span>gh 인증</span><strong data-ready={readyValue(preflight.ghAuthenticated)}>{statusLabel(preflight.ghAuthenticated)}</strong></div>
           <div><span>Codex CLI</span><strong data-ready={readyValue(preflight.codexAvailable)}>{statusLabel(preflight.codexAvailable)}</strong></div>
+          <div><span>Codex 인증</span><strong data-ready={readyValue(preflight.codexChatgptAuth)}>{codexAuthLabel(preflight)}</strong></div>
           <div><span>Organization</span><strong data-ready={readyValue(preflight.organizationAccessible)}>{statusLabel(preflight.organizationAccessible)}</strong></div>
         </div>
       )}

@@ -1,9 +1,127 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::{
+    collections::HashSet,
     fs,
+    io::Write,
     path::{Path, PathBuf},
-    process::{Command, Output},
+    process::{Command, Output, Stdio},
 };
+
+const PM_PLAN_SCHEMA: &str = r#"{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "projectName",
+    "repositoryName",
+    "productSummary",
+    "architectureSummary",
+    "needsAuth",
+    "technologyDecisions",
+    "tasks"
+  ],
+  "properties": {
+    "projectName": { "type": "string", "minLength": 1, "maxLength": 80 },
+    "repositoryName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "productSummary": { "type": "string", "minLength": 1, "maxLength": 1200 },
+    "architectureSummary": { "type": "string", "minLength": 1, "maxLength": 1800 },
+    "needsAuth": { "type": "boolean" },
+    "technologyDecisions": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["area", "choice", "reason"],
+        "properties": {
+          "area": { "type": "string", "minLength": 1, "maxLength": 80 },
+          "choice": { "type": "string", "minLength": 1, "maxLength": 160 },
+          "reason": { "type": "string", "minLength": 1, "maxLength": 500 }
+        }
+      }
+    },
+    "tasks": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 40,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "title",
+          "role",
+          "taskSlug",
+          "summary",
+          "dependsOn",
+          "acceptanceCriteria"
+        ],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[A-Z]+-[0-9]{3}$" },
+          "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+          "role": {
+            "type": "string",
+            "enum": [
+              "idea",
+              "design-system",
+              "designer",
+              "frontend",
+              "backend",
+              "code-review",
+              "reviewer",
+              "qa",
+              "documentation",
+              "debug-router",
+              "user-a",
+              "user-b",
+              "process-evaluator"
+            ]
+          },
+          "taskSlug": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 48,
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "summary": { "type": "string", "minLength": 1, "maxLength": 800 },
+          "dependsOn": {
+            "type": "array",
+            "maxItems": 20,
+            "items": { "type": "string", "pattern": "^[A-Z]+-[0-9]{3}$" }
+          },
+          "acceptanceCriteria": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 12,
+            "items": { "type": "string", "minLength": 1, "maxLength": 400 }
+          }
+        }
+      }
+    }
+  }
+}"#;
+
+const ALLOWED_PM_TASK_ROLES: &[&str] = &[
+    "idea",
+    "design-system",
+    "designer",
+    "frontend",
+    "backend",
+    "code-review",
+    "reviewer",
+    "qa",
+    "documentation",
+    "debug-router",
+    "user-a",
+    "user-b",
+    "process-evaluator",
+];
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -13,6 +131,9 @@ struct ProjectRuntimePreflight {
     gh_available: bool,
     gh_authenticated: bool,
     codex_available: bool,
+    codex_authenticated: bool,
+    codex_chatgpt_auth: bool,
+    codex_auth_mode: String,
     organization_accessible: bool,
     message: String,
 }
@@ -26,6 +147,54 @@ struct ProjectRepositoryBootstrap {
     cloned_repository: bool,
     release_branch: String,
     integration_branch: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TechnologyDecision {
+    area: String,
+    choice: String,
+    reason: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ProjectTaskPlan {
+    id: String,
+    title: String,
+    role: String,
+    task_slug: String,
+    summary: String,
+    depends_on: Vec<String>,
+    acceptance_criteria: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PmProjectPlan {
+    project_name: String,
+    repository_name: String,
+    product_summary: String,
+    architecture_summary: String,
+    needs_auth: bool,
+    technology_decisions: Vec<TechnologyDecision>,
+    tasks: Vec<ProjectTaskPlan>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PmCodexRunResult {
+    plan: PmProjectPlan,
+    session_id: Option<String>,
+    events_path: String,
+    output_path: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct StartProjectRuntimeResult {
+    pm: PmCodexRunResult,
+    repository: ProjectRepositoryBootstrap,
 }
 
 fn run_command(program: &str, args: &[String]) -> Result<Output, String> {
@@ -43,15 +212,54 @@ fn command_succeeds(program: &str, args: &[&str]) -> bool {
         .unwrap_or(false)
 }
 
+fn output_detail(output: &Output) -> String {
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if !stderr.is_empty() {
+        stderr
+    } else {
+        stdout
+    }
+}
+
 fn run_checked(program: &str, args: &[String]) -> Result<Output, String> {
     let output = run_command(program, args)?;
     if output.status.success() {
         return Ok(output);
     }
 
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    let detail = if !stderr.is_empty() { stderr } else { stdout };
+    let detail = output_detail(&output);
+    Err(if detail.is_empty() {
+        format!("{program} 명령이 실패했습니다.")
+    } else {
+        format!("{program} 명령 실패: {detail}")
+    })
+}
+
+fn run_checked_with_stdin(program: &str, args: &[String], input: &str) -> Result<Output, String> {
+    let mut child = Command::new(program)
+        .args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|error| format!("{program} 실행 실패: {error}"))?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin
+            .write_all(input.as_bytes())
+            .map_err(|error| format!("{program} 입력 전달 실패: {error}"))?;
+    }
+
+    let output = child
+        .wait_with_output()
+        .map_err(|error| format!("{program} 실행 결과 확인 실패: {error}"))?;
+
+    if output.status.success() {
+        return Ok(output);
+    }
+
+    let detail = output_detail(&output);
     Err(if detail.is_empty() {
         format!("{program} 명령이 실패했습니다.")
     } else {
@@ -76,6 +284,116 @@ fn validate_github_name(value: &str, label: &str) -> Result<(), String> {
     {
         return Err(format!("{label} 값에 사용할 수 없는 문자가 있습니다."));
     }
+    Ok(())
+}
+
+fn is_lower_kebab(value: &str) -> bool {
+    let mut has_character = false;
+    let mut previous_dash = false;
+
+    for character in value.chars() {
+        if character.is_ascii_lowercase() || character.is_ascii_digit() {
+            has_character = true;
+            previous_dash = false;
+        } else if character == '-' && has_character && !previous_dash {
+            previous_dash = true;
+        } else {
+            return false;
+        }
+    }
+
+    has_character && !previous_dash
+}
+
+fn is_task_id(value: &str) -> bool {
+    let Some((prefix, number)) = value.rsplit_once('-') else {
+        return false;
+    };
+
+    !prefix.is_empty()
+        && prefix.chars().all(|character| character.is_ascii_uppercase())
+        && number.len() == 3
+        && number.chars().all(|character| character.is_ascii_digit())
+}
+
+fn validate_project_plan(plan: &PmProjectPlan) -> Result<(), String> {
+    validate_github_name(&plan.repository_name, "PM repository")?;
+    if !is_lower_kebab(&plan.repository_name) || plan.repository_name.len() > 80 {
+        return Err("PM repositoryName은 80자 이하의 lowercase ASCII kebab-case여야 합니다.".to_string());
+    }
+    if plan.project_name.trim().is_empty()
+        || plan.product_summary.trim().is_empty()
+        || plan.architecture_summary.trim().is_empty()
+    {
+        return Err("PM 계획의 프로젝트 이름/제품 요약/아키텍처 요약이 비어 있습니다.".to_string());
+    }
+    if plan.tasks.is_empty() {
+        return Err("PM 계획에 Task가 없습니다.".to_string());
+    }
+    if plan.tasks.len() > 40 {
+        return Err("PM 계획의 Task 수가 허용 범위를 초과했습니다.".to_string());
+    }
+
+    let mut ids = HashSet::new();
+    let mut slugs = HashSet::new();
+    for task in &plan.tasks {
+        if !is_task_id(&task.id) {
+            return Err(format!("PM 계획의 Task ID 형식이 잘못되었습니다: {}", task.id));
+        }
+        if !is_lower_kebab(&task.task_slug) || task.task_slug.len() > 48 {
+            return Err(format!("PM 계획의 taskSlug 형식이 잘못되었습니다: {}", task.task_slug));
+        }
+        if task.title.trim().is_empty() || task.summary.trim().is_empty() {
+            return Err(format!("{} Task의 제목 또는 설명이 비어 있습니다.", task.id));
+        }
+        if !ALLOWED_PM_TASK_ROLES.contains(&task.role.as_str()) {
+            return Err(format!("PM 계획에 허용되지 않은 Agent role이 있습니다: {}", task.role));
+        }
+        if !ids.insert(task.id.as_str()) {
+            return Err(format!("PM 계획의 Task ID가 중복됩니다: {}", task.id));
+        }
+        if !slugs.insert(task.task_slug.as_str()) {
+            return Err(format!("PM 계획의 taskSlug가 중복됩니다: {}", task.task_slug));
+        }
+        if task.acceptance_criteria.is_empty() {
+            return Err(format!("{} Task에 acceptance criteria가 없습니다.", task.id));
+        }
+    }
+
+    for task in &plan.tasks {
+        for dependency in &task.depends_on {
+            if !ids.contains(dependency.as_str()) {
+                return Err(format!(
+                    "{} Task가 존재하지 않는 dependency {}를 참조합니다.",
+                    task.id, dependency
+                ));
+            }
+            if dependency == &task.id {
+                return Err(format!("{} Task가 자기 자신을 dependency로 참조합니다.", task.id));
+            }
+        }
+    }
+
+    let mut completed = HashSet::new();
+    while completed.len() < plan.tasks.len() {
+        let before = completed.len();
+        for task in &plan.tasks {
+            if completed.contains(task.id.as_str()) {
+                continue;
+            }
+            if task
+                .depends_on
+                .iter()
+                .all(|dependency| completed.contains(dependency.as_str()))
+            {
+                completed.insert(task.id.as_str());
+            }
+        }
+        if completed.len() == before {
+            return Err("PM 계획의 Task dependency에 순환 참조가 있습니다.".to_string());
+        }
+    }
+
     Ok(())
 }
 
@@ -122,12 +440,40 @@ fn ensure_expected_origin(workspace: &Path, organization: &str, repository: &str
     }
 }
 
+fn codex_auth_status(codex_available: bool) -> (bool, bool, String) {
+    if !codex_available {
+        return (false, false, "none".to_string());
+    }
+
+    let output = Command::new("codex").args(["login", "status"]).output();
+    let Ok(output) = output else {
+        return (false, false, "none".to_string());
+    };
+
+    let authenticated = output.status.success();
+    if !authenticated {
+        return (false, false, "none".to_string());
+    }
+
+    let combined = format!(
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    )
+    .to_ascii_lowercase();
+    let chatgpt_auth = combined.contains("chatgpt");
+    let mode = if chatgpt_auth { "chatgpt" } else { "other" };
+
+    (authenticated, chatgpt_auth, mode.to_string())
+}
+
 #[tauri::command]
 fn project_runtime_preflight(organization: String) -> ProjectRuntimePreflight {
     let organization = organization.trim().to_string();
     let git_available = command_succeeds("git", &["--version"]);
     let gh_available = command_succeeds("gh", &["--version"]);
     let codex_available = command_succeeds("codex", &["--version"]);
+    let (codex_authenticated, codex_chatgpt_auth, codex_auth_mode) = codex_auth_status(codex_available);
     let gh_authenticated = gh_available && command_succeeds("gh", &["auth", "status", "--hostname", "github.com"]);
     let organization_accessible = if gh_authenticated && !organization.is_empty() {
         let endpoint = format!("orgs/{organization}");
@@ -141,15 +487,16 @@ fn project_runtime_preflight(organization: String) -> ProjectRuntimePreflight {
         false
     };
 
-    let message = if git_available
-        && gh_available
-        && gh_authenticated
-        && codex_available
-        && organization_accessible
-    {
-        "Git, GitHub CLI, Codex CLI와 Organization 접근이 준비되었습니다.".to_string()
+    let message = if !codex_available {
+        "Codex CLI가 필요합니다.".to_string()
+    } else if !codex_authenticated {
+        "Codex CLI 로그인이 필요합니다. ChatGPT 계정으로 `codex login`을 완료해 주세요.".to_string()
+    } else if !codex_chatgpt_auth {
+        "Codex가 API key/access token 모드입니다. 별도 API 과금을 피하기 위해 Luna Runtime은 ChatGPT 로그인만 허용합니다.".to_string()
+    } else if git_available && gh_available && gh_authenticated && organization_accessible {
+        "Git, GitHub CLI, ChatGPT Codex 로그인과 Organization 접근이 준비되었습니다.".to_string()
     } else {
-        "누락된 로컬 Runtime 조건을 확인해 주세요. ChatGPT의 GitHub Connector 설치와 Luna 로컬 CLI 인증은 별도입니다.".to_string()
+        "누락된 로컬 Runtime 조건을 확인해 주세요. ChatGPT GitHub Connector 설치와 Luna 로컬 CLI 인증은 별도입니다.".to_string()
     };
 
     ProjectRuntimePreflight {
@@ -158,13 +505,15 @@ fn project_runtime_preflight(organization: String) -> ProjectRuntimePreflight {
         gh_available,
         gh_authenticated,
         codex_available,
+        codex_authenticated,
+        codex_chatgpt_auth,
+        codex_auth_mode,
         organization_accessible,
         message,
     }
 }
 
-#[tauri::command]
-fn bootstrap_project_repository(
+fn bootstrap_project_repository_inner(
     organization: String,
     repository: String,
     workspace_root: String,
@@ -304,6 +653,202 @@ fn bootstrap_project_repository(
     })
 }
 
+#[tauri::command]
+fn bootstrap_project_repository(
+    organization: String,
+    repository: String,
+    workspace_root: String,
+) -> Result<ProjectRepositoryBootstrap, String> {
+    bootstrap_project_repository_inner(organization, repository, workspace_root)
+}
+
+fn pm_prompt(
+    organization: &str,
+    project_id: &str,
+    team_id: &str,
+    team_name: &str,
+    request: &str,
+) -> String {
+    format!(
+        r#"You are the independent PM Codex Agent for Luna team {team_name} ({team_id}).
+
+Project ID: {project_id}
+GitHub Organization: {organization}
+User request:
+{request}
+
+Your job in this turn is planning only. Do not create files, repositories, branches, commits, PRs, or deployments. Return the project plan that Luna will execute after this turn.
+
+Operating contract:
+- Treat the project as a real production service, not a demo or mock-only prototype.
+- Default to one project monorepo unless there is a concrete reason not to.
+- repositoryName must be a concise lowercase ASCII kebab-case GitHub repository name.
+- If login or sign-up is required, needsAuth must be true and the implementation must use the shared 꽃다발 authentication standard.
+- Choose libraries/frameworks when they materially improve reliability, security, accessibility, maintainability, performance, or delivery speed. Record each meaningful choice and its reason in technologyDecisions.
+- Every participating Agent is an independent worker with its own branch/worktree, session, judgment, commit history, PR, and retrospective.
+- Branch convention is agent/<team>/<role>/<task>. taskSlug must be concise lowercase ASCII kebab-case.
+- Agents do not blindly trust PM or reviewers. Every material action must have a defensible, verifiable reason.
+- Code Review, higher-level Reviewer, QA, Documentation, User A, User B, and Process Evaluator should be included as independent gates for a normal user-facing production service. Omit a role only when it genuinely does not apply.
+- Frontend and Backend tasks may run in parallel when dependencies allow it.
+- Acceptance criteria must be observable and verifiable. Include build/test/browser/error/loading/empty/security requirements where relevant.
+- Do not assume external credentials, paid services, or unavailable datasets exist. Model them as explicit implementation blockers or setup tasks when necessary.
+- Keep tasks independently reviewable. Avoid one giant frontend or backend task covering the whole project.
+- Task dependencies must reference existing task IDs and must not form self-dependencies.
+- The final response must match the supplied JSON schema exactly. No Markdown outside the JSON result.
+"#
+    )
+}
+
+fn extract_codex_session_id(events: &str) -> Option<String> {
+    for line in events.lines() {
+        let Ok(value) = serde_json::from_str::<Value>(line) else {
+            continue;
+        };
+
+        for key in ["session_id", "sessionId", "thread_id", "threadId"] {
+            if let Some(id) = value.get(key).and_then(Value::as_str) {
+                if !id.trim().is_empty() {
+                    return Some(id.to_string());
+                }
+            }
+        }
+
+        let event_type = value.get("type").and_then(Value::as_str).unwrap_or_default();
+        if event_type.contains("thread") || event_type.contains("session") {
+            if let Some(id) = value.get("id").and_then(Value::as_str) {
+                if !id.trim().is_empty() {
+                    return Some(id.to_string());
+                }
+            }
+        }
+    }
+
+    None
+}
+
+fn run_pm_codex(
+    organization: &str,
+    workspace_root: &str,
+    project_id: &str,
+    team_id: &str,
+    team_name: &str,
+    request: &str,
+) -> Result<PmCodexRunResult, String> {
+    validate_github_name(organization, "Organization")?;
+    validate_github_name(project_id, "Project ID")?;
+    if request.trim().is_empty() {
+        return Err("프로젝트 요구사항이 비어 있습니다.".to_string());
+    }
+    if workspace_root.trim().is_empty() {
+        return Err("Workspace root를 먼저 설정해 주세요.".to_string());
+    }
+
+    let preflight = project_runtime_preflight(organization.to_string());
+    if !preflight.codex_available {
+        return Err("Codex CLI가 설치되어 있지 않습니다.".to_string());
+    }
+    if !preflight.codex_authenticated {
+        return Err("Codex CLI 로그인이 필요합니다. `codex login`을 실행해 주세요.".to_string());
+    }
+    if !preflight.codex_chatgpt_auth {
+        return Err(
+            "Luna는 별도 API 과금을 피하기 위해 ChatGPT 로그인 상태의 Codex만 실행합니다. `codex logout` 후 `codex login`으로 ChatGPT 계정에 로그인해 주세요."
+                .to_string(),
+        );
+    }
+
+    let planning_dir = PathBuf::from(workspace_root)
+        .join(".luna-runtime")
+        .join("projects")
+        .join(project_id)
+        .join("pm");
+    fs::create_dir_all(&planning_dir)
+        .map_err(|error| format!("PM planning directory 생성 실패: {error}"))?;
+
+    let schema_path = planning_dir.join("pm-plan.schema.json");
+    let output_path = planning_dir.join("pm-plan.json");
+    let events_path = planning_dir.join("pm-events.jsonl");
+    fs::write(&schema_path, PM_PLAN_SCHEMA)
+        .map_err(|error| format!("PM output schema 저장 실패: {error}"))?;
+
+    let prompt = pm_prompt(organization, project_id, team_id, team_name, request.trim());
+    let args = vec![
+        "exec".to_string(),
+        "--json".to_string(),
+        "--output-schema".to_string(),
+        schema_path.to_string_lossy().to_string(),
+        "--output-last-message".to_string(),
+        output_path.to_string_lossy().to_string(),
+        "--sandbox".to_string(),
+        "read-only".to_string(),
+        "--skip-git-repo-check".to_string(),
+        "-C".to_string(),
+        planning_dir.to_string_lossy().to_string(),
+        "-".to_string(),
+    ];
+
+    let output = run_checked_with_stdin("codex", &args, &prompt)?;
+    fs::write(&events_path, &output.stdout)
+        .map_err(|error| format!("PM Codex event log 저장 실패: {error}"))?;
+
+    let raw_plan = fs::read_to_string(&output_path)
+        .map_err(|error| format!("PM Codex 결과 파일 읽기 실패: {error}"))?;
+    let plan: PmProjectPlan = serde_json::from_str(&raw_plan)
+        .map_err(|error| format!("PM Codex 결과 JSON 파싱 실패: {error}"))?;
+    validate_project_plan(&plan)?;
+
+    let events = String::from_utf8_lossy(&output.stdout);
+    let session_id = extract_codex_session_id(&events);
+
+    Ok(PmCodexRunResult {
+        plan,
+        session_id,
+        events_path: events_path.to_string_lossy().to_string(),
+        output_path: output_path.to_string_lossy().to_string(),
+    })
+}
+
+#[tauri::command]
+async fn start_project_runtime(
+    organization: String,
+    workspace_root: String,
+    project_id: String,
+    team_id: String,
+    team_name: String,
+    request: String,
+) -> Result<StartProjectRuntimeResult, String> {
+    let preflight = project_runtime_preflight(organization.clone());
+    if !preflight.git_available || !preflight.gh_available || !preflight.gh_authenticated {
+        return Err("Git/GitHub CLI Runtime이 준비되지 않았습니다. Runtime 확인 결과를 먼저 해결해 주세요.".to_string());
+    }
+    if !preflight.organization_accessible {
+        return Err(format!(
+            "GitHub CLI로 {} Organization에 접근할 수 없습니다.",
+            organization.trim()
+        ));
+    }
+    if !preflight.codex_chatgpt_auth {
+        return Err(preflight.message);
+    }
+
+    let pm = run_pm_codex(
+        organization.trim(),
+        workspace_root.trim(),
+        project_id.trim(),
+        team_id.trim(),
+        team_name.trim(),
+        request.trim(),
+    )?;
+    let repository_name = pm.plan.repository_name.clone();
+    let repository = bootstrap_project_repository_inner(
+        organization,
+        repository_name,
+        workspace_root,
+    )?;
+
+    Ok(StartProjectRuntimeResult { pm, repository })
+}
+
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -317,7 +862,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             project_runtime_preflight,
-            bootstrap_project_repository
+            bootstrap_project_repository,
+            start_project_runtime
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

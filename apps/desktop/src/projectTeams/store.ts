@@ -1,6 +1,12 @@
 import { createInitialProjectTeamsState } from "./catalog";
 import { createAgentRuntimeIdentity } from "./permissions";
-import type { AgentDecision, ProjectState, ProjectTeamsState, TeamId } from "./types";
+import type {
+  AgentDecision,
+  ProjectPlan,
+  ProjectState,
+  ProjectTeamsState,
+  TeamId,
+} from "./types";
 
 const STORAGE_KEY = "luna.project-teams.v1";
 
@@ -9,6 +15,14 @@ export type StartProjectResult =
   | { ok: false; state: ProjectTeamsState; message: string };
 
 export type RecordDecisionInput = Omit<AgentDecision, "id" | "createdAt">;
+
+export type CompleteProjectPlanningInput = {
+  projectId: string;
+  plan: ProjectPlan;
+  repositoryFullName: string;
+  workspacePath: string;
+  pmSessionId: string | null;
+};
 
 function canUseStorage() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -52,6 +66,10 @@ function hydrateState(state: ProjectTeamsState): ProjectTeamsState {
       documentationPolicyId: project.documentationPolicyId ?? "documentation-evidence",
       qualityPolicyId: project.qualityPolicyId ?? "production-service",
       deploymentPolicyId: project.deploymentPolicyId ?? "luna-apps-portal",
+      plan: project.plan ?? null,
+      repositoryFullName: project.repositoryFullName ?? null,
+      workspacePath: project.workspacePath ?? null,
+      pmSessionId: project.pmSessionId ?? null,
     })),
     decisions: Array.isArray(state.decisions) ? state.decisions : [],
   };
@@ -106,6 +124,13 @@ function createDecisionId() {
   return `DECISION-${time}-${random}`;
 }
 
+function updateProject(state: ProjectTeamsState, projectId: string, updater: (project: ProjectState) => ProjectState) {
+  return {
+    ...state,
+    projects: state.projects.map((project) => (project.id === projectId ? updater(project) : project)),
+  };
+}
+
 export function recordAgentDecision(state: ProjectTeamsState, input: RecordDecisionInput) {
   const decision: AgentDecision = {
     ...input,
@@ -146,7 +171,11 @@ export function startProject(state: ProjectTeamsState, request: string): StartPr
     documentationPolicyId: "documentation-evidence",
     qualityPolicyId: "production-service",
     deploymentPolicyId: "luna-apps-portal",
-    runtimeMessage: "팀 배정 완료 · 독립 Agent 실행 Runtime 연결 대기",
+    plan: null,
+    repositoryFullName: null,
+    workspacePath: null,
+    pmSessionId: null,
+    runtimeMessage: "팀 배정 완료 · PM Codex 실행 준비",
   };
 
   const nextState: ProjectTeamsState = {
@@ -171,6 +200,106 @@ export function startProject(state: ProjectTeamsState, request: string): StartPr
 
   saveProjectTeamsState(nextState);
   return { ok: true, state: nextState, project };
+}
+
+export function beginProjectPlanning(state: ProjectTeamsState, projectId: string) {
+  const project = state.projects.find((item) => item.id === projectId);
+  if (!project) return state;
+
+  let nextState = updateProject(state, projectId, (currentProject) => ({
+    ...currentProject,
+    status: "planning",
+    runtimeMessage: "PM Codex가 프로젝트를 분석하고 실제 서비스 계획을 작성 중",
+  }));
+
+  nextState = {
+    ...nextState,
+    teams: nextState.teams.map((team) =>
+      team.id === project.teamId
+        ? {
+            ...team,
+            status: "working",
+            agents: team.agents.map((agent) => ({
+              ...agent,
+              status: agent.role === "pm" ? "working" : "idle",
+            })),
+          }
+        : team,
+    ),
+  };
+
+  saveProjectTeamsState(nextState);
+  return nextState;
+}
+
+export function completeProjectPlanning(state: ProjectTeamsState, input: CompleteProjectPlanningInput) {
+  const project = state.projects.find((item) => item.id === input.projectId);
+  if (!project) return state;
+
+  const requiredRoles = new Set(input.plan.tasks.map((task) => task.role));
+  let nextState = updateProject(state, input.projectId, (currentProject) => ({
+    ...currentProject,
+    status: "planning",
+    plan: input.plan,
+    repositoryFullName: input.repositoryFullName,
+    workspacePath: input.workspacePath,
+    pmSessionId: input.pmSessionId,
+    runtimeMessage: "PM 계획 및 repository 준비 완료 · 독립 Agent worker dispatch 대기",
+  }));
+
+  nextState = {
+    ...nextState,
+    teams: nextState.teams.map((team) =>
+      team.id === project.teamId
+        ? {
+            ...team,
+            status: "working",
+            agents: team.agents.map((agent) => ({
+              ...agent,
+              status:
+                agent.role === "pm"
+                  ? "done"
+                  : requiredRoles.has(agent.role)
+                    ? "ready"
+                    : "idle",
+            })),
+          }
+        : team,
+    ),
+  };
+
+  saveProjectTeamsState(nextState);
+  return nextState;
+}
+
+export function failProjectRuntime(state: ProjectTeamsState, projectId: string, reason: string) {
+  const project = state.projects.find((item) => item.id === projectId);
+  if (!project) return state;
+
+  let nextState = updateProject(state, projectId, (currentProject) => ({
+    ...currentProject,
+    status: "blocked",
+    runtimeMessage: reason,
+  }));
+
+  nextState = {
+    ...nextState,
+    teams: nextState.teams.map((team) =>
+      team.id === project.teamId
+        ? {
+            ...team,
+            status: "working",
+            agents: team.agents.map((agent) => ({
+              ...agent,
+              status: agent.role === "pm" ? "blocked" : agent.status,
+            })),
+          }
+        : team,
+    ),
+  };
+
+  saveProjectTeamsState(nextState);
+  return nextState;
 }
 
 export function getTeamName(state: ProjectTeamsState, teamId: TeamId) {
