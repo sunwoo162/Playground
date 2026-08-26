@@ -113,6 +113,23 @@ export type AgentTaskRunResult = {
   report: AgentTaskReport;
 };
 
+export type MergeProjectPullRequestsInput = {
+  repositoryFullName: string;
+  pullRequestNumbers: number[];
+};
+
+export type MergedPullRequest = {
+  number: number;
+  url: string;
+  headBranch: string;
+  mergeCommitSha: string | null;
+};
+
+export type MergeProjectPullRequestsResult = {
+  repositoryFullName: string;
+  mergedPullRequests: MergedPullRequest[];
+};
+
 export async function checkProjectRuntime(organization: string) {
   return invoke<ProjectRuntimePreflight>("project_runtime_preflight", { organization });
 }
@@ -127,4 +144,8 @@ export async function startProjectRuntime(input: StartProjectRuntimeInput) {
 
 export async function dispatchAgentTask(input: AgentTaskRuntimeInput) {
   return invoke<AgentTaskRunResult>("dispatch_agent_task", { input });
+}
+
+export async function mergeProjectPullRequests(input: MergeProjectPullRequestsInput) {
+  return invoke<MergeProjectPullRequestsResult>("merge_project_pull_requests", { input });
 }

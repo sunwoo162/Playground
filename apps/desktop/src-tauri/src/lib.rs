@@ -1,4 +1,5 @@
 mod agent_runtime;
+mod integration_runtime;
 mod project_runtime;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -10,7 +11,8 @@ pub fn run() {
             project_runtime::project_runtime_preflight,
             project_runtime::bootstrap_project_repository,
             project_runtime::start_project_runtime,
-            agent_runtime::dispatch_agent_task
+            agent_runtime::dispatch_agent_task,
+            integration_runtime::merge_project_pull_requests
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
