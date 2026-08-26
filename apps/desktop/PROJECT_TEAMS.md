@@ -133,6 +133,34 @@ Project Teams and execution-control local writes are coalesced at the microtask 
 
 This history makes the orchestration state durable beyond browser storage, but it does not reconnect to an already-running Codex OS process after a full app/process loss. True process-level live-session reconciliation remains separate work.
 
+## Worktree lifecycle cleanup and archive
+
+Independent Agent execution creates one worktree per task under the project workspace parent:
+
+```text
+.luna-worktrees/<projectId>/<taskId>
+```
+
+After the project merge gate succeeds and the required PRs have been merged into `develop`, Luna runs a conservative cleanup pass for completed task worktrees. Cleanup is evidence-gated rather than age-based or directory-based, and it never uses `git worktree remove --force`.
+
+Repository-changing Agents are eligible only when the task is `done` and the persisted branch, commit, and PR evidence are present. Before removal Luna checks that the worktree is clean including untracked files, the current branch matches the recorded Agent branch, the worktree HEAD matches the recorded commit, and the referenced GitHub PR is actually `MERGED` with the expected head branch and `develop` base.
+
+Review/read-only Agents do not need writer PR metadata, but their completed worktree must be clean and remain on detached HEAD. A review-style worktree that unexpectedly has branch metadata or an attached branch is preserved instead of being guessed safe.
+
+Luna also verifies that the target path stays under the expected `.luna-worktrees/<projectId>` root and is still registered by `git worktree list --porcelain`. Windows path handling separates the original lexical-root check from canonical-path/registry comparison so normal `C:\...` paths and Windows canonical `\\?\C:\...` forms do not bypass or incorrectly fail the safety boundary. This is path-hardening logic, not a claim that the packaged Windows app has completed end-to-end verification.
+
+Dirty or untracked worktrees, blocked/incomplete tasks, missing writer evidence, branch/commit mismatches, unmerged PRs, unexpected registry state, and unsafe paths are skipped and preserved. Local or remote Agent branches are not force-deleted by this lifecycle step.
+
+Before attempting destructive removal, Luna flushes an archive record to the Tauri application-data directory:
+
+```text
+project-teams/worktree-archive/<projectId>.jsonl
+```
+
+The archive records task/session/turn identity, role, original worktree path, branch, commit, PR, evidence, and verification together with lifecycle phases such as `pre-remove`, `removed`, `remove-failed`, and `already-absent`. `pre-remove` is written before `git worktree remove`; this keeps an auditable record even if removal or the app fails afterward. After the project pass Luna runs `git worktree prune` to clear stale Git registry entries.
+
+Worktree removal does not erase the main Project Teams task record. Durable orchestration history continues to retain the task/Agent/branch/commit/PR/evidence state, while the separate archive records what happened to the physical worktree.
+
 ## Data & Marketing workflow
 
 Every team has its own independent **Data & Marketing Agent**. It is a repository-changing Agent and works in:
@@ -244,6 +272,7 @@ Implemented in the existing Tauri/React desktop app includes:
 - dependency-aware Agent task queue with bounded parallel waves
 - cooperative `/pause` / `/resume` / `/stop` execution control with persisted wave-boundary reconciliation
 - dedicated Agent worktrees and `agent/<team>/<role>/<task>` branches
+- evidence-gated completed-worktree cleanup/archive after project integration
 - Codex App Server Agent threads/turns
 - repository writer commit/push/PR contract with independent post-turn verification
 - Code Review / Reviewer / QA / Documentation / User role separation
@@ -262,7 +291,6 @@ See [`AGENT_RUNTIME_POLICY.md`](./AGENT_RUNTIME_POLICY.md) for the detailed auto
 The following still require dedicated verification or implementation and must not be represented as finished:
 
 - true in-turn Codex App Server pause/interruption/reconnect reconciliation beyond the implemented cooperative wave-boundary controls
-- completed-worktree lifecycle cleanup/archive
 - reusable 꽃다발 authentication implementation
 - final Luna apps portal release publication
 - managed unattended GitHub identity/credential strategy
