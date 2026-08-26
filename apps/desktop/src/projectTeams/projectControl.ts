@@ -1,3 +1,5 @@
+import { loadRemoteRunnerSettings } from "./remoteRunnerSettings";
+
 export type ProjectExecutionControlState = "running" | "paused" | "stopped";
 
 export type ProjectExecutionControl = {
@@ -17,9 +19,10 @@ function keyForProject(projectId: string) {
 }
 
 function createDefaultControl(projectId: string): ProjectExecutionControl {
+  const remoteHandoff = loadRemoteRunnerSettings().mode === "remote";
   return {
     projectId,
-    state: "running",
+    state: remoteHandoff ? "paused" : "running",
     updatedAt: new Date().toISOString(),
   };
 }
