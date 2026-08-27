@@ -1,0 +1,181 @@
+name: Deploy Bloom Worker
+
+on:
+  workflow_run:
+    workflows: ["Deploy to Server"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bloom-worker-production
+  cancel-in-progress: true
+
+jobs:
+  provision-worker:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Bloom runtime Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Build Bloom worker
+        run: pnpm run build:bloom-worker
+
+      - name: Build Bloom runtime bridge
+        run: pnpm run build:bloom-runtime-bridge
+
+      - name: Copy Bloom runtime bridge to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          source: "bloom-runtime/target/release/bloom-runtime-bridge"
+          target: "/home/ubuntu/playground/bloom-runtime/target/release/"
+          strip_components: 3
+
+      - name: Provision and start Bloom worker
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          command_timeout: 15m
+          script: |
+            set -eu
+            cd /home/ubuntu/playground
+            export PATH="$HOME/.local/node_modules/.bin:$PATH"
+
+            git fetch origin main
+            git reset --hard origin/main
+
+            command -v pnpm >/dev/null 2>&1 || npm install --prefix "$HOME/.local" pnpm@10.33.0
+            pnpm install --frozen-lockfile
+            pnpm run build:bloom-worker
+
+            BRIDGE="/home/ubuntu/playground/bloom-runtime/target/release/bloom-runtime-bridge"
+            test -f "$BRIDGE" || { echo "Bloom runtime bridge is missing"; exit 1; }
+            chmod +x "$BRIDGE"
+
+            mkdir -p /home/ubuntu/bloom-workspaces
+
+            touch /home/ubuntu/playground/.env
+            TOKEN_CREATED=false
+            if ! grep -Eq '^BUILDER_WORKER_TOKEN=.+$' /home/ubuntu/playground/.env; then
+              WORKER_TOKEN="$(openssl rand -hex 32)"
+              printf '\nBUILDER_WORKER_TOKEN=%s\n' "$WORKER_TOKEN" >> /home/ubuntu/playground/.env
+              TOKEN_CREATED=true
+              echo "Generated a server-local BUILDER_WORKER_TOKEN"
+            fi
+
+            append_default_env() {
+              KEY="$1"
+              VALUE="$2"
+              if ! grep -Eq "^${KEY}=.+$" /home/ubuntu/playground/.env; then
+                printf '%s=%s\n' "$KEY" "$VALUE" >> /home/ubuntu/playground/.env
+              fi
+            }
+
+            append_default_env BLOOM_API_BASE_URL http://localhost:8080
+            append_default_env BLOOM_GITHUB_ORGANIZATION sunwoo162
+            append_default_env BLOOM_WORKSPACE_ROOT /home/ubuntu/bloom-workspaces
+            append_default_env BLOOM_WORKER_ID bloom-worker-production
+            append_default_env BLOOM_TEAM_ID rose
+            append_default_env BLOOM_TEAM_NAME Rose
+
+            export $(grep -v '^#' /home/ubuntu/playground/.env | xargs)
+            if [ -n "${GITHUB_TOKEN:-}" ] && [ -z "${GH_TOKEN:-}" ]; then
+              export GH_TOKEN="$GITHUB_TOKEN"
+            fi
+
+            if ! command -v gh >/dev/null 2>&1; then
+              sudo apt-get update
+              sudo apt-get install -y gh
+            fi
+
+            if ! command -v codex >/dev/null 2>&1; then
+              npm install --prefix "$HOME/.local" @openai/codex@latest
+            fi
+
+            test -n "${BUILDER_WORKER_TOKEN:-}" || { echo "BUILDER_WORKER_TOKEN is missing"; exit 1; }
+            test -n "${BLOOM_GITHUB_ORGANIZATION:-}" || { echo "BLOOM_GITHUB_ORGANIZATION is missing"; exit 1; }
+            test -n "${BLOOM_WORKSPACE_ROOT:-}" || { echo "BLOOM_WORKSPACE_ROOT is missing"; exit 1; }
+
+            if [ "$TOKEN_CREATED" = "true" ]; then
+              pm2 reload ecosystem.config.js --only backend --update-env
+            fi
+
+            WORKER_READY=true
+
+            if gh auth status >/tmp/bloom-gh-auth.log 2>&1; then
+              echo "Bloom preflight: GitHub CLI authentication OK"
+            else
+              echo "Bloom preflight: GitHub CLI authentication MISSING"
+              cat /tmp/bloom-gh-auth.log || true
+              WORKER_READY=false
+            fi
+
+            if codex --version >/tmp/bloom-codex-version.log 2>&1; then
+              echo "Bloom preflight: Codex CLI installed ($(cat /tmp/bloom-codex-version.log))"
+            else
+              echo "Bloom preflight: Codex CLI unavailable"
+              WORKER_READY=false
+            fi
+
+            if codex login status >/tmp/bloom-codex-auth.log 2>&1; then
+              echo "Bloom preflight: Codex ChatGPT authentication OK"
+            else
+              echo "Bloom preflight: Codex ChatGPT authentication MISSING"
+              cat /tmp/bloom-codex-auth.log || true
+              WORKER_READY=false
+            fi
+
+            if [ "$WORKER_READY" != "true" ]; then
+              pm2 delete bloom-worker 2>/dev/null || true
+              pm2 save
+              echo "Bloom worker was not started because interactive CLI authentication is incomplete."
+              exit 2
+            fi
+
+            pm2 delete bloom-worker 2>/dev/null || true
+            pm2 start ecosystem.config.js --only bloom-worker --update-env
+            sleep 3
+
+            WORKER_PID="$(pm2 pid bloom-worker)"
+            test -n "$WORKER_PID" && [ "$WORKER_PID" != "0" ] || { echo "Bloom worker did not stay online"; exit 1; }
+
+            pm2 save
+            echo "Bloom worker online with PID $WORKER_PID"
