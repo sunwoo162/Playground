@@ -32,6 +32,9 @@
     "src/projectTeams/sessionReconciliationPolicy.ts",
     "src/projectTeams/sessionReconciliation.policy-test.ts",
     "src/projectTeams/orchestrationCore.ts",
-    "src/projectTeams/orchestrationCore.policy-test.ts"
+    "src/projectTeams/orchestrationCore.policy-test.ts",
+    "src/projectTeams/builderWorkerAdapter.ts",
+    "src/projectTeams/builderWorkerHttpClient.ts",
+    "src/projectTeams/builderWorkerAdapter.policy-test.ts"
   ]
 }
