@@ -29,6 +29,9 @@ export type ProjectSubmissionInput = {
   frontendRepositoryUrl?: string | null;
   backendRepositoryUrl?: string | null;
   requiresAuth: boolean;
+  authPolicyId?: string | null;
+  bouquetClientId?: string | null;
+  bouquetRedirectUri?: string | null;
 };
 
 export type EvaluationPlanStep = {
@@ -66,6 +69,16 @@ export const EVALUATION_AGENT_PERMISSIONS: AgentPermission[] = [
   "build:run",
 ];
 
+export const BOUQUET_AUTH_EVALUATION_CHECKLIST = [
+  "익명 상태에서 보호 화면/API가 노출되지 않고 꽃다발 로그인 시작 경로가 명확한지 확인한다.",
+  "프로젝트가 이메일/비밀번호를 직접 수집하지 않고 중앙 BloomBouquet 꽃다발 Portal로 이동하는지 확인한다.",
+  "꽃다발 계정으로 로그인한 뒤 등록된 callback으로 돌아와 프로젝트 세션이 생성되고 보호 기능을 사용할 수 있는지 확인한다.",
+  "이미 중앙 꽃다발 세션이 있는 상태에서 다른 꽃다발 프로젝트로 이동했을 때 credential 재입력 없이 SSO가 이어지는지 확인한다.",
+  "callback의 state 누락/불일치, 잘못된 PKCE verifier, authorization code 재사용이 정상 세션으로 승격되지 않는지 확인한다.",
+  "프로젝트 로그아웃 뒤 해당 프로젝트 세션은 무효화되며 중앙 꽃다발 세션 정책과 프로젝트 세션 경계가 혼동되지 않는지 확인한다.",
+  "브라우저 저장소, URL, 로그, 오류 UI에서 bouquet access token/code/verifier가 노출되지 않는지 확인한다.",
+] as const;
+
 const BASE_ROLES: Array<Exclude<EvaluationAgentRole, "backend" | "code-review" | "process-evaluator">> = [
   "user-a",
   "user-b",
@@ -95,6 +108,7 @@ export const SENIOR_EVALUATION_REPORT_CONTRACT = {
     "Tie every technical term to observable evidence and product or engineering impact.",
     "Do not copy, anchor on, or revise a score based on another evaluator's conclusion.",
     "Do not claim production readiness without evidence from the relevant specialist domain.",
+    "When requiresAuth=true, treat the Bouquet SSO checklist as observable evaluation evidence rather than trusting declared auth metadata alone.",
   ] as const,
 };
 
@@ -125,6 +139,26 @@ export function assertBouquetAuthCompatibility(input: ProjectSubmissionInput): v
   if (!input.demoUrl.startsWith("https://")) {
     throw new Error("Bouquet authentication projects require an HTTPS demo URL.");
   }
+  if (input.authPolicyId !== "bouquet") {
+    throw new Error("Bouquet authentication projects require authPolicyId=bouquet.");
+  }
+  if (!input.bouquetClientId?.startsWith("bouquet-submission-")) {
+    throw new Error("Bouquet authentication projects require a provisioned Bouquet OAuth client ID.");
+  }
+  if (!input.bouquetRedirectUri?.startsWith("https://")) {
+    throw new Error("Bouquet authentication projects require an HTTPS Bouquet redirect URI.");
+  }
+
+  const demo = new URL(input.demoUrl);
+  const redirect = new URL(input.bouquetRedirectUri);
+  if (demo.origin !== redirect.origin) {
+    throw new Error("Bouquet redirect URI must share the demo URL origin.");
+  }
+}
+
+export function bouquetAuthEvaluationChecklist(input: ProjectSubmissionInput): readonly string[] {
+  assertBouquetAuthCompatibility(input);
+  return input.requiresAuth ? BOUQUET_AUTH_EVALUATION_CHECKLIST : [];
 }
 
 function clampScore(value: number, min: number, max: number): number {
