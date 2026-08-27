@@ -15,11 +15,18 @@ function run() {
   );
 
   for (const team of state.teams) {
-    assert(team.agents.length === 15, `${team.id} must initialize all 15 delivery Agent roles`);
+    assert(team.agents.length === 19, `${team.id} must initialize all 19 delivery Agent roles`);
     assert(
       team.agents.some((agent) => agent.role === "data-marketing"),
       `${team.id} must own an independent Data & Marketing Agent`,
     );
+
+    for (const specialistRole of ["database", "security", "devops", "accessibility"] as const) {
+      assert(
+        team.agents.some((agent) => agent.role === specialistRole),
+        `${team.id} must own an independent ${specialistRole} Agent`,
+      );
+    }
 
     const ids = new Set(team.agents.map((agent) => agent.id));
     assert(ids.size === team.agents.length, `${team.id} Agent IDs must be unique`);
@@ -36,7 +43,7 @@ function run() {
     }
   }
 
-  console.log("PASS  Luna 15-Agent senior baseline scenarios passed.");
+  console.log("PASS  Luna 19-Agent senior baseline scenarios passed.");
 }
 
 run();
