@@ -7,6 +7,7 @@ import {
   type LiveE2ESnapshotEnvelope,
 } from '../../../bloom-runtime/ts/e2eSmoke'
 
+import SchedulerObservabilityPanel from './SchedulerObservabilityPanel'
 import './live-e2e.css'
 
 type BuilderUser = {
@@ -291,6 +292,8 @@ export default function LiveE2EPanel({ onClose }: LiveE2EPanelProps) {
             </div>
             {message && <p className="bloom-e2e-message" role="status">{message}</p>}
           </section>
+
+          <SchedulerObservabilityPanel snapshot={snapshot} />
 
           <section className="bloom-e2e-card">
             <div className="bloom-e2e-card-heading">
