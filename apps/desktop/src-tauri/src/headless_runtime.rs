@@ -4,6 +4,7 @@ use std::io::{self, Read};
 
 use crate::{
     agent_evidence_runtime,
+    agent_reconciliation,
     agent_runtime,
     intake_runtime,
     integration_runtime,
@@ -28,6 +29,26 @@ enum HeadlessRuntimeRequest {
         intake_id: String,
         request: String,
     },
+    #[serde(rename = "planProject")]
+    PlanProject {
+        organization: String,
+        #[serde(rename = "workspaceRoot")]
+        workspace_root: String,
+        #[serde(rename = "projectId")]
+        project_id: String,
+        #[serde(rename = "teamId")]
+        team_id: String,
+        #[serde(rename = "teamName")]
+        team_name: String,
+        request: String,
+    },
+    #[serde(rename = "bootstrapProjectRepository")]
+    BootstrapProjectRepository {
+        organization: String,
+        repository: String,
+        #[serde(rename = "workspaceRoot")]
+        workspace_root: String,
+    },
     #[serde(rename = "startProject")]
     StartProject {
         organization: String,
@@ -44,6 +65,10 @@ enum HeadlessRuntimeRequest {
     #[serde(rename = "dispatchAgentTask")]
     DispatchAgentTask {
         input: agent_runtime::AgentTaskRuntimeInput,
+    },
+    #[serde(rename = "reconcileInterruptedAgentTask")]
+    ReconcileInterruptedAgentTask {
+        input: agent_reconciliation::ReconcileInterruptedAgentTaskInput,
     },
     #[serde(rename = "mergePullRequests")]
     MergePullRequests {
@@ -99,6 +124,38 @@ async fn execute(request: HeadlessRuntimeRequest) -> HeadlessRuntimeResponse {
             Ok(result) => success(result),
             Err(error) => failure(error),
         },
+        HeadlessRuntimeRequest::PlanProject {
+            organization,
+            workspace_root,
+            project_id,
+            team_id,
+            team_name,
+            request,
+        } => match project_runtime::plan_project_runtime(
+            organization,
+            workspace_root,
+            project_id,
+            team_id,
+            team_name,
+            request,
+        )
+        .await
+        {
+            Ok(result) => success(result),
+            Err(error) => failure(error),
+        },
+        HeadlessRuntimeRequest::BootstrapProjectRepository {
+            organization,
+            repository,
+            workspace_root,
+        } => match project_runtime::bootstrap_project_repository(
+            organization,
+            repository,
+            workspace_root,
+        ) {
+            Ok(result) => success(result),
+            Err(error) => failure(error),
+        },
         HeadlessRuntimeRequest::StartProject {
             organization,
             workspace_root,
@@ -121,6 +178,12 @@ async fn execute(request: HeadlessRuntimeRequest) -> HeadlessRuntimeResponse {
         },
         HeadlessRuntimeRequest::DispatchAgentTask { input } => {
             match agent_evidence_runtime::dispatch_agent_task(input).await {
+                Ok(result) => success(result),
+                Err(error) => failure(error),
+            }
+        }
+        HeadlessRuntimeRequest::ReconcileInterruptedAgentTask { input } => {
+            match agent_evidence_runtime::reconcile_interrupted_agent_task(input).await {
                 Ok(result) => success(result),
                 Err(error) => failure(error),
             }

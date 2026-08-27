@@ -2,11 +2,16 @@ import {
   REPOSITORY_WRITER_ROLES,
   taskTransitivelyDependsOn,
 } from "./planTopology";
-import type { AgentRole, ProjectState, ProjectTaskRun } from "./types";
+import type { AgentRole, ProjectPlan, ProjectTaskRun } from "./types";
 
 export type ProjectMergeGate =
   | { ready: true; pullRequestNumbers: number[] }
   | { ready: false; pullRequestNumbers: number[]; reasons: string[] };
+
+export type ProjectMergeGateState = {
+  plan: ProjectPlan | null;
+  taskRuns: ProjectTaskRun[];
+};
 
 function verificationPassed(run: ProjectTaskRun) {
   return !run.verification.some(
@@ -15,7 +20,7 @@ function verificationPassed(run: ProjectTaskRun) {
 }
 
 function cleanReviewRuns(
-  project: ProjectState,
+  project: ProjectMergeGateState,
   role: Extract<AgentRole, "code-review" | "reviewer" | "qa">,
   pullRequestNumber: number,
 ) {
@@ -28,7 +33,7 @@ function cleanReviewRuns(
   );
 }
 
-export function evaluateProjectMergeGate(project: ProjectState): ProjectMergeGate {
+export function evaluateProjectMergeGate(project: ProjectMergeGateState): ProjectMergeGate {
   const reasons: string[] = [];
   const unfinished = project.taskRuns.filter((run) => run.status !== "done");
   if (unfinished.length > 0) {

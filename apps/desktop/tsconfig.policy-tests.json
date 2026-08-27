@@ -33,8 +33,11 @@
     "src/projectTeams/sessionReconciliation.policy-test.ts",
     "src/projectTeams/orchestrationCore.ts",
     "src/projectTeams/orchestrationCore.policy-test.ts",
+    "src/projectTeams/mergeGate.ts",
     "src/projectTeams/builderWorkerAdapter.ts",
     "src/projectTeams/builderWorkerHttpClient.ts",
-    "src/projectTeams/builderWorkerAdapter.policy-test.ts"
+    "src/projectTeams/builderWorkerAdapter.policy-test.ts",
+    "src/projectTeams/headlessBuilderExecutor.ts",
+    "src/projectTeams/headlessBuilderExecutor.policy-test.ts"
   ]
 }
