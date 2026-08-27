@@ -52,8 +52,8 @@ function isUntouchedRun(run: ProjectTaskRun) {
     && run.pullRequestNumber === null;
 }
 
-export function assignInitialTaskRunAgents(taskRuns: ProjectTaskRun[]): ProjectTaskRun[] {
-  if (taskRuns.length === 0 || !taskRuns.every(isUntouchedRun)) return taskRuns;
+export function assignTaskRunAgentsPreservingStarted(taskRuns: ProjectTaskRun[]): ProjectTaskRun[] {
+  if (taskRuns.length === 0) return taskRuns;
 
   const teamId = teamIdFromAgentId(taskRuns[0].agentId);
   if (!teamId) return taskRuns;
@@ -63,7 +63,14 @@ export function assignInitialTaskRunAgents(taskRuns: ProjectTaskRun[]): ProjectT
     const pool = agentIdsForRole(teamId, run.role);
     const offset = roleOffsets.get(run.role) ?? 0;
     roleOffsets.set(run.role, offset + 1);
+
+    if (!isUntouchedRun(run)) return run;
     const agentId = pool[offset % pool.length];
     return agentId === run.agentId ? run : { ...run, agentId };
   });
+}
+
+export function assignInitialTaskRunAgents(taskRuns: ProjectTaskRun[]): ProjectTaskRun[] {
+  if (!taskRuns.every(isUntouchedRun)) return taskRuns;
+  return assignTaskRunAgentsPreservingStarted(taskRuns);
 }
