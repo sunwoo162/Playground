@@ -5,7 +5,7 @@ const path = require("node:path");
 
 const { runBuilderWorkerOnce } = require("../.tmp/bloom-worker/builderWorkerAdapter.js");
 const { createBuilderWorkerHttpClient } = require("../.tmp/bloom-worker/builderWorkerHttpClient.js");
-const { createHeadlessBuilderExecutor } = require("../.tmp/bloom-worker/headlessBuilderExecutor.js");
+const { createObservedHeadlessBuilderExecutor } = require("../.tmp/bloom-worker/observedHeadlessBuilderExecutor.js");
 
 const MAX_BRIDGE_OUTPUT_BYTES = 16 * 1024 * 1024;
 const TEAM_IDS = new Set(["rose", "lily", "tulip", "sunflower", "cherry-blossom"]);
@@ -163,7 +163,7 @@ async function main() {
   );
   const runtime = createRuntimeBridge(binaryPath);
   const client = createBuilderWorkerHttpClient({ baseUrl, token });
-  const execute = createHeadlessBuilderExecutor({
+  const execute = createObservedHeadlessBuilderExecutor({
     organization,
     workspaceRoot,
     teamId,
