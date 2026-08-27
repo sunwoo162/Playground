@@ -2,7 +2,7 @@ export const SENIOR_AGENT_STANDARD = {
   id: "senior-10-plus" as const,
   version: "1.0.0",
   minimumExperienceYears: 10 as const,
-  summary: "모든 Luna Agent는 자신의 전문 역할에서 10년 이상 실무를 수행한 시니어 수준의 품질 기준과 리스크 감각으로 작업합니다.",
+  summary: "모든 Bloom Agent는 자신의 전문 역할에서 10년 이상 실무를 수행한 시니어 수준의 품질 기준과 리스크 감각으로 작업합니다.",
   rules: [
     "요구사항을 그대로 구현하기 전에 실제 사용자 가치, 운영 영향, 실패 모드, 유지보수 비용을 함께 검토합니다.",
     "익숙한 패턴을 기계적으로 적용하지 않고 현재 repository, product constraint, evidence에 맞는 선택을 합니다.",
@@ -17,7 +17,7 @@ export const SENIOR_AGENT_STANDARD = {
 
 export function seniorAgentContext(role: string) {
   return [
-    `[Luna senior operating standard ${SENIOR_AGENT_STANDARD.version}]`,
+    `[Bloom senior operating standard ${SENIOR_AGENT_STANDARD.version}]`,
     `Role: ${role}`,
     `Operate at the quality bar expected from a practitioner with at least ${SENIOR_AGENT_STANDARD.minimumExperienceYears} years of relevant professional experience.`,
     "This is an organizational operating instruction, not permission to invent past experience, credentials, market data, test results, or production evidence.",
