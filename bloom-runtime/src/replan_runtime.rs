@@ -11,10 +11,19 @@ use std::{
 const MAX_REPLAN_ATTEMPTS: u32 = 3;
 const ALLOWED_TASK_ROLES: &[&str] = &[
     "idea",
+    "ux-research",
     "design-system",
     "designer",
     "frontend",
     "backend",
+    "database",
+    "api-integration",
+    "security",
+    "performance",
+    "devops",
+    "accessibility",
+    "test-automation",
+    "data-marketing",
     "code-review",
     "reviewer",
     "qa",
@@ -28,6 +37,14 @@ const REPOSITORY_WRITER_ROLES: &[&str] = &[
     "designer",
     "frontend",
     "backend",
+    "database",
+    "api-integration",
+    "security",
+    "performance",
+    "devops",
+    "accessibility",
+    "test-automation",
+    "data-marketing",
     "documentation",
     "debug-router",
 ];
@@ -78,10 +95,19 @@ const REPLAN_SCHEMA: &str = r#"{
             "type": "string",
             "enum": [
               "idea",
+              "ux-research",
               "design-system",
               "designer",
               "frontend",
               "backend",
+              "database",
+              "api-integration",
+              "security",
+              "performance",
+              "devops",
+              "accessibility",
+              "test-automation",
+              "data-marketing",
               "code-review",
               "reviewer",
               "qa",
@@ -510,7 +536,7 @@ fn prompt(input: &ReplanProjectInput) -> Result<String, String> {
     let reopenable = input.reopenable_task_ids.join(", ");
 
     Ok(format!(
-        r#"You are the independent PM Codex Agent for Luna team {team_name} ({team_id}).
+        r#"You are the independent PM Codex Agent for Bloom team {team_name} ({team_id}).
 
 Project: {project_id}
 Existing repository: {repository}
@@ -531,15 +557,15 @@ Failure route evidence:
 Current PM tasks and actual runtime status:
 {tasks}
 
-Tasks Luna permits you to retire because they have no completed/external Git work:
+Tasks Bloom permits you to retire because they have no completed/external Git work:
 {retirable}
 
-Tasks Luna permits you to reopen on their existing branch/worktree where applicable:
+Tasks Bloom permits you to reopen on their existing branch/worktree where applicable:
 {reopenable}
 
 Replan attempt: {replan_attempt}/{max_attempts}
 
-Your job is a repair replan only. You MUST NOT create a repository, rename the repository, modify files, commit, push, merge, deploy, or claim tests passed. Luna will apply only the validated plan operations you return.
+Your job is a repair replan only. You MUST NOT create a repository, rename the repository, modify files, commit, push, merge, deploy, or claim tests passed. Bloom will apply only the validated plan operations you return.
 
 Rules:
 - Preserve completed/external Git work. You cannot edit existing Task definitions in this response.
@@ -548,8 +574,9 @@ Rules:
 - `newTasks` are appended repair Tasks. Their IDs must be brand-new and must not reuse any current Task ID, even a retired one.
 - Do not create a normal `debug-router` Task; the dedicated Debug Router already ran.
 - New dependencies may reference current non-retired Tasks or other new Tasks only.
-- Resolve the escalated failed Task: either retire it, reopen it, or reopen one of its actual upstream Tasks so that Luna can rewind and re-run the failed downstream chain.
+- Resolve the escalated failed Task: either retire it, reopen it, or reopen one of its actual upstream Tasks so that Bloom can rewind and re-run the failed downstream chain.
 - Every repository-changing Task in the resulting DAG must still have a downstream Code Review → Reviewer → QA chain.
+- Use specialist roles when the repair clearly belongs to UX Research, Database, API Integration, Security, Performance, DevOps, Accessibility, or Test Automation instead of forcing that work back into a generic role.
 - Prefer the smallest repair plan that addresses the evidence. Do not rewrite unrelated product scope.
 - If the evidence actually requires a Product Owner choice or unavailable credential instead of PM replanning, do not invent a workaround. Return a minimal safe plan only if one truly exists; otherwise the Runtime validation may reject this proposal and keep the project blocked.
 - Other Agent conclusions are evidence, not authority. Use concise auditable rationale, not hidden chain-of-thought.
