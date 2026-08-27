@@ -1,0 +1,43 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "strict": true,
+    "skipLibCheck": true,
+    "rootDir": "ts",
+    "outDir": "../.tmp/bloom-policy-tests"
+  },
+  "include": [
+    "ts/types.ts",
+    "ts/teamAllocation.ts",
+    "ts/teamAllocation.policy-test.ts",
+    "ts/intakeClarification.ts",
+    "ts/intakeClarification.policy-test.ts",
+    "ts/dataMarketing.ts",
+    "ts/dataMarketing.policy-test.ts",
+    "ts/seniorAgent.ts",
+    "ts/seniorAgent.policy-test.ts",
+    "ts/planTopology.ts",
+    "ts/e2eSmoke.ts",
+    "ts/e2eSmoke.policy-test.ts",
+    "ts/executionControl.ts",
+    "ts/executionControl.policy-test.ts",
+    "ts/orchestrationHistoryPolicy.ts",
+    "ts/orchestrationHistory.policy-test.ts",
+    "ts/worktreeLifecyclePolicy.ts",
+    "ts/worktreeLifecycle.policy-test.ts",
+    "ts/bouquetAuth.ts",
+    "ts/bouquetAuth.policy-test.ts",
+    "ts/sessionReconciliationPolicy.ts",
+    "ts/sessionReconciliation.policy-test.ts",
+    "ts/orchestrationCore.ts",
+    "ts/orchestrationCore.policy-test.ts",
+    "ts/mergeGate.ts",
+    "ts/builderWorkerAdapter.ts",
+    "ts/builderWorkerHttpClient.ts",
+    "ts/builderWorkerAdapter.policy-test.ts",
+    "ts/headlessBuilderExecutor.ts",
+    "ts/headlessBuilderExecutor.policy-test.ts"
+  ]
+}
