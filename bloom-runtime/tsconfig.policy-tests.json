@@ -20,6 +20,7 @@
     "ts/seniorAgent.policy-test.ts",
     "ts/specialistRouting.ts",
     "ts/teamExpansion.policy-test.ts",
+    "ts/pmSpecialistRoles.policy-test.ts",
     "ts/planTopology.ts",
     "ts/e2eSmoke.ts",
     "ts/e2eSmoke.policy-test.ts",
