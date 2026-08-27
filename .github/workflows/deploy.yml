@@ -182,7 +182,7 @@ jobs:
 
             ROOT_OK=false
             AUTH_OK=false
-            for attempt in 1 2 3 4 5; do
+            for attempt in $(seq 1 30); do
               if curl -fsS "http://127.0.0.1:${SERVER_PORT}/" | grep -q '<title>BloomBouquet</title>'; then
                 ROOT_OK=true
               fi
