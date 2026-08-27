@@ -213,7 +213,7 @@ public class BloomBouquetService {
     @Transactional(readOnly = true)
     public List<BloomBouquetDto.AgentEvaluationResponse> getAgentEvaluations(Long runId) {
         if (!runRepository.existsById(runId)) {
-            throw new NoSuchElementException("평가 Run을 찾을 수 없습니다."));
+            throw new NoSuchElementException("평가 Run을 찾을 수 없습니다.");
         }
         return agentEvaluationRepository.findByRunIdOrderByIdAsc(runId).stream()
                 .map(this::toAgentEvaluationResponse).toList();
