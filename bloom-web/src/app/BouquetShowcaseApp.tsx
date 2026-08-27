@@ -146,10 +146,11 @@ export default function BouquetShowcaseApp() {
 
       <section className="bouquet-auth-note" aria-label="Authentication policy">
         <span className="bouquet-auth-mark">✿</span>
-        <div>
+        <div className="bouquet-auth-copy">
           <strong>꽃다발 공통 인증</strong>
           <p>회원가입/로그인이 필요한 모든 프로젝트는 동일한 꽃다발 인증 정책을 사용합니다.</p>
         </div>
+        <a className="bouquet-login-link" href="?mode=auth">꽃다발 로그인</a>
       </section>
 
       {loading && <div className="bouquet-state">프로젝트를 불러오는 중...</div>}

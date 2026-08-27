@@ -19,9 +19,12 @@ button, a { font: inherit; }
 .bouquet-stats span { color: #85828a; font-size: 12px; }
 
 .bouquet-auth-note { max-width: 1280px; margin: 0 auto 30px; display: flex; gap: 14px; align-items: center; padding: 17px 20px; background: #fff9fb; border: 1px solid #efdce6; border-radius: 20px; }
-.bouquet-auth-mark { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%; background: #f0d7e2; font-size: 20px; }
+.bouquet-auth-mark { width: 38px; height: 38px; flex: 0 0 38px; display: grid; place-items: center; border-radius: 50%; background: #f0d7e2; font-size: 20px; }
+.bouquet-auth-copy { min-width: 0; flex: 1; }
 .bouquet-auth-note strong { font-size: 14px; }
 .bouquet-auth-note p { margin: 3px 0 0; color: #7a7378; font-size: 13px; }
+.bouquet-login-link { flex: 0 0 auto; padding: 10px 14px; border: 1px solid #dcc8d3; border-radius: 12px; background: #fff; color: #6f4c62; font-size: 12px; font-weight: 900; text-decoration: none; transition: transform .15s ease, box-shadow .15s ease; }
+.bouquet-login-link:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(80, 49, 67, .08); }
 
 .bouquet-grid { max-width: 1280px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); gap: 18px; }
 .bouquet-card { min-height: 320px; display: flex; flex-direction: column; padding: 24px; background: #fff; border: 1px solid #e9e3e8; border-radius: 26px; box-shadow: 0 14px 40px rgba(71, 46, 62, .06); }
@@ -81,6 +84,9 @@ button, a { font: inherit; }
   .bouquet-hero { align-items: stretch; flex-direction: column; }
   .bouquet-stats { grid-template-columns: repeat(3, 1fr); }
   .bouquet-stats div { min-width: 0; padding: 14px; }
+  .bouquet-auth-note { align-items: flex-start; flex-wrap: wrap; }
+  .bouquet-auth-copy { flex-basis: calc(100% - 54px); }
+  .bouquet-login-link { width: 100%; text-align: center; }
   .bouquet-report-summary, .bouquet-review-grid { grid-template-columns: 1fr; }
   .bouquet-report-backdrop { padding: 8px; }
   .bouquet-report { padding: 20px; border-radius: 20px; }
