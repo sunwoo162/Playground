@@ -1,3 +1,19 @@
+export type BuilderOrchestrationSnapshot = {
+  schemaVersion: number;
+  version: number;
+  phase: string;
+  payloadJson: string;
+  updatedByWorkerId: string;
+  updatedAt: string | null;
+};
+
+export type BuilderOrchestrationSnapshotWrite = {
+  expectedVersion: number;
+  schemaVersion: number;
+  phase: string;
+  payloadJson: string;
+};
+
 export type BuilderWorkerClaim = {
   runId: number;
   projectId: number;
@@ -13,6 +29,7 @@ export type BuilderWorkerClaim = {
   templateId: string | null;
   repositoryFullName: string | null;
   previewUrl: string | null;
+  orchestrationSnapshot: BuilderOrchestrationSnapshot | null;
 };
 
 export type BuilderWorkerRunState = {
@@ -36,6 +53,12 @@ export type BuilderWorkerExecutionResult = {
 export type BuilderWorkerClient = {
   claim(workerId: string): Promise<BuilderWorkerClaim | null>;
   heartbeat(runId: number, workerId: string): Promise<BuilderWorkerRunState>;
+  loadSnapshot(runId: number, workerId: string): Promise<BuilderOrchestrationSnapshot | null>;
+  saveSnapshot(
+    runId: number,
+    workerId: string,
+    snapshot: BuilderOrchestrationSnapshotWrite,
+  ): Promise<BuilderOrchestrationSnapshot>;
   complete(
     runId: number,
     workerId: string,
@@ -46,6 +69,7 @@ export type BuilderWorkerClient = {
 
 export type BuilderWorkerExecutor = (
   claim: BuilderWorkerClaim,
+  client: BuilderWorkerClient,
 ) => Promise<BuilderWorkerExecutionResult>;
 
 export type BuilderWorkerTimer = {
@@ -133,7 +157,7 @@ export async function runBuilderWorkerOnce(
   let executionError: unknown = null;
 
   try {
-    executionResult = await executor(claim);
+    executionResult = await executor(claim, client);
   } catch (error) {
     executionError = error;
   } finally {

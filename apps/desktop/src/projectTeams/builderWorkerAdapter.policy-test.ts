@@ -27,6 +27,7 @@ const CLAIM: BuilderWorkerClaim = {
   templateId: "community",
   repositoryFullName: null,
   previewUrl: null,
+  orchestrationSnapshot: null,
 };
 
 function state(status: BuilderWorkerRunState["status"]): BuilderWorkerRunState {
@@ -78,6 +79,17 @@ function fakeClient(overrides: Partial<BuilderWorkerClient> = {}) {
     async heartbeat() {
       calls.heartbeat += 1;
       return state("running");
+    },
+    async loadSnapshot() {
+      return CLAIM.orchestrationSnapshot;
+    },
+    async saveSnapshot(_runId, workerId, snapshot) {
+      return {
+        ...snapshot,
+        version: snapshot.expectedVersion + 1,
+        updatedByWorkerId: workerId,
+        updatedAt: "2026-08-27T00:00:30",
+      };
     },
     async complete() {
       calls.complete += 1;
@@ -203,13 +215,13 @@ async function testFinalLeaseCheckPreventsLateCompletion() {
 }
 
 async function testHttpClientUsesWorkerHeaderAndHandlesNoContent() {
-  const requests: Array<{ input: string; headers: Record<string, string>; body: string }> = [];
+  const requests: Array<{ input: string; method: string; headers: Record<string, string>; body: string }> = [];
   const token = "0123456789abcdef0123456789abcdef";
   const client = createBuilderWorkerHttpClient({
     baseUrl: "http://localhost:8080/",
     token,
     fetchImpl: async (input, init) => {
-      requests.push({ input, headers: init.headers, body: init.body });
+      requests.push({ input, method: init.method, headers: init.headers, body: init.body ?? "" });
       return {
         ok: true,
         status: 204,
@@ -226,8 +238,45 @@ async function testHttpClientUsesWorkerHeaderAndHandlesNoContent() {
     requests[0].input === "http://localhost:8080/internal/builder/worker/runs/claim",
     "claim must target the internal worker endpoint",
   );
+  assert(requests[0].method === "POST", "claim must use POST");
   assert(requests[0].headers["X-Builder-Worker-Token"] === token, "worker token must be sent only in its header");
   assert(!requests[0].input.includes(token) && !requests[0].body.includes(token), "worker token must not enter URL or JSON body");
+}
+
+async function testHttpClientLoadsAndSavesSnapshot() {
+  const requests: Array<{ input: string; method: string; body: string }> = [];
+  const token = "0123456789abcdef0123456789abcdef";
+  const client = createBuilderWorkerHttpClient({
+    baseUrl: "http://localhost:8080",
+    token,
+    fetchImpl: async (input, init) => {
+      requests.push({ input, method: init.method, body: init.body ?? "" });
+      const payload = init.method === "PUT"
+        ? { schemaVersion: 1, version: 3, phase: "building", payloadJson: "{\"tasks\":[]}", updatedByWorkerId: "worker-01", updatedAt: null }
+        : { schemaVersion: 1, version: 2, phase: "planning", payloadJson: "{\"tasks\":[]}", updatedByWorkerId: "worker-old", updatedAt: null };
+      return {
+        ok: true,
+        status: 200,
+        async json() { return payload; },
+        async text() { return ""; },
+      };
+    },
+  });
+
+  const loaded = await client.loadSnapshot(11, "worker-01");
+  assert(loaded?.version === 2, "snapshot GET must return persisted version");
+  const saved = await client.saveSnapshot(11, "worker-01", {
+    expectedVersion: 2,
+    schemaVersion: 1,
+    phase: "building",
+    payloadJson: "{\"tasks\":[]}",
+  });
+  assert(saved.version === 3, "snapshot PUT must return incremented version");
+  assert(requests[0].method === "GET" && requests[0].body === "", "snapshot load must use bodyless GET");
+  assert(requests[0].input.endsWith("/internal/builder/worker/runs/11/snapshot?workerId=worker-01"), "snapshot load endpoint must include workerId");
+  assert(requests[1].method === "PUT", "snapshot save must use PUT");
+  assert(requests[1].body.includes('"expectedVersion":2'), "snapshot save must send optimistic version");
+  assert(!requests[0].input.includes(token) && !requests[1].body.includes(token), "worker token must remain out of URL and snapshot payload");
 }
 
 function testHttpClientRejectsUnsafeConfiguration() {
@@ -263,6 +312,7 @@ async function run() {
   await testHeartbeatLossPreventsStaleTerminalUpdate();
   await testFinalLeaseCheckPreventsLateCompletion();
   await testHttpClientUsesWorkerHeaderAndHandlesNoContent();
+  await testHttpClientLoadsAndSavesSnapshot();
   testHttpClientRejectsUnsafeConfiguration();
   console.log("builderWorkerAdapter policy tests passed");
 }
