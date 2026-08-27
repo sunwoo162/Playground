@@ -2,6 +2,7 @@ mod agent_evidence_runtime;
 mod agent_reconciliation;
 mod agent_runtime;
 mod failure_router_runtime;
+pub mod headless_runtime;
 mod intake_runtime;
 mod integration_runtime;
 mod market_discovery_runtime;
