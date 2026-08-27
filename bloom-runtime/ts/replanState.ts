@@ -41,15 +41,11 @@ function emptyRun(task: ProjectTaskPlan, teamId: string): ProjectTaskRun {
   };
 }
 
-function resetRun(run: ProjectTaskRun, task: ProjectTaskPlan, teamId: string): ProjectTaskRun {
+function resetRun(run: ProjectTaskRun, task: ProjectTaskPlan): ProjectTaskRun {
   return {
     ...run,
     role: task.role,
-    agentId: `${teamId}:${task.role}`,
     status: "pending",
-    attempts: 0,
-    branchName: null,
-    worktreePath: null,
     threadId: null,
     sessionId: null,
     turnId: null,
@@ -187,7 +183,7 @@ export function applyProjectFailureReplan(
   let nextRuns = revisedPlan.tasks.map((task) => {
     const existing = oldRunById.get(task.id);
     if (!existing) return emptyRun(task, project.teamId);
-    if (rewind.has(task.id)) return resetRun(existing, task, project.teamId);
+    if (rewind.has(task.id)) return resetRun(existing, task);
     return existing;
   });
   nextRuns = makeReadyWhenDependenciesDone(revisedPlan.tasks, nextRuns);
