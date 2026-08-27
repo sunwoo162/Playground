@@ -6,7 +6,7 @@ BloomBouquet에 등록된 프로젝트 Submission의 `QUEUED` Evaluation Run을 
 
 ## Existing Boundaries Reused
 
-- Backend가 `claim`, Agent result 기록, Agent result 조회, `complete` worker API를 소유한다.
+- Backend가 `claim`, `heartbeat`, Agent result 기록, Agent result 조회, `complete` worker API를 소유한다.
 - `evaluationPlatform.ts`가 evaluator role, 독립 실행 계획, senior report contract, Bouquet auth checklist를 소유한다.
 - 기존 자율 코딩 worker는 repository writer/PR 생성 흐름을 계속 담당하지만 BloomBouquet evaluator는 writer 권한을 사용하지 않는다.
 - 기존 Builder worker token을 내부 worker 인증 경계로 재사용한다.
@@ -16,8 +16,9 @@ BloomBouquet에 등록된 프로젝트 Submission의 `QUEUED` Evaluation Run을 
 Evaluator runtime을 Builder 실행기와 분리한다.
 
 1. `BloomBouquetEvaluatorHttpClient`
-   - `/api/internal/builder/worker/bloom-bouquet/*` endpoint만 호출한다.
-   - claim, Agent 평가 기록, 기존 평가 조회, final complete를 제공한다.
+   - `/internal/builder/worker/bloom-bouquet/*` endpoint만 호출한다.
+   - 모든 요청에 internal worker token과 `X-Bloom-Worker-Id`를 보낸다.
+   - claim, heartbeat, Agent 평가 기록, 기존 평가 조회, final complete를 제공한다.
    - token, base URL, HTTP error handling 정책은 기존 Builder HTTP client와 동일한 수준으로 유지한다.
 
 2. `BloomBouquetEvaluatorWorker`
@@ -29,6 +30,8 @@ Evaluator runtime을 Builder 실행기와 분리한다.
    - 각 결과를 즉시 Backend에 저장한다.
    - 모든 필수 independent role이 저장된 뒤에만 aggregate runner를 실행한다.
    - Process Evaluator 입력에만 독립 평가 전체를 포함한다.
+   - 90초 lease 동안 기본 30초 heartbeat를 유지한다.
+   - heartbeat가 끊긴 worker는 이후 Agent result 또는 final complete를 stale write하지 않고 `lease-lost`로 종료한다.
 
 3. `SeniorEvaluatorRunner`
    - worker orchestration은 구체적인 LLM provider에 의존하지 않고 interface에 의존한다.
@@ -78,28 +81,42 @@ Process Evaluator output:
 
 Process Evaluator는 모든 필수 independent Agent 결과가 존재할 때만 실행한다.
 
-## Retry and Idempotency
+## Retry, Lease, and Idempotency
 
-- claim된 run이 `RUNNING`인 동안 worker가 재시작될 수 있으므로 Backend에 이미 저장된 role 목록을 source of truth로 사용한다.
+- claim 시 Backend가 worker identity와 90초 lease를 소유권으로 기록한다.
+- worker는 lease보다 짧은 주기로 heartbeat를 갱신한다.
+- 다른 worker는 유효한 lease를 가진 run에 결과를 기록하거나 완료할 수 없다.
+- lease가 만료된 `RUNNING` run은 다음 worker가 reclaim할 수 있고 `claimCount`가 증가한다.
+- worker가 재시작되거나 reclaim된 경우 Backend에 이미 저장된 role 목록을 source of truth로 사용한다.
 - 이미 기록된 role은 건너뛴다.
-- Agent 하나가 실패하면 아직 성공한 Agent 결과를 삭제하지 않고 run을 미완료 상태로 남겨 다음 복구 경로가 이어받을 수 있게 한다.
+- Agent 하나가 실패하면 이미 성공한 Agent 결과를 삭제하지 않고, lease expiry/reclaim 이후 다음 worker가 이어서 실행한다.
 - 동일 Submission의 과거 Evaluation Run이나 이전 버전 결과를 덮어쓰지 않는다.
 
-## Worker Loop Integration
+## Worker Mode Integration
 
-기존 `bloom-worker/run.js`는 한 poll cycle에서 BloomBouquet 평가를 먼저 시도하고, 평가가 없을 때 기존 Builder run을 claim한다. 이렇게 하면 evaluator workload가 writer flow와 섞이지 않으면서 동일 프로세스/인증/운영 환경을 재사용할 수 있다.
+`bloom-worker/run.js`는 하나의 프로세스가 두 책임을 동시에 claim하지 않도록 명시적 runtime mode로 분리한다.
+
+- 기본 `BLOOM_WORKER_MODE=evaluator`: BloomBouquet Evaluation Run만 처리한다.
+- `BLOOM_WORKER_MODE=builder`: 기존 자율 Builder run만 처리한다.
+- 두 모드는 동일한 `BLOOM_API_BASE_URL`, `BUILDER_WORKER_TOKEN`, `BLOOM_WORKER_ID`, heartbeat/poll 설정을 재사용한다.
+- Builder용 GitHub organization/workspace/team/runtime bridge 설정은 builder mode에서만 필요하다.
+
+이 구조는 평가 Agent의 read-only 책임과 Builder의 writer 권한을 운영 프로세스 수준에서도 분리한다.
 
 ## Testing
 
-Policy/unit tests에서 다음을 검증한다.
+Policy/unit/E2E tests에서 다음을 검증한다.
 
-- HTTP endpoint/path/body/token 계약
+- HTTP endpoint/path/body/token/worker identity 계약
+- claim lease, heartbeat, 다른 worker ownership conflict, expired lease reclaim
 - repo URL에 따른 evaluator role 선택
 - 독립 Agent input에 다른 Agent 결과가 포함되지 않음
 - 이미 저장된 role skip
 - Agent result 즉시 persistence
+- heartbeat loss 이후 stale Agent persistence/aggregate/complete 차단
 - 모든 필수 role 이전 Process Evaluator 실행 금지
 - aggregate input에는 independent results 포함
-- Backend duplicate protection과 함께 retry 시 중복 결과를 만들지 않음
+- retry/reclaim 시 기존 결과 재사용 및 중복 결과 방지
 - evaluator worker가 writer permission/path를 사용하지 않음
+- evaluator/builder runtime mode 분리
 - worker TypeScript build와 전체 Harness regression
