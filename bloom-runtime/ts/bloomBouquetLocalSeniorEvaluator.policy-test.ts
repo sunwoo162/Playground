@@ -165,7 +165,8 @@ async function testLocalTransportRetriesInvalidJsonAndSendsSchema() {
   assert.match(JSON.stringify(bodies[0]), /output schema/i);
   assert.match(JSON.stringify(bodies[0]), /score/);
   assert.match(JSON.stringify(bodies[1]), /previous response was not valid json/i);
-  assert.doesNotMatch(JSON.stringify(bodies[0]), /tool_choice|tools/);
+  assert.equal(Object.prototype.hasOwnProperty.call(bodies[0], "tools"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(bodies[0], "tool_choice"), false);
 }
 
 async function testLocalTransportRejectsNonLoopbackEndpoint() {
