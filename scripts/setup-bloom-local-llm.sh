@@ -36,7 +36,8 @@ fi
 pm2 delete bloom-local-llm >/dev/null 2>&1 || true
 BLOOM_LLAMA_BIN="$LLAMA_BIN" pm2 start "$ROOT_DIR/bloom-worker/start-local-llm.sh" \
   --name bloom-local-llm \
-  --interpreter bash
+  --interpreter bash \
+  --max-memory-restart 2600M
 pm2 save >/dev/null
 
 HEALTH_URL="http://127.0.0.1:${BLOOM_LOCAL_LLM_PORT:-8091}/health"
@@ -44,7 +45,7 @@ echo "[bloom-local] waiting for model server: $HEALTH_URL"
 for _ in $(seq 1 450); do
   if curl -fsS "$HEALTH_URL" >/dev/null 2>&1; then
     echo "[bloom-local] local model is ready"
-    echo "[bloom-local] engine: Qwen2.5-Coder-1.5B-Instruct Q4_K_M / llama.cpp / parallel=1"
+    echo "[bloom-local] engine: Qwen2.5-Coder-1.5B-Instruct Q4_K_M / llama.cpp / parallel=1 / threads=${BLOOM_LOCAL_LLM_THREADS:-3}"
     echo "[bloom-local] compatibility shim: $(command -v codex)"
     exit 0
   fi
