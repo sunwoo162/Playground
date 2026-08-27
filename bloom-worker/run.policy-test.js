@@ -24,6 +24,9 @@ test('Bloom worker entrypoint wires evaluator runtime and gates builder behind m
   assert.match(source, /createBloomBouquetEvaluatorHttpClient/);
   assert.match(source, /runBloomBouquetEvaluatorOnce/);
   assert.match(source, /createCodexSeniorEvaluatorRunner/);
+  assert.match(source, /createLocalSeniorEvaluatorRunner/);
+  assert.match(source, /BLOOM_EVALUATOR_RUNTIME/);
+  assert.match(source, /evaluatorRuntime === ['"]local['"]/);
   assert.match(source, /resolveBloomWorkerMode/);
   assert.match(source, /mode === ['"]builder['"]/);
 });
@@ -32,7 +35,7 @@ test('evaluator mode passes worker identity and heartbeat policy into the lease-
   const source = fs.readFileSync(path.join(ROOT, 'bloom-worker/run.js'), 'utf8');
 
   assert.match(source, /runBloomBouquetEvaluatorOnce\(client,\s*workerId,\s*runner,\s*\{[\s\S]*heartbeatIntervalMs/);
-  assert.match(source, /started mode=evaluator workerId=\$\{workerId\}/);
+  assert.match(source, /started mode=evaluator runtime=\$\{evaluatorRuntime\} workerId=\$\{workerId\}/);
 });
 
 test('production PM2 config explicitly pins Bloom worker to evaluator mode', () => {
