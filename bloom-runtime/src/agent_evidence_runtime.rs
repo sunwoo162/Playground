@@ -9,10 +9,18 @@ use crate::{agent_reconciliation, agent_runtime};
 const ALLOWED_TEAMS: &[&str] = &["rose", "lily", "tulip", "sunflower", "cherry-blossom"];
 const ALLOWED_ROLES: &[&str] = &[
     "idea",
+    "ux-research",
     "design-system",
     "designer",
     "frontend",
     "backend",
+    "database",
+    "api-integration",
+    "security",
+    "performance",
+    "devops",
+    "accessibility",
+    "test-automation",
     "data-marketing",
     "code-review",
     "reviewer",
