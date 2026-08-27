@@ -162,7 +162,7 @@ export default function BouquetAuthApp() {
 
   return (
     <main className="bouquet-auth-shell">
-      <a className="bouquet-auth-home" href="/bloom/" aria-label="BloomBouquet으로 돌아가기">
+      <a className="bouquet-auth-home" href="/" aria-label="BloomBouquet으로 돌아가기">
         <span aria-hidden="true">✿</span>
         <strong>BloomBouquet</strong>
       </a>
@@ -209,7 +209,7 @@ export default function BouquetAuthApp() {
                 {oauth.projectHost ? `${oauth.projectHost} 계속하기` : '프로젝트로 계속하기'}
               </button>
             ) : (
-              <a className="bouquet-auth-primary bouquet-auth-primary-link" href="/bloom/">
+              <a className="bouquet-auth-primary bouquet-auth-primary-link" href="/">
                 프로젝트 둘러보기
               </a>
             )}
