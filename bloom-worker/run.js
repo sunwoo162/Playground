@@ -3,9 +3,13 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 
+const { resolveBloomWorkerMode } = require("./runtime-mode.js");
 const { runBuilderWorkerOnce } = require("../.tmp/bloom-worker/builderWorkerAdapter.js");
 const { createBuilderWorkerHttpClient } = require("../.tmp/bloom-worker/builderWorkerHttpClient.js");
 const { createObservedHeadlessBuilderExecutor } = require("../.tmp/bloom-worker/observedHeadlessBuilderExecutor.js");
+const { createBloomBouquetEvaluatorHttpClient } = require("../.tmp/bloom-worker/bloomBouquetEvaluatorHttpClient.js");
+const { runBloomBouquetEvaluatorOnce } = require("../.tmp/bloom-worker/bloomBouquetEvaluatorWorker.js");
+const { createCodexSeniorEvaluatorRunner } = require("../.tmp/bloom-worker/bloomBouquetSeniorEvaluator.js");
 
 const MAX_BRIDGE_OUTPUT_BYTES = 16 * 1024 * 1024;
 const TEAM_IDS = new Set(["rose", "lily", "tulip", "sunflower", "cherry-blossom"]);
@@ -129,10 +133,30 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function main() {
-  const baseUrl = configValue("BLOOM_API_BASE_URL", "BUILDER_API_BASE_URL") || "http://localhost:8080";
-  // Backend worker authentication still uses the existing Builder protocol token.
-  const token = requiredConfig("BUILDER_WORKER_TOKEN");
+async function runEvaluatorMode({ baseUrl, token, pollIntervalMs, isStopping }) {
+  const client = createBloomBouquetEvaluatorHttpClient({ baseUrl, token });
+  const runner = createCodexSeniorEvaluatorRunner({
+    cwd: path.resolve(__dirname, ".."),
+  });
+
+  console.log(`[bloom-worker] started mode=evaluator api=${baseUrl}`);
+  while (!isStopping()) {
+    try {
+      const outcome = await runBloomBouquetEvaluatorOnce(client, runner);
+      if (outcome.status !== "idle") {
+        console.log(`[bloom-worker] evaluator run ${outcome.runId ?? "-"} -> ${outcome.status}`);
+      }
+      if (outcome.status === "idle" || outcome.status === "partial") {
+        await sleep(pollIntervalMs);
+      }
+    } catch (error) {
+      console.error(`[bloom-worker] evaluator cycle error: ${error instanceof Error ? error.message : String(error)}`);
+      await sleep(pollIntervalMs);
+    }
+  }
+}
+
+async function runBuilderMode({ baseUrl, token, pollIntervalMs, isStopping }) {
   const organization = requiredConfig("BLOOM_GITHUB_ORGANIZATION", "BUILDER_GITHUB_ORGANIZATION");
   const workspaceRoot = requiredConfig("BLOOM_WORKSPACE_ROOT", "BUILDER_WORKSPACE_ROOT");
   const teamId = configValue("BLOOM_TEAM_ID", "BUILDER_TEAM_ID") || "rose";
@@ -142,12 +166,6 @@ async function main() {
   const teamName = configValue("BLOOM_TEAM_NAME", "BUILDER_TEAM_NAME") || teamId;
   const workerId = configValue("BLOOM_WORKER_ID", "BUILDER_WORKER_ID")
     || `bloom-${os.hostname()}-${process.pid}`;
-  const pollIntervalMs = integerConfig(
-    "BLOOM_WORKER_POLL_INTERVAL_MS",
-    "BUILDER_WORKER_POLL_INTERVAL_MS",
-    5000,
-    1000,
-  );
   const heartbeatIntervalMs = integerConfig(
     "BLOOM_WORKER_HEARTBEAT_INTERVAL_MS",
     "BUILDER_WORKER_HEARTBEAT_INTERVAL_MS",
@@ -171,22 +189,14 @@ async function main() {
     runtime,
   });
 
-  let stopping = false;
-  const stop = (signal) => {
-    stopping = true;
-    console.log(`[bloom-worker] ${signal} received; current cycle will finish before exit.`);
-  };
-  process.on("SIGINT", () => stop("SIGINT"));
-  process.on("SIGTERM", () => stop("SIGTERM"));
-
-  console.log(`[bloom-worker] started workerId=${workerId} team=${teamId} api=${baseUrl}`);
-  while (!stopping) {
+  console.log(`[bloom-worker] started mode=builder workerId=${workerId} team=${teamId} api=${baseUrl}`);
+  while (!isStopping()) {
     try {
       const outcome = await runBuilderWorkerOnce(client, workerId, execute, {
         heartbeatIntervalMs,
       });
       if (outcome.status !== "idle") {
-        console.log(`[bloom-worker] run ${outcome.claim?.runId ?? "-"} -> ${outcome.status}`);
+        console.log(`[bloom-worker] builder run ${outcome.claim?.runId ?? "-"} -> ${outcome.status}`);
       }
       if (
         outcome.status === "idle"
@@ -197,10 +207,45 @@ async function main() {
         await sleep(pollIntervalMs);
       }
     } catch (error) {
-      console.error(`[bloom-worker] cycle error: ${error instanceof Error ? error.message : String(error)}`);
+      console.error(`[bloom-worker] builder cycle error: ${error instanceof Error ? error.message : String(error)}`);
       await sleep(pollIntervalMs);
     }
   }
+}
+
+async function main() {
+  const mode = resolveBloomWorkerMode(process.env.BLOOM_WORKER_MODE);
+  const baseUrl = configValue("BLOOM_API_BASE_URL", "BUILDER_API_BASE_URL") || "http://localhost:8080";
+  // Evaluator and legacy builder currently authenticate through the same internal worker token.
+  const token = requiredConfig("BUILDER_WORKER_TOKEN");
+  const pollIntervalMs = integerConfig(
+    "BLOOM_WORKER_POLL_INTERVAL_MS",
+    "BUILDER_WORKER_POLL_INTERVAL_MS",
+    5000,
+    1000,
+  );
+
+  let stopping = false;
+  const stop = (signal) => {
+    stopping = true;
+    console.log(`[bloom-worker] ${signal} received; current cycle will finish before exit.`);
+  };
+  process.on("SIGINT", () => stop("SIGINT"));
+  process.on("SIGTERM", () => stop("SIGTERM"));
+
+  const common = {
+    baseUrl,
+    token,
+    pollIntervalMs,
+    isStopping: () => stopping,
+  };
+
+  if (mode === "builder") {
+    await runBuilderMode(common);
+    return;
+  }
+
+  await runEvaluatorMode(common);
 }
 
 main().catch((error) => {
