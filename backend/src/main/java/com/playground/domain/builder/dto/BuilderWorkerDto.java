@@ -17,6 +17,30 @@ public class BuilderWorkerDto {
     @Getter
     @Builder
     @AllArgsConstructor
+    public static class SnapshotResponse {
+        private int schemaVersion;
+        private long version;
+        private String phase;
+        private String payloadJson;
+        private String updatedByWorkerId;
+        private LocalDateTime updatedAt;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class SnapshotWriteRequest {
+        private String workerId;
+        private Long expectedVersion;
+        private Integer schemaVersion;
+        private String phase;
+        private String payloadJson;
+    }
+
+    @Getter
+    @Builder
+    @AllArgsConstructor
     public static class ClaimResponse {
         private Long runId;
         private Long projectId;
@@ -32,6 +56,7 @@ public class BuilderWorkerDto {
         private String templateId;
         private String repositoryFullName;
         private String previewUrl;
+        private SnapshotResponse orchestrationSnapshot;
     }
 
     @Getter

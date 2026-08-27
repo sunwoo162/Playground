@@ -15,6 +15,7 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -25,11 +26,15 @@ class BuilderWorkerRunServiceTest {
     @Mock
     private BuilderProjectRunRepository runRepository;
 
+    @Mock
+    private BuilderOrchestrationSnapshotService snapshotService;
+
     private BuilderWorkerRunService service;
 
     @BeforeEach
     void setUp() {
-        service = new BuilderWorkerRunService(projectRepository, runRepository);
+        service = new BuilderWorkerRunService(projectRepository, runRepository, snapshotService);
+        lenient().when(snapshotService.findForClaim(anyLong())).thenReturn(Optional.empty());
     }
 
     @Test
@@ -62,6 +67,30 @@ class BuilderWorkerRunServiceTest {
         assertNotNull(run.getStartedAt());
         assertNotNull(run.getHeartbeatAt());
         verify(projectRepository).save(project);
+    }
+
+    @Test
+    void claimReturnsPersistedOrchestrationSnapshotForResume() {
+        BuilderProject project = project(7L, "running");
+        BuilderProjectRun run = run(11L, project, "running", "worker-old");
+        run.setLeaseExpiresAt(LocalDateTime.now().minusSeconds(1));
+        when(runRepository.claimNextAvailableForUpdate()).thenReturn(Optional.of(run));
+        when(runRepository.save(any(BuilderProjectRun.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(snapshotService.findForClaim(11L)).thenReturn(Optional.of(
+                BuilderWorkerDto.SnapshotResponse.builder()
+                        .schemaVersion(1)
+                        .version(4)
+                        .phase("building")
+                        .payloadJson("{\"tasks\":[{\"id\":\"frontend\"}]}")
+                        .updatedByWorkerId("worker-old")
+                        .build()
+        ));
+
+        BuilderWorkerDto.ClaimResponse response = service.claimNext("worker-new").orElseThrow();
+
+        assertNotNull(response.getOrchestrationSnapshot());
+        assertEquals(4L, response.getOrchestrationSnapshot().getVersion());
+        assertEquals("building", response.getOrchestrationSnapshot().getPhase());
     }
 
     @Test
