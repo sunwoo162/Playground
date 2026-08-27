@@ -1,7 +1,11 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const http = require("node:http");
+const os = require("node:os");
+const path = require("node:path");
+const { resolveThroughExistingAncestor } = require("./local-path-compat.js");
 const {
   completeJson,
   localResourceSnapshot,
@@ -27,6 +31,17 @@ async function withFakeServer(handler, run) {
 async function main() {
   assert.deepEqual(parseJsonObject("```json\n{\"ok\":true}\n```"), { ok: true });
   assert.deepEqual(parseJsonObject("prefix {\"value\":3} suffix"), { value: 3 });
+
+  const nestedRoot = fs.mkdtempSync(path.join(os.tmpdir(), "bloom-local-path-"));
+  try {
+    const nested = path.join(nestedRoot, "src", "components", "App.tsx");
+    assert.equal(resolveThroughExistingAncestor(nested), nested);
+    fs.mkdirSync(path.dirname(nested), { recursive: true });
+    fs.writeFileSync(nested, "export default null;\n", "utf8");
+    assert.equal(fs.realpathSync(nested), nested);
+  } finally {
+    fs.rmSync(nestedRoot, { recursive: true, force: true });
+  }
 
   const normalized = normalizeReport({
     status: "completed",
