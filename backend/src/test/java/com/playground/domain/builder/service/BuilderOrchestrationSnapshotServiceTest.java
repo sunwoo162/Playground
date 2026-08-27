@@ -14,6 +14,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -186,6 +187,35 @@ class BuilderOrchestrationSnapshotServiceTest {
 
         assertEquals(2L, response.getVersion());
         assertEquals("planning", response.getPhase());
+    }
+
+    @Test
+    void ownerCanReadSnapshotWithoutOwningWorkerLease() {
+        BuilderProjectRun run = runningRun("worker-01");
+        run.setStatus("completed");
+        run.setLeaseExpiresAt(null);
+        BuilderOrchestrationSnapshot snapshot = snapshot(run, 5L);
+        when(runRepository.findByIdAndProject_IdAndOwnerId(11L, 7L, "user-1")).thenReturn(Optional.of(run));
+        when(snapshotRepository.findByRun_Id(11L)).thenReturn(Optional.of(snapshot));
+
+        BuilderWorkerDto.SnapshotResponse response = service.findForOwner("user-1", 7L, 11L).orElseThrow();
+
+        assertEquals(5L, response.getVersion());
+        assertEquals("planning", response.getPhase());
+        verify(runRepository, never()).findByIdForUpdate(anyLong());
+    }
+
+    @Test
+    void anotherOwnerCannotReadSnapshot() {
+        when(runRepository.findByIdAndProject_IdAndOwnerId(11L, 7L, "user-2")).thenReturn(Optional.empty());
+
+        NoSuchElementException error = assertThrows(
+                NoSuchElementException.class,
+                () -> service.findForOwner("user-2", 7L, 11L)
+        );
+
+        assertTrue(error.getMessage().contains("실행 기록"));
+        verify(snapshotRepository, never()).findByRun_Id(anyLong());
     }
 
     private BuilderProjectRun runningRun(String workerId) {
