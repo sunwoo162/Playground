@@ -1,61 +1,39 @@
-import { createInitialProjectTeamsState } from "./catalog";
-import { auditLiveE2EProject, LIVE_E2E_MARKER } from "./e2eSmoke";
-import type {
-  ExecutableAgentRole,
-  ProjectState,
-  ProjectTaskPlan,
-  ProjectTaskRun,
-  ProjectTeamsState,
-} from "./types";
+import {
+  auditLiveE2ESnapshot,
+  createLiveE2ESmokeRequest,
+  LIVE_E2E_MARKER,
+  type LiveE2ESnapshotEnvelope,
+} from "./e2eSmoke";
 
 function assert(condition: boolean, message: string) {
   if (!condition) throw new Error(message);
 }
 
-const roles: ExecutableAgentRole[] = [
-  "frontend",
-  "backend",
-  "data-marketing",
-  "documentation",
-  "code-review",
-  "reviewer",
-  "qa",
-];
+const writerRoles = ["frontend", "backend", "data-marketing", "documentation"] as const;
+const governanceRoles = ["code-review", "reviewer", "qa"] as const;
 
-function task(role: ExecutableAgentRole, index: number): ProjectTaskPlan {
-  return {
-    id: `TASK-${String(index + 1).padStart(3, "0")}`,
-    title: `${role} task`,
-    role,
-    taskSlug: `${role}-task`,
-    summary: `${role} E2E fixture task`,
-    dependsOn: index === 0 ? [] : [`TASK-${String(index).padStart(3, "0")}`],
-    acceptanceCriteria: ["fixture complete"],
-  };
-}
-
-function run(
-  role: ExecutableAgentRole,
+function taskRun(
+  role: string,
   index: number,
-  reviewedPullRequests: number[],
-): ProjectTaskRun {
-  const writer = ["frontend", "backend", "data-marketing", "documentation"].includes(role);
+  reviewedPullRequests: number[] = [],
+) {
+  const writer = writerRoles.includes(role as (typeof writerRoles)[number]);
   return {
     taskId: `TASK-${String(index + 1).padStart(3, "0")}`,
     role,
     agentId: `rose:${role}`,
     status: "done",
     attempts: 1,
-    branchName: writer ? `agent/rose/${role}/${role}-task` : null,
-    worktreePath: writer ? `/tmp/${role}` : null,
+    branchName: writer ? `bloom-e2e/${role}` : null,
+    worktreePath: writer ? `/tmp/bloom-e2e/${role}` : null,
     threadId: `thread-${role}`,
-    sessionId: `thread-${role}-turn-${role}`,
+    sessionId: `session-${role}`,
     turnId: `turn-${role}`,
     eventsPath: `/tmp/${role}.events.jsonl`,
     stderrPath: `/tmp/${role}.stderr.log`,
     commitSha: writer ? `${index + 1}`.repeat(40).slice(0, 40) : null,
     pullRequestNumber: writer ? 100 + index : null,
-    pullRequestUrl: writer ? `https://github.com/BloomBouquet/e2e/pull/${100 + index}` : null,
+    pullRequestUrl: writer ? `https://github.com/BloomBouquet/bloom-e2e-pulseboard-fixture/pull/${100 + index}` : null,
     reviewedPullRequests,
     summary: `${role} complete`,
     rationaleSummary: "fixture evidence",
@@ -63,115 +41,113 @@ function run(
     verification: [{ name: "fixture", status: "passed", details: "passed" }],
     blockers: [],
     lastError: null,
-    startedAt: "2026-08-26T00:00:00.000Z",
-    completedAt: "2026-08-26T00:01:00.000Z",
+    startedAt: "2026-08-27T00:00:00.000Z",
+    completedAt: "2026-08-27T00:01:00.000Z",
   };
 }
 
-function completedFixture(): ProjectTeamsState {
-  const state = createInitialProjectTeamsState();
-  const tasks = roles.map(task);
-  const writerPrs = [100, 101, 102, 103];
-  const taskRuns = roles.map((role, index) =>
-    run(role, index, role === "code-review" ? writerPrs : []),
-  );
-  const project: ProjectState = {
-    id: "PROJECT-E2E-FIXTURE",
+function completedSnapshot(): LiveE2ESnapshotEnvelope {
+  const writerPrs = writerRoles.map((_, index) => 100 + index);
+  const taskRuns = [
+    ...writerRoles.map((role, index) => taskRun(role, index)),
+    taskRun("code-review", 4, writerPrs),
+    taskRun("reviewer", 5),
+    taskRun("qa", 6),
+  ];
+  const payload = {
+    schemaVersion: 1,
+    runId: 44,
+    projectId: 12,
+    runtimeProjectId: "builder-12",
+    intakeId: "builder-run-44",
     request: `${LIVE_E2E_MARKER} build Pulseboard`,
-    teamId: "rose",
-    status: "completed",
-    createdAt: "2026-08-26T00:00:00.000Z",
-    completedAt: "2026-08-26T00:10:00.000Z",
     intake: {
-      id: "INTAKE-E2E",
-      agentVersion: "1.0.0",
+      analysis: { summary: "Pulseboard" },
       sessionId: "intake-session",
       eventsPath: "/tmp/intake.events.jsonl",
       outputPath: "/tmp/intake.json",
-      createdAt: "2026-08-26T00:00:01.000Z",
-      summary: "Pulseboard",
-      primaryUser: "small product team",
-      primaryJob: "track feedback",
-      complexity: "medium",
-      requiredRoles: ["frontend", "backend", "data-marketing", "documentation", "code-review", "reviewer", "qa"],
-      criticalRoles: ["frontend", "backend"],
-      needsAuth: false,
-      userFacing: true,
-      externalDependencies: [],
-      riskFlags: ["data-persistence"],
-      assumptions: [],
-      missingInputs: [],
-      rationaleSummary: "fixture intake",
     },
-    teamAllocation: {
-      strategy: "fairness-guarded-evidence",
-      assignmentCountBefore: 0,
-      completedProjectsBefore: 0,
-      lastAssignedAt: null,
-      reason: "fixture allocation",
+    pm: {
+      sessionId: "pm-session",
+      eventsPath: "/tmp/pm.events.jsonl",
+      outputPath: "/tmp/pm.json",
     },
-    authPolicyId: "bouquet",
-    executionPolicyId: "iseol-workflow",
-    autonomyPolicyId: "independent-agent",
-    decisionPolicyId: "reasoned-agent-decisions",
-    documentationPolicyId: "documentation-evidence",
-    qualityPolicyId: "production-service",
-    deploymentPolicyId: "luna-apps-portal",
     plan: {
-      projectName: "Pulseboard",
-      repositoryName: "luna-e2e-pulseboard-fixture",
-      productSummary: "E2E fixture",
-      architectureSummary: "web + API + SQLite",
-      needsAuth: false,
-      technologyDecisions: [],
-      tasks,
+      repositoryName: "bloom-e2e-pulseboard-fixture",
+      tasks: taskRuns.map((run) => ({ id: run.taskId, role: run.role })),
+    },
+    repository: {
+      repository: "BloomBouquet/bloom-e2e-pulseboard-fixture",
+      workspacePath: "/tmp/bloom-e2e-pulseboard-fixture",
     },
     taskRuns,
-    repositoryFullName: "BloomBouquet/luna-e2e-pulseboard-fixture",
-    workspacePath: "/tmp/luna-e2e-pulseboard-fixture",
-    pmSessionId: "pm-session",
-    runtimeFailureSource: null,
-    runtimeMessage: "Agent 회고 7개 및 Team Evolution 제안 0개 저장 완료 · 프로젝트 아카이브 완료",
+    integrationPullRequestNumbers: writerPrs,
+    integration: {
+      repositoryFullName: "BloomBouquet/bloom-e2e-pulseboard-fixture",
+      mergedPullRequests: writerPrs.map((number, index) => ({
+        number,
+        url: `https://github.com/BloomBouquet/bloom-e2e-pulseboard-fixture/pull/${number}`,
+        headBranch: `bloom-e2e/${writerRoles[index]}`,
+        mergeCommitSha: `merge-${number}`,
+      })),
+    },
+    blockedReason: null,
   };
-
   return {
-    ...state,
-    projects: [project],
-    teams: state.teams.map((team) =>
-      team.id === "rose"
-        ? { ...team, status: "idle", activeProjectId: null, completedProjects: 1 }
-        : team,
-    ),
+    schemaVersion: 1,
+    version: 10,
+    phase: "completed",
+    payloadJson: JSON.stringify(payload),
+    updatedByWorkerId: "bloom-worker-fixture",
+    updatedAt: "2026-08-27T00:10:00.000Z",
   };
 }
 
 function main() {
-  const completed = completedFixture();
-  const project = completed.projects[0];
-  const audit = auditLiveE2EProject(completed, project);
-  assert(audit.passed, `completed E2E fixture must pass: ${audit.checks.filter((item) => item.status !== "pass").map((item) => item.id).join(", ")}`);
-  assert(audit.completedChecks === audit.totalChecks, "all E2E checks must be complete");
+  const request = createLiveE2ESmokeRequest(new Date(2026, 7, 27, 10, 11, 12));
+  assert(request.repositoryName === "bloom-e2e-pulseboard-20260827-101112", "E2E repository name must use Bloom prefix and timestamp");
+  assert(request.request.includes(LIVE_E2E_MARKER), "E2E request must include Bloom marker");
+  assert(!request.request.includes("LUNA-E2E"), "E2E request must not use the old Luna marker");
 
-  const running: ProjectTeamsState = {
+  const completed = completedSnapshot();
+  const completedAudit = auditLiveE2ESnapshot(completed, "completed");
+  assert(completedAudit.passed, `completed E2E snapshot must pass: ${completedAudit.checks.filter((item) => item.status !== "pass").map((item) => item.id).join(", ")}`);
+  assert(completedAudit.completedChecks === completedAudit.totalChecks, "all completed E2E checks must pass");
+
+  const runningPayload = JSON.parse(completed.payloadJson);
+  runningPayload.taskRuns[0].status = "running";
+  runningPayload.integrationPullRequestNumbers = [];
+  runningPayload.integration = null;
+  const runningAudit = auditLiveE2ESnapshot({
     ...completed,
-    projects: [{
-      ...project,
-      status: "development",
-      completedAt: null,
-      runtimeMessage: "Agent execution in progress",
-      taskRuns: project.taskRuns.map((item, index) =>
-        index === 0 ? { ...item, status: "running" as const } : { ...item, status: "pending" as const },
-      ),
-    }],
-    teams: completed.teams.map((team) =>
-      team.id === "rose" ? { ...team, status: "working", activeProjectId: project.id } : team,
-    ),
-  };
-  const runningAudit = auditLiveE2EProject(running, running.projects[0]);
-  assert(!runningAudit.passed, "in-progress E2E fixture must not pass");
-  assert(runningAudit.checks.some((item) => item.status === "pending"), "in-progress fixture should expose pending checks");
+    phase: "building",
+    payloadJson: JSON.stringify(runningPayload),
+  }, "running");
+  assert(!runningAudit.passed, "running E2E snapshot must not pass");
+  assert(runningAudit.checks.some((item) => item.status === "pending"), "running E2E snapshot should expose pending checks");
 
-  console.log("PASS  Luna live E2E smoke audit scenarios passed.");
+  const uncoveredPayload = JSON.parse(completed.payloadJson);
+  const codeReview = uncoveredPayload.taskRuns.find((run: { role: string }) => run.role === "code-review");
+  codeReview.reviewedPullRequests = codeReview.reviewedPullRequests.slice(0, -1);
+  const uncoveredAudit = auditLiveE2ESnapshot({
+    ...completed,
+    payloadJson: JSON.stringify(uncoveredPayload),
+  }, "completed");
+  const coverage = uncoveredAudit.checks.find((item) => item.id === "review-coverage");
+  assert(coverage?.status === "fail", "missing writer PR review coverage must fail the E2E audit");
+
+  const malformedAudit = auditLiveE2ESnapshot({
+    ...completed,
+    payloadJson: "{broken-json",
+  }, "failed");
+  assert(!malformedAudit.passed, "malformed terminal snapshot must fail");
+  assert(malformedAudit.checks.every((item) => item.status !== "pending"), "failed terminal snapshot must not remain pending");
+
+  const queuedAudit = auditLiveE2ESnapshot(null, "queued");
+  assert(!queuedAudit.passed, "queued run without snapshot must not pass");
+  assert(queuedAudit.checks.every((item) => item.status === "pending"), "queued run without snapshot should remain pending");
+
+  console.log(`PASS  Bloom live E2E snapshot audit scenarios passed (${governanceRoles.length + writerRoles.length} fixture roles).`);
 }
 
 main();

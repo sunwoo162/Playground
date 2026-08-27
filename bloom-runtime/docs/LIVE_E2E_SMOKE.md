@@ -1,25 +1,27 @@
-# Luna Live E2E Smoke
+# Bloom Live E2E Smoke
 
 ## Goal
 
-This is Luna's first production-path smoke test. It is intentionally different from a unit test, policy test, or mocked orchestration test.
+This smoke test verifies Bloom's real headless project execution path, not only policy or mocked orchestration code.
 
-The run must use the same local Runtime and GitHub flow that a real project uses:
+The target flow is:
 
 ```text
-/start
+Bloom Web project request
   ↓
-Organization Project Intake
+Builder run queue
   ↓
-team allocation
+Bloom worker claim
   ↓
-team PM Codex
+Organization Intake
   ↓
-BloomBouquet repository bootstrap
+PM plan
+  ↓
+repository bootstrap
   ↓
 Frontend + Backend Agent work
   ↓
-agent branches / worktrees / commits / pull requests
+repository-writing Agent branches / worktrees / commits / pull requests
   ↓
 Data & Marketing
   ↓
@@ -31,16 +33,12 @@ Reviewer
   ↓
 QA
   ↓
-develop integration
+integration merge
   ↓
-Agent retrospectives
-  ↓
-Team Evolution
-  ↓
-team returns to idle
+worker Run completed
 ```
 
-Passing GitHub CI alone is not a Live E2E pass.
+A deterministic CI policy scenario protects this contract, but CI alone is not a real Live E2E pass because the production path requires the operator machine's authenticated Codex and GitHub Runtime.
 
 ## Fixture product
 
@@ -64,53 +62,61 @@ It requires:
 - meaningful automated tests
 - reproducible setup
 
-The fixture intentionally requires both Frontend and Backend work so a successful run proves more than a single static page path.
+The fixture intentionally requires both Frontend and Backend work so the run proves more than a static-page path.
 
 ## Starting a run
 
-Open:
+Open Bloom Web and choose **Live E2E**.
+
+The panel creates a normal Bloom project whose brief contains `[BLOOM-E2E-SMOKE]` and an exact unique repository name such as:
 
 ```text
-Tools → Live E2E Smoke
+bloom-e2e-pulseboard-20260827-101112
 ```
 
-The page generates a unique repository name and a `[LUNA-E2E-SMOKE]` `/start` command.
+Starting the smoke uses the same public project create API and run queue API as an ordinary Bloom project. There is no hidden orchestration shortcut.
 
-Use **명령 복사하고 Project Teams 열기**, paste the copied command into Project Teams, and run it.
+## Required local worker preconditions
 
-The smoke command does not use a hidden shortcut. It enters the normal `/start` path so Organization Intake and team allocation are exercised exactly as they are for a real project.
+Before starting a real run:
 
-## Required local preconditions
+1. Bloom backend is running and the browser is authenticated.
+2. A Bloom worker is running and can claim the queued run.
+3. `codex --version` works on the worker machine.
+4. `codex login status` confirms ChatGPT authentication.
+5. `gh auth status` succeeds with access to the target GitHub organization.
+6. Git can fetch and push repositories.
+7. `BLOOM_WORKSPACE_ROOT` points to a writable workspace root.
+8. `BLOOM_GITHUB_ORGANIZATION` is configured for the intended organization.
+9. The Bloom Runtime bridge can be built and launched.
+10. No secrets are pasted into the project brief or generated documentation.
 
-Before running:
-
-1. Luna workspace root is configured.
-2. `codex --version` works locally.
-3. `codex login status` confirms ChatGPT authentication.
-4. `gh auth status` succeeds with access to the BloomBouquet organization.
-5. Git is installed and can fetch/push GitHub repositories.
-6. The machine can create sibling `.luna-worktrees` and `.luna-runtime` directories.
-7. No secret values are pasted into the project request or documentation.
-
-If a prerequisite is unavailable, the smoke run should block honestly rather than being marked passed.
+If one of these prerequisites is unavailable, the run must block or fail honestly instead of being marked passed.
 
 ## Audit contract
 
-The Live E2E page scans the latest project containing `[LUNA-E2E-SMOKE]` and checks eleven milestones:
+Bloom Web reads the authenticated run snapshot through:
 
-1. Organization Intake record and real Codex session
-2. auditable team allocation
-3. PM plan, PM session, repository and workspace
-4. Frontend and Backend Tasks both complete
-5. every repository-writing Task has verified commit and PR evidence
-6. Data & Marketing and Documentation complete
-7. Data Marketing → Documentation → Code Review → Reviewer → QA governance complete
+```text
+GET /api/builder/projects/{projectId}/runs/{runId}/snapshot
+```
+
+The endpoint is read-only and returns a snapshot only when the logged-in user owns the project and run.
+
+The Live E2E audit checks ten milestones:
+
+1. Bloom orchestration snapshot contains the E2E marker
+2. Organization Intake analysis and real session evidence
+3. PM plan and PM session evidence
+4. repository and workspace bootstrap evidence
+5. Frontend and Backend Agent Tasks complete
+6. every repository-writing Task has verified commit and PR evidence
+7. Data & Marketing -> Documentation -> Code Review -> Reviewer -> QA completes
 8. Code Review evidence covers every writer PR
-9. project reaches the post-integration state
-10. retrospectives and Team Evolution complete
-11. assigned team returns to idle
+9. integration target PRs are all merged
+10. worker Run and orchestration phase both reach `completed` without a blocked reason
 
-The smoke is `ALL PASS` only when every check passes.
+`ALL PASS` means all ten checks pass. Missing evidence stays `pending` while the run is active and becomes `fail` when the run reaches a terminal state without satisfying the contract.
 
 ## Expected repository artifacts
 
@@ -121,41 +127,40 @@ docs/marketing/MARKETING_ANALYSIS.md
 docs/marketing/GO_TO_MARKET.md
 ```
 
-The marketing files must describe the product that was actually built. Unsupported market metrics remain hypotheses or gaps rather than fabricated facts.
+The marketing files must describe the product that was actually built. Unsupported market metrics remain hypotheses or evidence gaps rather than fabricated facts.
 
 ## What to inspect when a run stops
 
-Do not reset the project immediately. Preserve the evidence first.
+Preserve evidence before retrying or deleting the fixture repository.
 
 Inspect:
 
-- Project Teams runtime message
+- Bloom Web run state and snapshot phase
 - blocked Task ID and Agent role
-- `.luna-runtime` event/output/stderr paths
+- snapshot `blockedReason`
+- worker logs
+- Agent event/stderr paths
 - Agent worktree
-- local branch and HEAD
-- remote branch
-- open PR and base branch
-- PR checks
-- Debug Router result
-- PM replan record, if any
-- Product Owner decision request, if any
+- local and remote branches
+- commit SHA and PR URL
+- Code Review `reviewedPullRequests`
+- integration PR set and merge evidence
 
-The failure itself is useful E2E evidence. Fix the responsible Runtime layer, rerun the blocked path, and keep the smoke project until the root cause is understood.
+Fix the responsible Runtime layer, then rerun from preserved snapshot state where possible.
 
 ## Failure-injection follow-up
 
-After one clean Live E2E run passes, repeat with deliberate failures one at a time:
+After one clean Live E2E run passes, repeat with one deliberate failure at a time:
 
-- close Luna while an Agent is running
+- stop the worker while an Agent is running
 - temporarily break GitHub connectivity
 - force one build/test failure
 - create an already-existing branch/worktree condition
 - make one Agent return blocked
 - make QA reject a change
 
-Each injected failure must demonstrate the intended recovery path instead of being silently ignored.
+Each injected failure should demonstrate the intended recovery or terminal-failure path instead of being silently ignored.
 
-## Scope note
+## Next lifecycle extension
 
-GitHub Actions still runs the deterministic E2E audit policy scenario so changes to the audit contract are typechecked and regression-tested. That CI scenario does **not** replace the local Live E2E run because CI does not have the user's ChatGPT-authenticated Codex session and Luna's local GitHub Runtime credentials.
+The current headless completion boundary ends after integration merge. Retrospective and Team Evolution will be added as a post-integration phase after this production path is stable, then the E2E contract should gain explicit checks for those milestones.
