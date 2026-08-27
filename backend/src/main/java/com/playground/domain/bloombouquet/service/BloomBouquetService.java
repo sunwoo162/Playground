@@ -18,6 +18,7 @@ import java.util.regex.Pattern;
 public class BloomBouquetService {
     private static final String BOUQUET_AUTH_POLICY = "bouquet";
     private static final String DEFAULT_BOUQUET_CALLBACK_PATH = "/auth/bouquet/callback";
+    private static final long EVALUATOR_LEASE_SECONDS = 90;
     private static final Pattern SLUG_PATTERN = Pattern.compile("[a-z0-9]+(?:-[a-z0-9]+)*");
     private static final Set<String> BASE_EVALUATORS = Set.of(
             "user-a", "user-b", "ux-research", "frontend", "security",
@@ -157,36 +158,41 @@ public class BloomBouquetService {
     }
 
     @Transactional
-    public Optional<BloomBouquetDto.EvaluationClaimResponse> claimNextEvaluation() {
-        Optional<BloomBouquetEvaluationRun> candidate = runRepository.findFirstByStatusOrderByCreatedAtAsc("QUEUED");
+    public Optional<BloomBouquetDto.EvaluationClaimResponse> claimNextEvaluation(String workerId) {
+        String worker = requireWorkerId(workerId);
+        Optional<BloomBouquetEvaluationRun> candidate = runRepository.claimNextAvailableForUpdate();
         if (candidate.isEmpty()) return Optional.empty();
+
         BloomBouquetEvaluationRun run = candidate.get();
+        LocalDateTime now = LocalDateTime.now();
         run.setStatus("RUNNING");
-        run.setStartedAt(LocalDateTime.now());
-        runRepository.save(run);
-        BloomBouquetSubmission submission = run.getSubmission();
-        BloomBouquetProject project = submission.getProject();
-        BloomBouquetTeam team = project.getTeam();
-        return Optional.of(BloomBouquetDto.EvaluationClaimResponse.builder()
-                .runId(run.getId()).submissionId(submission.getId()).projectId(project.getId()).teamId(team.getId())
-                .projectName(project.getName()).teamName(team.getName()).version(submission.getVersion())
-                .demoUrl(submission.getDemoUrl()).frontendRepositoryUrl(submission.getFrontendRepositoryUrl())
-                .backendRepositoryUrl(submission.getBackendRepositoryUrl()).requiresAuth(submission.isRequiresAuth())
-                .authPolicyId(submission.getAuthPolicyId())
-                .bouquetClientId(submission.getBouquetClientId()).bouquetRedirectUri(submission.getBouquetRedirectUri())
-                .build());
+        run.setWorkerId(worker);
+        if (run.getStartedAt() == null) {
+            run.setStartedAt(now);
+        }
+        run.setHeartbeatAt(now);
+        run.setLeaseExpiresAt(now.plusSeconds(EVALUATOR_LEASE_SECONDS));
+        run.setCompletedAt(null);
+        run.setClaimCount(Math.max(0, run.getClaimCount()) + 1);
+        return Optional.of(toClaimResponse(runRepository.save(run)));
+    }
+
+    @Transactional
+    public BloomBouquetDto.EvaluationLeaseResponse heartbeatEvaluation(Long runId, String workerId) {
+        BloomBouquetEvaluationRun run = requireRunningOwner(runId, workerId);
+        LocalDateTime now = LocalDateTime.now();
+        run.setHeartbeatAt(now);
+        run.setLeaseExpiresAt(now.plusSeconds(EVALUATOR_LEASE_SECONDS));
+        return toLeaseResponse(runRepository.save(run));
     }
 
     @Transactional
     public BloomBouquetDto.AgentEvaluationResponse recordAgentEvaluation(
             Long runId,
+            String workerId,
             BloomBouquetDto.AgentEvaluationRequest request
     ) {
-        BloomBouquetEvaluationRun run = runRepository.findById(runId)
-                .orElseThrow(() -> new NoSuchElementException("평가 Run을 찾을 수 없습니다."));
-        if (!"RUNNING".equals(run.getStatus())) {
-            throw new IllegalArgumentException("RUNNING 상태의 평가에만 Agent 결과를 기록할 수 있습니다.");
-        }
+        BloomBouquetEvaluationRun run = requireRunningOwner(runId, workerId);
         String role = required(request.getAgentRole(), "agentRole", 60);
         if (!ALLOWED_EVALUATORS.contains(role)) {
             throw new IllegalArgumentException("허용되지 않은 평가 Agent 역할입니다: " + role);
@@ -222,13 +228,10 @@ public class BloomBouquetService {
     @Transactional
     public BloomBouquetDto.SubmissionResponse completeEvaluation(
             Long runId,
+            String workerId,
             BloomBouquetDto.CompleteEvaluationRequest request
     ) {
-        BloomBouquetEvaluationRun run = runRepository.findById(runId)
-                .orElseThrow(() -> new NoSuchElementException("평가 Run을 찾을 수 없습니다."));
-        if (!"RUNNING".equals(run.getStatus())) {
-            throw new IllegalArgumentException("RUNNING 상태의 평가만 완료할 수 있습니다.");
-        }
+        BloomBouquetEvaluationRun run = requireRunningOwner(runId, workerId);
         Set<String> completedRoles = new HashSet<>(agentEvaluationRepository.findByRunIdOrderByIdAsc(runId).stream()
                 .map(BloomBouquetAgentEvaluation::getAgentRole).toList());
         Set<String> requiredRoles = expectedEvaluators(run.getSubmission());
@@ -237,13 +240,74 @@ public class BloomBouquetService {
             missing.removeAll(completedRoles);
             throw new IllegalArgumentException("Process Evaluator 실행 전 독립 평가가 부족합니다: " + String.join(", ", missing));
         }
+        LocalDateTime now = LocalDateTime.now();
         run.setOverallScore(requireRange(request.getOverallScore(), 0, 100, "overallScore"));
         run.setOverallStars(requireRange(request.getOverallStars(), 1.0, 5.0, "overallStars"));
         run.setReportSummary(required(request.getReportSummary(), "reportSummary", 60000));
         run.setStatus("COMPLETED");
-        run.setCompletedAt(LocalDateTime.now());
+        run.setHeartbeatAt(now);
+        run.setLeaseExpiresAt(null);
+        run.setCompletedAt(now);
         runRepository.save(run);
         return toSubmissionResponse(run.getSubmission(), run);
+    }
+
+    private BloomBouquetEvaluationRun requireRunningOwner(Long runId, String workerId) {
+        if (runId == null || runId <= 0) {
+            throw new IllegalArgumentException("평가 Run ID가 올바르지 않습니다.");
+        }
+        String worker = requireWorkerId(workerId);
+        BloomBouquetEvaluationRun run = runRepository.findByIdForUpdate(runId)
+                .orElseThrow(() -> new NoSuchElementException("평가 Run을 찾을 수 없습니다."));
+        if (!"RUNNING".equals(run.getStatus())) {
+            throw new IllegalStateException("RUNNING 상태의 평가만 worker가 갱신할 수 있습니다.");
+        }
+        if (!worker.equals(run.getWorkerId())) {
+            throw new IllegalStateException("현재 평가 lease를 소유한 worker가 아닙니다.");
+        }
+        if (run.getLeaseExpiresAt() == null || !run.getLeaseExpiresAt().isAfter(LocalDateTime.now())) {
+            throw new IllegalStateException("평가 lease가 만료되어 다시 claim해야 합니다.");
+        }
+        return run;
+    }
+
+    private String requireWorkerId(String workerId) {
+        String value = workerId == null ? "" : workerId.trim();
+        if (value.length() < 3 || value.length() > 120) {
+            throw new IllegalArgumentException("workerId 길이가 올바르지 않습니다.");
+        }
+        if (!value.chars().allMatch(character ->
+                Character.isLetterOrDigit(character)
+                        || character == '-'
+                        || character == '_'
+                        || character == '.'
+                        || character == ':'
+        )) {
+            throw new IllegalArgumentException("workerId 형식이 올바르지 않습니다.");
+        }
+        return value;
+    }
+
+    private BloomBouquetDto.EvaluationClaimResponse toClaimResponse(BloomBouquetEvaluationRun run) {
+        BloomBouquetSubmission submission = run.getSubmission();
+        BloomBouquetProject project = submission.getProject();
+        BloomBouquetTeam team = project.getTeam();
+        return BloomBouquetDto.EvaluationClaimResponse.builder()
+                .runId(run.getId()).submissionId(submission.getId()).projectId(project.getId()).teamId(team.getId())
+                .projectName(project.getName()).teamName(team.getName()).version(submission.getVersion())
+                .demoUrl(submission.getDemoUrl()).frontendRepositoryUrl(submission.getFrontendRepositoryUrl())
+                .backendRepositoryUrl(submission.getBackendRepositoryUrl()).requiresAuth(submission.isRequiresAuth())
+                .authPolicyId(submission.getAuthPolicyId())
+                .bouquetClientId(submission.getBouquetClientId()).bouquetRedirectUri(submission.getBouquetRedirectUri())
+                .workerId(run.getWorkerId()).leaseExpiresAt(run.getLeaseExpiresAt()).claimCount(run.getClaimCount())
+                .build();
+    }
+
+    private BloomBouquetDto.EvaluationLeaseResponse toLeaseResponse(BloomBouquetEvaluationRun run) {
+        return BloomBouquetDto.EvaluationLeaseResponse.builder()
+                .runId(run.getId()).workerId(run.getWorkerId()).status(run.getStatus())
+                .heartbeatAt(run.getHeartbeatAt()).leaseExpiresAt(run.getLeaseExpiresAt())
+                .claimCount(run.getClaimCount()).build();
     }
 
     private Set<String> expectedEvaluators(BloomBouquetSubmission submission) {

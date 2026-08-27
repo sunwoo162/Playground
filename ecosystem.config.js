@@ -57,6 +57,7 @@ module.exports = {
         ...sharedEnv,
         NODE_ENV: 'production',
         BUILDER_WORKER_TOKEN: workerToken,
+        BLOOM_WORKER_MODE: sharedEnv.BLOOM_WORKER_MODE || 'evaluator',
         BLOOM_API_BASE_URL: sharedEnv.BLOOM_API_BASE_URL || 'http://localhost:8080',
         BLOOM_GITHUB_ORGANIZATION: sharedEnv.BLOOM_GITHUB_ORGANIZATION || 'sunwoo162',
         BLOOM_WORKSPACE_ROOT: sharedEnv.BLOOM_WORKSPACE_ROOT || '/home/ubuntu/bloom-workspaces',

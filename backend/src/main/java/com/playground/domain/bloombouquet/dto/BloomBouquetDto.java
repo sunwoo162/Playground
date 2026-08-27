@@ -64,6 +64,13 @@ public class BloomBouquetDto {
         private String frontendRepositoryUrl; private String backendRepositoryUrl;
         private boolean requiresAuth; private String authPolicyId;
         private String bouquetClientId; private String bouquetRedirectUri;
+        private String workerId; private LocalDateTime leaseExpiresAt; private int claimCount;
+    }
+
+    @Getter @Builder @AllArgsConstructor
+    public static class EvaluationLeaseResponse {
+        private Long runId; private String workerId; private String status;
+        private LocalDateTime heartbeatAt; private LocalDateTime leaseExpiresAt; private int claimCount;
     }
 
     @Getter @Setter @NoArgsConstructor @AllArgsConstructor
