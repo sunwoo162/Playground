@@ -14,6 +14,10 @@ function readBloomWorkerDeployWorkflow() {
   return fs.readFileSync(path.join(ROOT, '.github/workflows/deploy-bloom-worker.yml'), 'utf8');
 }
 
+function readLocalEvaluatorSetupScript() {
+  return fs.readFileSync(path.join(ROOT, 'scripts/setup-bloom-evaluator-local-llm.sh'), 'utf8');
+}
+
 test('backend uses the shared JWT secret even when backend env contains a stale override', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bloombouquet-ecosystem-'));
   const copiedConfig = path.join(tempDir, 'ecosystem.config.cjs');
@@ -138,4 +142,11 @@ test('production evaluator uses a local model runtime without interactive Codex 
   assert.match(workflow, /127\.0\.0\.1:8091\/health/);
   assert.doesNotMatch(workflow, /codex login status/);
   assert.match(workflow, /runtime=local/);
+});
+
+test('production local evaluator pins the llama installer to a reviewed upstream commit', () => {
+  const setup = readLocalEvaluatorSetupScript();
+  assert.match(setup, /4ee224e8b16ad6c48be85609e74dd8b1e8d740ae/);
+  assert.match(setup, /raw\.githubusercontent\.com\/ggml-org\/llama-install\.sh\/\$\{LLAMA_INSTALLER_COMMIT\}\/install\.sh/);
+  assert.doesNotMatch(setup, /https:\/\/llama\.app\/install\.sh/);
 });
