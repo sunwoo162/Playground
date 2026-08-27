@@ -48,6 +48,9 @@ jobs:
       - name: Run agent runtime policy tests
         run: pnpm --dir apps/desktop run test:allocation
 
+      - name: Build headless builder worker
+        run: pnpm run build:builder-worker
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
