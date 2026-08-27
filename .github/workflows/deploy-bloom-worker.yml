@@ -95,16 +95,12 @@ jobs:
             append_default_env BLOOM_WORKER_POLL_INTERVAL_MS 5000
             append_default_env BLOOM_WORKER_HEARTBEAT_INTERVAL_MS 30000
 
-            set -a
-            . "$ENV_FILE"
-            set +a
+            grep -Eq '^BUILDER_WORKER_TOKEN=.+$' "$ENV_FILE" || { echo "BUILDER_WORKER_TOKEN is missing"; exit 1; }
+            grep -Eq '^BLOOM_WORKER_MODE=evaluator$' "$ENV_FILE" || { echo "BLOOM_WORKER_MODE must be evaluator"; exit 1; }
 
             if ! command -v codex >/dev/null 2>&1; then
               npm install --prefix "$HOME/.local" @openai/codex@latest
             fi
-
-            test -n "${BUILDER_WORKER_TOKEN:-}" || { echo "BUILDER_WORKER_TOKEN is missing"; exit 1; }
-            test "${BLOOM_WORKER_MODE:-}" = "evaluator" || { echo "BLOOM_WORKER_MODE must be evaluator"; exit 1; }
 
             if [ "$TOKEN_CREATED" = "true" ]; then
               pm2 reload ecosystem.config.js --only backend --update-env
@@ -129,6 +125,7 @@ jobs:
             fi
 
             pm2 delete bloom-worker 2>/dev/null || true
+            rm -f "$HOME/.pm2/logs/bloom-worker-out.log" "$HOME/.pm2/logs/bloom-worker-error.log"
             pm2 start ecosystem.config.js --only bloom-worker --update-env
             sleep 3
 
