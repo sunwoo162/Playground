@@ -15,5 +15,5 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false
   },
-  "include": ["playground-web/src", "builder-web/src"]
+  "include": ["playground-web/src", "bloom-web/src"]
 }
