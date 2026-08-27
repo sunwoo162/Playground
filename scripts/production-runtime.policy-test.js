@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 const test = require('node:test');
 
 const ROOT = path.resolve(__dirname, '..');
@@ -40,4 +41,26 @@ test('PM2 ecosystem config changes trigger a backend restart', () => {
   const workflow = readDeployWorkflow();
   const detectionBlock = workflow.match(/- name: Detect backend changes[\s\S]*?- name: Set up JDK 17/)?.[0] ?? '';
   assert.ok(detectionBlock.includes('ecosystem\\.config\\.js'), 'backend change detection must include ecosystem.config.js');
+});
+
+test('production JWT bootstrap replaces an invalid shared secret without printing it', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bloombouquet-jwt-bootstrap-'));
+  const envPath = path.join(tempDir, '.env');
+
+  try {
+    fs.writeFileSync(envPath, 'JWT_SECRET=playground-jwt-secret-2024\nPORT=3000\n');
+    const result = spawnSync(process.execPath, [path.join(ROOT, 'scripts/ensure-production-jwt.js'), envPath], {
+      encoding: 'utf8',
+    });
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const updated = fs.readFileSync(envPath, 'utf8');
+    const secret = updated.match(/^JWT_SECRET=(.+)$/m)?.[1] ?? '';
+    assert.ok(secret.length >= 32, 'generated JWT secret must be at least 32 characters');
+    assert.ok(!secret.includes('playground-jwt-secret-2024'), 'default JWT secret must be replaced');
+    assert.equal(updated.includes('PORT=3000'), true, 'other env entries must be preserved');
+    assert.equal(`${result.stdout}${result.stderr}`.includes(secret), false, 'JWT secret must never be printed');
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
 });
