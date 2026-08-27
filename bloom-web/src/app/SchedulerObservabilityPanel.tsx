@@ -91,7 +91,9 @@ function waveStatusLabel(wave: SchedulerWaveTelemetry) {
 
 export default function SchedulerObservabilityPanel({ snapshot }: SchedulerObservabilityPanelProps) {
   const telemetry = useMemo(() => readSchedulerSnapshot(snapshot), [snapshot])
-  const latestWave = telemetry.waves.at(-1) ?? null
+  const latestWave = telemetry.waves.length > 0
+    ? telemetry.waves[telemetry.waves.length - 1]
+    : null
   const recentWaves = useMemo(() => telemetry.waves.slice(-8).reverse(), [telemetry.waves])
   const metrics = telemetry.metrics
 
