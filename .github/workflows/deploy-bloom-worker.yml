@@ -47,11 +47,11 @@ jobs:
           port: 24136
           username: ubuntu
           password: ${{ secrets.SSH_PASSWORD }}
-          command_timeout: 15m
+          command_timeout: 20m
           script: |
             set -eu
             cd /home/ubuntu/playground
-            export PATH="$HOME/.local/node_modules/.bin:$PATH"
+            export PATH="$HOME/.local/bin:$HOME/.llama/bin:$HOME/.local/node_modules/.bin:$PATH"
 
             git fetch origin main
             git reset --hard origin/main
@@ -90,6 +90,9 @@ jobs:
             }
 
             set_env_value BLOOM_WORKER_MODE evaluator
+            set_env_value BLOOM_EVALUATOR_RUNTIME local
+            set_env_value BLOOM_LOCAL_EVALUATOR_URL http://127.0.0.1:8091/v1/chat/completions
+            append_default_env BLOOM_LOCAL_EVALUATOR_MODEL qwen2.5-coder-1.5b-instruct
             append_default_env BLOOM_API_BASE_URL http://localhost:8080
             append_default_env BLOOM_WORKER_ID bloom-evaluator-production
             append_default_env BLOOM_WORKER_POLL_INTERVAL_MS 5000
@@ -97,32 +100,18 @@ jobs:
 
             grep -Eq '^BUILDER_WORKER_TOKEN=.+$' "$ENV_FILE" || { echo "BUILDER_WORKER_TOKEN is missing"; exit 1; }
             grep -Eq '^BLOOM_WORKER_MODE=evaluator$' "$ENV_FILE" || { echo "BLOOM_WORKER_MODE must be evaluator"; exit 1; }
-
-            if ! command -v codex >/dev/null 2>&1; then
-              npm install --prefix "$HOME/.local" @openai/codex@latest
-            fi
+            grep -Eq '^BLOOM_EVALUATOR_RUNTIME=local$' "$ENV_FILE" || { echo "BLOOM_EVALUATOR_RUNTIME must be local"; exit 1; }
 
             if [ "$TOKEN_CREATED" = "true" ]; then
               pm2 reload ecosystem.config.js --only backend --update-env
             fi
 
-            if codex --version >/tmp/bloom-codex-version.log 2>&1; then
-              echo "Bloom preflight: Codex CLI installed ($(cat /tmp/bloom-codex-version.log))"
-            else
-              echo "Bloom preflight: Codex CLI unavailable"
-              pm2 delete bloom-worker 2>/dev/null || true
-              pm2 save
-              exit 2
-            fi
-
-            if codex login status >/tmp/bloom-codex-auth.log 2>&1; then
-              echo "Bloom preflight: Codex ChatGPT authentication OK"
-            else
-              echo "Bloom preflight: Codex ChatGPT authentication MISSING"
-              pm2 delete bloom-worker 2>/dev/null || true
-              pm2 save
-              exit 2
-            fi
+            bash scripts/setup-bloom-evaluator-local-llm.sh
+            curl -fsS --max-time 3 http://127.0.0.1:8091/health >/dev/null || {
+              echo "Bloom local evaluator model health check failed"
+              pm2 status bloom-evaluator-llm || true
+              exit 1
+            }
 
             pm2 delete bloom-worker 2>/dev/null || true
             rm -f "$HOME/.pm2/logs/bloom-worker-out.log" "$HOME/.pm2/logs/bloom-worker-error.log"
@@ -132,11 +121,11 @@ jobs:
             WORKER_PID="$(pm2 pid bloom-worker)"
             test -n "$WORKER_PID" && [ "$WORKER_PID" != "0" ] || { echo "Bloom evaluator worker did not stay online"; exit 1; }
 
-            if ! pm2 logs bloom-worker --lines 30 --nostream 2>/dev/null | grep -Fq 'started mode=evaluator workerId='; then
-              echo "Bloom evaluator worker did not report evaluator mode"
+            if ! pm2 logs bloom-worker --lines 30 --nostream 2>/dev/null | grep -Fq 'started mode=evaluator runtime=local workerId='; then
+              echo "Bloom evaluator worker did not report mode=evaluator runtime=local"
               pm2 status bloom-worker || true
               exit 1
             fi
 
             pm2 save
-            echo "Bloom evaluator worker online with PID $WORKER_PID"
+            echo "Bloom evaluator worker online runtime=local with PID $WORKER_PID"
