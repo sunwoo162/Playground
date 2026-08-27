@@ -186,6 +186,44 @@ fn validate_repository(value: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn strip_pool_instance(identity: &str) -> &str {
+    if let Some((base, suffix)) = identity.rsplit_once('-') {
+        if !base.is_empty() && !suffix.is_empty() && suffix.chars().all(|character| character.is_ascii_digit()) {
+            return base;
+        }
+    }
+    identity
+}
+
+fn runtime_role_for_agent_identity(identity: &str) -> &str {
+    match strip_pool_instance(identity) {
+        "database" | "security" | "devops" | "performance" | "api-integration" => "backend",
+        "accessibility" | "test-automation" => "frontend",
+        "ux-research" => "designer",
+        role => role,
+    }
+}
+
+fn validate_agent_identity(input: &ReconcileInterruptedAgentTaskInput) -> Result<(), String> {
+    let prefix = format!("{}:", input.team_id.trim());
+    let identity = input
+        .agent_id
+        .trim()
+        .strip_prefix(&prefix)
+        .ok_or_else(|| "Agent ID가 project team 범위와 일치하지 않습니다.".to_string())?;
+    validate_segment(identity, "Agent identity")?;
+
+    let runtime_role = runtime_role_for_agent_identity(identity);
+    if runtime_role != input.role.trim() {
+        return Err(format!(
+            "Agent ID 역할과 Runtime role이 일치하지 않습니다. agent={} runtimeRole={}",
+            input.agent_id.trim(),
+            input.role.trim()
+        ));
+    }
+    Ok(())
+}
+
 fn validate_input(input: &ReconcileInterruptedAgentTaskInput) -> Result<(), String> {
     validate_project_id(input.project_id.trim())?;
     validate_task_id(input.task_id.trim())?;
@@ -193,13 +231,7 @@ fn validate_input(input: &ReconcileInterruptedAgentTaskInput) -> Result<(), Stri
     validate_segment(input.role.trim(), "Agent role")?;
     validate_segment(input.task_slug.trim(), "Task slug")?;
     validate_repository(input.repository_full_name.trim())?;
-
-    let expected_agent_id = format!("{}:{}", input.team_id.trim(), input.role.trim());
-    if input.agent_id.trim() != expected_agent_id {
-        return Err(format!(
-            "Agent ID가 project team/role과 일치하지 않습니다. expected={expected_agent_id}"
-        ));
-    }
+    validate_agent_identity(input)?;
     if input.workspace_path.trim().is_empty() {
         return Err("Project workspace path가 비어 있습니다.".to_string());
     }
