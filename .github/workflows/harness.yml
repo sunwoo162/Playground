@@ -27,8 +27,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build deployed playground web
+        run: pnpm run build:playground-web
+
       - name: Build builder web control plane
-        run: pnpm run build
+        run: pnpm run build:builder-web
 
       - name: Setup Java
         uses: actions/setup-java@v5

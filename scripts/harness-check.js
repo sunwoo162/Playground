@@ -16,7 +16,7 @@ function exists(relativePath) {
 }
 
 function getPortalAppIds() {
-  const source = readText('src/entities/app-item/model/apps.ts');
+  const source = readText('playground-web/src/entities/app-item/model/apps.ts');
   return new Set(Array.from(source.matchAll(/id:\s*['"]([^'"]+)['"]/g)).map((match) => match[1]));
 }
 

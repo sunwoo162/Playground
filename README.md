@@ -2,9 +2,18 @@
 
 > Working title. The permanent product name has not been decided yet.
 
-Project Builder is a web-first autonomous software creation platform. A user describes an idea or chooses a template, then independent specialist Agents plan, build, review, test, and prepare a real project for release.
+This repository now keeps the existing Playground web portal and the new autonomous Builder web control plane as separate frontend folders.
 
-The current repository is being migrated from a Playground/Luna-oriented product into this Builder architecture.
+## Web folders
+
+```text
+playground-web/   # currently deployed Playground portal
+builder-web/      # new Agent-powered software builder
+```
+
+`playground-web` preserves the existing user-facing Playground source while `builder-web` contains the new idea/template-to-project product. They share the repository-level dependencies but build independently.
+
+The server, backend, generated/legacy apps, and retained Agent runtime remain outside these frontend folders.
 
 ## Product flow
 
@@ -18,22 +27,6 @@ Idea or template
   -> Integration / Preview / Release
 ```
 
-The root web application is the new control plane. Existing applications under `apps/*` remain available during migration and may become generated outputs, examples, or legacy apps.
-
-## Agent Runtime migration
-
-The verified Agent orchestration implementation currently lives primarily in `apps/desktop`. That Tauri shell is not the target product UI anymore, but its OS-bound Git, worktree, Codex App Server, evidence, recovery, and cleanup Runtime is preserved until equivalent server/worker interfaces replace it.
-
-Do not remove the desktop Runtime only to remove Luna branding; migrate the Runtime first, then retire the shell.
-
-## Authentication
-
-**꽃다발** is the shared authentication standard.
-
-- The Builder platform should use 꽃다발 for its own account/session flow once the reusable service/package is available.
-- Generated projects that require login or sign-up use the 꽃다발 auth contract by default.
-- Provider choice remains project-specific behind the shared contract.
-
 ## Development
 
 Install dependencies:
@@ -42,25 +35,35 @@ Install dependencies:
 pnpm install --frozen-lockfile
 ```
 
-Run the web control plane and server:
+Run the existing Playground portal with the Node server:
 
 ```bash
 pnpm dev
 ```
 
-Build the web control plane:
+Run each web frontend independently:
 
 ```bash
-pnpm build
+pnpm run dev:playground-web
+pnpm run dev:builder-web
 ```
 
-Verify the retained desktop Agent Runtime:
+Build each frontend independently:
 
 ```bash
-pnpm --dir apps/desktop run build
-pnpm --dir apps/desktop run test:allocation
-cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml
+pnpm run build:playground-web
+pnpm run build:builder-web
 ```
+
+`build:playground-web` intentionally writes to the repository-level `dist/` directory because the current Node production server still serves that directory. `build:builder-web` writes to `dist-builder/` and is not switched into production routing yet.
+
+## Agent Runtime migration
+
+The verified Agent orchestration implementation currently lives primarily in `apps/desktop`. That Tauri shell is not the target product UI anymore, but its OS-bound Git, worktree, Codex App Server, evidence, recovery, and cleanup Runtime is preserved until equivalent server/worker interfaces replace it.
+
+## Authentication
+
+**꽃다발** is the shared authentication standard for the Builder platform and generated projects that require account/session functionality.
 
 ## Product specification
 
