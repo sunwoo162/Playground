@@ -99,6 +99,16 @@ class BloomBouquetProjectRegistrationE2ETest {
                 .andReturn();
         long projectId = json(projectResult).get("id").asLong();
 
+        mockMvc.perform(get("/api/bloom-bouquet/projects").cookie(ownerCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(projectId))
+                .andExpect(jsonPath("$[0].published").value(false));
+
+        Cookie otherOwnerCookie = signUpBouquetAccount("other-owner@example.test", "Other Owner");
+        mockMvc.perform(get("/api/bloom-bouquet/projects").cookie(otherOwnerCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isEmpty());
+
         mockMvc.perform(get("/api/bloom-bouquet/public/projects/{projectId}", projectId))
                 .andExpect(status().isNotFound());
 
