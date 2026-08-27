@@ -13,6 +13,7 @@
     "ts/builderWorkerAdapter.ts",
     "ts/builderWorkerHttpClient.ts",
     "ts/bloomBouquetEvaluatorHttpClient.ts",
+    "ts/bloomBouquetEvaluatorWorker.ts",
     "ts/headlessBuilderExecutor.ts",
     "ts/schedulerObservability.ts",
     "ts/observedHeadlessBuilderExecutor.ts"
