@@ -13,6 +13,13 @@ const WRITER_ROLES: &[&str] = &[
     "designer",
     "frontend",
     "backend",
+    "database",
+    "api-integration",
+    "security",
+    "performance",
+    "devops",
+    "accessibility",
+    "test-automation",
     "data-marketing",
     "documentation",
     "debug-router",
@@ -186,6 +193,28 @@ fn validate_repository(value: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn role_instance_count(role: &str) -> usize {
+    match role {
+        "frontend" | "backend" => 3,
+        "code-review" | "qa" | "documentation" => 2,
+        _ => 1,
+    }
+}
+
+fn valid_agent_id(team_id: &str, role: &str, agent_id: &str) -> bool {
+    let primary = format!("{team_id}:{role}");
+    if agent_id == primary {
+        return true;
+    }
+    let Some(suffix) = agent_id.strip_prefix(&format!("{primary}-")) else {
+        return false;
+    };
+    let Ok(instance) = suffix.parse::<usize>() else {
+        return false;
+    };
+    instance >= 2 && instance <= role_instance_count(role)
+}
+
 fn validate_input(input: &ReconcileInterruptedAgentTaskInput) -> Result<(), String> {
     validate_project_id(input.project_id.trim())?;
     validate_task_id(input.task_id.trim())?;
@@ -194,10 +223,10 @@ fn validate_input(input: &ReconcileInterruptedAgentTaskInput) -> Result<(), Stri
     validate_segment(input.task_slug.trim(), "Task slug")?;
     validate_repository(input.repository_full_name.trim())?;
 
-    let expected_agent_id = format!("{}:{}", input.team_id.trim(), input.role.trim());
-    if input.agent_id.trim() != expected_agent_id {
+    if !valid_agent_id(input.team_id.trim(), input.role.trim(), input.agent_id.trim()) {
         return Err(format!(
-            "Agent ID가 project team/role과 일치하지 않습니다. expected={expected_agent_id}"
+            "Agent ID가 Bloom team/role instance와 일치하지 않습니다: {}",
+            input.agent_id
         ));
     }
     if input.workspace_path.trim().is_empty() {
