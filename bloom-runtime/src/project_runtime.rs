@@ -71,11 +71,20 @@ const PM_PLAN_SCHEMA: &str = r#"{
               "idea",
               "design-system",
               "designer",
+              "ux-research",
               "frontend",
               "backend",
+              "database",
+              "security",
+              "devops",
+              "accessibility",
+              "performance",
+              "api-integration",
+              "data-marketing",
               "code-review",
               "reviewer",
               "qa",
+              "test-automation",
               "documentation",
               "debug-router",
               "user-a",
@@ -111,11 +120,20 @@ const ALLOWED_PM_TASK_ROLES: &[&str] = &[
     "idea",
     "design-system",
     "designer",
+    "ux-research",
     "frontend",
     "backend",
+    "database",
+    "security",
+    "devops",
+    "accessibility",
+    "performance",
+    "api-integration",
+    "data-marketing",
     "code-review",
     "reviewer",
     "qa",
+    "test-automation",
     "documentation",
     "debug-router",
     "user-a",
@@ -647,14 +665,14 @@ fn pm_prompt(
     request: &str,
 ) -> String {
     format!(
-        r#"You are the independent PM Codex Agent for Luna team {team_name} ({team_id}).
+        r#"You are the independent PM Codex Agent for Bloom team {team_name} ({team_id}).
 
 Project ID: {project_id}
 GitHub Organization: {organization}
 User request:
 {request}
 
-Your job in this turn is planning only. Do not create files, repositories, branches, commits, PRs, or deployments. Return the project plan that Luna will execute after this turn.
+Your job in this turn is planning only. Do not create files, repositories, branches, commits, PRs, or deployments. Return the project plan that Bloom will execute after this turn.
 
 Operating contract:
 - Treat the project as a real production service, not a demo or mock-only prototype.
@@ -666,7 +684,9 @@ Operating contract:
 - Branch convention is agent/<team>/<role>/<task>. taskSlug must be concise lowercase ASCII kebab-case.
 - Agents do not blindly trust PM or reviewers. Every material action must have a defensible, verifiable reason.
 - Code Review, higher-level Reviewer, QA, Documentation, User A, User B, and Process Evaluator should be included as independent gates for a normal user-facing production service. Omit a role only when it genuinely does not apply.
-- Frontend and Backend tasks may run in parallel when dependencies allow it.
+- Assign specialist ownership directly when the work materially belongs to it: UX Research for research/validation, Database for schema/migrations/query/persistence, Security for auth/permissions/session/CSRF/secrets, DevOps for CI/CD/deployment/containers/observability, Accessibility for keyboard/ARIA/screen-reader/contrast/semantic UX, Performance for measured performance work, API Integration for external or cross-service API contracts, Test Automation for automated integration/E2E coverage, and Data & Marketing for product/market analysis artifacts.
+- Do not create a specialist Task just to use every role. Keep generic Frontend or Backend ownership when specialist scope is not material.
+- Frontend, Backend, and independent specialist tasks may run in parallel when dependencies allow it.
 - Acceptance criteria must be observable and verifiable. Include build/test/browser/error/loading/empty/security requirements where relevant.
 - Do not assume external credentials, paid services, or unavailable datasets exist. Model them as explicit implementation blockers or setup tasks when necessary.
 - Keep tasks independently reviewable. Avoid one giant frontend or backend task covering the whole project.
