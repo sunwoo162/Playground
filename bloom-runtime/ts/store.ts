@@ -1,3 +1,4 @@
+import { assignInitialTaskRunAgents } from "./agentRoster";
 import { createInitialProjectTeamsState } from "./catalog";
 import { createAgentRuntimeIdentity } from "./permissions";
 import type { AgentTaskRunResult } from "./runtime";
@@ -101,13 +102,21 @@ function hydrateState(state: ProjectTeamsState): ProjectTeamsState {
         return templateTeam;
       }
 
-      const storedAgents = new Map(storedTeam.agents.map((agent) => [agent.role, agent]));
+      const storedAgentsById = new Map(storedTeam.agents.map((agent) => [agent.id, agent]));
+      const legacyPrimaryAgentsByRole = new Map(
+        storedTeam.agents
+          .filter((agent) => agent.id === `${storedTeam.id}:${agent.role}`)
+          .map((agent) => [agent.role, agent]),
+      );
 
       return {
         ...templateTeam,
         ...storedTeam,
         agents: templateTeam.agents.map((templateAgent) => {
-          const storedAgent = storedAgents.get(templateAgent.role) ?? templateAgent;
+          const isPrimary = templateAgent.id === `${templateTeam.id}:${templateAgent.role}`;
+          const storedAgent = storedAgentsById.get(templateAgent.id)
+            ?? (isPrimary ? legacyPrimaryAgentsByRole.get(templateAgent.role) : undefined)
+            ?? templateAgent;
           const identity = createAgentRuntimeIdentity(templateAgent.id, templateAgent.role);
 
           return {
@@ -115,26 +124,33 @@ function hydrateState(state: ProjectTeamsState): ProjectTeamsState {
             ...storedAgent,
             id: templateAgent.id,
             role: templateAgent.role,
+            label: templateAgent.label,
+            description: templateAgent.description,
             autonomy: identity.autonomy,
             permissions: identity.permissions,
           };
         }),
       };
     }),
-    projects: state.projects.map((project) => ({
-      ...project,
-      autonomyPolicyId: project.autonomyPolicyId ?? "independent-agent",
-      decisionPolicyId: project.decisionPolicyId ?? "reasoned-agent-decisions",
-      documentationPolicyId: project.documentationPolicyId ?? "documentation-evidence",
-      qualityPolicyId: project.qualityPolicyId ?? "production-service",
-      deploymentPolicyId: project.deploymentPolicyId ?? "luna-apps-portal",
-      plan: project.plan ?? null,
-      taskRuns: Array.isArray(project.taskRuns) ? project.taskRuns.map(hydrateTaskRun) : [],
-      repositoryFullName: project.repositoryFullName ?? null,
-      workspacePath: project.workspacePath ?? null,
-      pmSessionId: project.pmSessionId ?? null,
-      runtimeFailureSource: project.runtimeFailureSource ?? null,
-    })),
+    projects: state.projects.map((project) => {
+      const hydratedTaskRuns = Array.isArray(project.taskRuns)
+        ? assignInitialTaskRunAgents(project.taskRuns.map(hydrateTaskRun))
+        : [];
+      return {
+        ...project,
+        autonomyPolicyId: project.autonomyPolicyId ?? "independent-agent",
+        decisionPolicyId: project.decisionPolicyId ?? "reasoned-agent-decisions",
+        documentationPolicyId: project.documentationPolicyId ?? "documentation-evidence",
+        qualityPolicyId: project.qualityPolicyId ?? "production-service",
+        deploymentPolicyId: project.deploymentPolicyId ?? "luna-apps-portal",
+        plan: project.plan ?? null,
+        taskRuns: hydratedTaskRuns,
+        repositoryFullName: project.repositoryFullName ?? null,
+        workspacePath: project.workspacePath ?? null,
+        pmSessionId: project.pmSessionId ?? null,
+        runtimeFailureSource: project.runtimeFailureSource ?? null,
+      };
+    }),
     decisions: Array.isArray(state.decisions) ? state.decisions : [],
   };
 }
@@ -257,23 +273,23 @@ function refreshDependencyReadiness(project: ProjectState): ProjectState {
 
   return {
     ...project,
-    taskRuns: project.taskRuns.map((run) => {
+    taskRuns: assignInitialTaskRunAgents(project.taskRuns.map((run) => {
       if (run.status !== "pending") return run;
       const task = taskPlanById(project, run.taskId);
       if (!task) return run;
       const ready = task.dependsOn.every((dependency) => completed.has(dependency));
       return ready ? { ...run, status: "ready" as const } : run;
-    }),
+    })),
   };
 }
 
-function agentStatusFromRuns(role: AgentRole, runs: ProjectTaskRun[]) {
-  const roleRuns = runs.filter((run) => run.role === role);
-  if (roleRuns.length === 0) return "idle" as const;
-  if (roleRuns.some((run) => run.status === "running")) return "working" as const;
-  if (roleRuns.some((run) => run.status === "blocked")) return "blocked" as const;
-  if (roleRuns.some((run) => run.status === "ready")) return "ready" as const;
-  if (roleRuns.every((run) => run.status === "done")) return "done" as const;
+function agentStatusFromRuns(agentId: string, runs: ProjectTaskRun[]) {
+  const agentRuns = runs.filter((run) => run.agentId === agentId);
+  if (agentRuns.length === 0) return "idle" as const;
+  if (agentRuns.some((run) => run.status === "running")) return "working" as const;
+  if (agentRuns.some((run) => run.status === "blocked")) return "blocked" as const;
+  if (agentRuns.some((run) => run.status === "ready")) return "ready" as const;
+  if (agentRuns.every((run) => run.status === "done")) return "done" as const;
   return "idle" as const;
 }
 
@@ -292,7 +308,7 @@ function syncTeamAgentStatuses(state: ProjectTeamsState, projectId: string) {
           if (agent.role === "pm") {
             return { ...agent, status: project.plan ? "done" as const : agent.status };
           }
-          return { ...agent, status: agentStatusFromRuns(agent.role, project.taskRuns) };
+          return { ...agent, status: agentStatusFromRuns(agent.id, project.taskRuns) };
         }),
       };
     }),
@@ -304,10 +320,24 @@ function projectStatusForRoles(roles: Array<Exclude<AgentRole, "pm">>) {
     { roles: ["process-evaluator"], status: "evaluation" },
     { roles: ["user-a", "user-b"], status: "user-test" },
     { roles: ["qa"], status: "qa" },
-    { roles: ["code-review", "reviewer", "documentation"], status: "review" },
-    { roles: ["frontend", "backend", "debug-router"], status: "development" },
+    { roles: ["code-review", "reviewer", "documentation", "data-marketing"], status: "review" },
+    {
+      roles: [
+        "frontend",
+        "backend",
+        "database",
+        "api-integration",
+        "security",
+        "performance",
+        "devops",
+        "accessibility",
+        "test-automation",
+        "debug-router",
+      ],
+      status: "development",
+    },
     { roles: ["design-system", "designer"], status: "design" },
-    { roles: ["idea"], status: "planning" },
+    { roles: ["idea", "ux-research"], status: "planning" },
   ];
 
   return priority.find((group) => roles.some((role) => group.roles.includes(role)))?.status ?? "development";
@@ -423,7 +453,9 @@ export function completeProjectPlanning(state: ProjectTeamsState, input: Complet
   const project = state.projects.find((item) => item.id === input.projectId);
   if (!project) return state;
 
-  const taskRuns = input.plan.tasks.map((task) => emptyTaskRun(task, project.teamId));
+  const taskRuns = assignInitialTaskRunAgents(
+    input.plan.tasks.map((task) => emptyTaskRun(task, project.teamId)),
+  );
   let nextState = updateProject(state, input.projectId, (currentProject) => ({
     ...currentProject,
     status: "development",
@@ -446,15 +478,16 @@ export function getRunnableTaskRuns(state: ProjectTeamsState, projectId: string,
   if (!project || !project.plan || project.status === "blocked") return [];
 
   const selected: ProjectTaskRun[] = [];
-  const busyRoles = new Set(
-    project.taskRuns.filter((run) => run.status === "running").map((run) => run.role),
+  const busyAgentIds = new Set(
+    project.taskRuns.filter((run) => run.status === "running").map((run) => run.agentId),
   );
+  const boundedLimit = Math.min(Math.max(0, limit), 2);
 
   for (const run of project.taskRuns) {
-    if (run.status !== "ready" || busyRoles.has(run.role)) continue;
+    if (run.status !== "ready" || busyAgentIds.has(run.agentId)) continue;
     selected.push(run);
-    busyRoles.add(run.role);
-    if (selected.length >= limit) break;
+    busyAgentIds.add(run.agentId);
+    if (selected.length >= boundedLimit) break;
   }
 
   return selected;
