@@ -16,11 +16,12 @@ function taskRun(
   taskId: string,
   role: ExecutableAgentRole,
   status: TaskRunStatus,
+  agentId = `rose:${role}`,
 ): ProjectTaskRun {
   return {
     taskId,
     role,
-    agentId: `rose:${role}`,
+    agentId,
     status,
     attempts: 0,
     branchName: null,
@@ -126,19 +127,44 @@ function testDependencyReadiness() {
   assert(stillPending[1].status === "pending", "task must remain pending while a dependency is unfinished");
 }
 
-function testBoundedRoleExclusiveWave() {
+function testInitialAgentDistribution() {
+  const plan: ProjectPlan = {
+    ...basePlan(),
+    needsAuth: false,
+    tasks: [
+      { id: "FE-001", title: "A", role: "frontend", taskSlug: "a", summary: "A", dependsOn: [], acceptanceCriteria: ["A"] },
+      { id: "FE-002", title: "B", role: "frontend", taskSlug: "b", summary: "B", dependsOn: [], acceptanceCriteria: ["B"] },
+      { id: "FE-003", title: "C", role: "frontend", taskSlug: "c", summary: "C", dependsOn: [], acceptanceCriteria: ["C"] },
+      { id: "FE-004", title: "D", role: "frontend", taskSlug: "d", summary: "D", dependsOn: [], acceptanceCriteria: ["D"] },
+      { id: "QA-001", title: "Q1", role: "qa", taskSlug: "q1", summary: "Q1", dependsOn: [], acceptanceCriteria: ["Q1"] },
+      { id: "QA-002", title: "Q2", role: "qa", taskSlug: "q2", summary: "Q2", dependsOn: [], acceptanceCriteria: ["Q2"] },
+    ],
+  };
+  const distributed = refreshOrchestrationReadiness(
+    plan,
+    plan.tasks.map((task) => taskRun(task.id, task.role, "pending")),
+  );
+
+  assert(distributed[0].agentId === "rose:frontend", "first frontend task must use primary Frontend Agent");
+  assert(distributed[1].agentId === "rose:frontend-2", "second frontend task must use Frontend Agent 2");
+  assert(distributed[2].agentId === "rose:frontend-3", "third frontend task must use Frontend Agent 3");
+  assert(distributed[3].agentId === "rose:frontend", "frontend allocation must round-robin after three instances");
+  assert(distributed[4].agentId === "rose:qa", "first QA task must use primary QA Agent");
+  assert(distributed[5].agentId === "rose:qa-2", "second QA task must use QA Agent 2");
+}
+
+function testBoundedAgentExclusiveWave() {
   const candidates = [
-    taskRun("FE-001", "frontend", "ready"),
-    taskRun("FE-002", "frontend", "ready"),
-    taskRun("BE-001", "backend", "ready"),
-    taskRun("DS-001", "designer", "ready"),
+    taskRun("FE-001", "frontend", "ready", "rose:frontend"),
+    taskRun("FE-002", "frontend", "ready", "rose:frontend-2"),
+    taskRun("BE-001", "backend", "ready", "rose:backend"),
   ];
   const wave = selectOrchestrationWave(candidates);
 
   assert(ORCHESTRATION_MAX_PARALLEL_TASKS === 2, "default orchestration concurrency must remain two");
   assert(wave.length === 2, "default wave must contain at most two tasks");
   assert(wave[0].taskId === "FE-001", "wave selection must preserve task order");
-  assert(wave[1].taskId === "BE-001", "same-role ready task must be skipped within the same wave");
+  assert(wave[1].taskId === "FE-002", "different Frontend Agent instances may run same-role tasks together");
 
   const oversizedRequest = selectOrchestrationWave(candidates, 10);
   assert(
@@ -146,13 +172,13 @@ function testBoundedRoleExclusiveWave() {
     "caller-provided limit must never raise concurrency above the orchestration hard cap",
   );
 
-  const withBusyFrontend = selectOrchestrationWave([
-    taskRun("FE-RUNNING", "frontend", "running"),
-    taskRun("FE-READY", "frontend", "ready"),
-    taskRun("BE-READY", "backend", "ready"),
+  const withBusyAgent = selectOrchestrationWave([
+    taskRun("FE-RUNNING", "frontend", "running", "rose:frontend"),
+    taskRun("FE-SAME", "frontend", "ready", "rose:frontend"),
+    taskRun("FE-SECOND", "frontend", "ready", "rose:frontend-2"),
   ]);
-  assert(withBusyFrontend.length === 1, "a role already running must not receive another task");
-  assert(withBusyFrontend[0].taskId === "BE-READY", "other idle roles remain schedulable");
+  assert(withBusyAgent.length === 1, "a running Agent instance must not receive a second task");
+  assert(withBusyAgent[0].taskId === "FE-SECOND", "another idle instance of the same role remains schedulable");
 }
 
 function testTaskSummaryAndPhase() {
@@ -166,13 +192,15 @@ function testTaskSummaryAndPhase() {
 
   assert(projectStatusForActiveRoles(["frontend", "qa"]) === "qa", "QA must outrank development phase");
   assert(projectStatusForActiveRoles(["designer", "frontend"]) === "development", "development must outrank design");
-  assert(projectStatusForActiveRoles(["idea"]) === "planning", "Idea-only work must map to planning");
+  assert(projectStatusForActiveRoles(["ux-research"]) === "planning", "UX research must map to planning");
+  assert(projectStatusForActiveRoles(["performance"]) === "development", "Performance work must map to development");
 }
 
 function run() {
   testPlanPreparation();
   testDependencyReadiness();
-  testBoundedRoleExclusiveWave();
+  testInitialAgentDistribution();
+  testBoundedAgentExclusiveWave();
   testTaskSummaryAndPhase();
   console.log("orchestrationCore policy tests passed");
 }
