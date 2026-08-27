@@ -50,11 +50,13 @@ The service must reduce evidence-loss risk without making individualized legal j
 - evidence upload and private storage
 - chronological event timeline
 - evidence checklist by case category
-- neutral case summary generated from user-entered facts
+- deterministic case summary assembled from explicit user-entered facts
 - evidence packet export
 - SHA-256 file integrity value generation
 - public consumer-information links with source and verification date
 - shared 꽃다발 authentication
+
+The deterministic case summary is template-based. It does not use generative AI and does not infer legal conclusions.
 
 ### Explicitly excluded
 
@@ -108,18 +110,25 @@ MVP excludes medical/health dispute categories to avoid intentionally collecting
 
 Users must be able to delete individual evidence files, cases, and their entire account data. Deletion must remove both database metadata and stored object data according to the retention policy.
 
-### 5.4 Third-party personal information
+### 5.4 Third-party personal information and redaction
 
 Screenshots may contain merchant employee names, phone numbers, emails, account numbers, or other third-party information. The product must:
 
 - keep evidence private,
 - advise the user to retain only information necessary for the dispute,
-- provide a redaction step before upload or before export,
-- avoid public sharing features in MVP.
+- avoid public sharing features in MVP,
+- allow image evidence (JPEG/PNG/WEBP) to be client-side redacted with opaque rectangles before upload,
+- permanently rasterize the redacted image before it is uploaded so the hidden pixels are not recoverable from the uploaded result,
+- require users to upload a separately redacted copy of PDFs when PDF redaction is needed in MVP,
+- allow any attachment to be excluded from an export packet.
+
+MVP does not perform OCR-based automatic personal-information detection. This avoids false assurances and avoids sending evidence contents to an AI/OCR provider.
 
 ### 5.5 Age policy
 
-MVP supports users aged 14 or older. The product must not intentionally onboard children under 14 until a legal guardian consent workflow is designed and reviewed.
+MVP is restricted to users aged 14 or older. First-time onboarding requires an explicit `만 14세 이상입니다` attestation before product data is created. The service does not store date of birth solely for this purpose.
+
+If the 꽃다발 Identity Provider later exposes a verified age-eligibility claim, the application should prefer that claim. A legal-guardian consent workflow is outside MVP scope.
 
 ### 5.6 Legal information pages
 
@@ -130,6 +139,8 @@ Consumer-information pages must:
 - distinguish general information from individualized advice,
 - link users to the authoritative source for current details.
 
+Priority reference authorities are the National Law Information Center, Korea Consumer Agency, Consumer24, Korea Fair Trade Commission, and relevant official dispute-resolution bodies.
+
 ## 6. Product Architecture
 
 `증빙함` is an independent product, not a new public route inside the BloomBouquet frontend.
@@ -138,38 +149,38 @@ BloomBouquet remains the public project showcase/evaluation platform. `증빙함
 
 Authentication uses the shared 꽃다발 Identity Provider through Authorization Code + PKCE S256. Evidence Vault maintains only its own application session and product-domain data; it does not create its own password credential store.
 
-Recommended initial architecture:
+Initial architecture:
 
 ```text
 Browser / PWA
-  -> Evidence Vault Web App
-    -> App BFF / API
-      -> PostgreSQL
-      -> Private Object Storage
-      -> 꽃다발 Identity Provider
-      -> Export Worker / PDF Generator
+  -> Evidence Vault Next.js App
+    -> Route Handlers / Server Actions
+      -> Domain Services
+        -> PostgreSQL
+        -> Private S3-compatible Object Storage
+        -> 꽃다발 Identity Provider adapter
+        -> Export service
 ```
 
-For MVP, the API may ship in the same deployable unit as the web app if deployment simplicity is materially improved, but domain services must remain separated in code so backend extraction is possible later.
+MVP ships as one deployable Next.js application with clear server-side domain boundaries. Export generation runs inside the application process behind an `ExportService` interface for MVP. Moving export generation to a dedicated worker is a later scaling option and must not change the domain contract.
 
 ## 7. Technology Choices
 
-The Playground repository baseline prefers React + TypeScript + Vite for normal apps, but this product requires authenticated server-backed persistence, secure object access, and server-side session handling.
+Standalone stack:
 
-Recommended standalone stack:
-
-- Frontend: Next.js 16 + TypeScript + App Router
-- Styling: existing project design-system primitives; no heavy UI framework required
+- Framework: Next.js 16 + TypeScript + App Router
+- Styling: Tailwind CSS with small accessible project-owned UI primitives
 - Validation: Zod
 - Database: PostgreSQL
-- ORM: Prisma or Drizzle; choose one at bootstrap and keep a single data access boundary
-- Object storage: S3-compatible private bucket in a Korean region when possible
+- ORM/query layer: Drizzle ORM
+- Object storage API: AWS SDK S3 client against a private S3-compatible bucket; production storage should use a Korean region when possible
 - Auth: 꽃다발 OAuth 2.0 Authorization Code + PKCE S256
-- Session: secure, HTTP-only application session cookie
-- Testing: Vitest + Testing Library + Playwright
+- Session: opaque database-backed session referenced by a Secure, HttpOnly cookie
+- Unit/integration testing: Vitest + Testing Library
+- End-to-end testing: Playwright
 - Deployment: Docker-compatible production build
 
-No AI provider, realtime provider, or payment provider is required for MVP.
+No AI provider, realtime provider, payment provider, OCR provider, or third-party analytics provider is required for MVP.
 
 ## 8. Domain Model
 
@@ -182,9 +193,28 @@ Core fields:
 - id
 - identitySubject
 - displayName
+- ageAttestedAt
+- termsAcceptedAt
+- privacyAcceptedAt
 - createdAt
 - updatedAt
 - deletedAt
+
+### Session
+
+Represents an application session after OAuth code exchange.
+
+Core fields:
+
+- id
+- userId
+- tokenHash
+- expiresAt
+- createdAt
+- lastSeenAt
+- revokedAt nullable
+
+Only the session token hash is stored server-side. The raw opaque session token exists only in the user's secure cookie.
 
 ### VaultItem
 
@@ -260,7 +290,7 @@ Core fields:
 - redactionState
 - deletedAt
 
-No public object URL is stored. Access is generated through short-lived signed URLs after authorization.
+No public object URL is stored. Access is generated through a short-lived signed download URL only after server-side ownership authorization.
 
 ### Case
 
@@ -300,7 +330,7 @@ Examples:
 - defect_photo
 - payment_record
 
-The UI must say "확인해 볼 자료" or "정리 권장 자료", not "법적으로 반드시 필요한 자료" unless a cited authoritative source explicitly states that requirement.
+The UI must say `확인해 볼 자료` or `정리 권장 자료`, not `법적으로 반드시 필요한 자료` unless a cited authoritative source explicitly states that requirement.
 
 ### ExportPacket
 
@@ -313,7 +343,7 @@ Core fields:
 - requestedByUserId
 - generatedAt
 - storageKey
-- manifestHash
+- manifestSha256
 - status
 - expiresAt nullable
 
@@ -325,7 +355,9 @@ Core fields:
 2. App redirects using Authorization Code + PKCE S256.
 3. Server exchanges the authorization code.
 4. App creates a secure application session.
-5. First-time users accept product terms and privacy notices.
+5. First-time users accept product terms and privacy notices and attest that they are at least 14 years old.
+
+No product-domain record is created before required onboarding acknowledgements succeed.
 
 ### 9.2 Register an item
 
@@ -339,11 +371,13 @@ Core fields:
 
 1. User creates an event or selects an existing event.
 2. User selects a local file.
-3. Client shows a privacy warning and redaction option.
-4. Server validates authorization, MIME type, extension, file size, and upload intent.
-5. File is stored privately.
-6. Server computes or verifies SHA-256 and stores metadata.
-7. Timeline displays the event and attachment.
+3. Client shows a privacy warning.
+4. For JPEG/PNG/WEBP, the user may apply opaque client-side redaction rectangles; the redacted result becomes a new rasterized upload file.
+5. For PDF, the UI instructs the user to upload a pre-redacted copy if sensitive information must be removed.
+6. Server validates authorization, MIME type, extension, file size, and upload intent.
+7. Server streams the file into private object storage.
+8. Server computes SHA-256 while processing the upload and stores metadata only after storage succeeds.
+9. Timeline displays the event and attachment.
 
 ### 9.4 Start case mode
 
@@ -357,9 +391,11 @@ Core fields:
 
 1. User chooses `증빙 패킷 만들기`.
 2. User reviews included events and files.
-3. User can redact or exclude selected attachments.
-4. System generates a chronological PDF summary plus a manifest of included attachments and file integrity values.
-5. User downloads the packet through an authenticated, short-lived URL.
+3. User excludes any attachment that should not be exported.
+4. System creates a ZIP archive containing a deterministic `summary.pdf`, `manifest.json`, and selected original/redacted attachments under `evidence/`.
+5. `manifest.json` records included filenames, event timestamps, MIME types, byte sizes, and SHA-256 integrity values.
+6. The system stores the SHA-256 of the exact generated `manifest.json` bytes as `manifestSha256`.
+7. User downloads the ZIP through an authenticated endpoint that issues a signed object URL valid for 5 minutes.
 
 ## 10. Dashboard UX
 
@@ -392,6 +428,7 @@ Routes:
 
 - `/` landing
 - `/auth/callback`
+- `/onboarding`
 - `/dashboard`
 - `/vault/new`
 - `/vault/:id`
@@ -414,32 +451,44 @@ The product must support mobile widths first and remain usable on desktop.
 - every item, event, file, case, and export query is scoped by the authenticated user
 - authorization is enforced server-side, never only in the UI
 - OAuth state and PKCE verifier are short-lived and bound to the login attempt
-- session cookies use Secure, HttpOnly, and SameSite protections appropriate to the deployed topology
+- session cookies use Secure, HttpOnly, SameSite=Lax, and Path=/
+- session tokens are cryptographically random and stored server-side only as a hash
+- logout revokes the server-side session
 
 ### Object storage
 
 - private bucket only
 - no permanent public URLs
-- unpredictable storage keys
-- short-lived signed upload/download access
-- server-side ownership check before issuing a URL
+- unpredictable UUID-based storage keys
+- uploads pass through the authenticated application API so ownership and file policy are validated before persistence
+- downloads use signed URLs valid for 5 minutes only after a server-side ownership check
 - deleted records trigger object deletion
 
-### File validation
+### File policy
 
-MVP allowlist should include common evidence formats such as PDF, JPEG, PNG, and WEBP. Other formats are rejected until explicitly supported.
+MVP supported evidence formats:
 
-Validation must include:
+- `application/pdf`
+- `image/jpeg`
+- `image/png`
+- `image/webp`
 
-- maximum file size
-- server-side MIME inspection where available
-- extension/MIME consistency checks
-- rejection of executable and archive formats in MVP
-- image metadata removal or normalization when export processing is performed
+Maximum upload size: 20 MiB per file.
+
+MVP rejects archives, executable formats, Office documents, SVG, HTML, and other unlisted MIME types.
+
+Validation includes:
+
+- maximum size enforcement before accepting persistence
+- file-signature / magic-byte validation for supported formats where practical
+- extension and detected MIME consistency checks
+- rejection of executable and archive formats
+- rasterization of image redaction output before upload
+- stripping image metadata from client-generated redacted image outputs
 
 ### Logging
 
-Application logs must not contain uploaded file content, OAuth tokens, signed URLs, resident registration numbers, account numbers, or full message contents.
+Application logs must not contain uploaded file content, OAuth tokens, session tokens, signed URLs, resident registration numbers, account numbers, or full message contents.
 
 Security/audit logs may record event type, actor ID, object ID, timestamp, and outcome.
 
@@ -454,7 +503,15 @@ Required controls:
 - delete a VaultItem and its related data
 - delete account and all product data
 
-Deletion jobs must be retryable and must reconcile database tombstones with object-storage deletion results.
+Normal deletion behavior:
+
+1. mark the database record deleted in a transaction,
+2. enqueue or record a storage-deletion operation,
+3. delete the private object,
+4. record deletion completion,
+5. make deleted evidence inaccessible immediately from all normal application queries even if a storage deletion retry is pending.
+
+Deletion operations must be retryable and must reconcile database tombstones with object-storage deletion results.
 
 A short operational recovery window may exist only if it is explicitly documented in the privacy policy and implemented consistently. MVP should prefer immediate logical deletion followed by prompt physical deletion rather than indefinite retention.
 
@@ -480,7 +537,7 @@ Keep the case unchanged, mark export status as failed, and allow regeneration.
 
 ### Identity Provider unavailable
 
-Show a recoverable sign-in error and do not create a partial account.
+Show a recoverable sign-in error and do not create a partial product account.
 
 ### Storage unavailable
 
@@ -490,25 +547,38 @@ Allow timeline text to remain saveable only if the UI clearly indicates that att
 
 MVP does not require push notifications.
 
-Phase 1 reminders may be in-app only. Email or push notifications require explicit product work because they introduce delivery credentials, scheduling infrastructure, user preference management, and additional privacy considerations.
+Phase 1 reminders are in-app only. Email or push notifications require explicit future product work because they introduce delivery credentials, scheduling infrastructure, user preference management, and additional privacy considerations.
 
-The system must therefore model deadlines independently of notification channels.
+The system therefore models deadlines independently of notification channels.
 
 ## 16. Export Design
 
 The export packet is an organizational artifact, not a legal opinion.
 
-PDF summary structure:
+Archive layout:
+
+```text
+case-<case-id>.zip
+  summary.pdf
+  manifest.json
+  evidence/
+    <safe-generated-name-1>.pdf
+    <safe-generated-name-2>.jpg
+```
+
+`summary.pdf` structure:
 
 1. product disclaimer
 2. case title and category
-3. user-entered transaction facts
+3. explicit user-entered transaction facts
 4. chronological event timeline
 5. included evidence index
 6. file names, timestamps, and SHA-256 integrity values
 7. generation timestamp
 
-No automatic section should state legal liability, breach, statutory entitlement, damages, or likelihood of success.
+`manifest.json` contains machine-readable equivalents for included files and events. Export filenames are sanitized and generated server-side; original filenames are recorded inside the manifest rather than trusted as archive paths.
+
+No automatic section states legal liability, breach, statutory entitlement, damages, or likelihood of success.
 
 ## 17. Consumer Guide Design
 
@@ -525,7 +595,7 @@ Each card stores:
 
 Priority official sources include Korea Consumer Agency, Consumer24, the Korea Fair Trade Commission, the National Law Information Center, and relevant dispute-resolution organizations.
 
-The guide is informational and should send the user to the authoritative source for the most current rule.
+The guide is informational and sends the user to the authoritative source for the most current rule.
 
 ## 18. Observability
 
@@ -534,7 +604,7 @@ Minimum production observability:
 - structured application errors
 - auth callback failures
 - upload success/failure counts
-- export job duration and failure counts
+- export duration and failure counts
 - object deletion reconciliation failures
 - database health
 - storage health
@@ -548,29 +618,35 @@ No evidence contents are sent to analytics by default.
 - deadline ordering
 - ownership guards
 - file allowlist validation
-- SHA-256 manifest generation
+- 20 MiB file-size rejection
+- SHA-256 file and manifest generation
 - checklist selection logic
-- neutral copy guards where practical
+- deterministic summary generation
+- archive filename sanitization
+- session token hashing/lookup behavior
 
 ### Integration tests
 
-- OAuth callback/session creation with mocked IdP contract
+- OAuth callback/session creation with mocked 꽃다발 IdP contract
+- first-login age/terms/privacy onboarding gate
 - create item -> add event -> attach file metadata
-- signed URL authorization
-- delete item cascade / deletion queue behavior
-- export creation lifecycle
+- object download authorization and 5-minute signed URL issuance
+- delete item cascade / deletion retry behavior
+- export archive creation lifecycle
 
 ### End-to-end tests
 
 Critical happy path:
 
-`sign in -> create VaultItem -> add deadline -> add event -> upload evidence -> start case -> export packet`
+`sign in -> onboarding -> create VaultItem -> add deadline -> add event -> upload evidence -> start case -> export packet`
 
 Critical negative paths:
 
 - user A cannot access user B evidence
-- executable upload rejected
-- expired signed URL rejected
+- user A cannot request a signed download URL for user B evidence
+- executable or unlisted MIME upload is rejected
+- file above 20 MiB is rejected
+- expired signed URL is rejected
 - failed export remains retryable
 - deleted evidence is not returned from normal queries
 
@@ -584,6 +660,7 @@ Check at minimum:
 - zero evidence state
 - multiple deadlines on same day
 - upload progress/failure
+- image redaction flow
 - keyboard-only primary flow
 
 ## 20. Production Blockers
@@ -595,10 +672,12 @@ The product is not production-ready until all of the following exist:
 - exact redirect URI and public product domain
 - production PostgreSQL database
 - private object storage bucket and credentials
+- Korean-region storage decision documented
 - privacy policy
 - terms of service
+- age eligibility/onboarding copy reviewed
 - retention/deletion policy
-- supported-file policy and size limits
+- supported-file policy fixed to the implemented allowlist and 20 MiB limit
 - legal copy review for guide/disclaimer/export wording
 - TLS-enabled deployment
 - backup and restore procedure for database metadata
@@ -611,7 +690,7 @@ If paid plans are later introduced, payment, cancellation/refund terms, business
 
 Evidence Vault is submitted to BloomBouquet only after it has an independently deployable URL and source repository.
 
-Submission should include:
+Submission includes:
 
 - public project URL
 - source repository URL
@@ -619,7 +698,7 @@ Submission should include:
 - test/build evidence
 - known production blockers
 
-BloomBouquet evaluators should independently review user experience, accessibility, frontend, backend, security, performance, QA, documentation, and code quality.
+BloomBouquet evaluators independently review user experience, accessibility, frontend, backend, security, performance, QA, documentation, and code quality.
 
 ## 22. Repository & Branch Strategy
 
@@ -640,50 +719,59 @@ Each Agent owns its branch scope and may challenge other Agents' conclusions. Co
 
 ## 23. Initial Build Sequence
 
-The first implementation cycle should produce one complete vertical slice rather than many disconnected screens.
+The first implementation cycle produces one complete vertical slice rather than many disconnected screens.
 
 Sequence:
 
 1. repository bootstrap and CI
-2. 꽃다발 auth adapter and protected application shell
-3. VaultItem persistence and dashboard empty state
-4. deadline creation/listing
-5. timeline event creation
-6. private evidence upload and authorization
-7. case mode and neutral checklist
-8. evidence packet export
-9. deletion/account privacy controls
-10. end-to-end and security verification
-11. independent Luna Agent review
-12. BloomBouquet submission
+2. 꽃다발 auth adapter, session persistence, and protected application shell
+3. onboarding gate
+4. VaultItem persistence and dashboard empty state
+5. deadline creation/listing
+6. timeline event creation
+7. private evidence upload, image redaction, and authorization
+8. case mode and neutral checklist
+9. deterministic case summary and evidence ZIP export
+10. deletion/account privacy controls
+11. end-to-end and cross-user security verification
+12. independent Luna Agent review
+13. BloomBouquet submission
 
 ## 24. Success Criteria For MVP
 
 MVP is accepted only when a user can complete this workflow with real persisted data:
 
 1. sign in through 꽃다발,
-2. create an item,
-3. add a deadline,
-4. add a factual event,
-5. upload a private evidence file,
-6. start a case,
-7. select evidence for the case,
-8. generate and download an evidence packet,
-9. delete the evidence and verify it is no longer accessible.
+2. pass first-login onboarding,
+3. create an item,
+4. add a deadline,
+5. add a factual event,
+6. upload a private evidence file,
+7. start a case,
+8. select evidence for the case,
+9. generate and download the ZIP evidence packet,
+10. delete the evidence and verify it is no longer accessible.
 
-The implementation must pass an explicit cross-user access test proving that one account cannot retrieve another account's evidence or signed download URL.
+The implementation must pass an explicit cross-user access test proving that one account cannot retrieve another account's evidence or obtain a signed download URL for it.
 
 ## 25. Decisions Locked By This Spec
 
 - Evidence Vault is a standalone product.
 - BloomBouquet is an evaluator/showcase, not the product host.
 - 꽃다발 is the only authentication provider for production accounts.
+- Next.js 16, TypeScript, PostgreSQL, Drizzle ORM, Zod, Tailwind CSS, Vitest, and Playwright are the MVP application stack.
 - Evidence is private by default.
 - No legal-advice AI is included in MVP.
+- No OCR/AI provider receives user evidence in MVP.
 - No individualized legal conclusions are generated.
+- Deterministic summaries use explicit user-entered facts only.
 - SHA-256 is described only as an integrity fingerprint.
 - Medical dispute workflows are excluded from MVP.
 - Users under 14 are excluded from MVP onboarding.
 - Deadline values are user-entered/source-labeled unless an authoritative source is explicitly attached.
+- Supported evidence files are PDF, JPEG, PNG, and WEBP with a 20 MiB per-file limit.
+- Redaction is supported for raster images; PDFs must be pre-redacted by the user in MVP.
+- Evidence exports are ZIP archives containing `summary.pdf`, `manifest.json`, and selected evidence files.
+- Signed evidence download URLs expire after 5 minutes.
 - The dashboard prioritizes deadlines and recent evidence rather than presenting a generic file manager.
 - Server persistence is required; LocalStorage-only persistence is not acceptable.
