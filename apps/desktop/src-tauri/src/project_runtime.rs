@@ -777,6 +777,31 @@ fn run_pm_codex(
     })
 }
 
+#[tauri::command]
+pub async fn plan_project_runtime(
+    organization: String,
+    workspace_root: String,
+    project_id: String,
+    team_id: String,
+    team_name: String,
+    request: String,
+) -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let pm = run_pm_codex(
+            organization.trim(),
+            workspace_root.trim(),
+            project_id.trim(),
+            team_id.trim(),
+            team_name.trim(),
+            request.trim(),
+        )?;
+        serde_json::to_value(pm)
+            .map_err(|error| format!("PM Runtime 결과 직렬화 실패: {error}"))
+    })
+    .await
+    .map_err(|error| format!("PM Runtime join 실패: {error}"))?
+}
+
 fn start_project_runtime_blocking(
     organization: String,
     workspace_root: String,

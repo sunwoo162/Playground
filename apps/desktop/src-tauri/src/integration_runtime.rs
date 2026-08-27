@@ -77,7 +77,7 @@ fn inspect_pull_request(repository: &str, number: u64) -> Result<Value, String> 
             "--repo".to_string(),
             repository.to_string(),
             "--json".to_string(),
-            "number,state,isDraft,baseRefName,headRefName,url,mergeable,reviewDecision,statusCheckRollup".to_string(),
+            "number,state,isDraft,baseRefName,headRefName,url,mergeable,reviewDecision,statusCheckRollup,mergeCommit".to_string(),
         ],
     )?;
 
@@ -85,20 +85,38 @@ fn inspect_pull_request(repository: &str, number: u64) -> Result<Value, String> 
         .map_err(|error| format!("PR #{number} JSON 파싱 실패: {error}"))
 }
 
-fn verify_pull_request_gate(pr: &Value, expected_number: u64) -> Result<(String, String), String> {
+fn pull_request_identity(pr: &Value, expected_number: u64) -> Result<(String, String), String> {
     let number = pr.get("number").and_then(Value::as_u64).unwrap_or(0);
     if number != expected_number {
         return Err(format!("PR 번호 검증 실패: expected={expected_number}, actual={number}"));
     }
+    if pr.get("baseRefName").and_then(Value::as_str) != Some("develop") {
+        return Err(format!("PR #{number}의 base가 develop이 아닙니다."));
+    }
+
+    let url = pr
+        .get("url")
+        .and_then(Value::as_str)
+        .ok_or_else(|| format!("PR #{number} URL을 확인할 수 없습니다."))?
+        .to_string();
+    let head_branch = pr
+        .get("headRefName")
+        .and_then(Value::as_str)
+        .ok_or_else(|| format!("PR #{number} head branch를 확인할 수 없습니다."))?
+        .to_string();
+
+    Ok((url, head_branch))
+}
+
+fn verify_pull_request_gate(pr: &Value, expected_number: u64) -> Result<(String, String), String> {
+    let (url, head_branch) = pull_request_identity(pr, expected_number)?;
+    let number = expected_number;
 
     if pr.get("state").and_then(Value::as_str) != Some("OPEN") {
         return Err(format!("PR #{number}가 open 상태가 아닙니다."));
     }
     if pr.get("isDraft").and_then(Value::as_bool).unwrap_or(false) {
         return Err(format!("PR #{number}는 아직 Draft입니다."));
-    }
-    if pr.get("baseRefName").and_then(Value::as_str) != Some("develop") {
-        return Err(format!("PR #{number}의 base가 develop이 아닙니다."));
     }
     if pr.get("mergeable").and_then(Value::as_str) != Some("MERGEABLE") {
         return Err(format!("PR #{number}가 현재 mergeable 상태가 아닙니다."));
@@ -131,18 +149,29 @@ fn verify_pull_request_gate(pr: &Value, expected_number: u64) -> Result<(String,
         }
     }
 
-    let url = pr
-        .get("url")
-        .and_then(Value::as_str)
-        .ok_or_else(|| format!("PR #{number} URL을 확인할 수 없습니다."))?
-        .to_string();
-    let head_branch = pr
-        .get("headRefName")
-        .and_then(Value::as_str)
-        .ok_or_else(|| format!("PR #{number} head branch를 확인할 수 없습니다."))?
-        .to_string();
-
     Ok((url, head_branch))
+}
+
+fn merged_pull_request_evidence(
+    pr: &Value,
+    expected_number: u64,
+) -> Result<Option<MergedPullRequest>, String> {
+    if pr.get("state").and_then(Value::as_str) != Some("MERGED") {
+        return Ok(None);
+    }
+    let (url, head_branch) = pull_request_identity(pr, expected_number)?;
+    let merge_commit_sha = pr
+        .get("mergeCommit")
+        .and_then(|value| value.get("oid"))
+        .and_then(Value::as_str)
+        .map(str::to_string);
+
+    Ok(Some(MergedPullRequest {
+        number: expected_number,
+        url,
+        head_branch,
+        merge_commit_sha,
+    }))
 }
 
 fn merge_pull_request(repository: &str, number: u64) -> Result<Option<String>, String> {
@@ -200,6 +229,11 @@ pub fn merge_project_pull_requests(
     let mut merged_pull_requests = Vec::with_capacity(numbers.len());
     for number in numbers {
         let pr = inspect_pull_request(&input.repository_full_name, number)?;
+        if let Some(recovered) = merged_pull_request_evidence(&pr, number)? {
+            merged_pull_requests.push(recovered);
+            continue;
+        }
+
         let (url, head_branch) = verify_pull_request_gate(&pr, number)?;
         let merge_commit_sha = merge_pull_request(&input.repository_full_name, number)?;
         merged_pull_requests.push(MergedPullRequest {
