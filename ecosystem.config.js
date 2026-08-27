@@ -20,6 +20,7 @@ function readEnvFile(filePath) {
 const root = __dirname;
 const sharedEnv = readEnvFile(path.join(root, '.env'));
 const backendEnv = readEnvFile(path.join(root, '.env.backend'));
+const workerToken = backendEnv.BUILDER_WORKER_TOKEN || sharedEnv.BUILDER_WORKER_TOKEN || '';
 
 module.exports = {
   apps: [
@@ -39,6 +40,26 @@ module.exports = {
       env: {
         ...sharedEnv,
         ...backendEnv,
+        BUILDER_WORKER_TOKEN: workerToken,
+      },
+    },
+    {
+      name: 'bloom-worker',
+      script: './bloom-worker/run.js',
+      cwd: '/home/ubuntu/playground',
+      autorestart: true,
+      restart_delay: 5000,
+      max_restarts: 20,
+      env: {
+        ...sharedEnv,
+        NODE_ENV: 'production',
+        BUILDER_WORKER_TOKEN: workerToken,
+        BLOOM_API_BASE_URL: sharedEnv.BLOOM_API_BASE_URL || 'http://localhost:8080',
+        BLOOM_GITHUB_ORGANIZATION: sharedEnv.BLOOM_GITHUB_ORGANIZATION || 'sunwoo162',
+        BLOOM_WORKSPACE_ROOT: sharedEnv.BLOOM_WORKSPACE_ROOT || '/home/ubuntu/bloom-workspaces',
+        BLOOM_WORKER_ID: sharedEnv.BLOOM_WORKER_ID || 'bloom-worker-production',
+        BLOOM_TEAM_ID: sharedEnv.BLOOM_TEAM_ID || 'rose',
+        BLOOM_TEAM_NAME: sharedEnv.BLOOM_TEAM_NAME || 'Rose',
       },
     },
   ],
