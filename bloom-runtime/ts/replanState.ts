@@ -1,3 +1,4 @@
+import { assignTaskRunAgentsPreservingStarted } from "./agentRoster";
 import { taskTransitivelyDependsOn } from "./planTopology";
 import {
   getPmRecoveryTrigger,
@@ -5,7 +6,6 @@ import {
 } from "./replanning";
 import { saveProjectTeamsState } from "./store";
 import type {
-  AgentRole,
   ProjectReplanRecord,
   ProjectTaskPlan,
   ProjectTaskRun,
@@ -47,6 +47,9 @@ function resetRun(run: ProjectTaskRun, task: ProjectTaskPlan, teamId: string): P
     role: task.role,
     agentId: `${teamId}:${task.role}`,
     status: "pending",
+    attempts: 0,
+    branchName: null,
+    worktreePath: null,
     threadId: null,
     sessionId: null,
     turnId: null,
@@ -67,13 +70,13 @@ function resetRun(run: ProjectTaskRun, task: ProjectTaskPlan, teamId: string): P
   };
 }
 
-function roleStatus(role: AgentRole, runs: ProjectTaskRun[]) {
-  const roleRuns = runs.filter((run) => run.role === role);
-  if (roleRuns.length === 0) return "idle" as const;
-  if (roleRuns.some((run) => run.status === "running")) return "working" as const;
-  if (roleRuns.some((run) => run.status === "blocked")) return "blocked" as const;
-  if (roleRuns.some((run) => run.status === "ready")) return "ready" as const;
-  if (roleRuns.every((run) => run.status === "done")) return "done" as const;
+function agentStatus(agentId: string, runs: ProjectTaskRun[]) {
+  const agentRuns = runs.filter((run) => run.agentId === agentId);
+  if (agentRuns.length === 0) return "idle" as const;
+  if (agentRuns.some((run) => run.status === "running")) return "working" as const;
+  if (agentRuns.some((run) => run.status === "blocked")) return "blocked" as const;
+  if (agentRuns.some((run) => run.status === "ready")) return "ready" as const;
+  if (agentRuns.every((run) => run.status === "done")) return "done" as const;
   return "idle" as const;
 }
 
@@ -93,7 +96,7 @@ function makeReadyWhenDependenciesDone(
     );
     if (dependenciesDone) run.status = "ready";
   }
-  return nextRuns;
+  return assignTaskRunAgentsPreservingStarted(nextRuns);
 }
 
 function syncTeam(
@@ -113,7 +116,7 @@ function syncTeam(
         status: "working" as const,
         agents: team.agents.map((agent) => {
           if (agent.role === "pm") return { ...agent, status: pmStatus };
-          return { ...agent, status: roleStatus(agent.role, project.taskRuns) };
+          return { ...agent, status: agentStatus(agent.id, project.taskRuns) };
         }),
       };
     }),
