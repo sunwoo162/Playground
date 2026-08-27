@@ -90,6 +90,7 @@ jobs:
           script: |
             set -eu
             BACKEND_CHANGED="${BACKEND_CHANGED:-false}"
+            JWT_REGENERATED=false
             cd ~/playground
 
             record_failure() {
@@ -132,6 +133,7 @@ jobs:
                 chmod 600 "$TEMP_ENV"
                 mv "$TEMP_ENV" "$ENV_FILE"
                 export JWT_SECRET
+                JWT_REGENERATED=true
                 echo "Regenerated invalid production JWT secret."
               fi
             }
@@ -160,7 +162,7 @@ jobs:
             PLAYGROUND_PID="$(pm2 pid playground)"
             test -n "$PLAYGROUND_PID" && [ "$PLAYGROUND_PID" != "0" ] || record_failure "BloomBouquet Node server did not stay online"
 
-            if [ "$BACKEND_CHANGED" = "true" ] || ! pm2 describe backend >/dev/null 2>&1; then
+            if [ "$BACKEND_CHANGED" = "true" ] || [ "$JWT_REGENERATED" = "true" ] || ! curl -fsS --max-time 3 http://127.0.0.1:8080/api/bouquet/auth/me >/dev/null 2>&1; then
               if [ -f /home/ubuntu/playground/.env.backend ]; then
                 set -a
                 . /home/ubuntu/playground/.env.backend
