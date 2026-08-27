@@ -1,63 +1,46 @@
-# Harness Engineering For Playground
+# BloomBouquet Harness Engineering
 
-Harness engineering means building the rails around the products so every app can be checked consistently. In this repository, the harness is responsible for catching drift between:
+The repository Harness now protects a single public product boundary: BloomBouquet at the root domain.
 
-- The product registry in `docs/app-registry.json`
-- The portal app list in `src/entities/app-item/model/apps.ts`
-- Static app routes in `server/index.js`
-- Root build orchestration in `package.json`
-- Built app artifacts under `apps/<id>/dist`
+## Invariants
 
-## What Was Added
+`pnpm run harness` fails unless all of the following are true:
 
-- `pnpm run harness`
-  - Runs `scripts/harness-check.js`.
-  - Verifies that registered apps have directories.
-  - Verifies that buildable apps have build scripts.
-  - Warns when portal/server/build entries are out of sync with the registry.
+- `playground-web/` does not exist.
+- `apps/` contains only `apps/desktop`.
+- `package.json` has no `build:playground-web` or `build:apps` script.
+- `build:bloom-web` emits to repository-level `dist/`.
+- `server/index.js` contains no legacy `/apps/*` static product routes.
+- `bloom-web/index.html` identifies the public shell as `BloomBouquet`.
+- the production build has created `dist/index.html` and that artifact is the BloomBouquet shell.
 
-- `pnpm run verify`
-  - Runs `pnpm run build:all`.
-  - Runs `pnpm run harness`.
-  - Use this before shipping broad product changes.
+## CI coverage
 
-- `.github/workflows/harness.yml`
-  - Runs the fast harness check on pushes to `main` and pull requests.
-  - It intentionally does not install every app dependency or run the full build; that remains the job of release/deploy workflows.
+`.github/workflows/harness.yml` performs:
 
-## Why This Matters
+1. frozen pnpm install;
+2. BloomBouquet web build;
+3. Spring Boot backend tests;
+4. retained desktop runtime build;
+5. Bloom Agent policy tests;
+6. headless worker build;
+7. desktop Tauri Rust check;
+8. Bloom runtime Rust check;
+9. repository invariants.
 
-`Playground` has many apps, extensions, and native companion tools. Without a harness, it is easy to:
+## Why `apps/desktop` remains
 
-- Add an app to the portal but forget the server route
-- Add a package app but forget root `build:apps`
-- Keep a product in docs but delete or rename the folder
-- Ship a template app with no product readiness tracking
-- Treat a companion extension as a standalone product before its host app is stable
+`apps/desktop` is no longer a public Playground product. It remains because Bloom policy-test compilation and Tauri/Rust runtime checks still depend on its workspace/tooling setup. When those dependencies move to a server-only package, it can be removed in a dedicated migration.
 
-The harness turns those rules into executable checks.
+## Production boundary
 
-## Current Policy
+The Node process serves `dist/` at `/` and proxies API traffic to Spring Boot. There is no `/apps/<id>` hosting layer anymore. Published projects are represented by BloomBouquet project/submission records and open their own deployment URL from the gallery.
 
-- Product truth starts in `docs/app-registry.json`.
-- User-facing portal truth is `src/entities/app-item/model/apps.ts`.
-- Deployable static routes live in `server/index.js`.
-- Buildable Node/Vite apps must expose `pnpm run build`.
-- Apps that are not Node packages must be documented as companion/native/static tools.
+## Commands
 
-## Next Harness Layers
-
-The current harness is the foundation. Add these layers next:
-
-1. Route smoke test: start the server and request `/`, `/apps/<id>/`, and one asset for each active app.
-2. Browser smoke test: use Playwright to check that key app pages are nonblank at desktop and mobile sizes.
-3. App contract tests: define per-app `harness.json` files with primary routes, required permissions, and demo-mode expectations.
-4. Extension checks: validate each `manifest.json`, required icons, default URLs, and package zip outputs.
-5. Production deploy monitor: after GitHub Actions deploys, request hosted URLs and fail if an app returns a blank page or missing asset.
-
-## Command Reference
-
-```powershell
+```bash
+pnpm run build:bloom-web
 pnpm run harness
-pnpm run verify
+pnpm run test:bloom-runtime
+pnpm run build:bloom-worker
 ```

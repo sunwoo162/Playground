@@ -27,14 +27,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build deployed playground web
-        run: pnpm run build:playground-web
+      - name: Build BloomBouquet root web
+        run: pnpm run build:bloom-web
 
-      - name: Build Bloom web control plane
-        run: |
-          pnpm run build:bloom-web
-          test -f dist/bloom/index.html
-          grep -q '/bloom/assets/' dist/bloom/index.html
+      - name: Check BloomBouquet Node server
+        run: node --check server/index.js
 
       - name: Setup Java
         uses: actions/setup-java@v5

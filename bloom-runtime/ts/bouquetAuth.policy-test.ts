@@ -1,4 +1,4 @@
-import { ensureBouquetAuthPlan, validateBouquetAuthPlan } from "./bouquetAuth";
+import { BOUQUET_AUTH_STANDARD, ensureBouquetAuthPlan, validateBouquetAuthPlan } from "./bouquetAuth";
 import { ensureMarketingDocumentationPlan } from "./dataMarketing";
 import { validateProjectPlanReviewTopology } from "./planTopology";
 import type { ProjectPlan } from "./types";
@@ -45,6 +45,26 @@ assert(
     decision.area === "authentication" && decision.choice.includes("꽃다발"),
   ),
   "Bouquet auth decision must be recorded",
+);
+assert(
+  injected.technologyDecisions.some((decision) => decision.choice.includes("PKCE S256")),
+  "Bouquet auth decision must require Authorization Code + PKCE S256",
+);
+assert(
+  Boolean(server?.acceptanceCriteria.some((criterion) => criterion.includes("자체 꽃다발 회원가입/비밀번호 저장소"))),
+  "generated projects must not implement a separate Bouquet credential store",
+);
+assert(
+  Boolean(server?.acceptanceCriteria.some((criterion) => criterion.includes("authorization code 교환") && criterion.includes("Backend/BFF"))),
+  "authorization code exchange must remain server-side",
+);
+assert(
+  Boolean(client?.acceptanceCriteria.some((criterion) => criterion.includes("credential form은 만들지 않고") || criterion.includes("이메일/비밀번호를 직접 받지 않고"))),
+  "generated frontend must redirect to the central Bouquet auth portal instead of collecting credentials",
+);
+assert(
+  BOUQUET_AUTH_STANDARD.routeContract.callback === "/auth/bouquet/callback",
+  "Bouquet project callback route must remain stable",
 );
 validateBouquetAuthPlan(injected);
 

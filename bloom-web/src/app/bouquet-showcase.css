@@ -1,0 +1,95 @@
+:root {
+  font-family: Inter, Pretendard, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #1f2530;
+  background: #f7f4f7;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; background: #f7f4f7; }
+button, a { font: inherit; }
+
+.bouquet-shell { min-height: 100vh; padding: 56px clamp(20px, 5vw, 72px) 96px; }
+.bouquet-hero { display: flex; justify-content: space-between; gap: 36px; align-items: flex-end; max-width: 1280px; margin: 0 auto 28px; }
+.bouquet-eyebrow { margin: 0 0 12px; font-size: 12px; font-weight: 800; letter-spacing: .16em; color: #8a6179; }
+.bouquet-hero h1 { margin: 0; font-size: clamp(44px, 7vw, 82px); line-height: .95; letter-spacing: -.055em; }
+.bouquet-lead { max-width: 760px; margin: 22px 0 0; font-size: 18px; line-height: 1.7; color: #626873; }
+.bouquet-stats { display: grid; grid-template-columns: repeat(3, minmax(90px, 1fr)); gap: 10px; }
+.bouquet-stats div { min-width: 108px; padding: 18px; background: #fff; border: 1px solid #e7dfe5; border-radius: 20px; box-shadow: 0 8px 32px rgba(70, 43, 60, .05); }
+.bouquet-stats strong { display: block; font-size: 28px; letter-spacing: -.04em; }
+.bouquet-stats span { color: #85828a; font-size: 12px; }
+
+.bouquet-auth-note { max-width: 1280px; margin: 0 auto 30px; display: flex; gap: 14px; align-items: center; padding: 17px 20px; background: #fff9fb; border: 1px solid #efdce6; border-radius: 20px; }
+.bouquet-auth-mark { width: 38px; height: 38px; flex: 0 0 38px; display: grid; place-items: center; border-radius: 50%; background: #f0d7e2; font-size: 20px; }
+.bouquet-auth-copy { min-width: 0; flex: 1; }
+.bouquet-auth-note strong { font-size: 14px; }
+.bouquet-auth-note p { margin: 3px 0 0; color: #7a7378; font-size: 13px; }
+.bouquet-login-link { flex: 0 0 auto; padding: 10px 14px; border: 1px solid #dcc8d3; border-radius: 12px; background: #fff; color: #6f4c62; font-size: 12px; font-weight: 900; text-decoration: none; transition: transform .15s ease, box-shadow .15s ease; }
+.bouquet-login-link:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(80, 49, 67, .08); }
+
+.bouquet-grid { max-width: 1280px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); gap: 18px; }
+.bouquet-card { min-height: 320px; display: flex; flex-direction: column; padding: 24px; background: #fff; border: 1px solid #e9e3e8; border-radius: 26px; box-shadow: 0 14px 40px rgba(71, 46, 62, .06); }
+.bouquet-card-topline, .bouquet-card-heading, .bouquet-card-actions, .bouquet-agent-heading { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+.bouquet-team { font-size: 13px; font-weight: 800; color: #775268; }
+.bouquet-status { padding: 7px 10px; border-radius: 999px; background: #f0eef0; color: #66616a; font-size: 11px; font-weight: 800; }
+.bouquet-status-completed { background: #eaf6ee; color: #2f6b45; }
+.bouquet-status-running { background: #eef3ff; color: #3c5f9e; }
+.bouquet-status-queued { background: #fff5de; color: #8a6618; }
+.bouquet-status-failed { background: #ffecec; color: #a33d3d; }
+.bouquet-card-heading { margin-top: 28px; }
+.bouquet-card h2 { margin: 0 0 10px; font-size: 25px; letter-spacing: -.035em; }
+.bouquet-card p { margin: 0; color: #74717a; line-height: 1.65; }
+.bouquet-score { text-align: right; flex: 0 0 auto; }
+.bouquet-score strong { display: block; font-size: 34px; line-height: 1; letter-spacing: -.05em; }
+.bouquet-score span { font-size: 11px; color: #99949a; }
+.bouquet-meta { margin-top: auto; padding-top: 28px; display: flex; flex-wrap: wrap; gap: 8px; }
+.bouquet-meta span { padding: 7px 10px; border-radius: 999px; background: #f6f3f6; font-size: 12px; }
+.bouquet-auth-chip { background: #f8e7ef !important; color: #7f5369; font-weight: 700; }
+.bouquet-card-actions { margin-top: 18px; align-items: center; }
+.bouquet-card-actions a, .bouquet-card-actions button { border: 0; background: none; padding: 0; color: #6f4c62; font-weight: 800; text-decoration: none; cursor: pointer; }
+.bouquet-card-actions button:disabled { opacity: .5; cursor: wait; }
+
+.bouquet-state { max-width: 1280px; margin: 20px auto; min-height: 180px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; text-align: center; background: #fff; border: 1px dashed #d9cfd6; border-radius: 24px; color: #706b72; }
+.bouquet-state-error { color: #9f4343; border-color: #e7bcbc; }
+
+.bouquet-report-backdrop { position: fixed; inset: 0; z-index: 1000; padding: 24px; background: rgba(29, 24, 28, .58); backdrop-filter: blur(12px); overflow: auto; }
+.bouquet-report { width: min(1080px, 100%); margin: 20px auto; padding: 30px; background: #fbfafb; border-radius: 28px; box-shadow: 0 30px 90px rgba(0, 0, 0, .22); }
+.bouquet-report-header { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; }
+.bouquet-report-header h2 { margin: 0; font-size: 30px; letter-spacing: -.04em; }
+.bouquet-close { width: 42px; height: 42px; border: 1px solid #e4dde2; border-radius: 50%; background: #fff; font-size: 26px; cursor: pointer; }
+.bouquet-report-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 28px 0; }
+.bouquet-report-summary div { padding: 20px; border-radius: 18px; background: #fff; border: 1px solid #ece6ea; }
+.bouquet-report-summary strong { display: block; font-size: 24px; }
+.bouquet-report-summary span { display: block; margin-top: 4px; color: #8e8990; font-size: 12px; }
+.bouquet-process-summary { padding: 24px; border-radius: 20px; background: #30262d; color: #fff; }
+.bouquet-process-summary h3 { margin: 0 0 10px; }
+.bouquet-process-summary p { margin: 0; white-space: pre-wrap; line-height: 1.75; color: #e7dfe4; }
+.bouquet-agent-list { display: grid; gap: 14px; margin-top: 18px; }
+.bouquet-agent-review { padding: 24px; background: #fff; border: 1px solid #e9e2e7; border-radius: 20px; }
+.bouquet-agent-heading > div span { display: block; color: #76586a; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
+.bouquet-agent-heading > div strong { display: block; margin-top: 5px; font-size: 20px; }
+.bouquet-severity { padding: 7px 9px; border-radius: 8px; background: #f2eff1; font-size: 10px; font-weight: 900; }
+.bouquet-severity-high, .bouquet-severity-critical { background: #ffe8e8; color: #a33b3b; }
+.bouquet-severity-medium { background: #fff2d8; color: #8a6316; }
+.bouquet-terms { display: flex; flex-wrap: wrap; gap: 6px; margin: 18px 0; }
+.bouquet-terms span { padding: 6px 9px; border-radius: 8px; background: #f4eff3; color: #674b5c; font-size: 11px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.bouquet-review-section { margin-top: 18px; }
+.bouquet-review-section h4, .bouquet-review-grid h4 { margin: 0 0 7px; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: #8b7e86; }
+.bouquet-review-section p, .bouquet-review-grid p, .bouquet-review-section ul { margin: 0; line-height: 1.7; color: #55515a; }
+.bouquet-review-section ul { padding-left: 20px; }
+.bouquet-review-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 18px; }
+.bouquet-confidence { margin: 18px 0 0; font-size: 11px; color: #9a9499; text-transform: uppercase; letter-spacing: .08em; }
+
+@media (max-width: 780px) {
+  .bouquet-shell { padding: 32px 16px 64px; }
+  .bouquet-hero { align-items: stretch; flex-direction: column; }
+  .bouquet-stats { grid-template-columns: repeat(3, 1fr); }
+  .bouquet-stats div { min-width: 0; padding: 14px; }
+  .bouquet-auth-note { align-items: flex-start; flex-wrap: wrap; }
+  .bouquet-auth-copy { flex-basis: calc(100% - 54px); }
+  .bouquet-login-link { width: 100%; text-align: center; }
+  .bouquet-report-summary, .bouquet-review-grid { grid-template-columns: 1fr; }
+  .bouquet-report-backdrop { padding: 8px; }
+  .bouquet-report { padding: 20px; border-radius: 20px; }
+  .bouquet-card-heading { flex-direction: column; }
+  .bouquet-score { text-align: left; }
+}

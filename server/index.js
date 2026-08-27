@@ -1,96 +1,68 @@
-﻿/**
- * 놀이터 서버
- * 
- * 역할:
- * 1. GitHub OAuth 로그인 처리 (인증 플로우)
- * 2. 정적 파일 서빙 (프론트엔드 + 앱들)
- * 3. 세션 관리
- * 
- * GitHub OAuth 플로우:
- * ┌─────────┐     ┌──────────┐     ┌────────┐
- * │ 사용자   │────▶│ 우리 서버  │────▶│ GitHub │
- * │ 브라우저  │◀────│ (Express) │◀────│ API    │
- * └─────────┘     └──────────┘     └────────┘
- * 
- * 1. 사용자가 "GitHub 로그인" 클릭
- * 2. 서버가 GitHub 인증 페이지로 리다이렉트
- * 3. 사용자가 GitHub에서 승인
- * 4. GitHub이 우리 서버의 /auth/github/callback으로 코드를 보냄
- * 5. 서버가 그 코드로 GitHub API에서 access_token을 받음
- * 6. access_token으로 사용자 정보를 가져옴
- * 7. 세션에 사용자 정보 저장 → 로그인 완료
+/**
+ * BloomBouquet public server
+ *
+ * Responsibilities:
+ * 1. Serve the BloomBouquet production bundle from root dist/.
+ * 2. Proxy Spring Boot API/OAuth traffic without changing request bodies.
+ * 3. Preserve the legacy Builder GitHub sign-in boundary while Builder mode remains available.
+ *
+ * Published projects that require end-user authentication do NOT use this GitHub session.
+ * They use the shared 꽃다발 Identity Provider under /api/bouquet/**.
  */
 
 require('dotenv').config();
+
 const express = require('express');
 const session = require('express-session');
 const path = require('path');
 const http = require('http');
 const https = require('https');
-const { execFile } = require('child_process');
 const jwt = require('jsonwebtoken');
-const webpush = require('web-push');
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+const PORT = Number(process.env.PORT || 3000);
+const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8080';
 const JWT_SECRET = process.env.JWT_SECRET || 'playground-jwt-secret-2024';
+
 if (IS_PRODUCTION && (JWT_SECRET.length < 32 || JWT_SECRET.includes('playground-jwt-secret-2024'))) {
   throw new Error('JWT_SECRET must be set to a private value with at least 32 characters.');
 }
 
-const HAS_VAPID_KEYS = Boolean(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY);
-if (HAS_VAPID_KEYS) {
-  webpush.setVapidDetails(
-    process.env.VAPID_EMAIL || 'mailto:admin@playground.com',
-    process.env.VAPID_PUBLIC_KEY,
-    process.env.VAPID_PRIVATE_KEY
-  );
-}
-
 const app = express();
-const PORT = process.env.PORT || 3000;
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8080';
-const PROJECT_ROOT = path.resolve(__dirname, '..');
-
 app.set('trust proxy', 1);
 
-// 세션 설정 (로그인 상태 유지)
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'fallback-secret',
+  secret: process.env.SESSION_SECRET || JWT_SECRET,
   resave: false,
   saveUninitialized: false,
   rolling: true,
   cookie: {
     httpOnly: true,
     secure: IS_PRODUCTION,
-    sameSite: 'strict',
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7일
+    sameSite: 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000,
   },
 }));
-
-app.use(express.json());
 
 function parseCookies(cookieHeader = '') {
   return cookieHeader
     .split(';')
     .map((part) => part.trim())
     .filter(Boolean)
-    .reduce((acc, part) => {
-      const index = part.indexOf('=');
-      if (index === -1) return acc;
-      const key = part.slice(0, index);
-      const value = part.slice(index + 1);
-      acc[key] = decodeURIComponent(value);
-      return acc;
+    .reduce((cookies, part) => {
+      const separator = part.indexOf('=');
+      if (separator === -1) return cookies;
+      const key = part.slice(0, separator);
+      const value = part.slice(separator + 1);
+      cookies[key] = decodeURIComponent(value);
+      return cookies;
     }, {});
 }
 
 function resolveGithubCallbackUrl(req) {
   const configured = process.env.CALLBACK_URL;
-  const forwardedHost = req.get('x-forwarded-host');
-  const host = forwardedHost || req.get('host');
-  const forwardedProto = req.get('x-forwarded-proto');
-  const protocol = forwardedProto || req.protocol || 'http';
-
+  const host = req.get('x-forwarded-host') || req.get('host');
+  const protocol = req.get('x-forwarded-proto') || req.protocol || 'http';
   if (!host) return configured;
 
   const requestBasedCallback = `${protocol}://${host}/auth/github/callback`;
@@ -98,13 +70,14 @@ function resolveGithubCallbackUrl(req) {
 
   try {
     const configuredUrl = new URL(configured);
-    const configuredHost = configuredUrl.host.toLowerCase();
     const requestHost = host.toLowerCase();
+    const configuredHost = configuredUrl.host.toLowerCase();
     const localRequest = requestHost.startsWith('localhost') || requestHost.startsWith('127.0.0.1');
     const localConfigured = configuredHost.startsWith('localhost') || configuredHost.startsWith('127.0.0.1');
-    const nodeCallbackPath = configuredUrl.pathname === '/auth/github/callback';
-
-    if (nodeCallbackPath && (configuredHost === requestHost || (localRequest && localConfigured))) {
+    if (
+      configuredUrl.pathname === '/auth/github/callback'
+      && (configuredHost === requestHost || (localRequest && localConfigured))
+    ) {
       return configured;
     }
   } catch {
@@ -114,20 +87,18 @@ function resolveGithubCallbackUrl(req) {
   return requestBasedCallback;
 }
 
-function userFromJwtPayload(payload) {
-  if (!payload || payload.type === 'refresh' || !payload.id || !payload.login) {
-    return null;
-  }
+function normalizedBuilderUser(payload) {
+  if (!payload || payload.type === 'refresh' || !payload.id || !payload.login) return null;
   return {
-    id: payload.id,
-    login: payload.login,
+    id: String(payload.id),
+    login: String(payload.login),
     name: payload.name || payload.login,
     avatar_url: payload.avatar_url || '',
   };
 }
 
-function issueAccessTokenCookie(res, user) {
-  const accessToken = jwt.sign(
+function issueBuilderAccessCookie(res, user) {
+  const token = jwt.sign(
     {
       id: String(user.id),
       login: user.login,
@@ -136,50 +107,42 @@ function issueAccessTokenCookie(res, user) {
       type: 'access',
     },
     JWT_SECRET,
-    { expiresIn: '5h' }
+    { expiresIn: '1h' },
   );
 
-  res.cookie('playground_token', accessToken, {
+  res.cookie('playground_token', token, {
     httpOnly: true,
     secure: IS_PRODUCTION,
-    maxAge: 5 * 60 * 60 * 1000, // 5시간
-    sameSite: 'strict',
+    sameSite: 'lax',
+    maxAge: 60 * 60 * 1000,
     path: '/',
   });
 }
 
-function getAuthenticatedUser(req, res) {
+function getBuilderUser(req, res) {
   if (req.session.user) return req.session.user;
 
   const cookies = parseCookies(req.headers.cookie || '');
-  const accessToken = cookies.playground_token;
-  const refreshToken = cookies.playground_refresh;
-
-  if (accessToken) {
+  if (cookies.playground_token) {
     try {
-      const user = userFromJwtPayload(jwt.verify(accessToken, JWT_SECRET));
+      const user = normalizedBuilderUser(jwt.verify(cookies.playground_token, JWT_SECRET));
       if (user) {
         req.session.user = user;
         return user;
       }
     } catch {
-      // Try refresh token below.
+      // Fall through to refresh-token recovery.
     }
   }
 
-  if (refreshToken) {
+  if (cookies.playground_refresh) {
     try {
-      const payload = jwt.verify(refreshToken, JWT_SECRET);
+      const payload = jwt.verify(cookies.playground_refresh, JWT_SECRET);
       if (payload?.type === 'refresh') {
-        const user = {
-          id: payload.id,
-          login: payload.login,
-          name: payload.name || payload.login,
-          avatar_url: payload.avatar_url || '',
-        };
-        if (user.id && user.login) {
+        const user = normalizedBuilderUser({ ...payload, type: 'access' });
+        if (user) {
           req.session.user = user;
-          issueAccessTokenCookie(res, user);
+          issueBuilderAccessCookie(res, user);
           return user;
         }
       }
@@ -192,47 +155,21 @@ function getAuthenticatedUser(req, res) {
   return null;
 }
 
-function requireAppAccess(req, res, next) {
-  const user = getAuthenticatedUser(req, res);
-  if (user) {
-    next();
-    return;
-  }
-
-  if (req.accepts('html')) {
-    res.redirect(`/auth/github?returnTo=${encodeURIComponent(req.originalUrl)}`);
-    return;
-  }
-
-  res.status(401).json({ error: 'login_required' });
-}
-
 function proxyToBackend(req, res) {
   const targetUrl = new URL(req.originalUrl, BACKEND_URL);
   const client = targetUrl.protocol === 'https:' ? https : http;
-
-  // 쿠키 전달 확인용 로그
-  const cookieHeader = req.headers['cookie'] || '';
-  const hasToken = cookieHeader.includes('playground_token');
-  console.log(`[Proxy] ${req.method} ${req.originalUrl} | token: ${hasToken}`);
-
-  // express.json()이 바디를 파싱했으므로 다시 직렬화
-  const bodyData = req.body && Object.keys(req.body).length > 0
-    ? JSON.stringify(req.body)
-    : null;
+  const forwardedFor = [req.headers['x-forwarded-for'], req.socket.remoteAddress]
+    .filter(Boolean)
+    .join(', ');
 
   const headers = {
     ...req.headers,
     host: targetUrl.host,
     origin: BACKEND_URL,
-    'x-forwarded-host': req.headers.host,
-    'x-forwarded-proto': req.protocol,
+    'x-forwarded-host': req.headers.host || '',
+    'x-forwarded-proto': req.get('x-forwarded-proto') || req.protocol || 'http',
+    'x-forwarded-for': forwardedFor,
   };
-
-  if (bodyData) {
-    headers['content-length'] = Buffer.byteLength(bodyData).toString();
-    headers['content-type'] = 'application/json';
-  }
 
   const proxyReq = client.request(
     targetUrl,
@@ -241,918 +178,58 @@ function proxyToBackend(req, res) {
       headers,
     },
     (proxyRes) => {
-      res.writeHead(proxyRes.statusCode || 500, proxyRes.headers);
+      res.writeHead(proxyRes.statusCode || 502, proxyRes.headers);
       proxyRes.pipe(res);
-    }
+    },
   );
 
   proxyReq.on('error', (error) => {
-    console.error('Backend proxy error:', error);
-    res.status(502).json({ error: 'backend_unavailable' });
+    console.error(`[BloomBouquet proxy] ${req.method} ${req.originalUrl}:`, error.message);
+    if (!res.headersSent) {
+      res.status(502).json({ error: 'backend_unavailable' });
+    } else {
+      res.end();
+    }
   });
 
-  if (bodyData) {
-    proxyReq.write(bodyData);
-    proxyReq.end();
-  } else {
-    req.pipe(proxyReq);
-  }
+  req.pipe(proxyReq);
 }
 
-// ============================================
-// Commute Alarm transit API proxy
-// ============================================
-
-const SEOUL_OPEN_API_KEY = process.env.SEOUL_OPEN_API_KEY || process.env.SEOUL_SUBWAY_API_KEY || '';
-const SEOUL_BUS_API_KEY = process.env.SEOUL_BUS_API_KEY || '';
-const SEOUL_SUBWAY_BASE = 'http://openapi.seoul.go.kr:8088';
-const SEOUL_SUBWAY_REALTIME_BASE = 'http://swopenapi.seoul.go.kr/api/subway';
-const SEOUL_BUS_BASE = 'http://ws.bus.go.kr/api/rest';
-
-async function fetchJson(url) {
-  const response = await fetch(url);
-  const text = await response.text();
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    throw new Error(text.slice(0, 200) || 'Invalid JSON response');
-  }
-  if (!response.ok) {
-    throw new Error(data?.message || data?.RESULT?.MESSAGE || `HTTP ${response.status}`);
-  }
-  return data;
-}
-
-async function fetchText(url) {
-  const response = await fetch(url);
-  const text = await response.text();
-  if (!response.ok) throw new Error(text.slice(0, 200) || `HTTP ${response.status}`);
-  return text;
-}
-
-function xmlValue(block, tag) {
-  const match = block.match(new RegExp(`<${tag}>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?</${tag}>`));
-  return match ? match[1].trim() : '';
-}
-
-function xmlItems(xml) {
-  return Array.from(xml.matchAll(/<itemList>([\s\S]*?)<\/itemList>/g)).map((match) => match[1]);
-}
-
-function requireKey(res, key, label) {
-  if (key) return false;
-  res.status(503).json({
-    error: 'missing_api_key',
-    message: `${label} 환경변수가 서버에 설정되어 있지 않습니다.`,
-  });
-  return true;
-}
-
-app.get('/commute-api/config', (req, res) => {
-  res.json({
-    subway: Boolean(SEOUL_OPEN_API_KEY),
-    bus: Boolean(SEOUL_BUS_API_KEY),
-    required: {
-      subway: 'SEOUL_OPEN_API_KEY',
-      bus: 'SEOUL_BUS_API_KEY',
-    },
-  });
-});
-
-app.get('/commute-api/subway/search', async (req, res) => {
-  if (requireKey(res, SEOUL_OPEN_API_KEY, 'SEOUL_OPEN_API_KEY')) return;
-  const query = String(req.query.q || '').trim();
-  if (!query) return res.status(400).json({ error: 'q required' });
-
-  try {
-    const url = `${SEOUL_SUBWAY_BASE}/${encodeURIComponent(SEOUL_OPEN_API_KEY)}/json/SearchInfoBySubwayNameService/1/20/${encodeURIComponent(query)}`;
-    const data = await fetchJson(url);
-    const rows = data?.SearchInfoBySubwayNameService?.row || [];
-    res.json(rows.map((row) => ({
-      id: `${row.STATION_CD || row.STATION_NM}-${row.LINE_NUM}`,
-      stationCode: row.STATION_CD || '',
-      name: row.STATION_NM || '',
-      line: row.LINE_NUM || '',
-      lat: Number(row.YPOINT_WGS || row.YPOINT || 0),
-      lng: Number(row.XPOINT_WGS || row.XPOINT || 0),
-    })).filter((station) => station.name));
-  } catch (error) {
-    res.status(502).json({ error: 'subway_search_failed', message: error.message });
-  }
-});
-
-app.get('/commute-api/subway/arrivals', async (req, res) => {
-  if (requireKey(res, SEOUL_OPEN_API_KEY, 'SEOUL_OPEN_API_KEY')) return;
-  const station = String(req.query.station || '').trim().replace(/역$/, '');
-  if (!station) return res.status(400).json({ error: 'station required' });
-
-  try {
-    const url = `${SEOUL_SUBWAY_REALTIME_BASE}/${encodeURIComponent(SEOUL_OPEN_API_KEY)}/json/realtimeStationArrival/0/20/${encodeURIComponent(station)}`;
-    const data = await fetchJson(url);
-    const rows = data?.realtimeArrivalList || [];
-    res.json(rows.map((row) => ({
-      line: row.subwayId || '',
-      trainLine: row.trainLineNm || '',
-      message: row.arvlMsg2 || '',
-      status: row.arvlMsg3 || '',
-      upDown: row.updnLine || '',
-      destination: row.bstatnNm || '',
-      updatedAt: row.recptnDt || '',
-    })));
-  } catch (error) {
-    res.status(502).json({ error: 'subway_arrivals_failed', message: error.message });
-  }
-});
-
-app.get('/commute-api/bus/nearby', async (req, res) => {
-  if (requireKey(res, SEOUL_BUS_API_KEY, 'SEOUL_BUS_API_KEY')) return;
-  const lat = Number(req.query.lat);
-  const lng = Number(req.query.lng);
-  const radius = Math.min(Math.max(Number(req.query.radius || 500), 100), 1000);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return res.status(400).json({ error: 'lat,lng required' });
-
-  try {
-    const params = new URLSearchParams({
-      serviceKey: SEOUL_BUS_API_KEY,
-      tmX: String(lng),
-      tmY: String(lat),
-      radius: String(radius),
-    });
-    const xml = await fetchText(`${SEOUL_BUS_BASE}/stationinfo/getStationByPos?${params.toString()}`);
-    const items = xmlItems(xml);
-    res.json(items.map((item) => ({
-      id: xmlValue(item, 'stationId'),
-      arsId: xmlValue(item, 'arsId'),
-      name: xmlValue(item, 'stationNm'),
-      lat: Number(xmlValue(item, 'gpsY')),
-      lng: Number(xmlValue(item, 'gpsX')),
-      distance: Number(xmlValue(item, 'dist')),
-    })).filter((station) => station.id && station.name));
-  } catch (error) {
-    res.status(502).json({ error: 'bus_nearby_failed', message: error.message });
-  }
-});
-
-app.get('/commute-api/bus/arrivals', async (req, res) => {
-  if (requireKey(res, SEOUL_BUS_API_KEY, 'SEOUL_BUS_API_KEY')) return;
-  const stationId = String(req.query.stationId || '').trim();
-  if (!stationId) return res.status(400).json({ error: 'stationId required' });
-
-  try {
-    const params = new URLSearchParams({
-      serviceKey: SEOUL_BUS_API_KEY,
-      stId: stationId,
-    });
-    const xml = await fetchText(`${SEOUL_BUS_BASE}/arrive/getLowArrInfoByStId?${params.toString()}`);
-    const items = xmlItems(xml);
-    res.json(items.map((item) => ({
-      routeId: xmlValue(item, 'busRouteId'),
-      routeName: xmlValue(item, 'rtNm'),
-      direction: xmlValue(item, 'adirection'),
-      firstArrival: xmlValue(item, 'arrmsg1'),
-      secondArrival: xmlValue(item, 'arrmsg2'),
-      stationOrder: xmlValue(item, 'staOrd'),
-    })).filter((arrival) => arrival.routeName));
-  } catch (error) {
-    res.status(502).json({ error: 'bus_arrivals_failed', message: error.message });
-  }
-});
-
-app.use(['/api'], proxyToBackend);
-
-// ============================================
-// 나이스 급식 API 프록시
-// ============================================
-const NEIS_BASE = 'https://open.neis.go.kr/hub';
-
-// 전국 학교 목록 캐시 (서버 시작 시 로드)
-let schoolCache = [];
-let schoolCacheLoaded = false;
-
-async function loadSchoolCache() {
-  if (schoolCacheLoaded) return;
-  console.log('[NEIS] 전국 학교 목록 로딩 중...');
-  try {
-    let page = 1;
-    const all = [];
-    const apiKey = process.env.NEIS_API_KEY;
-    console.log('[NEIS] API Key 확인:', apiKey ? apiKey.slice(0, 8) + '...' : '없음');
-    while (true) {
-      const url = `${NEIS_BASE}/schoolInfo?KEY=${apiKey}&Type=json&pSize=1000&pIndex=${page}`;
-      const r = await fetch(url);
-      const text = await r.text();
-      let data;
-      try { data = JSON.parse(text); } catch { console.error('[NEIS] JSON 파싱 실패:', text.slice(0, 200)); break; }
-      const rows = data?.schoolInfo?.[1]?.row || [];
-      if (rows.length === 0) { console.log('[NEIS] page', page, '결과 없음, 로딩 종료'); break; }
-      all.push(...rows.map(s => ({
-        name: s.SCHUL_NM,
-        orgCode: s.ATPT_OFCDC_SC_CODE,
-        schoolCode: s.SD_SCHUL_CODE,
-        address: s.ORG_RDNMA,
-        type: s.SCHUL_KND_SC_NM,
-        region: s.LCTN_SC_NM,
-      })));
-      console.log(`[NEIS] page ${page}: ${rows.length}개 로드 (누적 ${all.length}개)`);
-      if (rows.length < 1000) break;
-      page++;
-    }
-    schoolCache = all;
-    schoolCacheLoaded = true;
-    console.log(`[NEIS] 학교 목록 로딩 완료: ${all.length}개`);
-  } catch (e) {
-    console.error('[NEIS] 학교 목록 로딩 실패:', e.message);
-  }
-}
-
-// 서버 시작 후 백그라운드에서 로드
-setTimeout(loadSchoolCache, 3000);
-
-/** GET /neis/school?q=검색어 - 학교 부분 검색 */
-app.get('/neis/school', async (req, res) => {
-  const { q } = req.query;
-  if (!q) return res.status(400).json({ error: 'q required' });
-  
-  // 캐시에서 부분 검색
-  if (schoolCacheLoaded && schoolCache.length > 0) {
-    const results = schoolCache
-      .filter(s => s.name.includes(q) || s.address?.includes(q))
-      .slice(0, 20);
-    return res.json(results);
-  }
-
-  // 캐시 없으면 API 직접 호출
-  try {
-    const url = `${NEIS_BASE}/schoolInfo?KEY=${process.env.NEIS_API_KEY}&Type=json&SCHUL_NM=${encodeURIComponent(q)}&pSize=20`;
-    const r = await fetch(url);
-    const data = await r.json();
-    const rows = data?.schoolInfo?.[1]?.row || [];
-    res.json(rows.map(s => ({
-      name: s.SCHUL_NM,
-      orgCode: s.ATPT_OFCDC_SC_CODE,
-      schoolCode: s.SD_SCHUL_CODE,
-      address: s.ORG_RDNMA,
-      type: s.SCHUL_KND_SC_NM,
-      region: s.LCTN_SC_NM,
-    })));
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-/** GET /neis/meal?orgCode=&schoolCode=&date=YYYYMMDD - 급식 조회 */
-app.get('/neis/meal', async (req, res) => {
-  const { orgCode, schoolCode, date } = req.query;
-  if (!orgCode || !schoolCode) return res.status(400).json({ error: 'orgCode, schoolCode required' });
-  const today = date || new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  try {
-    const url = `${NEIS_BASE}/mealServiceDietInfo?KEY=${process.env.NEIS_API_KEY}&Type=json&ATPT_OFCDC_SC_CODE=${orgCode}&SD_SCHUL_CODE=${schoolCode}&MLSV_YMD=${today}`;
-    const r = await fetch(url);
-    const data = await r.json();
-    const rows = data?.mealServiceDietInfo?.[1]?.row || [];
-    res.json(rows.map(m => ({
-      mealType: m.MMEAL_SC_NM,  // 조식/중식/석식
-      menu: m.DDISH_NM?.replace(/<br\/>/g, '\n').replace(/\d+\./g, '').trim(),
-      calories: m.CAL_INFO,
-      date: m.MLSV_YMD,
-    })));
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-/** GET /neis/timetable?orgCode=&schoolCode=&schoolType=&grade=&className=&date=YYYYMMDD - 시간표 조회 */
-app.get('/neis/timetable', async (req, res) => {
-  const { orgCode, schoolCode, schoolType, grade, className, date } = req.query;
-  if (!orgCode || !schoolCode || !grade || !className) {
-    return res.status(400).json({ error: 'orgCode, schoolCode, grade, className required' });
-  }
-
-  const targetDate = date || new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  const type = String(schoolType || '');
-  const endpoint = type.includes('초등') ? 'elsTimetable' : type.includes('중학교') ? 'misTimetable' : 'hisTimetable';
-
-  try {
-    const url = `${NEIS_BASE}/${endpoint}?KEY=${process.env.NEIS_API_KEY}&Type=json&ATPT_OFCDC_SC_CODE=${orgCode}&SD_SCHUL_CODE=${schoolCode}&GRADE=${grade}&CLASS_NM=${encodeURIComponent(className)}&ALL_TI_YMD=${targetDate}`;
-    const r = await fetch(url);
-    const data = await r.json();
-    const rows = data?.[endpoint]?.[1]?.row || [];
-    res.json(rows
-      .map(t => ({
-        period: Number(t.PERIO || 0),
-        subject: t.ITRT_CNTNT || '',
-        date: t.ALL_TI_YMD,
-      }))
-      .filter(t => t.period > 0 && t.subject)
-      .sort((a, b) => a.period - b.period));
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-/** GET /neis/schedule?orgCode=&schoolCode=&date=YYYYMMDD - 학사일정 조회 */
-app.get('/neis/schedule', async (req, res) => {
-  const { orgCode, schoolCode, date } = req.query;
-  if (!orgCode || !schoolCode) {
-    return res.status(400).json({ error: 'orgCode, schoolCode required' });
-  }
-
-  const targetDate = date || new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  try {
-    const url = `${NEIS_BASE}/SchoolSchedule?KEY=${process.env.NEIS_API_KEY}&Type=json&ATPT_OFCDC_SC_CODE=${orgCode}&SD_SCHUL_CODE=${schoolCode}&AA_YMD=${targetDate}`;
-    const r = await fetch(url);
-    const data = await r.json();
-    const rows = data?.SchoolSchedule?.[1]?.row || [];
-    const gradeFields = [
-      ['1', 'ONE_GRADE_EVENT_YN'],
-      ['2', 'TW_GRADE_EVENT_YN'],
-      ['3', 'THREE_GRADE_EVENT_YN'],
-      ['4', 'FR_GRADE_EVENT_YN'],
-      ['5', 'FIV_GRADE_EVENT_YN'],
-      ['6', 'SIX_GRADE_EVENT_YN'],
-    ];
-
-    res.json(rows.map(item => ({
-      date: item.AA_YMD,
-      name: item.EVENT_NM || '',
-      content: item.EVENT_CNTNT || '',
-      type: item.SBTR_DD_SC_NM || '',
-      grades: gradeFields
-        .filter(([, field]) => item[field] === 'Y')
-        .map(([grade]) => grade),
-    })).filter(item => item.name || item.content));
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// ============================================
-// Web Push
-// ============================================
-
-/** VAPID 공개키 반환 */
-app.get('/push/vapid-public-key', (req, res) => {
-  res.json({ publicKey: process.env.VAPID_PUBLIC_KEY });
-});
-
-/** 특정 유저에게 Web Push 발송 */
-async function sendPushNotification(userId, payload) {
-  if (!HAS_VAPID_KEYS) return;
-  try {
-    const subscriptions = await new Promise((resolve) => {
-      const targetUrl = new URL(`/api/push/subscriptions/${userId}`, BACKEND_URL);
-      const client = targetUrl.protocol === 'https:' ? https : http;
-      const req = client.get(targetUrl, (res) => {
-        let data = '';
-        res.on('data', chunk => data += chunk);
-        res.on('end', () => {
-          try { resolve(JSON.parse(data)); } catch { resolve([]); }
-        });
-      });
-      req.on('error', () => resolve([]));
-    });
-
-    await Promise.allSettled(
-      subscriptions.map(sub =>
-        webpush.sendNotification(
-          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.authKey } },
-          JSON.stringify(payload)
-        )
-      )
-    );
-  } catch (err) {
-    console.error('Push notification error:', err);
-  }
-}
-
-/**
- * POST /internal/push/send
- * Spring Boot에서 호출 → Node.js가 Web Push 발송
- * { userId, title, body, url }
- */
-app.post('/internal/push/send', async (req, res) => {
-  const { userId, title, body, url, ...data } = req.body;
-  if (!userId) return res.status(400).json({ error: 'userId required' });
-  await sendPushNotification(userId, { title, body, url, ...data });
-  res.json({ success: true });
-});
-
-// ============================================
-// GitHub 커밋 API
-// ============================================
-
-app.post('/github/commit-file', async (req, res) => {
-  const githubToken = req.session?.githubToken;
-  if (!githubToken) return res.status(401).json({ error: 'GitHub token is required. Please sign in again.' });
-
-  const { repo, filePath, content, message } = req.body;
-  if (!repo || !filePath || !content) {
-    return res.status(400).json({ error: 'repo, filePath, and content are required.' });
-  }
-
-  try {
-    const headers = {
-      'Authorization': `Bearer ${githubToken}`,
-      'Accept': 'application/vnd.github+json',
-      'User-Agent': 'playground-app',
-      'Content-Type': 'application/json',
-    };
-
-    let sha;
-    const getRes = await fetch(`https://api.github.com/repos/${repo}/contents/${encodeURIComponent(filePath)}`, { headers });
-    if (getRes.ok) {
-      const getData = await getRes.json();
-      sha = getData.sha;
-    }
-
-    const putRes = await fetch(`https://api.github.com/repos/${repo}/contents/${encodeURIComponent(filePath)}`, {
-      method: 'PUT',
-      headers,
-      body: JSON.stringify({
-        message: message || `Update ${filePath}`,
-        content: Buffer.from(content, 'utf-8').toString('base64'),
-        ...(sha && { sha }),
-      }),
-    });
-
-    if (!putRes.ok) {
-      const err = await putRes.json();
-      return res.status(putRes.status).json({ error: err.message });
-    }
-
-    const result = await putRes.json();
-    res.json({ success: true, url: result.content?.html_url, sha: result.content?.sha });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-app.get('/github/primary-email', async (req, res) => {
-  const githubToken = req.session?.githubToken;
-  if (!githubToken) return res.status(401).json({ error: 'GitHub 토큰 없음. 다시 로그인해주세요.' });
-
-  try {
-    const headers = {
-      'Authorization': `Bearer ${githubToken}`,
-      'Accept': 'application/vnd.github+json',
-      'User-Agent': 'playground-app',
-    };
-
-    const emailsRes = await fetch('https://api.github.com/user/emails', { headers });
-    if (emailsRes.status === 403 || emailsRes.status === 404) {
-      return res.status(403).json({ error: 'email_scope_required' });
-    }
-    if (!emailsRes.ok) {
-      const error = await emailsRes.text();
-      return res.status(emailsRes.status).json({ error });
-    }
-
-    const emails = await emailsRes.json();
-    const primary = Array.isArray(emails)
-      ? emails.find(email => email.primary && email.verified) || emails.find(email => email.verified) || emails[0]
-      : null;
-
-    res.json({ email: primary?.email || '' });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-app.post('/github/setup-dev-hub-structure', async (req, res) => {
-  const githubToken = req.session?.githubToken;
-  if (!githubToken) return res.status(401).json({ error: 'GitHub 토큰 없음. 다시 로그인해주세요.' });
-
-  const { org } = req.body;
-  const orgName = String(org || '').trim();
-  if (!orgName) return res.status(400).json({ error: 'org is required.' });
-
-  const headers = {
-    'Authorization': `Bearer ${githubToken}`,
-    'Accept': 'application/vnd.github+json',
-    'User-Agent': 'playground-app',
-    'Content-Type': 'application/json',
-    'X-GitHub-Api-Version': '2022-11-28',
-  };
-
-  const putFile = async (repo, filePath, content, message) => {
-    const encodedPath = filePath.split('/').map(part => encodeURIComponent(part)).join('/');
-    const getRes = await fetch(`https://api.github.com/repos/${repo}/contents/${encodedPath}`, { headers });
-    let sha;
-    if (getRes.ok) {
-      const data = await getRes.json();
-      sha = data.sha;
-    }
-    const putRes = await fetch(`https://api.github.com/repos/${repo}/contents/${encodedPath}`, {
-      method: 'PUT',
-      headers,
-      body: JSON.stringify({
-        message,
-        content: Buffer.from(content, 'utf-8').toString('base64'),
-        ...(sha && { sha }),
-      }),
-    });
-    if (!putRes.ok) {
-      const error = await putRes.json().catch(() => ({}));
-      throw new Error(error.message || `Failed to write ${filePath}`);
-    }
-  };
-
-  const ensureRepo = async (suffix, label) => {
-    const repoName = `${orgName}-${suffix}`;
-    const fullName = `${orgName}/${repoName}`;
-    const existing = await fetch(`https://api.github.com/repos/${fullName}`, { headers });
-    if (!existing.ok) {
-      const created = await fetch(`https://api.github.com/orgs/${orgName}/repos`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          name: repoName,
-          description: `${label} workspace for ${orgName}`,
-          private: false,
-          auto_init: true,
-        }),
-      });
-      if (!created.ok) {
-        const error = await created.json().catch(() => ({}));
-        throw new Error(error.message || `Failed to create ${repoName}`);
-      }
-    }
-
-    await putFile(
-      fullName,
-      'README.md',
-      `# ${label}\n\n${orgName} ${label} workspace.\n`,
-      `Initialize ${label} README`,
-    );
-    await putFile(
-      fullName,
-      '.github/workflows/log.yml',
-      `name: ${label} log\n\non:\n  push:\n  workflow_dispatch:\n\njobs:\n  log:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo "${label} log for ${orgName}"\n`,
-      `Add ${label} log workflow`,
-    );
-    return { name: repoName, fullName, actionsUrl: `https://github.com/${fullName}/actions` };
-  };
-
-  try {
-    const frontend = await ensureRepo('frontend', 'frontend');
-    const backend = await ensureRepo('backend', 'backend');
-    res.json({ success: true, repos: { frontend, backend } });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// ============================================
-// 로컬 GitHub 관리 API
-// ============================================
-
-function runLocalCommand(command, args, options = {}) {
-  return new Promise((resolve) => {
-    execFile(command, args, {
-      cwd: PROJECT_ROOT,
-      windowsHide: true,
-      timeout: options.timeout || 15000,
-      maxBuffer: 1024 * 1024,
-    }, (error, stdout, stderr) => {
-      resolve({
-        ok: !error,
-        code: error?.code ?? 0,
-        stdout: String(stdout || '').trim(),
-        stderr: String(stderr || '').trim(),
-        message: error?.message || '',
-      });
-    });
-  });
-}
-
-async function getLocalGitHubStatus() {
-  const [gitVersion, ghVersion, branch, status, remote, aheadBehind, lastCommit] = await Promise.all([
-    runLocalCommand('git', ['--version']),
-    runLocalCommand('gh', ['--version']),
-    runLocalCommand('git', ['branch', '--show-current']),
-    runLocalCommand('git', ['status', '--short']),
-    runLocalCommand('git', ['remote', '-v']),
-    runLocalCommand('git', ['status', '--short', '--branch']),
-    runLocalCommand('git', ['log', '-1', '--pretty=format:%h %s']),
-  ]);
-
-  const remoteLines = remote.stdout.split(/\r?\n/).filter(Boolean);
-  const origin = remoteLines.find(line => line.startsWith('origin') && line.includes('(fetch)')) || '';
-  const branchLine = aheadBehind.stdout.split(/\r?\n/)[0] || '';
-  const changedFiles = status.stdout ? status.stdout.split(/\r?\n/).filter(Boolean) : [];
-
-  return {
-    projectRoot: PROJECT_ROOT,
-    git: {
-      installed: gitVersion.ok,
-      version: gitVersion.stdout || gitVersion.stderr || gitVersion.message,
-    },
-    gh: {
-      installed: ghVersion.ok,
-      version: ghVersion.stdout.split(/\r?\n/)[0] || ghVersion.stderr || ghVersion.message,
-      installCommand: 'winget install --id GitHub.cli',
-    },
-    repository: {
-      isRepo: branch.ok || status.ok,
-      branch: branch.stdout || '',
-      remoteOrigin: origin.replace(/\s+\(fetch\)$/, ''),
-      hasOrigin: Boolean(origin),
-      lastCommit: lastCommit.stdout || '',
-      branchSummary: branchLine,
-      changedFiles,
-      changedCount: changedFiles.length,
-      clean: changedFiles.length === 0,
-    },
-  };
-}
-
-app.get('/local-github/status', async (req, res) => {
-  res.json(await getLocalGitHubStatus());
-});
-
-app.post('/local-github/commit-push', async (req, res) => {
-  const message = String(req.body?.message || '').trim() || `Update playground ${new Date().toISOString().slice(0, 10)}`;
-  const status = await getLocalGitHubStatus();
-
-  if (!status.git.installed) return res.status(400).json({ error: 'Git is not installed.' });
-  if (!status.repository.isRepo) return res.status(400).json({ error: 'This folder is not a Git repository.' });
-  if (!status.repository.hasOrigin) return res.status(400).json({ error: 'origin remote is not connected.' });
-  if (status.repository.clean) return res.json({ success: true, message: 'No changes to commit.', status });
-
-  const add = await runLocalCommand('git', ['add', '-A']);
-  if (!add.ok) return res.status(500).json({ error: add.stderr || add.message });
-
-  const commit = await runLocalCommand('git', ['commit', '-m', message], { timeout: 30000 });
-  if (!commit.ok) return res.status(500).json({ error: commit.stderr || commit.message });
-
-  const push = await runLocalCommand('git', ['push'], { timeout: 60000 });
-  if (!push.ok) return res.status(500).json({ error: push.stderr || push.message });
-
-  res.json({
-    success: true,
-    message: 'Committed and pushed.',
-    output: [commit.stdout, push.stdout || push.stderr].filter(Boolean).join('\n'),
-    status: await getLocalGitHubStatus(),
-  });
-});
-
-// ============================================
-// Velog publish API
-// ============================================
-
-const createVelogSlug = (title = '') =>
-  title
-    .trim()
-    .toLowerCase()
-    .replace(/[^\w가-힣\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 80) || `cornell-note-${Date.now()}`;
-
-const normalizeVelogUsername = (username = '') =>
-  String(username)
-    .trim()
-    .replace(/^https?:\/\/velog\.io\/@?/i, '')
-    .replace(/^@/, '')
-    .split(/[/?#]/)[0]
-    .trim();
-
-const createVelogHeaders = accessToken => ({
-  'Content-Type': 'application/json',
-  'Accept': 'application/json',
-  'Cookie': `access_token=${accessToken}`,
-  'Authorization': `Bearer ${accessToken}`,
-  'User-Agent': 'playground-app',
-});
-
-const parseVelogResponse = async response => {
-  const text = await response.text();
-  try {
-    return JSON.parse(text);
-  } catch {
-    return { raw: text };
-  }
-};
-
-const fetchVelogCurrentUsername = async accessToken => {
-  const query = `
-    query CurrentUser {
-      currentUser {
-        username
-      }
-    }
-  `;
-
-  try {
-    const response = await fetch('https://v2.velog.io/graphql', {
-      method: 'POST',
-      headers: createVelogHeaders(accessToken),
-      body: JSON.stringify({
-        operationName: 'CurrentUser',
-        query,
-        variables: {},
-      }),
-    });
-    const data = await parseVelogResponse(response);
-    if (!response.ok || data.errors?.length) return '';
-    return normalizeVelogUsername(data.data?.currentUser?.username);
-  } catch {
-    return '';
-  }
-};
-
-app.post('/velog/publish', async (req, res) => {
-  const { accessToken, username, title, body, tags, isPrivate } = req.body;
-  if (!accessToken || !title || !body) {
-    return res.status(400).json({ error: 'accessToken, title, and body are required.' });
-  }
-
-  const tagList = Array.isArray(tags)
-    ? tags
-    : String(tags || '')
-      .split(',')
-      .map(tag => tag.trim())
-      .filter(Boolean);
-  const urlSlug = createVelogSlug(title);
-  const query = `
-    mutation WritePost(
-      $title: String,
-      $body: String,
-      $tags: [String],
-      $is_markdown: Boolean,
-      $is_private: Boolean,
-      $is_temp: Boolean,
-      $url_slug: String,
-      $thumbnail: String
-    ) {
-      writePost(
-        title: $title,
-        body: $body,
-        tags: $tags,
-        is_markdown: $is_markdown,
-        is_private: $is_private,
-        is_temp: $is_temp,
-        url_slug: $url_slug,
-        thumbnail: $thumbnail
-      ) {
-        id
-        url_slug
-        user {
-          username
-        }
-      }
-    }
-  `;
-
-  try {
-    const requestedUsername = normalizeVelogUsername(username);
-    const tokenUsername = await fetchVelogCurrentUsername(accessToken);
-    const publishRes = await fetch('https://v2.velog.io/graphql', {
-      method: 'POST',
-      headers: createVelogHeaders(accessToken),
-      body: JSON.stringify({
-        operationName: 'WritePost',
-        query,
-        variables: {
-          title,
-          body,
-          tags: tagList,
-          is_markdown: true,
-          is_private: Boolean(isPrivate),
-          is_temp: false,
-          url_slug: urlSlug,
-          thumbnail: null,
-        },
-      }),
-    });
-
-    const data = await parseVelogResponse(publishRes);
-
-    if (!publishRes.ok || data.errors?.length) {
-      const message = data.errors?.[0]?.message || data.error || data.raw || 'Velog publish failed.';
-      return res.status(publishRes.status || 500).json({ error: message });
-    }
-
-    const post = data.data?.writePost;
-    const postUsername = normalizeVelogUsername(post?.user?.username || tokenUsername || requestedUsername);
-    const postSlug = post?.url_slug || urlSlug;
-    const url = !isPrivate && postUsername && postSlug ? `https://velog.io/@${postUsername}/${postSlug}` : undefined;
-    res.json({
-      success: true,
-      id: post?.id,
-      url,
-      username: postUsername,
-      slug: postSlug,
-      message: isPrivate
-        ? 'Velog private post was published. Private posts may show 404 from the public URL.'
-        : !postUsername
-          ? 'Velog post was published, but the Velog username could not be verified.'
-          : undefined,
-    });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-/**
- * POST /github/commit
- * 코테 일지 풀이를 GitHub 레포에 커밋
- * { repo, problemTitle, platform, language, code }
- */
-app.post('/github/commit', async (req, res) => {
-  const githubToken = req.session?.githubToken;
-  if (!githubToken) return res.status(401).json({ error: 'GitHub 토큰 없음. 다시 로그인해주세요.' });
-
-  const { repo, problemTitle, platform, language, code } = req.body;
-  if (!repo || !problemTitle || !code) return res.status(400).json({ error: '필수 값 누락' });
-
-  const LANG_EXT = {
-    python: 'py', javascript: 'js', typescript: 'ts', java: 'java',
-    cpp: 'cpp', c: 'c', kotlin: 'kt', swift: 'swift', go: 'go', rust: 'rs',
-  };
-  const ext = LANG_EXT[language?.toLowerCase()] || 'txt';
-  const langName = language ? language.charAt(0).toUpperCase() + language.slice(1) : 'Code';
-
-  // 파일 경로: codingtest.py/프로그래머스/문제이름 (Python).py
-  const platformDir = platform === 'programmers' ? '프로그래머스' : '백준';
-  const safeTitle = problemTitle.replace(/[\\/:*?"<>|]/g, '_');
-  const filePath = `codingtest.py/${platformDir}/${safeTitle} (${langName}).${ext}`;
-
-  try {
-    const headers = {
-      'Authorization': `Bearer ${githubToken}`,
-      'Accept': 'application/vnd.github+json',
-      'User-Agent': 'playground-app',
-      'Content-Type': 'application/json',
-    };
-
-    // 기존 파일 SHA 조회 (업데이트 시 필요)
-    let sha;
-    const getRes = await fetch(`https://api.github.com/repos/${repo}/contents/${encodeURIComponent(filePath)}`, { headers });
-    if (getRes.ok) {
-      const getData = await getRes.json();
-      sha = getData.sha;
-    }
-
-    // 파일 생성/업데이트
-    const body = {
-      message: `[${platform === 'programmers' ? '프로그래머스' : '백준'}] ${problemTitle}`,
-      content: Buffer.from(code, 'utf-8').toString('base64'),
-      ...(sha && { sha }),
-    };
-
-    const putRes = await fetch(`https://api.github.com/repos/${repo}/contents/${encodeURIComponent(filePath)}`, {
-      method: 'PUT',
-      headers,
-      body: JSON.stringify(body),
-    });
-
-    if (!putRes.ok) {
-      const err = await putRes.json();
-      return res.status(putRes.status).json({ error: err.message });
-    }
-
-    const result = await putRes.json();
-    res.json({ success: true, url: result.content?.html_url, sha: result.content?.sha });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
+// Spring Boot owns BloomBouquet, 꽃다발 SSO, Builder, and internal worker APIs.
+app.use('/api', proxyToBackend);
+app.use('/oauth2', proxyToBackend);
+app.use('/login/oauth2', proxyToBackend);
+
+// Builder-only GitHub sign-in. Published projects use 꽃다발 SSO instead.
 app.get('/auth/github', (req, res) => {
   const clientId = process.env.GITHUB_CLIENT_ID;
   const callbackUrl = resolveGithubCallbackUrl(req);
+  if (!clientId || !callbackUrl) {
+    return res.status(503).json({ error: 'github_oauth_not_configured' });
+  }
 
-  // returnTo 세션에 저장
-  if (req.query.returnTo) {
+  if (typeof req.query.returnTo === 'string' && req.query.returnTo.startsWith('/')) {
     req.session.returnTo = req.query.returnTo;
   }
-  
-  const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(callbackUrl)}&scope=read:user`;
-  res.redirect(githubAuthUrl);
+
+  const githubAuthUrl = new URL('https://github.com/login/oauth/authorize');
+  githubAuthUrl.searchParams.set('client_id', clientId);
+  githubAuthUrl.searchParams.set('redirect_uri', callbackUrl);
+  githubAuthUrl.searchParams.set('scope', 'read:user');
+  res.redirect(githubAuthUrl.toString());
 });
 
-/**
- * GET /auth/github/callback
- * GitHub에서 인증 후 돌아오는 콜백
- * GitHub이 ?code=xxx 파라미터와 함께 여기로 리다이렉트함
- */
 app.get('/auth/github/callback', async (req, res) => {
-  const { code } = req.query;
+  const code = typeof req.query.code === 'string' ? req.query.code : '';
   const callbackUrl = resolveGithubCallbackUrl(req);
-
-  if (!code) {
-    return res.redirect('/?error=no_code');
-  }
+  if (!code) return res.redirect('/?mode=builder&error=no_code');
 
   try {
-    // 1단계: code를 access_token으로 교환
     const tokenResponse = await fetch('https://github.com/login/oauth/access_token', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
+        Accept: 'application/json',
       },
       body: JSON.stringify({
         client_id: process.env.GITHUB_CLIENT_ID,
@@ -1161,108 +238,56 @@ app.get('/auth/github/callback', async (req, res) => {
         redirect_uri: callbackUrl,
       }),
     });
-
-    const tokenText = await tokenResponse.text();
-    console.log('Token response status:', tokenResponse.status);
-    console.log('Token response body:', tokenText.slice(0, 200));
-
-    let tokenData;
-    try {
-      tokenData = JSON.parse(tokenText);
-    } catch {
-      return res.redirect('/?error=token_parse_failed');
+    const tokenData = await tokenResponse.json();
+    if (!tokenResponse.ok || tokenData.error || !tokenData.access_token) {
+      return res.redirect('/?mode=builder&error=token_failed');
     }
 
-    if (tokenData.error) {
-      console.error('Token error from GitHub:', tokenData);
-      return res.redirect('/?error=token_failed&detail=' + encodeURIComponent(tokenData.error_description || tokenData.error));
-    }
-
-    // 2단계: access_token으로 사용자 정보 가져오기
     const userResponse = await fetch('https://api.github.com/user', {
       headers: {
-        'Authorization': `Bearer ${tokenData.access_token}`,
-        'Accept': 'application/vnd.github+json',
-        'User-Agent': 'playground-app',
+        Authorization: `Bearer ${tokenData.access_token}`,
+        Accept: 'application/vnd.github+json',
+        'User-Agent': 'bloombouquet-builder',
       },
     });
+    if (!userResponse.ok) return res.redirect('/?mode=builder&error=user_failed');
 
-    const userData = await userResponse.json();
-
-    // 3단계: 세션에 사용자 정보 저장
-    req.session.user = {
-      id: userData.id,
-      login: userData.login,
-      name: userData.name,
-      avatar_url: userData.avatar_url,
+    const githubUser = await userResponse.json();
+    const user = {
+      id: String(githubUser.id),
+      login: githubUser.login,
+      name: githubUser.name || githubUser.login,
+      avatar_url: githubUser.avatar_url || '',
     };
-    req.session.githubToken = tokenData.access_token; // GitHub API 사용용
+    req.session.user = user;
+    issueBuilderAccessCookie(res, user);
 
-    // 4단계: JWT 발급 (Spring Boot API 인증용)
-    const userPayload = {
-      id: String(userData.id),
-      login: userData.login,
-      name: userData.name || userData.login,
-      avatar_url: userData.avatar_url,
-    };
-
-    // 액세스 토큰 (1시간)
-    const accessToken = jwt.sign(
-      { ...userPayload, type: 'access' },
-      JWT_SECRET,
-      { expiresIn: '1h' }
-    );
-
-    // 리프레시 토큰 (7일)
     const refreshToken = jwt.sign(
-      { ...userPayload, type: 'refresh' },
+      { ...user, type: 'refresh' },
       JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: '7d' },
     );
-
-    // 액세스 토큰 쿠키 (1시간)
-    res.cookie('playground_token', accessToken, {
-      httpOnly: false, // 프론트에서 읽을 수 있게
-      secure: IS_PRODUCTION,
-      maxAge: 60 * 60 * 1000, // 1시간
-      sameSite: 'lax',
-      path: '/',
-    });
-
-    // 리프레시 토큰 쿠키 (7일, HttpOnly로 보안 강화)
     res.cookie('playground_refresh', refreshToken, {
       httpOnly: true,
       secure: IS_PRODUCTION,
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7일
       sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
       path: '/',
     });
 
-    // 로그인 성공 → returnTo가 있으면 거기로, 없으면 메인
-    const returnTo = req.session.returnTo || '/';
+    const returnTo = req.session.returnTo || '/?mode=builder';
     delete req.session.returnTo;
-    res.redirect(returnTo);
+    return res.redirect(returnTo);
   } catch (error) {
-    console.error('OAuth error:', error);
-    console.error('GITHUB_CLIENT_ID:', process.env.GITHUB_CLIENT_ID);
-    console.error('GITHUB_CLIENT_SECRET 길이:', process.env.GITHUB_CLIENT_SECRET?.length ?? '없음');
-    console.error('CALLBACK_URL:', callbackUrl);
-    res.redirect('/?error=auth_failed&detail=' + encodeURIComponent(String(error)));
+    console.error('[BloomBouquet GitHub OAuth]', error);
+    return res.redirect('/?mode=builder&error=auth_failed');
   }
 });
 
-/**
- * GET /auth/me
- * 현재 로그인한 사용자 정보 반환
- */
 app.get('/auth/me', (req, res) => {
-  res.json({ user: getAuthenticatedUser(req, res) });
+  res.json({ user: getBuilderUser(req, res) });
 });
 
-/**
- * POST /auth/logout
- * 로그아웃 - 세션 파기
- */
 app.post('/auth/logout', (req, res) => {
   req.session.destroy(() => {
     res.clearCookie('playground_token', { path: '/' });
@@ -1271,162 +296,13 @@ app.post('/auth/logout', (req, res) => {
   });
 });
 
-// ============================================
-// 정적 파일 서빙
-// ============================================
-
-// 놀이터 메인 (Vite 빌드 결과물)
-app.use(express.static(path.join(__dirname, '..', 'dist')));
-
-// 모든 개별 웹앱은 로그인 후에만 직접 접근할 수 있습니다.
-app.use('/apps', requireAppAccess);
-
-// Life Tracker 앱 (서브 경로에서 서빙)
-app.use('/apps/life-tracker', express.static(path.join(__dirname, '..', 'apps', 'life-tracker', 'dist')));
-app.get('/apps/life-tracker/*', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'apps', 'life-tracker', 'dist', 'index.html'));
-});
-
-// Dev Notes 앱
-app.use('/apps/dev-notes', express.static(path.join(__dirname, '..', 'apps', 'dev-notes', 'dist')));
-app.get('/apps/dev-notes/*', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'apps', 'dev-notes', 'dist', 'index.html'));
-});
-
-// Dev Action Hub 앱
-app.use('/apps/dev-action-hub', express.static(path.join(__dirname, '..', 'apps', 'dev-action-hub', 'dist')));
-app.get('/apps/dev-action-hub/*', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'apps', 'dev-action-hub', 'dist', 'index.html'));
-});
-
-// Dev Term Roulette 앱
-app.use('/apps/dev-term-roulette', express.static(path.join(__dirname, '..', 'apps', 'dev-term-roulette', 'dist')));
-app.get('/apps/dev-term-roulette/*', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'apps', 'dev-term-roulette', 'dist', 'index.html'));
-});
-
-// Idea Mixer 앱
-app.use('/apps/idea-mixer', express.static(path.join(__dirname, '..', 'apps', 'idea-mixer', 'dist')));
-app.get('/apps/idea-mixer/*', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'apps', 'idea-mixer', 'dist', 'index.html'));
-});
-
-// Study Planner 앱
-app.use('/apps/study-planner', express.static(path.join(__dirname, '..', 'apps', 'study-planner', 'dist')));
-app.get('/apps/study-planner/*', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'apps', 'study-planner', 'dist', 'index.html'));
-});
-
-// Focus Room 앱
-app.use('/apps/focus-room', express.static(path.join(__dirname, '..', 'apps', 'focus-room', 'dist')));
-app.get('/apps/focus-room/*', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'apps', 'focus-room', 'dist', 'index.html'));
-});
-
-// Todo 앱
-app.use('/apps/todo', express.static(path.join(__dirname, '..', 'apps', 'todo', 'dist')));
-app.get('/apps/todo/*', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'apps', 'todo', 'dist', 'index.html'));
-});
-
-// Day Schedule 앱
-app.use('/apps/day-schedule', express.static(path.join(__dirname, '..', 'apps', 'day-schedule', 'dist')));
-app.get('/apps/day-schedule/*', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'apps', 'day-schedule', 'dist', 'index.html'));
-});
-
-// Cornell Notes 앱
-app.use('/apps/cornell-notes', express.static(path.join(__dirname, '..', 'apps', 'cornell-notes', 'dist')));
-app.get('/apps/cornell-notes/*', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'apps', 'cornell-notes', 'dist', 'index.html'));
-});
-
-// Coding Log 앱
-app.use('/apps/coding-log', express.static(path.join(__dirname, '..', 'apps', 'coding-log', 'dist')));
-app.get('/apps/coding-log/*', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'apps', 'coding-log', 'dist', 'index.html'));
-});
-
-// School Meal 앱
-app.use('/apps/school-meal', express.static(path.join(__dirname, '..', 'apps', 'school-meal', 'dist'), {
-  setHeaders: (res) => {
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-  },
-}));
-app.get('/apps/school-meal/*', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'apps', 'school-meal', 'dist', 'index.html'));
-});
-
-// Commute Alarm 앱
-app.use('/apps/commute-alarm', express.static(path.join(__dirname, '..', 'apps', 'commute-alarm', 'dist'), {
-  setHeaders: (res) => {
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-  },
-}));
-app.get('/apps/commute-alarm/*', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'apps', 'commute-alarm', 'dist', 'index.html'));
-});
-
-// Mock Invest 앱
-app.use('/apps/mock-invest', express.static(path.join(__dirname, '..', 'apps', 'mock-invest', 'dist')));
-app.get('/apps/mock-invest/*', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'apps', 'mock-invest', 'dist', 'index.html'));
-});
-
-// Action Notifier 앱
-app.use('/apps/action-notifier', express.static(path.join(__dirname, '..', 'apps', 'action-notifier', 'dist')));
-app.get('/apps/action-notifier/*', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'apps', 'action-notifier', 'dist', 'index.html'));
-});
-
-// Code Run Visualizer 앱
-app.use('/apps/code-run-visualizer', express.static(path.join(__dirname, '..', 'apps', 'code-run-visualizer', 'dist')));
-app.get('/apps/code-run-visualizer/*', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'apps', 'code-run-visualizer', 'dist', 'index.html'));
-});
-
-// Voice Phishing 앱
-app.use('/apps/voice-phishing', express.static(path.join(__dirname, '..', 'apps', 'voice-phishing', 'dist')));
-app.get('/apps/voice-phishing/*', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'apps', 'voice-phishing', 'dist', 'index.html'));
-});
-
-// Virtual Study Room 앱
-app.use('/apps/virtual-study-room', express.static(path.join(__dirname, '..', 'apps', 'virtual-study-room', 'dist')));
-app.get('/apps/virtual-study-room/*', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'apps', 'virtual-study-room', 'dist', 'index.html'));
-});
-
-// Virtual Avatar 앱
-app.use('/apps/virtual-avatar', express.static(path.join(__dirname, '..', 'apps', 'virtual-avatar', 'dist')));
-app.get('/apps/virtual-avatar/*', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'apps', 'virtual-avatar', 'dist', 'index.html'));
-});
-
-// Voice Studio 앱
-app.use('/apps/voice-studio', express.static(path.join(__dirname, '..', 'apps', 'voice-studio', 'dist')));
-app.get('/apps/voice-studio/*', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'apps', 'voice-studio', 'dist', 'index.html'));
-});
-
-// Extension apps and guides
-app.use('/apps/site-macro-extension', express.static(path.join(__dirname, '..', 'apps', 'site-macro-extension')));
-app.use('/apps/site-macro-native-bridge', express.static(path.join(__dirname, '..', 'apps', 'site-macro-native-bridge')));
-app.use('/apps/webbridge', express.static(path.join(__dirname, '..', 'apps', 'webbridge')));
-app.use('/apps/focustime-extension', express.static(path.join(__dirname, '..', 'apps', 'focustime-extension')));
-app.use('/apps/focustime-tracker', express.static(path.join(__dirname, '..', 'apps', 'focustime-tracker')));
-app.use('/apps/school-meal-extension', express.static(path.join(__dirname, '..', 'apps', 'school-meal-extension')));
-app.use('/apps/mock-invest-extension', express.static(path.join(__dirname, '..', 'apps', 'mock-invest-extension')));
-app.use('/apps/voice-studio-extension', express.static(path.join(__dirname, '..', 'apps', 'voice-studio-extension')));
+const DIST_DIR = path.join(__dirname, '..', 'dist');
+app.use(express.static(DIST_DIR));
 
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'dist', 'index.html'));
+  res.sendFile(path.join(DIST_DIR, 'index.html'));
 });
 
 app.listen(PORT, () => {
-  console.log(`🎮 놀이터 서버 실행 중: http://localhost:${PORT}`);
+  console.log(`🌸 BloomBouquet server: http://localhost:${PORT}`);
 });

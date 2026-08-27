@@ -1,1 +1,0 @@
-export { TabNav } from './TabNav';

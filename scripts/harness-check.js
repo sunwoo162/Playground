@@ -15,114 +15,58 @@ function exists(relativePath) {
   return fs.existsSync(path.join(root, relativePath));
 }
 
-function getPortalAppIds() {
-  const source = readText('playground-web/src/entities/app-item/model/apps.ts');
-  return new Set(Array.from(source.matchAll(/id:\s*['"]([^'"]+)['"]/g)).map((match) => match[1]));
+function directDirectories(relativePath) {
+  const absolutePath = path.join(root, relativePath);
+  if (!fs.existsSync(absolutePath)) return [];
+  return fs
+    .readdirSync(absolutePath, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort();
 }
-
-function getServerAppRoutes() {
-  const source = readText('server/index.js');
-  return new Set(Array.from(source.matchAll(/['"]\/apps\/([^'"/*]+)(?:\/\*)?['"]/g)).map((match) => match[1]));
-}
-
-function getBuildScriptAppIds() {
-  const pkg = readJson('package.json');
-  const buildApps = pkg.scripts?.['build:apps'] || '';
-  const ids = [
-    ...Array.from(buildApps.matchAll(/--prefix\s+apps\/([^\s&]+)/g)),
-    ...Array.from(buildApps.matchAll(/--filter\s+(?:\.\/)?apps\/([^\s&]+)/g)),
-  ].map((match) => match[1]);
-  return new Set(ids);
-}
-
-function classifyApp(app) {
-  const appPath = `apps/${app.id}`;
-  const packagePath = `${appPath}/package.json`;
-  const hasPackage = exists(packagePath);
-  const packageJson = hasPackage ? readJson(packagePath) : null;
-  return {
-    ...app,
-    appPath,
-    hasDirectory: exists(appPath),
-    hasPackage,
-    hasBuildScript: Boolean(packageJson?.scripts?.build),
-    hasDist: exists(`${appPath}/dist`),
-    hasProductDoc: exists(`${appPath}/README.md`) || exists(`${appPath}/PRODUCT.md`),
-  };
-}
-
-const registry = readJson('docs/app-registry.json');
-const rootPackage = readJson('package.json');
-const portalIds = getPortalAppIds();
-const serverRoutes = getServerAppRoutes();
-const buildScriptIds = getBuildScriptAppIds();
-const registryIds = new Set(registry.apps.map((app) => app.id));
 
 const failures = [];
-const warnings = [];
 const info = [];
 
-if (!rootPackage.scripts?.build || !rootPackage.scripts?.['build:apps']) {
-  failures.push('Root package.json must define build and build:apps scripts.');
+function assert(condition, message) {
+  if (!condition) failures.push(message);
 }
 
-for (const app of registry.apps.map(classifyApp)) {
-  if (!app.hasDirectory) {
-    failures.push(`${app.id}: registry entry points to a missing apps/${app.id} directory.`);
-    continue;
-  }
+const pkg = readJson('package.json');
+const serverSource = readText('server/index.js');
+const bloomIndex = readText('bloom-web/index.html');
+const appDirectories = directDirectories('apps');
+const builtIndex = exists('dist/index.html') ? readText('dist/index.html') : '';
 
-  if (!portalIds.has(app.id)) {
-    warnings.push(`${app.id}: registered product is not listed in the portal APPS array.`);
-  }
+assert(!exists('playground-web'), 'legacy playground-web source must be removed.');
+assert(
+  appDirectories.length === 1 && appDirectories[0] === 'desktop',
+  `only apps/desktop may remain; found: ${appDirectories.join(', ') || '(none)'}`,
+);
+assert(Boolean(pkg.scripts?.['build:bloom-web']), 'build:bloom-web script is required.');
+assert(
+  pkg.scripts?.['build:bloom-web']?.includes('--outDir ../dist'),
+  'build:bloom-web must emit BloomBouquet directly to root dist/.',
+);
+assert(!pkg.scripts?.['build:playground-web'], 'legacy build:playground-web script must be removed.');
+assert(!pkg.scripts?.['build:apps'], 'legacy build:apps script must be removed.');
+assert(
+  pkg.scripts?.build === 'pnpm run build:bloom-web',
+  'root build script must build BloomBouquet only.',
+);
+assert(!/["']\/apps\//.test(serverSource), 'legacy /apps/* static routes must be removed from server/index.js.');
+assert(bloomIndex.includes('<title>BloomBouquet</title>'), 'bloom-web shell title must be BloomBouquet.');
+assert(exists('dist/index.html'), 'BloomBouquet production build must create dist/index.html.');
+assert(builtIndex.includes('<title>BloomBouquet</title>'), 'dist/index.html must be the BloomBouquet shell.');
 
-  if (!serverRoutes.has(app.id)) {
-    warnings.push(`${app.id}: registered product has no /apps/${app.id} static route in server/index.js.`);
-  }
+info.push(`apps/* directories: ${appDirectories.join(', ') || '(none)'}`);
+info.push(`root build: ${pkg.scripts?.build || '(missing)'}`);
+info.push(`Bloom build: ${pkg.scripts?.['build:bloom-web'] || '(missing)'}`);
+info.push(`dist/index.html: ${exists('dist/index.html') ? 'present' : 'missing'}`);
 
-  if (app.hasPackage && !app.hasBuildScript) {
-    failures.push(`${app.id}: package.json exists but has no build script.`);
-  }
-
-  if (app.hasPackage && app.hasBuildScript && !buildScriptIds.has(app.id)) {
-    warnings.push(`${app.id}: buildable app is not included in root build:apps.`);
-  }
-
-  if (app.priority <= 2 && app.status !== 'disabled' && app.hasPackage && !app.hasDist) {
-    warnings.push(`${app.id}: priority ${app.priority} app has no dist directory yet. Run its build before deployment.`);
-  }
-
-  if (app.priority <= 2 && app.hasPackage && !app.hasProductDoc) {
-    warnings.push(`${app.id}: priority ${app.priority} app has no README.md or PRODUCT.md.`);
-  }
-}
-
-for (const id of portalIds) {
-  if (id.startsWith('cs')) continue;
-  if (!registryIds.has(id)) {
-    warnings.push(`${id}: portal exposes an app that is missing from docs/app-registry.json.`);
-  }
-}
-
-for (const id of buildScriptIds) {
-  if (!registryIds.has(id)) {
-    warnings.push(`${id}: root build:apps includes an app that is missing from docs/app-registry.json.`);
-  }
-}
-
-info.push(`Registry apps: ${registry.apps.length}`);
-info.push(`Portal app ids: ${portalIds.size}`);
-info.push(`Server /apps routes: ${serverRoutes.size}`);
-info.push(`Root build:apps entries: ${buildScriptIds.size}`);
-
-console.log('Playground harness check');
+console.log('BloomBouquet production harness check');
 console.log('');
 for (const line of info) console.log(`INFO  ${line}`);
-
-if (warnings.length) {
-  console.log('');
-  for (const warning of warnings) console.log(`WARN  ${warning}`);
-}
 
 if (failures.length) {
   console.log('');
@@ -130,5 +74,5 @@ if (failures.length) {
   process.exitCode = 1;
 } else {
   console.log('');
-  console.log('PASS  Harness invariants passed.');
+  console.log('PASS  BloomBouquet production invariants passed.');
 }

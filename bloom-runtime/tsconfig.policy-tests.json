@@ -32,6 +32,8 @@
     "ts/worktreeLifecycle.policy-test.ts",
     "ts/bouquetAuth.ts",
     "ts/bouquetAuth.policy-test.ts",
+    "ts/evaluationPlatform.ts",
+    "ts/evaluationPlatform.policy-test.ts",
     "ts/sessionReconciliationPolicy.ts",
     "ts/sessionReconciliation.policy-test.ts",
     "ts/orchestrationCore.ts",
@@ -44,6 +46,7 @@
     "ts/builderWorkerHttpClient.ts",
     "ts/builderWorkerAdapter.policy-test.ts",
     "ts/headlessBuilderExecutor.ts",
-    "ts/headlessBuilderExecutor.policy-test.ts"
+    "ts/headlessBuilderExecutor.policy-test.ts",
+    "ts/headlessCrashRecovery.policy-test.ts"
   ]
 }

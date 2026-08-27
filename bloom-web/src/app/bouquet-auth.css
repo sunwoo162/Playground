@@ -1,0 +1,299 @@
+:root {
+  font-family: Inter, Pretendard, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.bouquet-auth-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 72px 20px;
+  background:
+    radial-gradient(circle at 10% 12%, rgba(224, 185, 205, .42), transparent 30%),
+    radial-gradient(circle at 88% 82%, rgba(211, 226, 204, .45), transparent 28%),
+    #f8f5f7;
+  color: #29232a;
+}
+
+.bouquet-auth-home {
+  position: fixed;
+  top: 24px;
+  left: clamp(20px, 4vw, 56px);
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: #382d34;
+  text-decoration: none;
+  font-size: 14px;
+  letter-spacing: -.01em;
+}
+
+.bouquet-auth-home span {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #efd8e4;
+  color: #7a5368;
+}
+
+.bouquet-auth-card {
+  width: min(480px, 100%);
+  padding: clamp(28px, 5vw, 44px);
+  border: 1px solid rgba(222, 208, 218, .9);
+  border-radius: 32px;
+  background: rgba(255, 255, 255, .94);
+  box-shadow: 0 28px 80px rgba(72, 45, 62, .12);
+  backdrop-filter: blur(20px);
+}
+
+.bouquet-auth-brand {
+  text-align: center;
+}
+
+.bouquet-auth-flower {
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 18px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #f2d7e4, #f9edf3);
+  color: #80566d;
+  font-size: 26px;
+  box-shadow: inset 0 0 0 1px rgba(126, 83, 106, .08);
+}
+
+.bouquet-auth-brand p {
+  margin: 0 0 8px;
+  color: #9a7488;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .18em;
+}
+
+.bouquet-auth-brand h1 {
+  margin: 0;
+  font-size: clamp(30px, 6vw, 40px);
+  letter-spacing: -.045em;
+}
+
+.bouquet-auth-brand > span {
+  display: block;
+  margin-top: 12px;
+  color: #777078;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.bouquet-auth-project {
+  margin: 26px 0 0;
+  padding: 16px 18px;
+  border: 1px solid #eadde4;
+  border-radius: 18px;
+  background: #fcf8fa;
+}
+
+.bouquet-auth-project span,
+.bouquet-auth-project small {
+  display: block;
+  color: #8b7d85;
+  font-size: 11px;
+}
+
+.bouquet-auth-project strong {
+  display: block;
+  margin: 5px 0 7px;
+  overflow-wrap: anywhere;
+  font-size: 15px;
+}
+
+.bouquet-auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin-top: 28px;
+  padding: 4px;
+  border-radius: 14px;
+  background: #f2eef1;
+}
+
+.bouquet-auth-tabs button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: #80767d;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.bouquet-auth-tabs button.active {
+  background: #fff;
+  color: #493942;
+  box-shadow: 0 3px 12px rgba(66, 45, 57, .08);
+}
+
+.bouquet-auth-form {
+  display: grid;
+  gap: 16px;
+  margin-top: 22px;
+}
+
+.bouquet-auth-form label {
+  display: grid;
+  gap: 7px;
+}
+
+.bouquet-auth-form label > span {
+  padding-left: 2px;
+  color: #625b61;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.bouquet-auth-form input {
+  width: 100%;
+  height: 50px;
+  padding: 0 15px;
+  border: 1px solid #dfd6dc;
+  border-radius: 14px;
+  outline: none;
+  background: #fff;
+  color: #2d272b;
+  font: inherit;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+.bouquet-auth-form input:focus {
+  border-color: #a97891;
+  box-shadow: 0 0 0 4px rgba(169, 120, 145, .12);
+}
+
+.bouquet-auth-primary,
+.bouquet-auth-secondary {
+  width: 100%;
+  min-height: 50px;
+  border-radius: 14px;
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.bouquet-auth-primary {
+  border: 1px solid #3d3038;
+  background: #3d3038;
+  color: #fff;
+  box-shadow: 0 12px 26px rgba(57, 43, 51, .16);
+}
+
+.bouquet-auth-primary:hover:not(:disabled) {
+  background: #2f252b;
+}
+
+.bouquet-auth-primary:disabled,
+.bouquet-auth-secondary:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.bouquet-auth-primary-link {
+  display: grid;
+  place-items: center;
+  text-decoration: none;
+}
+
+.bouquet-auth-secondary {
+  margin-top: 10px;
+  border: 1px solid #dfd5db;
+  background: #fff;
+  color: #675b63;
+}
+
+.bouquet-auth-alert {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.bouquet-auth-alert-error {
+  border: 1px solid #efcece;
+  background: #fff3f3;
+  color: #964747;
+}
+
+.bouquet-auth-loading {
+  min-height: 170px;
+  display: grid;
+  place-items: center;
+  color: #8b8389;
+  font-size: 13px;
+}
+
+.bouquet-auth-session {
+  margin-top: 28px;
+  text-align: center;
+}
+
+.bouquet-auth-avatar {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 14px;
+  border-radius: 50%;
+  background: #ead8e1;
+  color: #6c4b5c;
+  font-size: 24px;
+  font-weight: 900;
+}
+
+.bouquet-auth-session p {
+  margin: 0;
+  color: #92868d;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.bouquet-auth-session h2 {
+  margin: 6px 0 3px;
+  font-size: 24px;
+  letter-spacing: -.035em;
+}
+
+.bouquet-auth-session > div + span,
+.bouquet-auth-session > div:nth-child(2) > span {
+  color: #7c7479;
+  font-size: 13px;
+}
+
+.bouquet-auth-session .bouquet-auth-primary {
+  margin-top: 24px;
+}
+
+.bouquet-auth-footnote {
+  margin: 18px 0 0;
+  color: #9a9297;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+@media (max-width: 560px) {
+  .bouquet-auth-shell {
+    place-items: start center;
+    padding: 82px 12px 28px;
+  }
+
+  .bouquet-auth-home {
+    top: 18px;
+    left: 16px;
+  }
+
+  .bouquet-auth-card {
+    padding: 26px 20px;
+    border-radius: 24px;
+  }
+}
