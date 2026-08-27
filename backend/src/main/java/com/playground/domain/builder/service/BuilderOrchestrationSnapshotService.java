@@ -31,6 +31,16 @@ public class BuilderOrchestrationSnapshotService {
         return snapshotRepository.findByRun_Id(runId).map(this::toResponse);
     }
 
+    @Transactional(readOnly = true)
+    public Optional<BuilderWorkerDto.SnapshotResponse> findForOwner(String ownerId, Long projectId, Long runId) {
+        String owner = requireOwner(ownerId);
+        Long project = requireProjectId(projectId);
+        Long requestedRun = requireRunId(runId);
+        runRepository.findByIdAndProject_IdAndOwnerId(requestedRun, project, owner)
+                .orElseThrow(() -> new NoSuchElementException("프로젝트 실행 기록을 찾을 수 없습니다."));
+        return snapshotRepository.findByRun_Id(requestedRun).map(this::toResponse);
+    }
+
     @Transactional
     public Optional<BuilderWorkerDto.SnapshotResponse> loadOwned(Long runId, String workerId) {
         BuilderProjectRun run = requireLockedRun(runId);
@@ -84,11 +94,34 @@ public class BuilderOrchestrationSnapshotService {
     }
 
     private BuilderProjectRun requireLockedRun(Long runId) {
+        Long id = requireRunId(runId);
+        return runRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new NoSuchElementException("프로젝트 실행 기록을 찾을 수 없습니다."));
+    }
+
+    private String requireOwner(String ownerId) {
+        String value = ownerId == null ? "" : ownerId.trim();
+        if (value.isBlank()) {
+            throw new IllegalArgumentException("로그인 사용자를 확인할 수 없습니다.");
+        }
+        if (value.length() > 120) {
+            throw new IllegalArgumentException("사용자 식별자가 허용 범위를 초과했습니다.");
+        }
+        return value;
+    }
+
+    private Long requireProjectId(Long projectId) {
+        if (projectId == null || projectId <= 0) {
+            throw new IllegalArgumentException("프로젝트 ID가 올바르지 않습니다.");
+        }
+        return projectId;
+    }
+
+    private Long requireRunId(Long runId) {
         if (runId == null || runId <= 0) {
             throw new IllegalArgumentException("실행 ID가 올바르지 않습니다.");
         }
-        return runRepository.findByIdForUpdate(runId)
-                .orElseThrow(() -> new NoSuchElementException("프로젝트 실행 기록을 찾을 수 없습니다."));
+        return runId;
     }
 
     private String requireRunningOwner(BuilderProjectRun run, String workerId) {

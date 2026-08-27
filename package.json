@@ -12,7 +12,7 @@
     "dev:bloom-web": "vite bloom-web",
     "build": "pnpm run build:playground-web",
     "build:playground-web": "vite build playground-web --outDir ../dist --emptyOutDir",
-    "build:bloom-web": "vite build bloom-web --outDir ../dist-bloom --emptyOutDir",
+    "build:bloom-web": "pnpm exec tsc -p bloom-web/tsconfig.json --noEmit && vite build bloom-web --outDir ../dist-bloom --emptyOutDir",
     "build:web": "pnpm run build:playground-web && pnpm run build:bloom-web",
     "test:bloom-runtime": "node -e \"require('fs').rmSync('.tmp/bloom-policy-tests',{recursive:true,force:true})\" && pnpm --dir apps/desktop exec tsc -p ../../bloom-runtime/tsconfig.policy-tests.json && node bloom-runtime/run-policy-tests.cjs",
     "build:bloom-worker": "pnpm --dir apps/desktop exec tsc -p ../../bloom-runtime/tsconfig.worker.json && node --check bloom-worker/run.js",

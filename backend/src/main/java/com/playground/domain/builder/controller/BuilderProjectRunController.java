@@ -2,6 +2,8 @@ package com.playground.domain.builder.controller;
 
 import com.playground.config.JwtAuthenticationToken;
 import com.playground.domain.builder.dto.BuilderProjectRunDto;
+import com.playground.domain.builder.dto.BuilderWorkerDto;
+import com.playground.domain.builder.service.BuilderOrchestrationSnapshotService;
 import com.playground.domain.builder.service.BuilderProjectRunService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -17,6 +19,7 @@ import java.util.NoSuchElementException;
 @RequiredArgsConstructor
 public class BuilderProjectRunController {
     private final BuilderProjectRunService service;
+    private final BuilderOrchestrationSnapshotService snapshotService;
 
     @PostMapping
     public ResponseEntity<BuilderProjectRunDto.Response> requestRun(
@@ -39,6 +42,16 @@ public class BuilderProjectRunController {
             @PathVariable Long projectId,
             @PathVariable Long runId) {
         return ResponseEntity.ok(service.getRun(auth.getUserId(), projectId, runId));
+    }
+
+    @GetMapping("/{runId}/snapshot")
+    public ResponseEntity<BuilderWorkerDto.SnapshotResponse> getSnapshot(
+            @AuthenticationPrincipal JwtAuthenticationToken auth,
+            @PathVariable Long projectId,
+            @PathVariable Long runId) {
+        return snapshotService.findForOwner(auth.getUserId(), projectId, runId)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.noContent().build());
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
