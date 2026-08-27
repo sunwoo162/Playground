@@ -1,4 +1,6 @@
 import type {
+  BuilderOrchestrationSnapshot,
+  BuilderOrchestrationSnapshotWrite,
   BuilderWorkerClaim,
   BuilderWorkerClient,
   BuilderWorkerExecutionResult,
@@ -15,9 +17,9 @@ export type BuilderWorkerFetchResponse = {
 export type BuilderWorkerFetch = (
   input: string,
   init: {
-    method: "POST";
+    method: "GET" | "POST" | "PUT";
     headers: Record<string, string>;
-    body: string;
+    body?: string;
   },
 ) => Promise<BuilderWorkerFetchResponse>;
 
@@ -88,16 +90,27 @@ export function createBuilderWorkerHttpClient(
     throw new Error("Builder worker Runtime에 fetch 구현이 없습니다.");
   }
 
-  const post = async <T>(path: string, body: unknown, allowNoContent = false): Promise<T | null> => {
-    const response = await fetchImpl(`${baseUrl}${path}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Builder-Worker-Token": token,
-      },
-      body: JSON.stringify(body),
-    });
+  const request = async <T>(
+    method: "GET" | "POST" | "PUT",
+    path: string,
+    body: unknown | undefined,
+    allowNoContent = false,
+  ): Promise<T | null> => {
+    const headers: Record<string, string> = {
+      "X-Builder-Worker-Token": token,
+    };
+    const init: {
+      method: "GET" | "POST" | "PUT";
+      headers: Record<string, string>;
+      body?: string;
+    } = { method, headers };
 
+    if (body !== undefined) {
+      headers["Content-Type"] = "application/json";
+      init.body = JSON.stringify(body);
+    }
+
+    const response = await fetchImpl(`${baseUrl}${path}`, init);
     if (allowNoContent && response.status === 204) return null;
     if (!response.ok) {
       const detail = await errorDetail(response);
@@ -113,22 +126,42 @@ export function createBuilderWorkerHttpClient(
 
   return {
     async claim(workerId) {
-      return post<BuilderWorkerClaim>(
+      return request<BuilderWorkerClaim>(
+        "POST",
         "/internal/builder/worker/runs/claim",
         { workerId },
         true,
       );
     },
     async heartbeat(runId, workerId) {
-      const state = await post<BuilderWorkerRunState>(
+      const state = await request<BuilderWorkerRunState>(
+        "POST",
         `/internal/builder/worker/runs/${runId}/heartbeat`,
         { workerId },
       );
       if (!state) throw new Error("heartbeat 응답이 비어 있습니다.");
       return state;
     },
+    async loadSnapshot(runId, workerId) {
+      return request<BuilderOrchestrationSnapshot>(
+        "GET",
+        `/internal/builder/worker/runs/${runId}/snapshot?workerId=${encodeURIComponent(workerId)}`,
+        undefined,
+        true,
+      );
+    },
+    async saveSnapshot(runId, workerId, snapshot: BuilderOrchestrationSnapshotWrite) {
+      const saved = await request<BuilderOrchestrationSnapshot>(
+        "PUT",
+        `/internal/builder/worker/runs/${runId}/snapshot`,
+        { workerId, ...snapshot },
+      );
+      if (!saved) throw new Error("snapshot 저장 응답이 비어 있습니다.");
+      return saved;
+    },
     async complete(runId, workerId, result: BuilderWorkerExecutionResult) {
-      const state = await post<BuilderWorkerRunState>(
+      const state = await request<BuilderWorkerRunState>(
+        "POST",
         `/internal/builder/worker/runs/${runId}/complete`,
         {
           workerId,
@@ -140,7 +173,8 @@ export function createBuilderWorkerHttpClient(
       return state;
     },
     async fail(runId, workerId, failureReason) {
-      const state = await post<BuilderWorkerRunState>(
+      const state = await request<BuilderWorkerRunState>(
+        "POST",
         `/internal/builder/worker/runs/${runId}/fail`,
         { workerId, failureReason },
       );

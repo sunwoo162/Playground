@@ -23,6 +23,7 @@ public class BuilderWorkerRunService {
 
     private final BuilderProjectRepository projectRepository;
     private final BuilderProjectRunRepository runRepository;
+    private final BuilderOrchestrationSnapshotService snapshotService;
 
     @Transactional
     public Optional<BuilderWorkerDto.ClaimResponse> claimNext(String workerId) {
@@ -216,6 +217,7 @@ public class BuilderWorkerRunService {
                 .templateId(project.getTemplateId())
                 .repositoryFullName(project.getRepositoryFullName())
                 .previewUrl(project.getPreviewUrl())
+                .orchestrationSnapshot(snapshotService.findForClaim(run.getId()).orElse(null))
                 .build();
     }
 

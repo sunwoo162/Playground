@@ -1,6 +1,7 @@
 package com.playground.domain.builder.controller;
 
 import com.playground.domain.builder.dto.BuilderWorkerDto;
+import com.playground.domain.builder.service.BuilderOrchestrationSnapshotService;
 import com.playground.domain.builder.service.BuilderWorkerRunService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -14,6 +15,7 @@ import java.util.NoSuchElementException;
 @RequiredArgsConstructor
 public class BuilderWorkerController {
     private final BuilderWorkerRunService service;
+    private final BuilderOrchestrationSnapshotService snapshotService;
 
     @PostMapping("/runs/claim")
     public ResponseEntity<BuilderWorkerDto.ClaimResponse> claim(
@@ -30,6 +32,24 @@ public class BuilderWorkerController {
             @RequestBody BuilderWorkerDto.HeartbeatRequest request
     ) {
         return ResponseEntity.ok(service.heartbeat(runId, request == null ? null : request.getWorkerId()));
+    }
+
+    @GetMapping("/runs/{runId}/snapshot")
+    public ResponseEntity<BuilderWorkerDto.SnapshotResponse> snapshot(
+            @PathVariable Long runId,
+            @RequestParam String workerId
+    ) {
+        return snapshotService.loadOwned(runId, workerId)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.noContent().build());
+    }
+
+    @PutMapping("/runs/{runId}/snapshot")
+    public ResponseEntity<BuilderWorkerDto.SnapshotResponse> saveSnapshot(
+            @PathVariable Long runId,
+            @RequestBody BuilderWorkerDto.SnapshotWriteRequest request
+    ) {
+        return ResponseEntity.ok(snapshotService.save(runId, request));
     }
 
     @PostMapping("/runs/{runId}/complete")
