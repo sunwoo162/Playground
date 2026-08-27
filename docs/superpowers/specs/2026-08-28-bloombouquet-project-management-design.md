@@ -4,7 +4,7 @@ Date: 2026-08-28
 
 ## Goal
 
-Add a production-ready BloomBouquet management flow that lets a signed-in 꽃다발 account create a Team, create a Project, publish a versioned Submission, and automatically enqueue the existing senior-Agent evaluation pipeline without direct database manipulation or legacy JWT login.
+Add a production-ready BloomBouquet management flow that lets a signed-in 꽃다발 account create a Team, create or reselect a Project, publish a versioned Submission, and automatically enqueue the existing senior-Agent evaluation pipeline without direct database manipulation or legacy JWT login.
 
 The first production Submission created through this flow will also be used as the real evaluator E2E proof: `QUEUED -> RUNNING -> COMPLETED`, with persisted independent Agent evaluations and a public aggregate report.
 
@@ -13,6 +13,7 @@ The first production Submission created through this flow will also be used as t
 - The public BloomBouquet UI only lists published projects and evaluation reports.
 - Production currently has zero public projects, so the evaluator worker has no real Evaluation Run to claim.
 - `POST /api/bloom-bouquet/teams`, `POST /api/bloom-bouquet/projects`, and `POST /api/bloom-bouquet/projects/{projectId}/submissions` already exist.
+- `BloomBouquetProjectRepository` already has an owner-scoped project query, but no owner project-list API currently exposes it.
 - Publishing a Submission already creates an Evaluation Run with status `QUEUED` and marks the Project published.
 - The production evaluator worker is online in `runtime=local`, and production deployment has already proven a real Qwen JSON inference through `createLocalEvaluatorTransport()`.
 - 꽃다발 login currently establishes an HttpOnly `bouquet_session` cookie.
@@ -28,13 +29,14 @@ The change has two coordinated pieces:
    - Resolve the existing `bouquet_session` cookie on each request.
    - When valid, create a dedicated authenticated principal for the 꽃다발 account.
    - Keep Spring Security stateless; the cookie is resolved per request rather than creating an HTTP server session.
-   - BloomBouquet write endpoints accept only this dedicated 꽃다발 authentication for owner identity.
+   - BloomBouquet owner endpoints accept only this dedicated 꽃다발 authentication for owner identity.
    - Existing public endpoints, worker token authentication, legacy JWT authentication, and OAuth project login behavior remain intact.
 
 2. **`?mode=manage` management UI**
    - Reuse the existing Bloom web application shell.
    - Require a valid 꽃다발 session before showing management controls.
    - Provide a guided three-stage flow: Team -> Project -> Submission.
+   - Persist recoverability across refresh by loading owner Teams and Projects from the backend.
    - After Submission creation, show the created Evaluation Run and route the user back to the public gallery/report flow for status tracking.
 
 This keeps production behavior identical to the product contract: a normal logged-in owner publishes a real project, and the existing worker evaluates it automatically.
@@ -72,11 +74,12 @@ The 꽃다발 session filter runs before the JWT filter. A valid worker or exist
 
 ### BloomBouquet owner enforcement
 
-The three owner write/list operations use the dedicated 꽃다발 account id as `ownerId`:
+The owner operations use the dedicated 꽃다발 account id as `ownerId`:
 
 - `POST /api/bloom-bouquet/teams`
 - `GET /api/bloom-bouquet/teams`
 - `POST /api/bloom-bouquet/projects`
+- `GET /api/bloom-bouquet/projects`
 - `POST /api/bloom-bouquet/projects/{projectId}/submissions`
 
 A legacy JWT-authenticated request must not silently become a BloomBouquet owner request. If the principal is not the dedicated 꽃다발 authentication, the controller returns unauthorized/forbidden behavior appropriate to Spring Security.
@@ -86,6 +89,22 @@ Public read endpoints remain anonymous:
 - `GET /api/bloom-bouquet/public/projects`
 - `GET /api/bloom-bouquet/public/projects/{projectId}`
 - `GET /api/bloom-bouquet/public/evaluations/{runId}`
+
+## Owner Project Listing API
+
+Add:
+
+`GET /api/bloom-bouquet/projects`
+
+Behavior:
+
+- requires dedicated 꽃다발 authentication;
+- derives `ownerId` from the authenticated account, never from a query/body field;
+- returns all Projects owned by the account, including unpublished Projects;
+- orders by `updatedAt` descending using the existing repository method;
+- returns the existing `ProjectResponse`, including `latestSubmission` when present.
+
+This endpoint is required so a management session can recover after refresh and so an owner can publish a later version to an existing Project rather than creating a duplicate Project.
 
 ## Management UI
 
@@ -132,16 +151,20 @@ Backend validation remains authoritative. Client-side validation provides only r
 
 ### Stage 2: Project
 
-For the selected Team, allow Project creation with:
+Load the owner’s Projects with:
+
+`GET /api/bloom-bouquet/projects`
+
+The screen filters/selects Projects for the selected Team and supports creating a new Project with:
 
 - `teamId`
 - `name`
 - optional `slug`
 - `description`
 
-The returned Project is initially `published=false` and becomes the selected Project for Submission publishing.
+A returned new Project is initially `published=false` and becomes the selected Project for Submission publishing.
 
-The first version does not require a separate endpoint to list every unpublished Project owned by a Team. The management session keeps newly created Project responses in local state. Publicly published Projects remain available through the existing public APIs.
+Existing owned Projects, including unpublished Projects, remain selectable after page refresh. Published Projects can be selected to publish a later version.
 
 ### Stage 3: Submission
 
@@ -200,7 +223,7 @@ A 401 response moves the UI back to the login-required state. A validation 400 p
 - Keep the session cookie HttpOnly, Secure, SameSite=Lax, and path `/` as currently implemented.
 - Do not persist passwords, OAuth codes, worker tokens, or session tokens in browser storage.
 - Do not make `/internal/builder/worker/**` callable from the management UI.
-- Management writes derive `ownerId` from authenticated server-side identity only; no `ownerId` request field is accepted.
+- Management reads/writes derive `ownerId` from authenticated server-side identity only; no `ownerId` request field is accepted.
 - Do not loosen `/api/**` globally to `permitAll` to make the management UI work.
 - Do not accept arbitrary `return_to` URLs; only the symbolic `manage` target is allowed.
 - Existing URL validation and public-GitHub evidence restrictions remain backend/evaluator responsibilities.
@@ -215,12 +238,13 @@ The test should prove:
 1. signup/login creates a valid `bouquet_session` cookie;
 2. the cookie can create/list a Team;
 3. the cookie can create a Project owned by that account;
-4. the cookie can publish a Submission;
-5. publishing queues an Evaluation Run;
-6. an unauthenticated write is rejected;
-7. a legacy JWT principal is not accepted as a 꽃다발 project owner;
-8. public project/report endpoints remain anonymous;
-9. worker-token claim/heartbeat behavior remains unchanged.
+4. owner project listing returns unpublished and published Projects after refresh-equivalent requests;
+5. the cookie can publish a Submission;
+6. publishing queues an Evaluation Run;
+7. an unauthenticated owner request is rejected;
+8. a legacy JWT principal is not accepted as a 꽃다발 project owner;
+9. public project/report endpoints remain anonymous;
+10. worker-token claim/heartbeat behavior remains unchanged.
 
 Existing Bouquet auth service tests continue to cover login/session/OAuth semantics.
 
@@ -234,6 +258,7 @@ At minimum verify:
 - management API requests use `credentials: 'include'`;
 - login-required state does not expose write controls;
 - `return_to` only accepts `manage`;
+- owner Projects are reloaded through `GET /api/bloom-bouquet/projects`;
 - Submission success requires/uses the returned `evaluationRunId` and `QUEUED` state;
 - no management code references `/internal/builder/worker/`.
 
@@ -254,11 +279,14 @@ Likely modified files:
 
 - `backend/src/main/java/com/playground/config/SecurityConfig.java`
 - `backend/src/main/java/com/playground/domain/bloombouquet/controller/BloomBouquetController.java`
+- `backend/src/main/java/com/playground/domain/bloombouquet/service/BloomBouquetService.java`
 - `backend/src/test/java/com/playground/domain/bloombouquet/BloomBouquetProjectRegistrationE2ETest.java`
 - `bloom-web/src/app/BloomApp.tsx`
 - `bloom-web/src/app/BouquetAuthApp.tsx`
 - `bloom-web/src/app/BouquetShowcaseApp.tsx` only if a management-navigation entry is needed; do not mix form logic into the showcase component
 - package/test configuration only if required by the existing test runner
+
+`BloomBouquetProjectRepository` already contains the owner-scoped query needed by the new list endpoint, so no repository schema/query redesign is expected.
 
 ## Deployment and Production Verification
 
@@ -276,6 +304,7 @@ After merge:
 8. Observe the production evaluator worker claim the Run.
 9. Verify the public report reaches `COMPLETED` and contains all roles required by that Submission.
 10. Verify the public BloomBouquet card shows the aggregate score/stars and opens the stored report.
+11. Reload `?mode=manage` and verify the created Team/Project can be selected again for a later version.
 
 The E2E project should be a real project intended to remain in BloomBouquet, not a fake database fixture. If a temporary test project is unavoidable, cleanup is a separate explicit product action; this feature does not add destructive delete APIs.
 
