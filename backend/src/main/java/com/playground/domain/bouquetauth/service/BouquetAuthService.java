@@ -31,6 +31,8 @@ public class BouquetAuthService {
 
     private static final int AUTHORIZATION_CODE_BYTES = 32;
     private static final int AUTHORIZATION_CODE_TTL_MINUTES = 5;
+    private static final String PKCE_CHALLENGE_PATTERN = "[A-Za-z0-9_-]{43}";
+    private static final String PKCE_VERIFIER_PATTERN = "[A-Za-z0-9._~-]{43,128}";
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final BouquetAccountRepository accountRepository;
@@ -103,7 +105,9 @@ public class BouquetAuthService {
         if (state == null || state.isBlank()) {
             throw new BouquetAuthException("state_required");
         }
-        if (codeChallenge == null || codeChallenge.isBlank() || !"S256".equals(codeChallengeMethod)) {
+        if (!"S256".equals(codeChallengeMethod)
+                || codeChallenge == null
+                || !codeChallenge.matches(PKCE_CHALLENGE_PATTERN)) {
             throw new BouquetAuthException("pkce_s256_required");
         }
 
@@ -135,11 +139,13 @@ public class BouquetAuthService {
             String codeVerifier
     ) {
         requireClient(clientId, redirectUri);
-        if (code == null || code.isBlank() || codeVerifier == null || codeVerifier.isBlank()) {
+        if (code == null || code.isBlank()
+                || codeVerifier == null
+                || !codeVerifier.matches(PKCE_VERIFIER_PATTERN)) {
             throw new BouquetAuthException("invalid_grant");
         }
 
-        BouquetAuthorizationCode authorizationCode = authorizationCodeRepository.findById(sha256Hex(code))
+        BouquetAuthorizationCode authorizationCode = authorizationCodeRepository.findByCodeHashForUpdate(sha256Hex(code))
                 .orElseThrow(() -> new BouquetAuthException("invalid_grant"));
 
         LocalDateTime now = LocalDateTime.now();
