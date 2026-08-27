@@ -72,7 +72,19 @@ const PM_PLAN_SCHEMA: &str = r#"{
               "design-system",
               "designer",
               "frontend",
+              "frontend-ui",
+              "frontend-state",
               "backend",
+              "backend-api",
+              "backend-domain",
+              "integration",
+              "test-automation",
+              "performance",
+              "observability",
+              "database",
+              "security",
+              "devops",
+              "accessibility",
               "code-review",
               "reviewer",
               "qa",
@@ -112,7 +124,19 @@ const ALLOWED_PM_TASK_ROLES: &[&str] = &[
     "design-system",
     "designer",
     "frontend",
+    "frontend-ui",
+    "frontend-state",
     "backend",
+    "backend-api",
+    "backend-domain",
+    "integration",
+    "test-automation",
+    "performance",
+    "observability",
+    "database",
+    "security",
+    "devops",
+    "accessibility",
     "code-review",
     "reviewer",
     "qa",
@@ -647,14 +671,14 @@ fn pm_prompt(
     request: &str,
 ) -> String {
     format!(
-        r#"You are the independent PM Codex Agent for Luna team {team_name} ({team_id}).
+        r#"You are the independent PM Codex Agent for Bloom team {team_name} ({team_id}).
 
 Project ID: {project_id}
 GitHub Organization: {organization}
 User request:
 {request}
 
-Your job in this turn is planning only. Do not create files, repositories, branches, commits, PRs, or deployments. Return the project plan that Luna will execute after this turn.
+Your job in this turn is planning only. Do not create files, repositories, branches, commits, PRs, or deployments. Return the project plan that Bloom will execute after this turn.
 
 Operating contract:
 - Treat the project as a real production service, not a demo or mock-only prototype.
@@ -666,7 +690,13 @@ Operating contract:
 - Branch convention is agent/<team>/<role>/<task>. taskSlug must be concise lowercase ASCII kebab-case.
 - Agents do not blindly trust PM or reviewers. Every material action must have a defensible, verifiable reason.
 - Code Review, higher-level Reviewer, QA, Documentation, User A, User B, and Process Evaluator should be included as independent gates for a normal user-facing production service. Omit a role only when it genuinely does not apply.
-- Frontend and Backend tasks may run in parallel when dependencies allow it.
+- Split large implementation work across independent roles when ownership boundaries are clear instead of assigning one giant Frontend or Backend task.
+- Use frontend-ui for pages/components/layout/style/interactions, frontend-state for forms/state/data-fetching/cache/client data flow, and frontend for app shell or final frontend integration when useful.
+- Use backend-api for endpoints/contracts/validation/controllers, backend-domain for services/use-cases/business rules, and backend for server shell or final backend integration when useful.
+- Use integration for external APIs/webhooks/realtime/adapters, test-automation for automated unit/integration/E2E harness work, performance for measured bottleneck work, and observability for logs/health/metrics/tracing/error diagnosis.
+- Database, Security, DevOps, and Accessibility are specialized implementation roles and should receive their own tasks when the project actually needs those concerns.
+- Prefer tasks with minimal shared-file ownership so independent branches can progress safely and later run in parallel. Do not invent parallelism when two tasks inherently need the same implementation boundary.
+- Frontend-family and Backend-family tasks may run independently when dependencies allow it.
 - Acceptance criteria must be observable and verifiable. Include build/test/browser/error/loading/empty/security requirements where relevant.
 - Do not assume external credentials, paid services, or unavailable datasets exist. Model them as explicit implementation blockers or setup tasks when necessary.
 - Keep tasks independently reviewable. Avoid one giant frontend or backend task covering the whole project.
@@ -725,7 +755,7 @@ fn run_pm_codex(
         return Err("Codex CLI 로그인이 필요합니다. `codex login`을 실행해 주세요.".to_string());
     }
     if !preflight.codex_chatgpt_auth {
-        return Err("Luna는 ChatGPT 로그인 상태의 Codex만 실행합니다.".to_string());
+        return Err("Bloom은 ChatGPT 로그인 상태의 Codex만 실행합니다.".to_string());
     }
 
     let planning_dir = PathBuf::from(workspace_root)
