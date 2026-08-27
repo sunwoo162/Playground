@@ -27,5 +27,47 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build deployed playground web
+        run: pnpm run build:playground-web
+
+      - name: Build Bloom web control plane
+        run: pnpm run build:bloom-web
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Test builder backend protocol
+        run: bash backend/gradlew -p backend test --no-daemon
+
+      - name: Build Luna desktop pet
+        run: pnpm --dir apps/desktop run build
+
+      - name: Run Bloom agent runtime policy tests
+        run: pnpm run test:bloom-runtime
+
+      - name: Build Bloom headless worker
+        run: pnpm run build:bloom-worker
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Tauri Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Check Luna desktop shell
+        run: cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml
+
+      - name: Check Bloom runtime
+        run: cargo check --manifest-path bloom-runtime/Cargo.toml
+
       - name: Run harness invariants
         run: pnpm run harness

@@ -1,0 +1,18 @@
+.builder-brand strong {
+  font-size: 0;
+}
+
+.builder-brand strong::after {
+  content: "Bloom";
+  font-size: 16px;
+}
+
+.builder-brand > div > span {
+  font-size: 0;
+}
+
+.builder-brand > div > span::after {
+  content: "Autonomous Software Builder";
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}

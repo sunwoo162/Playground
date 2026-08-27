@@ -1,0 +1,345 @@
+import type { RunProjectRetrospectivesResult } from "./retrospective";
+import type {
+  EvolutionExperiment,
+  EvolutionMetrics,
+  EvolutionVersionSnapshot,
+  ProjectState,
+  ProjectTeamsState,
+  TeamState,
+} from "./types";
+
+const REWORK_RATE_TOLERANCE = 0.15;
+const FAILURE_RATE_TOLERANCE = 0.1;
+const VERIFICATION_RATE_TOLERANCE = 0.1;
+const REPLAN_RATE_TOLERANCE = 0.1;
+
+function experimentId() {
+  const time = Date.now().toString(36).toUpperCase();
+  const random = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `EVOLUTION-${time}-${random}`;
+}
+
+function parseSemver(version: string) {
+  const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(version.trim());
+  if (!match) return null;
+  return match.slice(1).map(Number) as [number, number, number];
+}
+
+function compareSemver(left: string, right: string) {
+  const a = parseSemver(left);
+  const b = parseSemver(right);
+  if (!a || !b) return null;
+  for (let index = 0; index < 3; index += 1) {
+    if (a[index] !== b[index]) return a[index] - b[index];
+  }
+  return 0;
+}
+
+function bumpMinor(version: string) {
+  const parsed = parseSemver(version);
+  if (!parsed) return version;
+  return `${parsed[0]}.${parsed[1] + 1}.0`;
+}
+
+function nextUnusedMinorVersion(version: string, usedVersions: Set<string>) {
+  let candidate = bumpMinor(version);
+  if (candidate === version) return version;
+  while (usedVersions.has(candidate)) {
+    const next = bumpMinor(candidate);
+    if (next === candidate) return version;
+    candidate = next;
+  }
+  return candidate;
+}
+
+function usedPlaybookVersions(state: ProjectTeamsState, teamId: TeamState["id"]) {
+  const versions = new Set<string>();
+  for (const experiment of state.evolutionExperiments ?? []) {
+    if (experiment.teamId !== teamId) continue;
+    versions.add(experiment.baseline.playbookVersion);
+    versions.add(experiment.candidate.playbookVersion);
+  }
+  const team = state.teams.find((item) => item.id === teamId);
+  if (team) versions.add(team.playbookVersion);
+  return versions;
+}
+
+function usedAgentVersions(
+  state: ProjectTeamsState,
+  teamId: TeamState["id"],
+  agentId: string,
+) {
+  const versions = new Set<string>();
+  for (const experiment of state.evolutionExperiments ?? []) {
+    if (experiment.teamId !== teamId) continue;
+    const baseline = experiment.baseline.agentVersions[agentId];
+    const candidate = experiment.candidate.agentVersions[agentId];
+    if (baseline) versions.add(baseline);
+    if (candidate) versions.add(candidate);
+  }
+  const team = state.teams.find((item) => item.id === teamId);
+  const agent = team?.agents.find((item) => item.id === agentId);
+  if (agent) versions.add(agent.version);
+  return versions;
+}
+
+export function snapshotTeamVersions(team: TeamState): EvolutionVersionSnapshot {
+  return {
+    playbookVersion: team.playbookVersion,
+    agentVersions: Object.fromEntries(team.agents.map((agent) => [agent.id, agent.version])),
+  };
+}
+
+export function collectEvolutionMetrics(project: ProjectState): EvolutionMetrics {
+  const totalAttempts = project.taskRuns.reduce((sum, run) => sum + run.attempts, 0);
+  const retryCount = project.taskRuns.reduce(
+    (sum, run) => sum + Math.max(0, run.attempts - 1),
+    0,
+  );
+  const failedVerificationCount = project.taskRuns.reduce(
+    (sum, run) => sum + run.verification.filter((item) => item.status === "failed").length,
+    0,
+  );
+  const blockedVerificationCount = project.taskRuns.reduce(
+    (sum, run) => sum + run.verification.filter((item) => item.status === "blocked").length,
+    0,
+  );
+
+  return {
+    taskCount: project.taskRuns.length,
+    totalAttempts,
+    retryCount,
+    failureRouteCount: project.failureRoutes?.length ?? 0,
+    replanCount: project.replans?.length ?? 0,
+    failedVerificationCount,
+    blockedVerificationCount,
+  };
+}
+
+function rate(value: number, taskCount: number) {
+  return value / Math.max(1, taskCount);
+}
+
+function metricSummary(metrics: EvolutionMetrics) {
+  return [
+    `tasks=${metrics.taskCount}`,
+    `retryRate=${rate(metrics.retryCount, metrics.taskCount).toFixed(2)}`,
+    `failureRate=${rate(metrics.failureRouteCount, metrics.taskCount).toFixed(2)}`,
+    `verificationIssueRate=${rate(
+      metrics.failedVerificationCount + metrics.blockedVerificationCount,
+      metrics.taskCount,
+    ).toFixed(2)}`,
+    `replanRate=${rate(metrics.replanCount, metrics.taskCount).toFixed(2)}`,
+  ].join(", ");
+}
+
+function experimentRegressions(baseline: EvolutionMetrics, current: EvolutionMetrics) {
+  const regressions: string[] = [];
+  const baselineTasks = Math.max(1, baseline.taskCount);
+  const currentTasks = Math.max(1, current.taskCount);
+
+  const reworkDelta = rate(current.retryCount, currentTasks) - rate(baseline.retryCount, baselineTasks);
+  if (reworkDelta > REWORK_RATE_TOLERANCE) {
+    regressions.push(`retry rate +${reworkDelta.toFixed(2)}`);
+  }
+
+  const failureDelta = rate(current.failureRouteCount, currentTasks)
+    - rate(baseline.failureRouteCount, baselineTasks);
+  if (failureDelta > FAILURE_RATE_TOLERANCE) {
+    regressions.push(`failure route rate +${failureDelta.toFixed(2)}`);
+  }
+
+  const baselineVerificationIssues = baseline.failedVerificationCount + baseline.blockedVerificationCount;
+  const currentVerificationIssues = current.failedVerificationCount + current.blockedVerificationCount;
+  const verificationDelta = rate(currentVerificationIssues, currentTasks)
+    - rate(baselineVerificationIssues, baselineTasks);
+  if (verificationDelta > VERIFICATION_RATE_TOLERANCE) {
+    regressions.push(`verification issue rate +${verificationDelta.toFixed(2)}`);
+  }
+
+  const replanDelta = rate(current.replanCount, currentTasks) - rate(baseline.replanCount, baselineTasks);
+  if (replanDelta > REPLAN_RATE_TOLERANCE) {
+    regressions.push(`replan rate +${replanDelta.toFixed(2)}`);
+  }
+
+  return regressions;
+}
+
+function stagedExperimentForProject(state: ProjectTeamsState, project: ProjectState) {
+  const projectCreatedAt = Date.parse(project.createdAt);
+  return (state.evolutionExperiments ?? []).find((experiment) =>
+    experiment.teamId === project.teamId
+      && experiment.status === "proposed"
+      && experiment.sourceProjectId !== project.id
+      && Date.parse(experiment.createdAt) <= projectCreatedAt,
+  ) ?? null;
+}
+
+export function createEvolutionExperimentCandidate(
+  state: ProjectTeamsState,
+  result: RunProjectRetrospectivesResult,
+) {
+  const project = state.projects.find((item) => item.id === result.projectId);
+  const team = state.teams.find((item) => item.id === result.teamId);
+  if (!project || !team) return state;
+
+  const existingPending = (state.evolutionExperiments ?? []).some(
+    (experiment) => experiment.teamId === team.id && experiment.status === "proposed",
+  );
+  if (existingPending) return state;
+
+  const sourceSnapshot = project.versionSnapshot ?? snapshotTeamVersions(team);
+  const baseline = snapshotTeamVersions(team);
+  const candidateAgentVersions = { ...baseline.agentVersions };
+  const agentChanges = result.evolution.agentVersionChanges.flatMap((proposal) => {
+    const agent = team.agents.find((item) => item.id === proposal.agentId);
+    if (!agent) return [];
+
+    const projectVersion = sourceSnapshot.agentVersions[agent.id] ?? agent.version;
+    if (proposal.currentVersion !== projectVersion) return [];
+
+    const usedVersions = usedAgentVersions(state, team.id, agent.id);
+    const recommendedComparison = compareSemver(proposal.recommendedVersion, agent.version);
+    const recommendedIsUsable = recommendedComparison !== null
+      && recommendedComparison > 0
+      && !usedVersions.has(proposal.recommendedVersion);
+    const toVersion = recommendedIsUsable
+      ? proposal.recommendedVersion
+      : nextUnusedMinorVersion(agent.version, usedVersions);
+    const reason = proposal.reason.trim();
+    if (toVersion === agent.version || !reason) return [];
+
+    candidateAgentVersions[agent.id] = toVersion;
+    return [{
+      agentId: agent.id,
+      fromVersion: agent.version,
+      toVersion,
+      reason,
+      instructionChanges: [
+        `Team Evolution experiment objective: ${reason}`,
+      ],
+    }];
+  });
+
+  const playbookChanges = result.evolution.playbookChanges
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .slice(0, 12);
+
+  if (playbookChanges.length === 0 && agentChanges.length === 0) return state;
+
+  const experiment: EvolutionExperiment = {
+    id: experimentId(),
+    teamId: team.id,
+    sourceProjectId: project.id,
+    targetProjectId: null,
+    status: "proposed",
+    playbookChanges,
+    agentChanges,
+    baseline,
+    candidate: {
+      playbookVersion: playbookChanges.length > 0
+        ? nextUnusedMinorVersion(baseline.playbookVersion, usedPlaybookVersions(state, team.id))
+        : baseline.playbookVersion,
+      agentVersions: candidateAgentVersions,
+    },
+    baselineMetrics: collectEvolutionMetrics(project),
+    experimentMetrics: null,
+    verdictReason: null,
+    createdAt: new Date().toISOString(),
+    activatedAt: null,
+    completedAt: null,
+  };
+
+  return {
+    ...state,
+    evolutionExperiments: [experiment, ...(state.evolutionExperiments ?? [])],
+    teams: state.teams.map((currentTeam) =>
+      currentTeam.id === team.id
+        ? {
+            ...currentTeam,
+            playbookVersion: experiment.candidate.playbookVersion,
+            agents: currentTeam.agents.map((agent) => ({
+              ...agent,
+              version: experiment.candidate.agentVersions[agent.id] ?? agent.version,
+            })),
+          }
+        : currentTeam,
+    ),
+  };
+}
+
+export function getProjectEvolutionInstructions(
+  state: ProjectTeamsState,
+  project: ProjectState,
+  agentId: string,
+) {
+  const experiment = stagedExperimentForProject(state, project);
+  if (!experiment) return null;
+
+  const agentChange = experiment.agentChanges.find((item) => item.agentId === agentId) ?? null;
+  return {
+    experimentId: experiment.id,
+    playbookVersion: experiment.candidate.playbookVersion,
+    agentVersion: experiment.candidate.agentVersions[agentId] ?? null,
+    playbookChanges: experiment.playbookChanges,
+    agentInstructions: agentChange?.instructionChanges ?? [],
+  };
+}
+
+export function finalizeActiveEvolutionExperiment(
+  state: ProjectTeamsState,
+  projectId: string,
+) {
+  const project = state.projects.find((item) => item.id === projectId);
+  if (!project) return state;
+  const experiment = stagedExperimentForProject(state, project);
+  if (!experiment) return state;
+
+  const metrics = collectEvolutionMetrics(project);
+  const regressions = experimentRegressions(experiment.baselineMetrics, metrics);
+  const keep = regressions.length === 0;
+  const verdictReason = keep
+    ? `비열등성 기준 통과 · baseline(${metricSummary(experiment.baselineMetrics)}) · experiment(${metricSummary(metrics)})`
+    : `허용 범위를 넘는 회귀 감지: ${regressions.join(", ")} · baseline(${metricSummary(experiment.baselineMetrics)}) · experiment(${metricSummary(metrics)})`;
+  const completedAt = new Date().toISOString();
+
+  return {
+    ...state,
+    evolutionExperiments: (state.evolutionExperiments ?? []).map((item) =>
+      item.id === experiment.id
+        ? {
+            ...item,
+            status: keep ? "kept" as const : "rolled-back" as const,
+            targetProjectId: project.id,
+            activatedAt: project.createdAt,
+            experimentMetrics: metrics,
+            verdictReason,
+            completedAt,
+          }
+        : item,
+    ),
+    teams: state.teams.map((team) => {
+      if (team.id !== experiment.teamId) return team;
+      const snapshot = keep ? experiment.candidate : experiment.baseline;
+      return {
+        ...team,
+        playbookVersion: snapshot.playbookVersion,
+        agents: team.agents.map((agent) => ({
+          ...agent,
+          version: snapshot.agentVersions[agent.id] ?? agent.version,
+        })),
+      };
+    }),
+    projects: state.projects.map((item) =>
+      item.id === project.id
+        ? {
+            ...item,
+            evolutionExperimentId: experiment.id,
+            versionSnapshot: experiment.candidate,
+            runtimeMessage: `${item.runtimeMessage} · Team Evolution 실험 ${keep ? "유지" : "롤백"}: ${verdictReason}`,
+          }
+        : item,
+    ),
+  };
+}

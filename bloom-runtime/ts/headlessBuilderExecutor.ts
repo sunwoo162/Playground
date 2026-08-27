@@ -1,0 +1,606 @@
+import type {
+  BuilderWorkerClaim,
+  BuilderWorkerClient,
+  BuilderWorkerExecutionResult,
+  BuilderWorkerExecutor,
+  BuilderOrchestrationSnapshot,
+} from "./builderWorkerAdapter";
+import { evaluateProjectMergeGate } from "./mergeGate";
+import {
+  prepareOrchestrationPlan,
+  refreshOrchestrationReadiness,
+  selectAdaptiveOrchestrationWave,
+  summarizeTaskRuns,
+} from "./orchestrationCore";
+import { seniorAgentContext } from "./seniorAgent";
+import type {
+  AgentTaskVerification,
+  ExecutableAgentRole,
+  ProjectIntakeAnalysis,
+  ProjectPlan,
+  ProjectTaskPlan,
+  ProjectTaskRun,
+  TeamId,
+} from "./types";
+
+export const HEADLESS_BUILDER_SNAPSHOT_SCHEMA_VERSION = 1;
+
+type IntakeResult = {
+  analysis: ProjectIntakeAnalysis;
+  sessionId: string | null;
+  eventsPath: string;
+  outputPath: string;
+};
+
+type PmResult = {
+  plan: ProjectPlan;
+  sessionId: string | null;
+  eventsPath: string;
+  outputPath: string;
+};
+
+type ProjectRepositoryBootstrap = {
+  repository: string;
+  workspacePath: string;
+  createdRepository: boolean;
+  clonedRepository: boolean;
+  releaseBranch: string;
+  integrationBranch: string;
+};
+
+type DependencyArtifact = {
+  taskId: string;
+  role: string;
+  summary: string;
+  branchName: string | null;
+  commitSha: string | null;
+  pullRequestNumber: number | null;
+  pullRequestUrl: string | null;
+};
+
+export type HeadlessAgentTaskRuntimeInput = {
+  organization: string;
+  projectId: string;
+  teamId: TeamId;
+  teamName: string;
+  role: ExecutableAgentRole;
+  agentId: string;
+  taskId: string;
+  taskSlug: string;
+  title: string;
+  summary: string;
+  acceptanceCriteria: string[];
+  userRequest: string;
+  productSummary: string;
+  architectureSummary: string;
+  repositoryFullName: string;
+  workspacePath: string;
+  dependencies: DependencyArtifact[];
+};
+
+type AgentTaskReport = {
+  status: "completed" | "blocked";
+  summary: string;
+  rationaleSummary: string;
+  evidence: string[];
+  verification: AgentTaskVerification[];
+  commitSha: string | null;
+  pullRequestNumber: number | null;
+  pullRequestUrl: string | null;
+  reviewedPullRequests: number[];
+  blockers: string[];
+};
+
+export type HeadlessAgentTaskRunResult = {
+  projectId: string;
+  taskId: string;
+  role: string;
+  agentId: string;
+  branchName: string | null;
+  worktreePath: string;
+  threadId: string;
+  sessionId: string;
+  turnId: string;
+  eventsPath: string;
+  stderrPath: string;
+  report: AgentTaskReport;
+};
+
+export type ReconcileInterruptedAgentTaskResult = {
+  outcome: "recovered" | "blocked";
+  reason: string;
+  result: HeadlessAgentTaskRunResult | null;
+};
+
+type MergeProjectPullRequestsResult = {
+  repositoryFullName: string;
+  mergedPullRequests: Array<{
+    number: number;
+    url: string;
+    headBranch: string;
+    mergeCommitSha: string | null;
+  }>;
+};
+
+export type HeadlessBuilderRuntime = {
+  analyzeIntake(input: {
+    organization: string;
+    workspaceRoot: string;
+    intakeId: string;
+    request: string;
+  }): Promise<IntakeResult>;
+  planProject(input: {
+    organization: string;
+    workspaceRoot: string;
+    projectId: string;
+    teamId: TeamId;
+    teamName: string;
+    request: string;
+  }): Promise<PmResult>;
+  bootstrapRepository(input: {
+    organization: string;
+    repository: string;
+    workspaceRoot: string;
+  }): Promise<ProjectRepositoryBootstrap>;
+  dispatchTask(input: HeadlessAgentTaskRuntimeInput): Promise<HeadlessAgentTaskRunResult>;
+  reconcileTask(input: {
+    projectId: string;
+    teamId: TeamId;
+    role: ExecutableAgentRole;
+    agentId: string;
+    taskId: string;
+    taskSlug: string;
+    repositoryFullName: string;
+    workspacePath: string;
+  }): Promise<ReconcileInterruptedAgentTaskResult>;
+  mergePullRequests(input: {
+    repositoryFullName: string;
+    pullRequestNumbers: number[];
+  }): Promise<MergeProjectPullRequestsResult>;
+};
+
+type PersistedPmEvidence = {
+  sessionId: string | null;
+  eventsPath: string;
+  outputPath: string;
+};
+
+export type HeadlessBuilderSnapshotPayload = {
+  schemaVersion: 1;
+  runId: number;
+  projectId: number;
+  runtimeProjectId: string;
+  intakeId: string;
+  request: string;
+  intake: IntakeResult | null;
+  pm: PersistedPmEvidence | null;
+  plan: ProjectPlan | null;
+  repository: ProjectRepositoryBootstrap | null;
+  taskRuns: ProjectTaskRun[];
+  integrationPullRequestNumbers: number[];
+  integration: MergeProjectPullRequestsResult | null;
+  blockedReason: string | null;
+};
+
+export type HeadlessBuilderExecutorOptions = {
+  organization: string;
+  workspaceRoot: string;
+  teamId: TeamId;
+  teamName: string;
+  runtime: HeadlessBuilderRuntime;
+  now?: () => string;
+};
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function buildClaimRequest(claim: BuilderWorkerClaim) {
+  const features = claim.features.map((feature) => feature.trim()).filter(Boolean);
+  return [
+    `Project title: ${claim.title.trim()}`,
+    claim.brief.trim(),
+    `Target platform: ${claim.platform.trim() || "web"}`,
+    features.length > 0 ? `Requested features: ${features.join(", ")}` : "Requested features: none specified",
+    `Authentication required by Product Owner: ${claim.authRequired ? "yes" : "no"}`,
+    claim.templateId ? `Selected template: ${claim.templateId}` : "Selected template: none",
+  ].filter(Boolean).join("\n");
+}
+
+function freshPayload(claim: BuilderWorkerClaim): HeadlessBuilderSnapshotPayload {
+  return {
+    schemaVersion: HEADLESS_BUILDER_SNAPSHOT_SCHEMA_VERSION,
+    runId: claim.runId,
+    projectId: claim.projectId,
+    runtimeProjectId: `builder-${claim.projectId}`,
+    intakeId: `builder-run-${claim.runId}`,
+    request: buildClaimRequest(claim),
+    intake: null,
+    pm: null,
+    plan: null,
+    repository: null,
+    taskRuns: [],
+    integrationPullRequestNumbers: [],
+    integration: null,
+    blockedReason: null,
+  };
+}
+
+function parseSnapshot(
+  claim: BuilderWorkerClaim,
+  snapshot: BuilderOrchestrationSnapshot,
+): HeadlessBuilderSnapshotPayload {
+  if (snapshot.schemaVersion !== HEADLESS_BUILDER_SNAPSHOT_SCHEMA_VERSION) {
+    throw new Error(`지원하지 않는 Builder orchestration snapshot schema입니다: ${snapshot.schemaVersion}`);
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(snapshot.payloadJson);
+  } catch (error) {
+    throw new Error(`Builder orchestration snapshot JSON 파싱 실패: ${errorMessage(error)}`);
+  }
+
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error("Builder orchestration snapshot payload가 객체가 아닙니다.");
+  }
+
+  const payload = parsed as Partial<HeadlessBuilderSnapshotPayload>;
+  if (payload.schemaVersion !== HEADLESS_BUILDER_SNAPSHOT_SCHEMA_VERSION
+    || payload.runId !== claim.runId
+    || payload.projectId !== claim.projectId
+    || typeof payload.runtimeProjectId !== "string"
+    || typeof payload.intakeId !== "string"
+    || typeof payload.request !== "string"
+    || !Array.isArray(payload.taskRuns)
+    || !Array.isArray(payload.integrationPullRequestNumbers)) {
+    throw new Error("Builder orchestration snapshot identity 또는 필수 필드가 손상되었습니다.");
+  }
+
+  return payload as HeadlessBuilderSnapshotPayload;
+}
+
+function initialTaskRun(task: ProjectTaskPlan, teamId: TeamId): ProjectTaskRun {
+  return {
+    taskId: task.id,
+    role: task.role,
+    agentId: `${teamId}:${task.role}`,
+    status: "pending",
+    attempts: 0,
+    branchName: null,
+    worktreePath: null,
+    threadId: null,
+    sessionId: null,
+    turnId: null,
+    eventsPath: null,
+    stderrPath: null,
+    commitSha: null,
+    pullRequestNumber: null,
+    pullRequestUrl: null,
+    reviewedPullRequests: [],
+    summary: null,
+    rationaleSummary: null,
+    evidence: [],
+    verification: [],
+    blockers: [],
+    lastError: null,
+    startedAt: null,
+    completedAt: null,
+  };
+}
+
+function dependencySummary(run: ProjectTaskRun, fallbackSummary: string) {
+  const base = run.summary ?? fallbackSummary;
+  if (run.reviewedPullRequests.length === 0) return base;
+  return `${base} | upstream reviewed PRs: ${run.reviewedPullRequests.map((number) => `#${number}`).join(", ")}`;
+}
+
+function buildTaskInput(
+  payload: HeadlessBuilderSnapshotPayload,
+  run: ProjectTaskRun,
+  options: HeadlessBuilderExecutorOptions,
+): HeadlessAgentTaskRuntimeInput {
+  const plan = payload.plan;
+  const repository = payload.repository;
+  if (!plan || !repository) {
+    throw new Error("Headless task 실행 전에 PM plan과 repository가 필요합니다.");
+  }
+
+  const task = plan.tasks.find((item) => item.id === run.taskId);
+  if (!task) throw new Error(`PM Task를 찾을 수 없습니다: ${run.taskId}`);
+
+  const dependencies = task.dependsOn.map((dependencyId) => {
+    const dependencyRun = payload.taskRuns.find((item) => item.taskId === dependencyId);
+    const dependencyTask = plan.tasks.find((item) => item.id === dependencyId);
+    if (!dependencyRun || !dependencyTask || dependencyRun.status !== "done") {
+      throw new Error(`${task.id}의 dependency ${dependencyId}가 완료되지 않았습니다.`);
+    }
+    return {
+      taskId: dependencyId,
+      role: dependencyRun.role,
+      summary: dependencySummary(dependencyRun, dependencyTask.summary),
+      branchName: dependencyRun.branchName,
+      commitSha: dependencyRun.commitSha,
+      pullRequestNumber: dependencyRun.pullRequestNumber,
+      pullRequestUrl: dependencyRun.pullRequestUrl,
+    };
+  });
+
+  return {
+    organization: options.organization,
+    projectId: payload.runtimeProjectId,
+    teamId: options.teamId,
+    teamName: options.teamName,
+    role: task.role,
+    agentId: run.agentId,
+    taskId: task.id,
+    taskSlug: task.taskSlug,
+    title: task.title,
+    summary: [seniorAgentContext(task.role), task.summary].join("\n\n"),
+    acceptanceCriteria: task.acceptanceCriteria,
+    userRequest: payload.request,
+    productSummary: plan.productSummary,
+    architectureSummary: plan.architectureSummary,
+    repositoryFullName: repository.repository,
+    workspacePath: repository.workspacePath,
+    dependencies,
+  };
+}
+
+function applyTaskResult(
+  run: ProjectTaskRun,
+  result: HeadlessAgentTaskRunResult,
+  completedAt: string,
+): ProjectTaskRun {
+  const completed = result.report.status === "completed";
+  return {
+    ...run,
+    status: completed ? "done" : "blocked",
+    branchName: result.branchName,
+    worktreePath: result.worktreePath,
+    threadId: result.threadId,
+    sessionId: result.sessionId,
+    turnId: result.turnId,
+    eventsPath: result.eventsPath,
+    stderrPath: result.stderrPath,
+    commitSha: result.report.commitSha,
+    pullRequestNumber: result.report.pullRequestNumber,
+    pullRequestUrl: result.report.pullRequestUrl,
+    reviewedPullRequests: result.report.reviewedPullRequests,
+    summary: result.report.summary,
+    rationaleSummary: result.report.rationaleSummary,
+    evidence: result.report.evidence,
+    verification: result.report.verification,
+    blockers: result.report.blockers,
+    lastError: completed ? null : result.report.blockers.join(" · ") || "Agent가 blocked 결과를 반환했습니다.",
+    completedAt,
+  };
+}
+
+function blockedTask(run: ProjectTaskRun, reason: string, completedAt: string): ProjectTaskRun {
+  return {
+    ...run,
+    status: "blocked",
+    blockers: Array.from(new Set([...run.blockers, reason])),
+    lastError: reason,
+    completedAt,
+  };
+}
+
+function ensureTaskRunsMatchPlan(payload: HeadlessBuilderSnapshotPayload, teamId: TeamId) {
+  if (!payload.plan) return;
+  if (payload.taskRuns.length === 0) {
+    payload.taskRuns = refreshOrchestrationReadiness(
+      payload.plan,
+      payload.plan.tasks.map((task) => initialTaskRun(task, teamId)),
+    );
+    return;
+  }
+
+  const planIds = new Set(payload.plan.tasks.map((task) => task.id));
+  const runIds = new Set(payload.taskRuns.map((run) => run.taskId));
+  if (planIds.size !== runIds.size
+    || [...planIds].some((taskId) => !runIds.has(taskId))) {
+    throw new Error("Builder snapshot taskRuns가 저장된 PM Task DAG와 일치하지 않습니다.");
+  }
+}
+
+export function createHeadlessBuilderExecutor(
+  options: HeadlessBuilderExecutorOptions,
+): BuilderWorkerExecutor {
+  const organization = options.organization.trim();
+  const workspaceRoot = options.workspaceRoot.trim();
+  const teamName = options.teamName.trim();
+  if (!organization) throw new Error("Headless Builder GitHub organization이 필요합니다.");
+  if (!workspaceRoot) throw new Error("Headless Builder workspace root가 필요합니다.");
+  if (!teamName) throw new Error("Headless Builder team name이 필요합니다.");
+  const now = options.now ?? (() => new Date().toISOString());
+
+  return async (
+    claim: BuilderWorkerClaim,
+    client: BuilderWorkerClient,
+  ): Promise<BuilderWorkerExecutionResult> => {
+    const persisted = claim.orchestrationSnapshot
+      ?? await client.loadSnapshot(claim.runId, claim.workerId);
+    let snapshotVersion = persisted?.version ?? 0;
+    const payload = persisted ? parseSnapshot(claim, persisted) : freshPayload(claim);
+
+    const persist = async (phase: string) => {
+      const saved = await client.saveSnapshot(claim.runId, claim.workerId, {
+        expectedVersion: snapshotVersion,
+        schemaVersion: HEADLESS_BUILDER_SNAPSHOT_SCHEMA_VERSION,
+        phase,
+        payloadJson: JSON.stringify(payload),
+      });
+      snapshotVersion = saved.version;
+    };
+
+    const failBlocked = async (reason: string) => {
+      payload.blockedReason = reason;
+      await persist("blocked");
+      throw new Error(reason);
+    };
+
+    if (!payload.intake) {
+      const intake = await options.runtime.analyzeIntake({
+        organization,
+        workspaceRoot,
+        intakeId: payload.intakeId,
+        request: payload.request,
+      });
+      payload.intake = intake;
+      const missingInputs = intake.analysis.missingInputs.map((item) => item.trim()).filter(Boolean);
+      if (missingInputs.length > 0) {
+        await failBlocked(`Project Intake 추가 확인 필요: ${missingInputs.join(" / ")}`);
+      }
+      await persist("planning");
+    }
+
+    if (!payload.plan) {
+      const pm = await options.runtime.planProject({
+        organization,
+        workspaceRoot,
+        projectId: payload.runtimeProjectId,
+        teamId: options.teamId,
+        teamName,
+        request: payload.request,
+      });
+      const rawPlan = claim.authRequired && !pm.plan.needsAuth
+        ? { ...pm.plan, needsAuth: true }
+        : pm.plan;
+      payload.plan = prepareOrchestrationPlan(rawPlan);
+      payload.pm = {
+        sessionId: pm.sessionId,
+        eventsPath: pm.eventsPath,
+        outputPath: pm.outputPath,
+      };
+      payload.blockedReason = null;
+      await persist("repository");
+    }
+
+    if (!payload.repository) {
+      payload.repository = await options.runtime.bootstrapRepository({
+        organization,
+        repository: payload.plan.repositoryName,
+        workspaceRoot,
+      });
+      ensureTaskRunsMatchPlan(payload, options.teamId);
+      await persist("building");
+    } else if (payload.taskRuns.length === 0) {
+      ensureTaskRunsMatchPlan(payload, options.teamId);
+      await persist("building");
+    } else {
+      ensureTaskRunsMatchPlan(payload, options.teamId);
+    }
+
+    const running = payload.taskRuns.filter((run) => run.status === "running");
+    if (running.length > 0) {
+      for (const interrupted of running) {
+        const task = payload.plan.tasks.find((item) => item.id === interrupted.taskId);
+        if (!task) throw new Error(`복구 대상 PM Task를 찾을 수 없습니다: ${interrupted.taskId}`);
+        const reconciliation = await options.runtime.reconcileTask({
+          projectId: payload.runtimeProjectId,
+          teamId: options.teamId,
+          role: interrupted.role,
+          agentId: interrupted.agentId,
+          taskId: interrupted.taskId,
+          taskSlug: task.taskSlug,
+          repositoryFullName: payload.repository.repository,
+          workspacePath: payload.repository.workspacePath,
+        });
+        const index = payload.taskRuns.findIndex((run) => run.taskId === interrupted.taskId);
+        if (reconciliation.outcome === "recovered" && reconciliation.result) {
+          payload.taskRuns[index] = applyTaskResult(interrupted, reconciliation.result, now());
+        } else {
+          payload.taskRuns[index] = blockedTask(
+            interrupted,
+            `중단 Task evidence 복구 실패: ${reconciliation.reason}`,
+            now(),
+          );
+        }
+      }
+      payload.taskRuns = refreshOrchestrationReadiness(payload.plan, payload.taskRuns);
+      const recoveredSummary = summarizeTaskRuns(payload.taskRuns);
+      await persist(recoveredSummary.hasBlocked ? "blocked" : "building");
+      if (recoveredSummary.hasBlocked) {
+        throw new Error("중단된 Agent Task를 repository/session evidence로 안전하게 복구하지 못했습니다.");
+      }
+    }
+
+    while (true) {
+      payload.taskRuns = refreshOrchestrationReadiness(payload.plan, payload.taskRuns);
+      const summary = summarizeTaskRuns(payload.taskRuns);
+      if (summary.allDone) break;
+      if (summary.hasBlocked) {
+        await failBlocked("하나 이상의 Agent Task가 blocked 상태라 orchestration을 계속할 수 없습니다.");
+      }
+
+      const wave = selectAdaptiveOrchestrationWave(payload.plan, payload.taskRuns);
+      if (wave.length === 0) {
+        await failBlocked("실행 가능한 Agent Task가 없지만 Task DAG가 완료되지 않았습니다.");
+      }
+
+      const startedAt = now();
+      const waveTaskIds = new Set(wave.map((run) => run.taskId));
+      payload.taskRuns = payload.taskRuns.map((run) => waveTaskIds.has(run.taskId)
+        ? { ...run, status: "running" as const, attempts: run.attempts + 1, startedAt, lastError: null }
+        : run);
+      await persist("building");
+
+      const activeRuns = wave.map((selected) => {
+        const current = payload.taskRuns.find((run) => run.taskId === selected.taskId);
+        if (!current) throw new Error(`실행할 Task Run을 찾을 수 없습니다: ${selected.taskId}`);
+        return current;
+      });
+      const settled = await Promise.allSettled(
+        activeRuns.map((run) => options.runtime.dispatchTask(buildTaskInput(payload, run, options))),
+      );
+
+      for (let index = 0; index < activeRuns.length; index += 1) {
+        const run = activeRuns[index];
+        const result = settled[index];
+        const taskIndex = payload.taskRuns.findIndex((item) => item.taskId === run.taskId);
+        if (result.status === "fulfilled") {
+          payload.taskRuns[taskIndex] = applyTaskResult(run, result.value, now());
+        } else {
+          payload.taskRuns[taskIndex] = blockedTask(
+            run,
+            `Agent Runtime 실행 실패: ${errorMessage(result.reason)}`,
+            now(),
+          );
+        }
+      }
+
+      payload.taskRuns = refreshOrchestrationReadiness(payload.plan, payload.taskRuns);
+      const waveSummary = summarizeTaskRuns(payload.taskRuns);
+      await persist(waveSummary.hasBlocked ? "blocked" : "building");
+      if (waveSummary.hasBlocked) {
+        throw new Error("Agent task wave 중 blocked 또는 Runtime 실패가 발생했습니다.");
+      }
+    }
+
+    const gate = evaluateProjectMergeGate({
+      plan: payload.plan,
+      taskRuns: payload.taskRuns,
+    });
+    if (!gate.ready) {
+      await failBlocked(`PR integration gate 실패: ${gate.reasons.join(" · ")}`);
+    }
+
+    if (!payload.integration) {
+      payload.integrationPullRequestNumbers = gate.pullRequestNumbers;
+      await persist("integration");
+      payload.integration = await options.runtime.mergePullRequests({
+        repositoryFullName: payload.repository.repository,
+        pullRequestNumbers: payload.integrationPullRequestNumbers,
+      });
+      payload.blockedReason = null;
+      await persist("completed");
+    }
+
+    return {
+      repositoryFullName: payload.repository.repository,
+      previewUrl: claim.previewUrl,
+    };
+  };
+}
