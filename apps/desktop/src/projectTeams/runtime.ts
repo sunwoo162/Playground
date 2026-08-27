@@ -1,9 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
-import { ensureBouquetAuthPlan } from "./bouquetAuth";
-import { ensureMarketingDocumentationPlan } from "./dataMarketing";
 import { getProjectEvolutionInstructions } from "./evolutionExperiments";
-import { validateProjectPlanReviewTopology } from "./planTopology";
+import { prepareOrchestrationPlan } from "./orchestrationCore";
 import { seniorAgentContext } from "./seniorAgent";
 import { loadProjectTeamsState } from "./store";
 import type {
@@ -259,7 +257,7 @@ function withPmEvolutionExperiment(input: StartProjectRuntimeInput): StartProjec
     "Experimental PM objective:",
     agent,
     "When planning, keep the experiment auditable in task rationale/evidence instead of silently treating it as a permanent rule.",
-  ].join("\n");
+  ].join("\n\n");
 
   return {
     ...input,
@@ -281,9 +279,7 @@ export async function startProjectRuntime(input: StartProjectRuntimeInput) {
     "start_project_runtime",
     preparedInput,
   );
-  const authPlan = ensureBouquetAuthPlan(result.pm.plan);
-  const plan = ensureMarketingDocumentationPlan(authPlan);
-  validateProjectPlanReviewTopology(plan);
+  const plan = prepareOrchestrationPlan(result.pm.plan);
   return {
     ...result,
     pm: {
