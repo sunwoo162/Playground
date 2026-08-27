@@ -6,6 +6,10 @@ const test = require('node:test');
 
 const ROOT = path.resolve(__dirname, '..');
 
+function readDeployWorkflow() {
+  return fs.readFileSync(path.join(ROOT, '.github/workflows/deploy.yml'), 'utf8');
+}
+
 test('backend uses the shared JWT secret even when backend env contains a stale override', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bloombouquet-ecosystem-'));
   const copiedConfig = path.join(tempDir, 'ecosystem.config.cjs');
@@ -28,6 +32,12 @@ test('backend uses the shared JWT secret even when backend env contains a stale 
 });
 
 test('production diagnostics never print PM2 environment details', () => {
-  const workflow = fs.readFileSync(path.join(ROOT, '.github/workflows/deploy.yml'), 'utf8');
+  const workflow = readDeployWorkflow();
   assert.doesNotMatch(workflow, /^\s*pm2 describe backend \|\| true\s*$/m);
+});
+
+test('PM2 ecosystem config changes trigger a backend restart', () => {
+  const workflow = readDeployWorkflow();
+  const detectionBlock = workflow.match(/- name: Detect backend changes[\s\S]*?- name: Set up JDK 17/)?.[0] ?? '';
+  assert.match(detectionBlock, /ecosystem\.config\.js/);
 });
