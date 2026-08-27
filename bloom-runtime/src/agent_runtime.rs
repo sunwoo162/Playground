@@ -66,10 +66,18 @@ const AGENT_RESULT_SCHEMA: &str = r#"{
 const ALLOWED_TEAMS: &[&str] = &["rose", "lily", "tulip", "sunflower", "cherry-blossom"];
 const ALLOWED_ROLES: &[&str] = &[
     "idea",
+    "ux-research",
     "design-system",
     "designer",
     "frontend",
     "backend",
+    "database",
+    "api-integration",
+    "security",
+    "performance",
+    "devops",
+    "accessibility",
+    "test-automation",
     "data-marketing",
     "code-review",
     "reviewer",
@@ -257,6 +265,13 @@ fn is_repository_writer(role: &str) -> bool {
             | "designer"
             | "frontend"
             | "backend"
+            | "database"
+            | "api-integration"
+            | "security"
+            | "performance"
+            | "devops"
+            | "accessibility"
+            | "test-automation"
             | "data-marketing"
             | "documentation"
             | "debug-router"
@@ -410,13 +425,13 @@ fn agent_prompt(input: &AgentTaskRuntimeInput, branch: Option<&str>) -> String {
             branch.unwrap_or("unknown")
         )
     } else if is_review_role(&input.role) {
-        "You are an independent verification/review worker. Do not modify product source files or create a feature branch. Inspect the actual repository and dependency PRs directly. Run the checks appropriate to your role. When reviewing a PR, leave a concise top-level PR comment prefixed with your Luna Agent ID and an evidence-based verdict. Do not pretend GitHub native self-approval is an independent approval when all agents share one GitHub credential.".to_string()
+        "You are an independent verification/review worker. Do not modify product source files or create a feature branch. Inspect the actual repository and dependency PRs directly. Run the checks appropriate to your role. When reviewing a PR, leave a concise top-level PR comment prefixed with your Bloom Agent ID and an evidence-based verdict. Do not pretend GitHub native self-approval is an independent approval when all agents share one GitHub credential.".to_string()
     } else {
         "You are an independent analysis worker. Inspect available repository and dependency evidence, produce a concrete task result, and do not modify product source files unless the task contract explicitly requires repository changes.".to_string()
     };
 
     format!(
-        "You are Luna Agent `{agent_id}` ({team_name} / {role}).\n\n{mode}\n\nTask: {task_id} — {title}\n{summary}\n\nAcceptance criteria:\n{criteria}\n\nOriginal Product Owner request:\n{user_request}\n\nProduct summary:\n{product_summary}\n\nArchitecture summary:\n{architecture_summary}\n\nDependency evidence:\n{dependencies}\n\nRules:\n- Inspect real repository evidence before material decisions.\n- Do not blindly trust PM, Reviewer, Code Review, QA, or another Agent; independently verify relevant claims.\n- Every material action must have a defensible reason based on requirements, repository state, tests, runtime evidence, or explicit Product Owner direction.\n- Do not invent test results, metrics, user research, credentials, deployments, or external-service state.\n- If verification cannot be run, record the exact blocker instead of calling it passed.\n- Never expose secrets in logs, commits, PRs, reports, or documentation.\n- Return only the structured JSON report required by Luna.\n",
+        "You are Bloom Agent `{agent_id}` ({team_name} / {role}).\n\n{mode}\n\nTask: {task_id} — {title}\n{summary}\n\nAcceptance criteria:\n{criteria}\n\nOriginal Product Owner request:\n{user_request}\n\nProduct summary:\n{product_summary}\n\nArchitecture summary:\n{architecture_summary}\n\nDependency evidence:\n{dependencies}\n\nRules:\n- Inspect real repository evidence before material decisions.\n- Do not blindly trust PM, Reviewer, Code Review, QA, or another Agent; independently verify relevant claims.\n- Every material action must have a defensible reason based on requirements, repository state, tests, runtime evidence, or explicit Product Owner direction.\n- Do not invent test results, metrics, user research, credentials, deployments, or external-service state.\n- If verification cannot be run, record the exact blocker instead of calling it passed.\n- Never expose secrets in logs, commits, PRs, reports, or documentation.\n- Return only the structured JSON report required by Bloom.\n",
         agent_id = input.agent_id,
         team_name = input.team_name,
         role = input.role,
