@@ -20,6 +20,19 @@ public class BloomBouquetEvaluationRun {
     @Column(nullable = false, length = 40)
     private String status;
 
+    @Column(name = "worker_id", length = 120)
+    private String workerId;
+
+    @Column(name = "heartbeat_at")
+    private LocalDateTime heartbeatAt;
+
+    @Column(name = "lease_expires_at")
+    private LocalDateTime leaseExpiresAt;
+
+    @Builder.Default
+    @Column(name = "claim_count", nullable = false)
+    private int claimCount = 0;
+
     @Column(name = "overall_score")
     private Integer overallScore;
 
