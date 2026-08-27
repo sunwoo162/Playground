@@ -1,3 +1,4 @@
+import { assignInitialTaskRunAgents } from "./agentRoster";
 import { ensureBouquetAuthPlan } from "./bouquetAuth";
 import { ensureMarketingDocumentationPlan } from "./dataMarketing";
 import { validateProjectPlanReviewTopology } from "./planTopology";
@@ -41,13 +42,15 @@ export function refreshOrchestrationReadiness(
   );
   const tasks = new Map(plan.tasks.map((task) => [task.id, task]));
 
-  return taskRuns.map((run) => {
+  const refreshed = taskRuns.map((run) => {
     if (run.status !== "pending") return run;
     const task = tasks.get(run.taskId);
     if (!task) return run;
     const ready = task.dependsOn.every((dependency) => completed.has(dependency));
     return ready ? { ...run, status: "ready" as const } : run;
   });
+
+  return assignInitialTaskRunAgents(refreshed);
 }
 
 export function selectOrchestrationWave(
@@ -58,16 +61,16 @@ export function selectOrchestrationWave(
   const boundedLimit = Math.min(limit, ORCHESTRATION_MAX_PARALLEL_TASKS);
 
   const selected: ProjectTaskRun[] = [];
-  const busyRoles = new Set<ExecutableAgentRole>(
+  const busyAgentIds = new Set(
     taskRuns
       .filter((run) => run.status === "running")
-      .map((run) => run.role),
+      .map((run) => run.agentId),
   );
 
   for (const run of taskRuns) {
-    if (run.status !== "ready" || busyRoles.has(run.role)) continue;
+    if (run.status !== "ready" || busyAgentIds.has(run.agentId)) continue;
     selected.push(run);
-    busyRoles.add(run.role);
+    busyAgentIds.add(run.agentId);
     if (selected.length >= boundedLimit) break;
   }
 
@@ -121,9 +124,23 @@ export function projectStatusForActiveRoles(
     { roles: ["user-a", "user-b"], status: "user-test" },
     { roles: ["qa"], status: "qa" },
     { roles: ["code-review", "reviewer", "documentation", "data-marketing"], status: "review" },
-    { roles: ["frontend", "backend", "database", "security", "devops", "accessibility", "debug-router"], status: "development" },
+    {
+      roles: [
+        "frontend",
+        "backend",
+        "database",
+        "api-integration",
+        "security",
+        "performance",
+        "devops",
+        "accessibility",
+        "test-automation",
+        "debug-router",
+      ],
+      status: "development",
+    },
     { roles: ["design-system", "designer"], status: "design" },
-    { roles: ["idea"], status: "planning" },
+    { roles: ["idea", "ux-research"], status: "planning" },
   ];
 
   return priority.find((group) => roles.some((role) => group.roles.includes(role)))?.status
