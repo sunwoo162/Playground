@@ -10,9 +10,11 @@ const { createObservedHeadlessBuilderExecutor } = require("../.tmp/bloom-worker/
 const { createBloomBouquetEvaluatorHttpClient } = require("../.tmp/bloom-worker/bloomBouquetEvaluatorHttpClient.js");
 const { runBloomBouquetEvaluatorOnce } = require("../.tmp/bloom-worker/bloomBouquetEvaluatorWorker.js");
 const { createCodexSeniorEvaluatorRunner } = require("../.tmp/bloom-worker/bloomBouquetSeniorEvaluator.js");
+const { createLocalSeniorEvaluatorRunner } = require("../.tmp/bloom-worker/bloomBouquetLocalSeniorEvaluator.js");
 
 const MAX_BRIDGE_OUTPUT_BYTES = 16 * 1024 * 1024;
 const TEAM_IDS = new Set(["rose", "lily", "tulip", "sunflower", "cherry-blossom"]);
+const EVALUATOR_RUNTIMES = new Set(["codex", "local"]);
 
 function configValue(primary, legacy) {
   return process.env[primary]?.trim() || (legacy ? process.env[legacy]?.trim() : "") || "";
@@ -35,6 +37,14 @@ function integerConfig(primary, legacy, fallback, minimum) {
     throw new Error(`${primary}은 ${minimum} 이상의 정수여야 합니다.`);
   }
   return value;
+}
+
+function resolveEvaluatorRuntime(value) {
+  const normalized = String(value || "codex").trim().toLowerCase() || "codex";
+  if (!EVALUATOR_RUNTIMES.has(normalized)) {
+    throw new Error(`BLOOM_EVALUATOR_RUNTIME은 codex 또는 local이어야 합니다: ${normalized}`);
+  }
+  return normalized;
 }
 
 function defaultBridgePath() {
@@ -146,12 +156,13 @@ async function runEvaluatorMode({ baseUrl, token, pollIntervalMs, isStopping }) 
     throw new Error("BLOOM_WORKER_HEARTBEAT_INTERVAL_MS는 90초 lease보다 짧아야 합니다.");
   }
 
+  const evaluatorRuntime = resolveEvaluatorRuntime(process.env.BLOOM_EVALUATOR_RUNTIME);
   const client = createBloomBouquetEvaluatorHttpClient({ baseUrl, token });
-  const runner = createCodexSeniorEvaluatorRunner({
-    cwd: path.resolve(__dirname, ".."),
-  });
+  const runner = evaluatorRuntime === "local"
+    ? createLocalSeniorEvaluatorRunner()
+    : createCodexSeniorEvaluatorRunner({ cwd: path.resolve(__dirname, "..") });
 
-  console.log(`[bloom-worker] started mode=evaluator workerId=${workerId} api=${baseUrl}`);
+  console.log(`[bloom-worker] started mode=evaluator runtime=${evaluatorRuntime} workerId=${workerId} api=${baseUrl}`);
   while (!isStopping()) {
     try {
       const outcome = await runBloomBouquetEvaluatorOnce(client, workerId, runner, {
