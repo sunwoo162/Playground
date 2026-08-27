@@ -34,7 +34,9 @@ assert.ok(independent.some((step) => step.role === "qa"));
 assert.ok(independent.some((step) => step.role === "documentation"));
 assert.ok(independent.some((step) => step.role === "code-review"));
 
-assert.ok(aggregate);
+if (!aggregate) {
+  throw new Error("Process Evaluator aggregate step must exist.");
+}
 assert.deepEqual(new Set(aggregate.dependsOn), new Set(independent.map((step) => step.role)));
 assert.ok(independent.every((step) => step.dependsOn.length === 0));
 
