@@ -61,6 +61,11 @@ public class BloomBouquetController {
         return ResponseEntity.ok(service.getPublicProject(projectId));
     }
 
+    @GetMapping("/public/evaluations/{runId}")
+    public ResponseEntity<BloomBouquetDto.EvaluationReportResponse> getPublicEvaluationReport(@PathVariable Long runId) {
+        return ResponseEntity.ok(service.getPublicEvaluationReport(runId));
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<String> badRequest(IllegalArgumentException error) {
         return ResponseEntity.badRequest().body(error.getMessage());
