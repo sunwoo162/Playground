@@ -134,19 +134,37 @@ function sleep(ms) {
 }
 
 async function runEvaluatorMode({ baseUrl, token, pollIntervalMs, isStopping }) {
+  const workerId = configValue("BLOOM_WORKER_ID", "BUILDER_WORKER_ID")
+    || `bloom-evaluator-${os.hostname()}-${process.pid}`;
+  const heartbeatIntervalMs = integerConfig(
+    "BLOOM_WORKER_HEARTBEAT_INTERVAL_MS",
+    "BUILDER_WORKER_HEARTBEAT_INTERVAL_MS",
+    30000,
+    1000,
+  );
+  if (heartbeatIntervalMs >= 90000) {
+    throw new Error("BLOOM_WORKER_HEARTBEAT_INTERVAL_MS는 90초 lease보다 짧아야 합니다.");
+  }
+
   const client = createBloomBouquetEvaluatorHttpClient({ baseUrl, token });
   const runner = createCodexSeniorEvaluatorRunner({
     cwd: path.resolve(__dirname, ".."),
   });
 
-  console.log(`[bloom-worker] started mode=evaluator api=${baseUrl}`);
+  console.log(`[bloom-worker] started mode=evaluator workerId=${workerId} api=${baseUrl}`);
   while (!isStopping()) {
     try {
-      const outcome = await runBloomBouquetEvaluatorOnce(client, runner);
+      const outcome = await runBloomBouquetEvaluatorOnce(client, workerId, runner, {
+        heartbeatIntervalMs,
+      });
       if (outcome.status !== "idle") {
         console.log(`[bloom-worker] evaluator run ${outcome.runId ?? "-"} -> ${outcome.status}`);
       }
-      if (outcome.status === "idle" || outcome.status === "partial") {
+      if (
+        outcome.status === "idle"
+        || outcome.status === "partial"
+        || outcome.status === "lease-lost"
+      ) {
         await sleep(pollIntervalMs);
       }
     } catch (error) {
