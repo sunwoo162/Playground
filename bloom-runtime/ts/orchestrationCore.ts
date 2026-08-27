@@ -1,3 +1,4 @@
+import { assignTaskRunsToAgentPool } from "./agentPool";
 import { ensureBouquetAuthPlan } from "./bouquetAuth";
 import { ensureMarketingDocumentationPlan } from "./dataMarketing";
 import { validateProjectPlanReviewTopology } from "./planTopology";
@@ -9,7 +10,7 @@ import type {
   ProjectTaskRun,
 } from "./types";
 
-export const ORCHESTRATION_MAX_PARALLEL_TASKS = 2;
+export const ORCHESTRATION_MAX_PARALLEL_TASKS = 6;
 
 export type TaskRunSummary = {
   allDone: boolean;
@@ -36,12 +37,13 @@ export function refreshOrchestrationReadiness(
 ): ProjectTaskRun[] {
   if (!plan) return taskRuns;
 
+  const pooledRuns = assignTaskRunsToAgentPool(plan, taskRuns);
   const completed = new Set(
-    taskRuns.filter((run) => run.status === "done").map((run) => run.taskId),
+    pooledRuns.filter((run) => run.status === "done").map((run) => run.taskId),
   );
   const tasks = new Map(plan.tasks.map((task) => [task.id, task]));
 
-  return taskRuns.map((run) => {
+  return pooledRuns.map((run) => {
     if (run.status !== "pending") return run;
     const task = tasks.get(run.taskId);
     if (!task) return run;
@@ -58,16 +60,16 @@ export function selectOrchestrationWave(
   const boundedLimit = Math.min(limit, ORCHESTRATION_MAX_PARALLEL_TASKS);
 
   const selected: ProjectTaskRun[] = [];
-  const busyRoles = new Set<ExecutableAgentRole>(
+  const busyAgentIds = new Set(
     taskRuns
       .filter((run) => run.status === "running")
-      .map((run) => run.role),
+      .map((run) => run.agentId),
   );
 
   for (const run of taskRuns) {
-    if (run.status !== "ready" || busyRoles.has(run.role)) continue;
+    if (run.status !== "ready" || busyAgentIds.has(run.agentId)) continue;
     selected.push(run);
-    busyRoles.add(run.role);
+    busyAgentIds.add(run.agentId);
     if (selected.length >= boundedLimit) break;
   }
 
