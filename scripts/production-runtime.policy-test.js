@@ -150,3 +150,12 @@ test('production local evaluator pins the llama installer to a reviewed upstream
   assert.match(setup, /raw\.githubusercontent\.com\/ggml-org\/llama-install\.sh\/\$\{LLAMA_INSTALLER_COMMIT\}\/install\.sh/);
   assert.doesNotMatch(setup, /https:\/\/llama\.app\/install\.sh/);
 });
+
+test('production deploy proves the local evaluator can complete a real JSON inference', () => {
+  const workflow = readBloomWorkerDeployWorkflow();
+  assert.match(workflow, /createLocalEvaluatorTransport/);
+  assert.match(workflow, /production-inference-smoke/);
+  assert.match(workflow, /Return exactly one JSON object with/);
+  assert.match(workflow, /Bloom local evaluator inference smoke OK/);
+  assert.match(workflow, /value\.ok !== true/);
+});
