@@ -36,13 +36,13 @@
 
 - [ ] **Step 1: Write the failing HTTP contract test**
 
-Test fake fetch requests for:
+Test fake fetch requests for the existing controller contract:
 
 ```text
-POST /api/internal/builder/worker/bloom-bouquet/claim
-GET  /api/internal/builder/worker/bloom-bouquet/evaluations/{runId}/agents
-POST /api/internal/builder/worker/bloom-bouquet/evaluations/{runId}/agents
-POST /api/internal/builder/worker/bloom-bouquet/evaluations/{runId}/complete
+POST /internal/builder/worker/bloom-bouquet/runs/claim
+GET  /internal/builder/worker/bloom-bouquet/runs/{runId}/agents
+POST /internal/builder/worker/bloom-bouquet/runs/{runId}/agents
+POST /internal/builder/worker/bloom-bouquet/runs/{runId}/complete
 ```
 
 Assert every request has `X-Builder-Worker-Token`, JSON bodies are exact, and claim handles HTTP 204 as `null`.
