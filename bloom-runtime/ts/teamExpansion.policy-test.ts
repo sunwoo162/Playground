@@ -11,6 +11,10 @@ function assert(condition: boolean, message: string) {
   if (!condition) throw new Error(message);
 }
 
+function roleCount(team: ReturnType<typeof createInitialProjectTeamsState>["teams"][number], role: string) {
+  return team.agents.filter((agent) => agent.role === role).length;
+}
+
 function specialistPlan(): ProjectPlan {
   return {
     projectName: "Specialist routing",
@@ -57,7 +61,43 @@ function specialistPlan(): ProjectPlan {
         acceptanceCriteria: ["Keyboard-only user flow is operable."],
       },
       {
+        id: "FE-002",
+        title: "Improve rendering performance",
+        role: "frontend",
+        taskSlug: "performance-rendering-bundle-size",
+        summary: "Profile rendering performance and reduce bundle size bottlenecks.",
+        dependsOn: [],
+        acceptanceCriteria: ["Measured rendering bottleneck is addressed."],
+      },
+      {
         id: "BE-004",
+        title: "Integrate external webhook API",
+        role: "backend",
+        taskSlug: "api-integration-webhook",
+        summary: "Implement external API webhook contract and retry boundaries.",
+        dependsOn: [],
+        acceptanceCriteria: ["Webhook contract and failure handling are verified."],
+      },
+      {
+        id: "FE-003",
+        title: "Automate browser regression flow",
+        role: "frontend",
+        taskSlug: "test-automation-playwright",
+        summary: "Add Playwright E2E test automation for the critical user flow.",
+        dependsOn: [],
+        acceptanceCriteria: ["Playwright regression runs reproducibly."],
+      },
+      {
+        id: "DS-001",
+        title: "Validate onboarding usability",
+        role: "designer",
+        taskSlug: "ux-research-usability",
+        summary: "Use usability evidence and journey mapping to validate the onboarding design.",
+        dependsOn: [],
+        acceptanceCriteria: ["Design decisions cite usability evidence."],
+      },
+      {
+        id: "BE-005",
         title: "Implement general API endpoint",
         role: "backend",
         taskSlug: "api-endpoint",
@@ -72,7 +112,13 @@ function specialistPlan(): ProjectPlan {
 function run() {
   const state = createInitialProjectTeamsState();
   for (const team of state.teams) {
-    assert(team.agents.length === 19, `${team.id} must expose 19 Agents`);
+    assert(team.agents.length === 30, `${team.id} must expose 30 Agents`);
+    assert(roleCount(team, "frontend") === 3, `${team.id} must expose three Frontend Agents`);
+    assert(roleCount(team, "backend") === 3, `${team.id} must expose three Backend Agents`);
+    assert(roleCount(team, "code-review") === 2, `${team.id} must expose two Code Review Agents`);
+    assert(roleCount(team, "qa") === 2, `${team.id} must expose two QA Agents`);
+    assert(roleCount(team, "documentation") === 2, `${team.id} must expose two Documentation Agents`);
+
     for (const role of SPECIALIST_AGENT_ROLES) {
       assert(
         team.agents.some((agent) => agent.id === `${team.id}:${role}` && agent.role === role),
@@ -88,7 +134,11 @@ function run() {
   assert(roleByTask.get("BE-002") === "security", "security work must route to Security Agent");
   assert(roleByTask.get("BE-003") === "devops", "deployment work must route to DevOps Agent");
   assert(roleByTask.get("FE-001") === "accessibility", "a11y work must route to Accessibility Agent");
-  assert(roleByTask.get("BE-004") === "backend", "generic backend work must stay with Backend Agent");
+  assert(roleByTask.get("FE-002") === "performance", "performance work must route to Performance Agent");
+  assert(roleByTask.get("BE-004") === "api-integration", "external API work must route to API Integration Agent");
+  assert(roleByTask.get("FE-003") === "test-automation", "browser automation work must route to Test Automation Agent");
+  assert(roleByTask.get("DS-001") === "ux-research", "usability work must route to UX Research Agent");
+  assert(roleByTask.get("BE-005") === "backend", "generic backend work must stay with Backend Agent");
 
   const original = specialistPlan();
   const routedAgain = routeSpecialistAgentTasks(routeSpecialistAgentTasks(original));
@@ -96,9 +146,9 @@ function run() {
     JSON.stringify(routedAgain) === JSON.stringify(routeSpecialistAgentTasks(original)),
     "specialist routing must be idempotent",
   );
-  assert(ORCHESTRATION_MAX_PARALLEL_TASKS === 2, "team expansion must not change concurrency optimization yet");
+  assert(ORCHESTRATION_MAX_PARALLEL_TASKS === 2, "30-Agent roster expansion must keep concurrency optimization deferred");
 
-  console.log("PASS  Bloom 19-Agent team expansion and specialist routing scenarios passed.");
+  console.log("PASS  Bloom 30-Agent team capacity and specialist routing scenarios passed.");
 }
 
 run();

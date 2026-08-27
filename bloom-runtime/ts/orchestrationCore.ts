@@ -120,9 +120,10 @@ export function projectStatusForActiveRoles(
     { roles: ["process-evaluator"], status: "evaluation" },
     { roles: ["user-a", "user-b"], status: "user-test" },
     { roles: ["qa"], status: "qa" },
+    { roles: ["test-automation"], status: "qa" },
     { roles: ["code-review", "reviewer", "documentation", "data-marketing"], status: "review" },
-    { roles: ["frontend", "backend", "database", "security", "devops", "accessibility", "debug-router"], status: "development" },
-    { roles: ["design-system", "designer"], status: "design" },
+    { roles: ["frontend", "backend", "database", "security", "devops", "accessibility", "performance", "api-integration", "debug-router"], status: "development" },
+    { roles: ["design-system", "designer", "ux-research"], status: "design" },
     { roles: ["idea"], status: "planning" },
   ];
 
