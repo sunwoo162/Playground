@@ -35,6 +35,12 @@ public class BloomBouquetSubmission {
     @Column(name = "auth_policy_id", nullable = false, length = 40)
     private String authPolicyId;
 
+    @Column(name = "bouquet_client_id", unique = true, length = 64)
+    private String bouquetClientId;
+
+    @Column(name = "bouquet_redirect_uri", length = 2048)
+    private String bouquetRedirectUri;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

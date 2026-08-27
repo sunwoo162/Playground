@@ -1,9 +1,11 @@
 import * as assert from "node:assert/strict";
 
 import {
+  BOUQUET_AUTH_EVALUATION_CHECKLIST,
   EVALUATION_AGENT_PERMISSIONS,
   SENIOR_EVALUATION_REPORT_CONTRACT,
   assertBouquetAuthCompatibility,
+  bouquetAuthEvaluationChecklist,
   createEvaluationPlan,
   summarizeIndependentEvaluations,
 } from "./evaluationPlatform";
@@ -16,6 +18,9 @@ const submission = {
   frontendRepositoryUrl: "https://github.com/example/frontend",
   backendRepositoryUrl: "https://github.com/example/backend",
   requiresAuth: true,
+  authPolicyId: "bouquet",
+  bouquetClientId: "bouquet-submission-1",
+  bouquetRedirectUri: "https://example.com/auth/bouquet/callback",
 };
 
 const plan = createEvaluationPlan(submission);
@@ -61,9 +66,29 @@ assert.deepEqual(
 );
 
 assert.doesNotThrow(() => assertBouquetAuthCompatibility(submission));
+assert.deepEqual(bouquetAuthEvaluationChecklist(submission), BOUQUET_AUTH_EVALUATION_CHECKLIST);
+assert.ok(BOUQUET_AUTH_EVALUATION_CHECKLIST.some((item) => item.includes("SSO")));
+assert.ok(BOUQUET_AUTH_EVALUATION_CHECKLIST.some((item) => item.includes("PKCE")));
+assert.ok(BOUQUET_AUTH_EVALUATION_CHECKLIST.some((item) => item.includes("code 재사용")));
 assert.throws(
   () => assertBouquetAuthCompatibility({ ...submission, demoUrl: "http://example.com" }),
   /HTTPS/,
+);
+assert.throws(
+  () => assertBouquetAuthCompatibility({ ...submission, authPolicyId: "local" }),
+  /authPolicyId=bouquet/,
+);
+assert.throws(
+  () => assertBouquetAuthCompatibility({ ...submission, bouquetClientId: null }),
+  /OAuth client ID/,
+);
+assert.throws(
+  () => assertBouquetAuthCompatibility({ ...submission, bouquetRedirectUri: "https://evil.example/auth/bouquet/callback" }),
+  /share the demo URL origin/,
+);
+assert.deepEqual(
+  bouquetAuthEvaluationChecklist({ ...submission, requiresAuth: false }),
+  [],
 );
 
 const summary = summarizeIndependentEvaluations([

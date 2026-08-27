@@ -3,6 +3,7 @@ package com.playground.domain.bloombouquet.service;
 import com.playground.domain.bloombouquet.dto.BloomBouquetDto;
 import com.playground.domain.bloombouquet.entity.*;
 import com.playground.domain.bloombouquet.repository.*;
+import com.playground.domain.bouquetauth.service.BouquetAuthService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,6 +17,7 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class BloomBouquetService {
     private static final String BOUQUET_AUTH_POLICY = "bouquet";
+    private static final String DEFAULT_BOUQUET_CALLBACK_PATH = "/auth/bouquet/callback";
     private static final Pattern SLUG_PATTERN = Pattern.compile("[a-z0-9]+(?:-[a-z0-9]+)*");
     private static final Set<String> BASE_EVALUATORS = Set.of(
             "user-a", "user-b", "ux-research", "frontend", "security",
@@ -31,6 +33,7 @@ public class BloomBouquetService {
     private final BloomBouquetSubmissionRepository submissionRepository;
     private final BloomBouquetEvaluationRunRepository runRepository;
     private final BloomBouquetAgentEvaluationRepository agentEvaluationRepository;
+    private final BouquetAuthService bouquetAuthService;
 
     @Transactional
     public BloomBouquetDto.TeamResponse createTeam(String ownerId, BloomBouquetDto.CreateTeamRequest request) {
@@ -94,6 +97,15 @@ public class BloomBouquetService {
                 .requiresAuth(request.isRequiresAuth())
                 .authPolicyId(BOUQUET_AUTH_POLICY)
                 .build());
+
+        if (submission.isRequiresAuth()) {
+            String redirectUri = validateAuthRedirectUri(demoUrl, request.getAuthRedirectUri());
+            String clientId = "bouquet-submission-" + submission.getId();
+            bouquetAuthService.registerClient(clientId, oauthClientDisplayName(project, version), redirectUri);
+            submission.setBouquetClientId(clientId);
+            submission.setBouquetRedirectUri(redirectUri);
+            submissionRepository.save(submission);
+        }
 
         BloomBouquetEvaluationRun run = runRepository.save(BloomBouquetEvaluationRun.builder()
                 .submission(submission)
@@ -160,7 +172,9 @@ public class BloomBouquetService {
                 .projectName(project.getName()).teamName(team.getName()).version(submission.getVersion())
                 .demoUrl(submission.getDemoUrl()).frontendRepositoryUrl(submission.getFrontendRepositoryUrl())
                 .backendRepositoryUrl(submission.getBackendRepositoryUrl()).requiresAuth(submission.isRequiresAuth())
-                .authPolicyId(submission.getAuthPolicyId()).build());
+                .authPolicyId(submission.getAuthPolicyId())
+                .bouquetClientId(submission.getBouquetClientId()).bouquetRedirectUri(submission.getBouquetRedirectUri())
+                .build());
     }
 
     @Transactional
@@ -267,6 +281,7 @@ public class BloomBouquetService {
                 .frontendRepositoryUrl(submission.getFrontendRepositoryUrl())
                 .backendRepositoryUrl(submission.getBackendRepositoryUrl())
                 .requiresAuth(submission.isRequiresAuth()).authPolicyId(submission.getAuthPolicyId())
+                .bouquetClientId(submission.getBouquetClientId()).bouquetRedirectUri(submission.getBouquetRedirectUri())
                 .evaluationRunId(run == null ? null : run.getId())
                 .evaluationStatus(run == null ? null : run.getStatus())
                 .overallScore(run == null ? null : run.getOverallScore())
@@ -301,13 +316,53 @@ public class BloomBouquetService {
         try { uri = URI.create(value); } catch (Exception error) {
             throw new IllegalArgumentException(field + " 형식이 올바르지 않습니다.");
         }
-        if (uri.getHost() == null || uri.getScheme() == null) {
+        if (uri.getHost() == null || uri.getScheme() == null || uri.getUserInfo() != null) {
             throw new IllegalArgumentException(field + " 형식이 올바르지 않습니다.");
         }
         if (requireHttps && !"https".equalsIgnoreCase(uri.getScheme())) {
             throw new IllegalArgumentException("꽃다발 인증을 사용하는 프로젝트는 HTTPS demoUrl이 필요합니다.");
         }
         return value;
+    }
+
+    private String validateAuthRedirectUri(String demoUrl, String requestedRedirectUri) {
+        URI demo = URI.create(demoUrl);
+        String value = requestedRedirectUri == null || requestedRedirectUri.isBlank()
+                ? demo.getScheme() + "://" + demo.getRawAuthority() + DEFAULT_BOUQUET_CALLBACK_PATH
+                : required(requestedRedirectUri, "authRedirectUri", 2048);
+
+        URI redirect;
+        try {
+            redirect = URI.create(value);
+        } catch (Exception error) {
+            throw new IllegalArgumentException("authRedirectUri 형식이 올바르지 않습니다.");
+        }
+        if (!"https".equalsIgnoreCase(redirect.getScheme())
+                || redirect.getHost() == null
+                || redirect.getUserInfo() != null
+                || redirect.getFragment() != null) {
+            throw new IllegalArgumentException("꽃다발 authRedirectUri는 fragment가 없는 HTTPS URL이어야 합니다.");
+        }
+        if (!sameOrigin(demo, redirect)) {
+            throw new IllegalArgumentException("꽃다발 authRedirectUri는 demoUrl과 같은 origin이어야 합니다.");
+        }
+        return value;
+    }
+
+    private boolean sameOrigin(URI left, URI right) {
+        return left.getScheme().equalsIgnoreCase(right.getScheme())
+                && left.getHost().equalsIgnoreCase(right.getHost())
+                && effectivePort(left) == effectivePort(right);
+    }
+
+    private int effectivePort(URI uri) {
+        if (uri.getPort() >= 0) return uri.getPort();
+        return "https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
+    }
+
+    private String oauthClientDisplayName(BloomBouquetProject project, String version) {
+        String value = project.getName() + " · " + version;
+        return value.length() <= 100 ? value : value.substring(0, 100);
     }
 
     private String optionalUrl(String raw) {

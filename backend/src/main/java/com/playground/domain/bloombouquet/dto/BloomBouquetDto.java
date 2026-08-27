@@ -17,7 +17,17 @@ public class BloomBouquetDto {
     @Getter @Setter @NoArgsConstructor @AllArgsConstructor
     public static class CreateSubmissionRequest {
         private String version; private String demoUrl; private String frontendRepositoryUrl;
-        private String backendRepositoryUrl; private boolean requiresAuth;
+        private String backendRepositoryUrl; private boolean requiresAuth; private String authRedirectUri;
+
+        public CreateSubmissionRequest(
+                String version,
+                String demoUrl,
+                String frontendRepositoryUrl,
+                String backendRepositoryUrl,
+                boolean requiresAuth
+        ) {
+            this(version, demoUrl, frontendRepositoryUrl, backendRepositoryUrl, requiresAuth, null);
+        }
     }
 
     @Getter @Builder @AllArgsConstructor
@@ -30,6 +40,7 @@ public class BloomBouquetDto {
         private Long id; private String version; private String demoUrl;
         private String frontendRepositoryUrl; private String backendRepositoryUrl;
         private boolean requiresAuth; private String authPolicyId;
+        private String bouquetClientId; private String bouquetRedirectUri;
         private Long evaluationRunId; private String evaluationStatus;
         private Integer overallScore; private Double overallStars; private LocalDateTime createdAt;
     }
@@ -52,6 +63,7 @@ public class BloomBouquetDto {
         private String projectName; private String teamName; private String version; private String demoUrl;
         private String frontendRepositoryUrl; private String backendRepositoryUrl;
         private boolean requiresAuth; private String authPolicyId;
+        private String bouquetClientId; private String bouquetRedirectUri;
     }
 
     @Getter @Setter @NoArgsConstructor @AllArgsConstructor
