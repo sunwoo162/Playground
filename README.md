@@ -1,70 +1,61 @@
-# Project Builder
+# BloomBouquet
 
-> Working title. The permanent product name has not been decided yet.
+BloomBouquet is a project showcase and evaluation platform. Teams publish real web projects, BloomBouquet keeps versioned submissions, and independent 10+ year senior Agents leave evidence-based technical evaluation reports with scores and star ratings.
 
-This repository now keeps the existing Playground web portal and the new autonomous Builder web control plane as separate frontend folders.
-
-## Web folders
-
-```text
-playground-web/   # currently deployed Playground portal
-builder-web/      # new Agent-powered software builder
-```
-
-`playground-web` preserves the existing user-facing Playground source while `builder-web` contains the new idea/template-to-project product. They share the repository-level dependencies but build independently.
-
-The server, backend, generated/legacy apps, and retained Agent runtime remain outside these frontend folders.
+Production: `https://playground.https.gsmsv.site/`
 
 ## Product flow
 
 ```text
-Idea or template
-  -> Project Intake
-  -> PM plan + Task DAG
-  -> Design / Frontend / Backend Agents
-  -> Code Review / Reviewer
-  -> QA / Documentation
-  -> Integration / Preview / Release
+Team
+  → Project
+  → Submission / version
+  → Evaluation Run
+  → Independent senior-Agent reviews
+  → Process Evaluator aggregation
+  → Score + stars + versioned report
 ```
+
+Independent evaluators include user, UX, frontend, backend, security, accessibility, performance, QA, documentation, and code-review roles. Each evaluation records Assessment, Evidence, Severity, Impact, Recommendation, Priority, Confidence, and relevant technical terminology.
+
+## Shared authentication
+
+Projects that require accounts use the shared **꽃다발** Identity Provider. Each authenticated submission receives its own OAuth client and uses Authorization Code + PKCE S256. Projects do not implement or store a separate email/password credential database.
+
+## Repository layout
+
+```text
+bloom-web/       # public BloomBouquet React/Vite UI
+backend/         # Spring Boot APIs, persistence, 꽃다발 Identity Provider
+server/          # root static server + backend proxy + Builder GitHub auth boundary
+bloom-runtime/   # Agent policy/orchestration runtime
+bloom-worker/    # headless worker
+apps/desktop/    # retained runtime/Tauri tooling required by policy/build checks
+```
+
+The former `playground-web/` portal and legacy hosted `apps/*` products have been removed. `apps/desktop` is internal runtime tooling, not a public hosted product.
 
 ## Development
 
-Install dependencies:
-
 ```bash
 pnpm install --frozen-lockfile
+pnpm run dev
 ```
 
-Run the existing Playground portal with the Node server:
+`pnpm run dev` starts the Node server and BloomBouquet Vite app. The web dev server runs on port 5175 and proxies API traffic to the existing backend.
+
+## Build and verification
 
 ```bash
-pnpm dev
+pnpm run build:bloom-web
+pnpm run harness
+pnpm run test:bloom-runtime
+pnpm run build:bloom-worker
+bash backend/gradlew -p backend test --no-daemon
 ```
 
-Run each web frontend independently:
+The production web build is written directly to repository-level `dist/`, which the Node server serves at `/`.
 
-```bash
-pnpm run dev:playground-web
-pnpm run dev:builder-web
-```
+## Deployment
 
-Build each frontend independently:
-
-```bash
-pnpm run build:playground-web
-pnpm run build:builder-web
-```
-
-`build:playground-web` intentionally writes to the repository-level `dist/` directory because the current Node production server still serves that directory. `build:builder-web` writes to `dist-builder/` and is not switched into production routing yet.
-
-## Agent Runtime migration
-
-The verified Agent orchestration implementation currently lives primarily in `apps/desktop`. That Tauri shell is not the target product UI anymore, but its OS-bound Git, worktree, Codex App Server, evidence, recovery, and cleanup Runtime is preserved until equivalent server/worker interfaces replace it.
-
-## Authentication
-
-**꽃다발** is the shared authentication standard for the Builder platform and generated projects that require account/session functionality.
-
-## Product specification
-
-See [`docs/AUTONOMOUS_BUILDER_PRODUCT.md`](./docs/AUTONOMOUS_BUILDER_PRODUCT.md) for the product boundary, MVP, Agent organization, 꽃다발 policy, and migration plan.
+Pushes to `main` run the existing production deployment workflow. The server host, PM2 process topology, Nginx proxy, Spring Boot backend, and MySQL persistence remain on the current Playground infrastructure; only the public product surface is now BloomBouquet.
