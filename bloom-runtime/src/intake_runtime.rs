@@ -35,16 +35,25 @@ const INTAKE_SCHEMA: &str = r#"{
     "requiredRoles": {
       "type": "array",
       "minItems": 1,
-      "maxItems": 13,
+      "maxItems": 22,
       "uniqueItems": true,
       "items": {
         "type": "string",
         "enum": [
           "idea",
+          "ux-research",
           "design-system",
           "designer",
           "frontend",
           "backend",
+          "database",
+          "api-integration",
+          "security",
+          "performance",
+          "devops",
+          "accessibility",
+          "test-automation",
+          "data-marketing",
           "code-review",
           "reviewer",
           "qa",
@@ -58,16 +67,25 @@ const INTAKE_SCHEMA: &str = r#"{
     },
     "criticalRoles": {
       "type": "array",
-      "maxItems": 6,
+      "maxItems": 10,
       "uniqueItems": true,
       "items": {
         "type": "string",
         "enum": [
           "idea",
+          "ux-research",
           "design-system",
           "designer",
           "frontend",
           "backend",
+          "database",
+          "api-integration",
+          "security",
+          "performance",
+          "devops",
+          "accessibility",
+          "test-automation",
+          "data-marketing",
           "code-review",
           "reviewer",
           "qa",
@@ -124,10 +142,19 @@ const INTAKE_SCHEMA: &str = r#"{
 #[serde(rename_all = "kebab-case")]
 enum IntakeRole {
     Idea,
+    UxResearch,
     DesignSystem,
     Designer,
     Frontend,
     Backend,
+    Database,
+    ApiIntegration,
+    Security,
+    Performance,
+    Devops,
+    Accessibility,
+    TestAutomation,
+    DataMarketing,
     CodeReview,
     Reviewer,
     Qa,
@@ -312,7 +339,7 @@ fn validate_analysis(analysis: &ProjectIntakeAnalysis) -> Result<(), String> {
 
 fn intake_prompt(organization: &str, intake_id: &str, request: &str) -> String {
     format!(
-        r#"You are Luna's organization-level Project Intake Agent.
+        r#"You are Bloom's organization-level Project Intake Agent.
 
 Intake ID: {intake_id}
 GitHub Organization: {organization}
@@ -323,6 +350,7 @@ Analyze the request before any team is selected. Do not choose a team. Do not cr
 
 Organization contract:
 - The five delivery teams are equal-status peers. They do not have predefined personalities or specialties.
+- Each team has the same 30-Agent roster. Frontend, Backend, Code Review, QA, and Documentation have multiple worker instances, but requiredRoles describes role types rather than instance counts.
 - Team strengths may only emerge later from measured project evidence. Never invent a team preference in this intake.
 - PM and downstream Agents are independent workers. Your output is evidence for them, not authority.
 - Preserve the Product Owner's explicit direction. Separate stated facts from conservative assumptions.
@@ -344,6 +372,7 @@ Analyze:
 
 Role guidance:
 - PM is not part of requiredRoles because a team PM always runs after allocation.
+- Use UX Research for user interviews, persona or usability research; Database for schema/migration/query ownership; API Integration for external APIs/webhooks/SDKs; Security for auth/authorization/secret boundaries; Performance for measured latency/render/cache/query bottlenecks; DevOps for CI/CD/deployment/observability; Accessibility for keyboard/ARIA/focus/assistive-tech concerns; Test Automation for repeatable unit/integration/E2E automation.
 - Do not mark Code Review, Reviewer, QA, Documentation, User A/B, or Process Evaluator as critical merely because they are normal governance gates. Mark them critical only if the request makes that role unusually central.
 - criticalRoles must be a subset of requiredRoles.
 - If the request is ambiguous, keep the analysis conservative and expose the ambiguity in assumptions or missingInputs rather than inventing requirements.
@@ -378,7 +407,7 @@ fn analyze_project_intake_blocking(
         return Err("Codex CLI가 설치되어 있지 않습니다.".to_string());
     }
     if !codex_chatgpt_authenticated() {
-        return Err("Luna Project Intake는 ChatGPT 로그인 상태의 Codex가 필요합니다.".to_string());
+        return Err("Bloom Project Intake는 ChatGPT 로그인 상태의 Codex가 필요합니다.".to_string());
     }
 
     let intake_dir = PathBuf::from(&workspace_root)
