@@ -48,6 +48,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/me", "/api/auth/refresh").permitAll()
                 .requestMatchers("/api/push/subscriptions/**").permitAll()
                 .requestMatchers("/api/bloom-bouquet/public/**").permitAll()
+                .requestMatchers("/api/bouquet/**").permitAll()
                 .requestMatchers("/internal/builder/worker/**").permitAll()
                 .requestMatchers("/api/**").authenticated()
                 .anyRequest().permitAll()
