@@ -35,6 +35,7 @@
     "ts/evaluationPlatform.ts",
     "ts/evaluationPlatform.policy-test.ts",
     "ts/bloomBouquetEvaluatorHttpClient.policy-test.ts",
+    "ts/bloomBouquetEvaluatorWorker.policy-test.ts",
     "ts/sessionReconciliationPolicy.ts",
     "ts/sessionReconciliation.policy-test.ts",
     "ts/orchestrationCore.ts",
