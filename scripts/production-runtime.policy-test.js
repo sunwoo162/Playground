@@ -65,3 +65,10 @@ test('JWT recovery or a failed backend health probe forces a backend restart', (
   assert.match(backendCondition, /\[ "\$JWT_REGENERATED" = "true" \]/);
   assert.match(backendCondition, /curl -fsS --max-time 3 http:\/\/127\.0\.0\.1:8080\/api\/bouquet\/auth\/me/);
 });
+
+test('backend cold-start smoke check allows at least 60 seconds', () => {
+  const workflow = readDeployWorkflow();
+  const smokeBlock = workflow.match(/ROOT_OK=false[\s\S]*?\ndone/)?.[0] ?? '';
+  assert.match(smokeBlock, /for attempt in \$\(seq 1 30\); do/);
+  assert.match(smokeBlock, /sleep 2/);
+});
