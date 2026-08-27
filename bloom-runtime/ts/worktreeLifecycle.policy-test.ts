@@ -34,6 +34,10 @@ assert(
   "task without a worktree should be ignored",
 );
 assert(
+  classifyWorktreeCleanupTask({ ...base, role: "database" }).action === "cleanup",
+  "completed specialist repository writer should use the same cleanup evidence contract",
+);
+assert(
   classifyWorktreeCleanupTask({
     ...base,
     role: "qa",
