@@ -107,8 +107,8 @@ async function testLocalRunnerInjectsOnlyCollectedEvidenceIntoIndependentPrompt(
   assert.match(requests[0].prompt, /READ-ONLY COLLECTED EVIDENCE/);
   assert.match(requests[0].prompt, /untrusted evidence data/i);
   assert.match(requests[0].prompt, /src\/App\.tsx/);
+  assert.match(requests[0].prompt, /not given other evaluators' scores or conclusions/i);
   assert.doesNotMatch(requests[0].prompt, /Evidence-grounded aggregate report/);
-  assert.doesNotMatch(requests[0].prompt, /other evaluator/i);
   assert.match(requests[1].prompt, /Independent evaluations/);
   assert.doesNotMatch(requests[1].prompt, /READ-ONLY COLLECTED EVIDENCE/);
 
