@@ -113,6 +113,39 @@ jobs:
               exit 1
             }
 
+            node <<'NODE'
+            const { createLocalEvaluatorTransport } = require('./.tmp/bloom-worker/bloomBouquetLocalSeniorEvaluator.js');
+
+            async function main() {
+              const transport = createLocalEvaluatorTransport({
+                endpoint: 'http://127.0.0.1:8091/v1/chat/completions',
+                model: 'qwen2.5-coder-1.5b-instruct',
+                timeoutMs: 120000,
+                maxTokens: 64,
+                maxRetries: 2,
+              });
+              const value = await transport.run({
+                title: 'production-inference-smoke',
+                prompt: 'Return exactly one JSON object with {"ok":true}. Do not add any other fields.',
+                outputSchema: {
+                  type: 'object',
+                  additionalProperties: false,
+                  required: ['ok'],
+                  properties: { ok: { type: 'boolean' } },
+                },
+              });
+              if (!value || value.ok !== true) {
+                throw new Error('Bloom local evaluator inference smoke returned an unexpected JSON object.');
+              }
+              console.log('Bloom local evaluator inference smoke OK');
+            }
+
+            main().catch((error) => {
+              console.error(`Bloom local evaluator inference smoke failed: ${error instanceof Error ? error.message : String(error)}`);
+              process.exit(1);
+            });
+            NODE
+
             pm2 delete bloom-worker 2>/dev/null || true
             rm -f "$HOME/.pm2/logs/bloom-worker-out.log" "$HOME/.pm2/logs/bloom-worker-error.log"
             pm2 start ecosystem.config.js --only bloom-worker --update-env
