@@ -69,6 +69,13 @@ public class BloomBouquetDto {
         private LocalDateTime createdAt;
     }
 
+    @Getter @Builder @AllArgsConstructor
+    public static class EvaluationReportResponse {
+        private Long runId; private String status; private Integer overallScore; private Double overallStars;
+        private String reportSummary; private List<AgentEvaluationResponse> agentEvaluations;
+        private LocalDateTime startedAt; private LocalDateTime completedAt;
+    }
+
     @Getter @Setter @NoArgsConstructor @AllArgsConstructor
     public static class CompleteEvaluationRequest {
         private Integer overallScore; private Double overallStars; private String reportSummary;
