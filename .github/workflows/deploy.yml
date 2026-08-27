@@ -17,7 +17,7 @@ jobs:
       - name: Detect backend changes
         id: changes
         run: |
-          if git diff --name-only HEAD~1 HEAD | grep -Eq '^(backend/|ecosystem\.config\.js$)'; then
+          if git diff --name-only HEAD~1 HEAD | grep -Eq '^(backend/|ecosystem\.config\.js$|scripts/ensure-production-jwt\.js$)'; then
             echo "backend=true" >> "$GITHUB_OUTPUT"
           else
             echo "backend=false" >> "$GITHUB_OUTPUT"
@@ -126,6 +126,7 @@ jobs:
             grep -q '<title>BloomBouquet</title>' dist/index.html || record_failure "BloomBouquet root shell marker missing"
             rm -f "$DEPLOY_LOG" dist/deploy-error.txt
 
+            node scripts/ensure-production-jwt.js /home/ubuntu/playground/.env || record_failure "production JWT bootstrap failed"
             export $(grep -v '^#' /home/ubuntu/playground/.env | xargs)
             test -n "${JWT_SECRET:-}" || { echo "JWT_SECRET is missing in /home/ubuntu/playground/.env"; exit 1; }
             SERVER_PORT="${PORT:-3000}"
@@ -152,7 +153,7 @@ jobs:
 
             ROOT_OK=false
             AUTH_OK=false
-            for attempt in 1 2 3 4 5; do
+            for attempt in 1 2 3 4 5 6 7 8 9 10; do
               if curl -fsS "http://127.0.0.1:${SERVER_PORT}/" | grep -q '<title>BloomBouquet</title>'; then
                 ROOT_OK=true
               fi
