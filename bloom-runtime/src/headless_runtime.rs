@@ -103,6 +103,41 @@ fn failure(error: String) -> HeadlessRuntimeResponse {
     }
 }
 
+fn runtime_role_alias(role: &str) -> &str {
+    match role {
+        "database" | "security" | "devops" | "performance" | "api-integration" => "backend",
+        "accessibility" | "test-automation" => "frontend",
+        "ux-research" => "designer",
+        _ => role,
+    }
+}
+
+fn adapt_dispatch_input(
+    mut input: agent_runtime::AgentTaskRuntimeInput,
+) -> (String, agent_runtime::AgentTaskRuntimeInput) {
+    let original_role = input.role.clone();
+    let alias = runtime_role_alias(&original_role);
+    if alias != original_role {
+        input.summary = format!(
+            "[Bloom specialist ownership] Original role: {original_role}. Execute as the {original_role} specialist. The Rust runtime role `{alias}` is only a transport compatibility alias; preserve the specialist scope and rationale.\n\n{}",
+            input.summary
+        );
+        input.role = alias.to_string();
+    }
+    (original_role, input)
+}
+
+fn adapt_reconciliation_input(
+    mut input: agent_reconciliation::ReconcileInterruptedAgentTaskInput,
+) -> (String, agent_reconciliation::ReconcileInterruptedAgentTaskInput) {
+    let original_role = input.role.clone();
+    let alias = runtime_role_alias(&original_role);
+    if alias != original_role {
+        input.role = alias.to_string();
+    }
+    (original_role, input)
+}
+
 async fn execute(request: HeadlessRuntimeRequest) -> HeadlessRuntimeResponse {
     match request {
         HeadlessRuntimeRequest::Preflight { organization } => {
@@ -177,14 +212,24 @@ async fn execute(request: HeadlessRuntimeRequest) -> HeadlessRuntimeResponse {
             Err(error) => failure(error),
         },
         HeadlessRuntimeRequest::DispatchAgentTask { input } => {
-            match agent_evidence_runtime::dispatch_agent_task(input).await {
-                Ok(result) => success(result),
+            let (original_role, adapted_input) = adapt_dispatch_input(input);
+            match agent_evidence_runtime::dispatch_agent_task(adapted_input).await {
+                Ok(mut result) => {
+                    result.role = original_role;
+                    success(result)
+                }
                 Err(error) => failure(error),
             }
         }
         HeadlessRuntimeRequest::ReconcileInterruptedAgentTask { input } => {
-            match agent_evidence_runtime::reconcile_interrupted_agent_task(input).await {
-                Ok(result) => success(result),
+            let (original_role, adapted_input) = adapt_reconciliation_input(input);
+            match agent_evidence_runtime::reconcile_interrupted_agent_task(adapted_input).await {
+                Ok(mut result) => {
+                    if let Some(recovered) = result.result.as_mut() {
+                        recovered.role = original_role;
+                    }
+                    success(result)
+                }
                 Err(error) => failure(error),
             }
         }
