@@ -20,46 +20,46 @@ export function PetWindow() {
     }
   };
 
-const openLuna = async () => {
-  cancelDrag();
+  const openLuna = async () => {
+    cancelDrag();
+    const existing = await WebviewWindow.getByLabel("main");
 
-  const existing = await WebviewWindow.getByLabel("main");
+    if (existing) {
+      await existing.show();
+      await existing.setFocus();
+      return;
+    }
 
-  if (existing) {
-    await existing.show();
-    await existing.setFocus();
-    return;
-  }
-
-  new WebviewWindow("main", {
-    title: "Luna",
-    url: "/",
-    width: 1200,
-    height: 760,
-    minWidth: 900,
-    minHeight: 600,
-    center: true,
-    resizable: true,
-    decorations: true,
-  });
-};
+    new WebviewWindow("main", {
+      title: "Luna",
+      url: "/",
+      width: 720,
+      height: 520,
+      minWidth: 560,
+      minHeight: 420,
+      center: true,
+      resizable: true,
+      decorations: true,
+    });
+  };
 
   return (
     <main className="pet-window">
-      <div
+      <button
         className="pet"
+        type="button"
+        aria-label="Luna desktop pet"
         onMouseDown={(event) => {
-          if (event.button === 0) {
-            startDrag();
-          }
+          if (event.button === 0) startDrag();
         }}
         onMouseUp={cancelDrag}
+        onMouseLeave={cancelDrag}
         onDoubleClick={() => {
           void openLuna();
         }}
       >
         ( •‿• )
-      </div>
+      </button>
     </main>
   );
 }

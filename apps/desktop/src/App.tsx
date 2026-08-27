@@ -1,19 +1,11 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
-import { PetWindow } from "./windows/PetWindow";
 import { MainWindow } from "./windows/MainWindow";
-
+import { PetWindow } from "./windows/PetWindow";
 import "./App.css";
-import "./ProjectTeams.css";
 
 function App() {
-  const label = getCurrentWindow().label;
-
-  if (label === "pet") {
-    return <PetWindow />;
-  }
-
-  return <MainWindow />;
+  return getCurrentWindow().label === "pet" ? <PetWindow /> : <MainWindow />;
 }
 
 export default App;

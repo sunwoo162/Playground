@@ -1,10 +1,10 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 
-import BuilderApp from './BuilderApp'
+import BloomApp from './BloomApp'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <BuilderApp />
+    <BloomApp />
   </StrictMode>,
 )
