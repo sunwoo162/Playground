@@ -98,6 +98,19 @@ jobs:
               exit 1
             }
 
+            dump_backend_diagnostics() {
+              echo "=== BloomBouquet backend diagnostics ==="
+              pm2 describe backend || true
+              echo "--- backend PM2 logs ---"
+              pm2 logs backend --lines 120 --nostream || true
+              echo "--- port 8080 listeners ---"
+              ss -ltnp 2>/dev/null | grep ':8080' || true
+              echo "--- direct backend auth probe ---"
+              curl -sS -i --max-time 5 http://127.0.0.1:8080/api/bouquet/auth/me || true
+              echo
+              echo "=== end backend diagnostics ==="
+            }
+
             git fetch origin main || record_failure "git fetch failed"
             git reset --hard origin/main || record_failure "git reset failed"
 
@@ -132,9 +145,9 @@ jobs:
               test -n "${GITHUB_CLIENT_SECRET:-}" || { echo "GITHUB_CLIENT_SECRET is missing for backend"; exit 1; }
 
               pm2 delete backend 2>/dev/null || true
-              pm2 start ecosystem.config.js --only backend --update-env || record_failure "backend pm2 start failed"
+              pm2 start ecosystem.config.js --only backend --update-env || { dump_backend_diagnostics; record_failure "backend pm2 start failed"; }
               BACKEND_PID="$(pm2 pid backend)"
-              test -n "$BACKEND_PID" && [ "$BACKEND_PID" != "0" ] || record_failure "backend did not stay online"
+              test -n "$BACKEND_PID" && [ "$BACKEND_PID" != "0" ] || { dump_backend_diagnostics; record_failure "backend did not stay online"; }
             fi
 
             ROOT_OK=false
@@ -152,7 +165,10 @@ jobs:
               sleep 2
             done
             [ "$ROOT_OK" = "true" ] || record_failure "BloomBouquet root smoke check failed"
-            [ "$AUTH_OK" = "true" ] || record_failure "Bouquet auth proxy smoke check failed"
+            if [ "$AUTH_OK" != "true" ]; then
+              dump_backend_diagnostics
+              record_failure "Bouquet auth proxy smoke check failed"
+            fi
             rm -f /tmp/bouquet-auth-smoke.json
 
             pm2 save
