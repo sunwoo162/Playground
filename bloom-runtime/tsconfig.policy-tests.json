@@ -32,6 +32,8 @@
     "ts/worktreeLifecycle.policy-test.ts",
     "ts/bouquetAuth.ts",
     "ts/bouquetAuth.policy-test.ts",
+    "ts/evaluationPlatform.ts",
+    "ts/evaluationPlatform.policy-test.ts",
     "ts/sessionReconciliationPolicy.ts",
     "ts/sessionReconciliation.policy-test.ts",
     "ts/orchestrationCore.ts",
