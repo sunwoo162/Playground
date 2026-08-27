@@ -30,6 +30,9 @@ jobs:
       - name: Build BloomBouquet root web
         run: pnpm run build:bloom-web
 
+      - name: Check BloomBouquet Node server
+        run: node --check server/index.js
+
       - name: Setup Java
         uses: actions/setup-java@v5
         with:
