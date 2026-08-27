@@ -127,7 +127,7 @@ test('production Bloom worker is evaluator-only and verifies the started runtime
   assert.doesNotMatch(workflow, /Copy Bloom runtime bridge to server/);
   assert.doesNotMatch(workflow, /gh auth status/);
   assert.doesNotMatch(workflow, /BLOOM_GITHUB_ORGANIZATION is missing/);
-  assert.match(workflow, /started mode=evaluator workerId=/);
+  assert.match(workflow, /started mode=evaluator runtime=local workerId=/);
 });
 
 test('production evaluator uses a local model runtime without interactive Codex authentication', () => {
