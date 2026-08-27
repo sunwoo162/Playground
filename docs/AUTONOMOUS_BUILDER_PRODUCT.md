@@ -92,16 +92,21 @@ Implemented:
 - a worker-only internal API can claim queued work, heartbeat a 90-second lease, complete or fail a Run, and safely re-claim expired work;
 - row locks and lease ownership prevent two workers from legitimately owning the same Run at once, and stale or expired workers cannot revive or overwrite a newer execution;
 - unattended worker credentials use a dedicated `BUILDER_WORKER_TOKEN` boundary instead of reusing browser user JWT credentials;
-- the user-facing project detail can inspect the latest Run and continues to show `queued` until a real worker claim changes the server state to `running`.
+- the user-facing project detail can inspect the latest Run and continues to show `queued` until a real worker claim changes the server state to `running`;
+- PM plan post-processing now passes through a pure orchestration core that applies the shared 꽃다발 auth plan, mandatory Data & Marketing/Documentation chain, and review-topology validation in one environment-independent path;
+- the orchestration core also defines dependency readiness, a hard maximum of two parallel tasks, same-role exclusion, task summaries, and project phase mapping as deterministic pure functions for reuse by a future headless executor;
+- a lease-safe worker adapter now implements `claim → heartbeat → executor → complete/fail`, performs a final lease check before terminal updates, and refuses to send stale terminal results after heartbeat or ownership loss;
+- the worker HTTP client keeps `BUILDER_WORKER_TOKEN` in its dedicated header, rejects unsafe remote cleartext HTTP and malformed credential-bearing base URLs, and does not place the token in URL or JSON payload data.
 
 Not yet implemented:
 
-- no headless worker process currently polls the internal claim API and automatically invokes the existing Project Intake, PM planning, Agent DAG scheduler, review, QA, integration, or release gates;
-- the existing high-level scheduling and plan-policy pipeline is still coupled to the Tauri/React project-team layer even though the OS/Git/Codex execution primitives already live in Rust;
+- no deployed headless worker process currently polls continuously and automatically invokes the full Project Intake, PM planning, Agent DAG scheduler, review, QA, integration, or release gates;
+- the worker adapter intentionally receives an executor port rather than substituting a fake successful executor, so a claimed Run cannot be legitimately completed until a real orchestration executor is connected;
+- some desktop project-team state transitions and recovery/integration coordination still live in the Tauri/React state layer and must be extracted or backed by server-side durable orchestration state before unattended multi-project execution is safe;
 - the browser still does not, and must not, execute Git, GitHub CLI, Codex, worktree, or filesystem mutation commands directly;
-- worker lifecycle state alone is not release evidence: `completed` must eventually be called only after the extracted headless orchestrator has passed the same repository, PR, review, QA, and integration evidence gates already used by the existing runtime.
+- worker lifecycle state alone is not release evidence: `completed` must only be called after the extracted headless orchestrator has passed the same repository, PR, review, QA, and integration evidence gates already used by the existing runtime.
 
-The next migration boundary is therefore to extract a reusable orchestration port/engine from the desktop UI layer, then connect a headless worker adapter to the server claim/heartbeat/terminal API without duplicating or weakening the existing safety policies.
+The next migration boundary is to give the headless executor durable server-side orchestration/task state and connect the executor port to the existing Intake/PM/Rust Agent Runtime without duplicating or weakening the shared orchestration core and evidence policies.
 
 ## Agent organization
 
