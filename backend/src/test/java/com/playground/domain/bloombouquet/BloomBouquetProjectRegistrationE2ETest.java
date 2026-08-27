@@ -3,6 +3,8 @@ package com.playground.domain.bloombouquet;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.playground.config.JwtAuthenticationToken;
+import com.playground.domain.bloombouquet.entity.BloomBouquetEvaluationRun;
+import com.playground.domain.bloombouquet.repository.BloomBouquetEvaluationRunRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -11,6 +13,8 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -36,12 +40,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Transactional
 class BloomBouquetProjectRegistrationE2ETest {
     private static final String WORKER_TOKEN = "test-worker-token-for-bloombouquet-e2e-0123456789abcdef";
+    private static final String WORKER_A = "bouquet-evaluator-a";
+    private static final String WORKER_B = "bouquet-evaluator-b";
 
     @Autowired
     private MockMvc mockMvc;
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private BloomBouquetEvaluationRunRepository runRepository;
 
     @Test
     void projectIsPublishedOnlyAfterSubmissionAndQueuesBouquetEvaluation() throws Exception {
@@ -105,14 +114,43 @@ class BloomBouquetProjectRegistrationE2ETest {
                 .andExpect(jsonPath("$.submissions[0].evaluationStatus").value("QUEUED"));
 
         mockMvc.perform(post("/internal/builder/worker/bloom-bouquet/runs/claim")
-                        .header("X-Builder-Worker-Token", WORKER_TOKEN))
+                        .header("X-Builder-Worker-Token", WORKER_TOKEN)
+                        .header("X-Bloom-Worker-Id", WORKER_A))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.runId").value(runId))
                 .andExpect(jsonPath("$.projectId").value(projectId))
                 .andExpect(jsonPath("$.projectName").value("Bouquet E2E Project"))
                 .andExpect(jsonPath("$.requiresAuth").value(true))
                 .andExpect(jsonPath("$.authPolicyId").value("bouquet"))
-                .andExpect(jsonPath("$.bouquetClientId").isNotEmpty());
+                .andExpect(jsonPath("$.bouquetClientId").isNotEmpty())
+                .andExpect(jsonPath("$.workerId").value(WORKER_A))
+                .andExpect(jsonPath("$.leaseExpiresAt").isNotEmpty())
+                .andExpect(jsonPath("$.claimCount").value(1));
+
+        mockMvc.perform(post("/internal/builder/worker/bloom-bouquet/runs/{runId}/heartbeat", runId)
+                        .header("X-Builder-Worker-Token", WORKER_TOKEN)
+                        .header("X-Bloom-Worker-Id", WORKER_A))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.runId").value(runId))
+                .andExpect(jsonPath("$.workerId").value(WORKER_A))
+                .andExpect(jsonPath("$.leaseExpiresAt").isNotEmpty());
+
+        mockMvc.perform(post("/internal/builder/worker/bloom-bouquet/runs/{runId}/heartbeat", runId)
+                        .header("X-Builder-Worker-Token", WORKER_TOKEN)
+                        .header("X-Bloom-Worker-Id", WORKER_B))
+                .andExpect(status().isConflict());
+
+        BloomBouquetEvaluationRun claimedRun = runRepository.findById(runId).orElseThrow();
+        claimedRun.setLeaseExpiresAt(LocalDateTime.now().minusSeconds(1));
+        runRepository.saveAndFlush(claimedRun);
+
+        mockMvc.perform(post("/internal/builder/worker/bloom-bouquet/runs/claim")
+                        .header("X-Builder-Worker-Token", WORKER_TOKEN)
+                        .header("X-Bloom-Worker-Id", WORKER_B))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.runId").value(runId))
+                .andExpect(jsonPath("$.workerId").value(WORKER_B))
+                .andExpect(jsonPath("$.claimCount").value(2));
 
         mockMvc.perform(get("/api/bloom-bouquet/public/evaluations/{runId}", runId))
                 .andExpect(status().isOk())
