@@ -41,3 +41,27 @@ test('PM2 ecosystem config changes trigger a backend restart', () => {
   const detectionBlock = workflow.match(/- name: Detect backend changes[\s\S]*?- name: Set up JDK 17/)?.[0] ?? '';
   assert.ok(detectionBlock.includes('ecosystem\\.config\\.js'), 'backend change detection must include ecosystem.config.js');
 });
+
+test('production deploy repairs an invalid shared JWT secret before PM2 startup', () => {
+  const workflow = readDeployWorkflow();
+  assert.match(workflow, /ensure_shared_jwt_secret\(\)/);
+  assert.match(workflow, /randomBytes\(48\)/);
+  assert.match(workflow, /playground-jwt-secret-2024/);
+  assert.match(workflow, /SHARED_JWT_SECRET="\$JWT_SECRET"/);
+});
+
+test('backend-specific env cannot override the shared JWT secret at PM2 startup', () => {
+  const workflow = readDeployWorkflow();
+  const backendBlock = workflow.match(/if \[ "\$BACKEND_CHANGED"[\s\S]*?pm2 start ecosystem\.config\.js --only backend/)?.[0] ?? '';
+  assert.match(backendBlock, /\. \/home\/ubuntu\/playground\/\.env\.backend/);
+  assert.match(backendBlock, /export JWT_SECRET="\$SHARED_JWT_SECRET"/);
+});
+
+test('JWT recovery or a failed backend health probe forces a backend restart', () => {
+  const workflow = readDeployWorkflow();
+  assert.match(workflow, /JWT_REGENERATED=false/);
+  assert.match(workflow, /JWT_REGENERATED=true/);
+  const backendCondition = workflow.match(/if \[ "\$BACKEND_CHANGED"[\s\S]*?; then/)?.[0] ?? '';
+  assert.match(backendCondition, /\[ "\$JWT_REGENERATED" = "true" \]/);
+  assert.match(backendCondition, /curl -fsS --max-time 3 http:\/\/127\.0\.0\.1:8080\/api\/bouquet\/auth\/me/);
+});
