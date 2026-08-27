@@ -68,6 +68,25 @@ function dependenciesForRoles(tasks: ProjectTaskPlan[], roles: ExecutableAgentRo
   return roleTaskIds.length > 0 ? roleTaskIds : terminalTaskIds(tasks);
 }
 
+const frontendImplementationRoles: ExecutableAgentRole[] = [
+  "frontend",
+  "frontend-ui",
+  "frontend-state",
+];
+const backendImplementationRoles: ExecutableAgentRole[] = [
+  "backend",
+  "backend-api",
+  "backend-domain",
+  "integration",
+];
+const allImplementationRoles: ExecutableAgentRole[] = [
+  ...frontendImplementationRoles,
+  ...backendImplementationRoles,
+  "test-automation",
+  "performance",
+  "observability",
+];
+
 const definitions: SpecialistDefinition[] = [
   {
     role: "database",
@@ -81,9 +100,9 @@ const definitions: SpecialistDefinition[] = [
       "핵심 읽기/쓰기 경로의 트랜잭션 경계, 무결성, 오류 처리가 검증된다.",
       "쿼리 또는 저장 계층 변경에 가능한 자동 테스트나 실행 evidence가 남는다.",
     ],
-    shouldActivate: (plan, text) => hasAnyRole(plan, ["backend"])
+    shouldActivate: (plan, text) => hasAnyRole(plan, backendImplementationRoles)
       || includesAny(text, ["database", " db ", "sql", "postgres", "mysql", "sqlite", "schema", "migration", "persistence", "storage"]),
-    dependencyRoles: ["backend"],
+    dependencyRoles: backendImplementationRoles,
   },
   {
     role: "security",
@@ -99,7 +118,7 @@ const definitions: SpecialistDefinition[] = [
     ],
     shouldActivate: (plan, text) => plan.needsAuth
       || includesAny(text, ["auth", "login", "permission", "security", "secret", "token", "payment", "admin", "sensitive"]),
-    dependencyRoles: ["frontend", "backend", "database"],
+    dependencyRoles: [...frontendImplementationRoles, ...backendImplementationRoles, "database"],
   },
   {
     role: "accessibility",
@@ -113,9 +132,9 @@ const definitions: SpecialistDefinition[] = [
       "폼 상태, 오류, 로딩 등 중요한 상태가 시각 정보에만 의존하지 않는다.",
       "가능한 접근성 검사 또는 재현 가능한 수동 검증 결과가 evidence로 남는다.",
     ],
-    shouldActivate: (plan, text) => hasAnyRole(plan, ["design-system", "designer", "frontend"])
+    shouldActivate: (plan, text) => hasAnyRole(plan, ["design-system", "designer", ...frontendImplementationRoles])
       || includesAny(text, ["accessibility", "accessible", "a11y", "screen reader", "keyboard", "responsive ui"]),
-    dependencyRoles: ["design-system", "designer", "frontend"],
+    dependencyRoles: ["design-system", "designer", ...frontendImplementationRoles],
   },
   {
     role: "devops",
@@ -129,9 +148,9 @@ const definitions: SpecialistDefinition[] = [
       "CI 또는 동등한 자동 검증 경로가 현재 프로젝트의 핵심 build/test를 실행한다.",
       "배포 또는 운영 경로에서 확인하지 못한 항목은 성공으로 표시하지 않고 blocker/evidence를 남긴다.",
     ],
-    shouldActivate: (plan, text) => hasAnyRole(plan, ["frontend", "backend"])
+    shouldActivate: (plan, text) => hasAnyRole(plan, allImplementationRoles)
       || includesAny(text, ["deploy", "deployment", "ci/cd", "docker", "container", "infrastructure", "production", "runtime", "hosting"]),
-    dependencyRoles: ["frontend", "backend", "database", "security"],
+    dependencyRoles: [...allImplementationRoles, "database", "security"],
   },
 ];
 
