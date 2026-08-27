@@ -35,7 +35,7 @@ const INTAKE_SCHEMA: &str = r#"{
     "requiredRoles": {
       "type": "array",
       "minItems": 1,
-      "maxItems": 13,
+      "maxItems": 22,
       "uniqueItems": true,
       "items": {
         "type": "string",
@@ -43,11 +43,20 @@ const INTAKE_SCHEMA: &str = r#"{
           "idea",
           "design-system",
           "designer",
+          "ux-research",
           "frontend",
           "backend",
+          "database",
+          "security",
+          "devops",
+          "accessibility",
+          "performance",
+          "api-integration",
+          "data-marketing",
           "code-review",
           "reviewer",
           "qa",
+          "test-automation",
           "documentation",
           "debug-router",
           "user-a",
@@ -58,7 +67,7 @@ const INTAKE_SCHEMA: &str = r#"{
     },
     "criticalRoles": {
       "type": "array",
-      "maxItems": 6,
+      "maxItems": 10,
       "uniqueItems": true,
       "items": {
         "type": "string",
@@ -66,11 +75,20 @@ const INTAKE_SCHEMA: &str = r#"{
           "idea",
           "design-system",
           "designer",
+          "ux-research",
           "frontend",
           "backend",
+          "database",
+          "security",
+          "devops",
+          "accessibility",
+          "performance",
+          "api-integration",
+          "data-marketing",
           "code-review",
           "reviewer",
           "qa",
+          "test-automation",
           "documentation",
           "debug-router",
           "user-a",
@@ -126,11 +144,20 @@ enum IntakeRole {
     Idea,
     DesignSystem,
     Designer,
+    UxResearch,
     Frontend,
     Backend,
+    Database,
+    Security,
+    Devops,
+    Accessibility,
+    Performance,
+    ApiIntegration,
+    DataMarketing,
     CodeReview,
     Reviewer,
     Qa,
+    TestAutomation,
     Documentation,
     DebugRouter,
     UserA,
@@ -312,7 +339,7 @@ fn validate_analysis(analysis: &ProjectIntakeAnalysis) -> Result<(), String> {
 
 fn intake_prompt(organization: &str, intake_id: &str, request: &str) -> String {
     format!(
-        r#"You are Luna's organization-level Project Intake Agent.
+        r#"You are Bloom's organization-level Project Intake Agent.
 
 Intake ID: {intake_id}
 GitHub Organization: {organization}
@@ -344,6 +371,7 @@ Analyze:
 
 Role guidance:
 - PM is not part of requiredRoles because a team PM always runs after allocation.
+- Use specialist roles when the request materially needs them: ux-research, database, security, devops, accessibility, performance, api-integration, data-marketing, or test-automation. Prefer generic frontend/backend when the specialist scope is not meaningful.
 - Do not mark Code Review, Reviewer, QA, Documentation, User A/B, or Process Evaluator as critical merely because they are normal governance gates. Mark them critical only if the request makes that role unusually central.
 - criticalRoles must be a subset of requiredRoles.
 - If the request is ambiguous, keep the analysis conservative and expose the ambiguity in assumptions or missingInputs rather than inventing requirements.
@@ -378,7 +406,7 @@ fn analyze_project_intake_blocking(
         return Err("Codex CLI가 설치되어 있지 않습니다.".to_string());
     }
     if !codex_chatgpt_authenticated() {
-        return Err("Luna Project Intake는 ChatGPT 로그인 상태의 Codex가 필요합니다.".to_string());
+        return Err("Bloom Project Intake는 ChatGPT 로그인 상태의 Codex가 필요합니다.".to_string());
     }
 
     let intake_dir = PathBuf::from(&workspace_root)
