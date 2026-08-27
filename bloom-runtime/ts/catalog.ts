@@ -1,3 +1,4 @@
+import { agentIdsForRole } from "./agentRoster";
 import { createAgentRuntimeIdentity } from "./permissions";
 import type { AgentRole, AgentState, ProjectTeamsState, TeamId, TeamState } from "./types";
 
@@ -16,7 +17,7 @@ export const BOUQUET_AUTH_POLICY = {
 
 export const EXECUTION_POLICY = {
   id: "iseol-workflow" as const,
-  version: "1.5.0",
+  version: "1.6.0",
   summary: "모든 Agent는 이설 작업 방식처럼 실제 저장소를 기준으로 독립적으로 작업하며 10년 이상 시니어 수준의 품질 기준을 적용합니다.",
   rules: [
     "모든 Agent는 자신의 전문 역할에서 최소 10년 이상 실무를 수행한 시니어 수준의 판단, 품질 기준, 리스크 감각을 적용합니다.",
@@ -27,10 +28,15 @@ export const EXECUTION_POLICY = {
     "검증하지 못한 항목은 성공했다고 기록하지 않고 정확한 blocker를 남깁니다.",
     "커밋은 작은 작업 단위로 나누고 영어 커밋 메시지를 사용합니다.",
     "작업한 Agent가 직접 branch push와 PR 생성/업데이트를 수행합니다.",
+    "UX Research Agent는 사용자 문제, 사용성 가설, persona와 research evidence를 독립적으로 검토합니다.",
     "Database Agent는 schema, migration, query, persistence 경계를 독립적으로 맡고 데이터 무결성과 롤백 가능성을 검토합니다.",
+    "API Integration Agent는 외부 API, webhook, SDK와 third-party boundary를 독립적으로 구현·검증합니다.",
     "Security Agent는 인증, 권한, secret, 입력 경계와 주요 공격 표면을 독립적으로 맡고 보안 근거를 남깁니다.",
+    "Performance Agent는 latency, rendering, caching, bundle, query cost와 병목 근거를 독립적으로 검토합니다.",
     "DevOps Agent는 CI/CD, container, deployment, observability와 운영 복구 경로를 독립적으로 맡습니다.",
     "Accessibility Agent는 keyboard, semantic structure, ARIA, focus, contrast와 assistive technology 사용 흐름을 독립 검증합니다.",
+    "Test Automation Agent는 반복 가능한 unit/integration/E2E 자동화와 flaky test 위험을 독립적으로 구현·검증합니다.",
+    "Frontend, Backend, Code Review, QA, Documentation은 작업량이 큰 프로젝트에서 복수 Agent 인스턴스로 분산될 수 있습니다.",
     "Code Review Agent가 코드 품질을 독립 검토하고 Reviewer Agent가 기능/요구사항/구조를 별도로 검토합니다.",
     "QA Agent는 실제 build/test/사용 흐름을 검증하고 Documentation Agent는 검증된 사실을 기준으로 사용자·개발·운영·마케팅 문서를 맞춥니다.",
     "Data & Marketing Agent는 제품, 사용자, 채널, 퍼널, 지표, SEO/콘텐츠, 출시 실험을 근거 중심으로 분석하고 Documentation Agent가 검증·정리할 수 있는 마케팅 산출물을 남깁니다.",
@@ -41,12 +47,11 @@ export const EXECUTION_POLICY = {
 };
 
 export const WORKFLOW_STAGES = [
-  "Idea",
+  "Idea / UX Research",
   "Planning",
-  "Design System",
-  "Designer",
+  "Design System / Designer",
   "Frontend / Backend",
-  "Database / Security / DevOps / Accessibility",
+  "Database / API Integration / Security / Performance / DevOps / Accessibility / Test Automation",
   "Code Review",
   "Reviewer",
   "QA",
@@ -58,21 +63,25 @@ export const WORKFLOW_STAGES = [
   "Team Evolution",
 ] as const;
 
-const agentCatalog: Array<{
+const roleCatalog: Array<{
   role: AgentRole;
   label: string;
   description: string;
 }> = [
   { role: "idea", label: "Idea Agent", description: "문제 정의와 기능 아이디어를 정리" },
   { role: "pm", label: "PM Agent", description: "요구사항, Task, Agent 실행 순서를 관리" },
+  { role: "ux-research", label: "UX Research Agent", description: "사용자 문제, persona, research evidence와 사용성 가설을 분석" },
   { role: "design-system", label: "Design System Agent", description: "Figma와 실제 제품 근거로 디자인 규칙을 결정" },
   { role: "designer", label: "Designer Agent", description: "제품 화면과 상호작용을 설계" },
   { role: "frontend", label: "Frontend Agent", description: "실제 프론트엔드 저장소를 구현" },
   { role: "backend", label: "Backend Agent", description: "API와 서버 애플리케이션 영역을 구현" },
   { role: "database", label: "Database Agent", description: "데이터 모델, schema, migration, query와 persistence 무결성을 구현" },
+  { role: "api-integration", label: "API Integration Agent", description: "외부 API, webhook, SDK와 third-party integration 경계를 구현" },
   { role: "security", label: "Security Agent", description: "인증, 권한, secret, 입력 경계와 보안 위험을 구현·검증" },
+  { role: "performance", label: "Performance Agent", description: "latency, rendering, caching, bundle, query cost와 병목을 개선" },
   { role: "devops", label: "DevOps Agent", description: "CI/CD, container, deployment, observability와 운영 경로를 구현" },
   { role: "accessibility", label: "Accessibility Agent", description: "키보드, semantic UI, ARIA, focus, contrast와 접근성 흐름을 구현·검증" },
+  { role: "test-automation", label: "Test Automation Agent", description: "unit, integration, E2E 자동화와 재현 가능한 회귀 검증을 구현" },
   { role: "data-marketing", label: "Data & Marketing Agent", description: "제품 데이터, 사용자 세그먼트, 퍼널, 채널, SEO/콘텐츠, 출시 실험을 분석하고 마케팅 전략 문서를 작성" },
   { role: "code-review", label: "Code Review Agent", description: "PR diff의 코드 품질, 버그, 보안, 성능, 테스트 누락을 독립 검토" },
   { role: "reviewer", label: "Reviewer Agent", description: "기능, 요구사항, 구조와 제품 완성도를 독립 검토" },
@@ -93,20 +102,25 @@ const teamCatalog: Array<{ id: TeamId; name: string }> = [
 ];
 
 function createAgents(teamId: TeamId): AgentState[] {
-  return agentCatalog.map((agent) => {
-    const identity = createAgentRuntimeIdentity(`${teamId}:${agent.role}`, agent.role);
-
-    return {
-      id: identity.agentId,
-      ...agent,
-      version: "1.0.0",
-      status: "idle",
-      retrospectiveCount: 0,
-      seniority: "senior-10-plus",
-      minimumExperienceYears: 10,
-      autonomy: identity.autonomy,
-      permissions: identity.permissions,
-    };
+  return roleCatalog.flatMap((agent) => {
+    const ids = agentIdsForRole(teamId, agent.role);
+    return ids.map((agentId, index) => {
+      const identity = createAgentRuntimeIdentity(agentId, agent.role);
+      const numbered = ids.length > 1;
+      return {
+        id: identity.agentId,
+        role: agent.role,
+        label: numbered ? `${agent.label} ${index + 1}` : agent.label,
+        description: agent.description,
+        version: "1.0.0",
+        status: "idle" as const,
+        retrospectiveCount: 0,
+        seniority: "senior-10-plus" as const,
+        minimumExperienceYears: 10 as const,
+        autonomy: identity.autonomy,
+        permissions: identity.permissions,
+      };
+    });
   });
 }
 
