@@ -10,6 +10,10 @@ function readDeployWorkflow() {
   return fs.readFileSync(path.join(ROOT, '.github/workflows/deploy.yml'), 'utf8');
 }
 
+function readBloomWorkerDeployWorkflow() {
+  return fs.readFileSync(path.join(ROOT, '.github/workflows/deploy-bloom-worker.yml'), 'utf8');
+}
+
 test('backend uses the shared JWT secret even when backend env contains a stale override', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bloombouquet-ecosystem-'));
   const copiedConfig = path.join(tempDir, 'ecosystem.config.cjs');
@@ -113,4 +117,15 @@ test('production secret files stay untracked and deploy diagnostics never dump t
   assert.doesNotMatch(workflow, /\bpm2\s+env\b/);
   assert.doesNotMatch(workflow, /\bset\s+-x\b/);
   assert.doesNotMatch(workflow, /\bcat\s+[^\n]*\.env(?:\.backend)?\b/);
+});
+
+test('production Bloom worker is evaluator-only and verifies the started runtime mode', () => {
+  const workflow = readBloomWorkerDeployWorkflow();
+
+  assert.match(workflow, /set_env_value BLOOM_WORKER_MODE evaluator/);
+  assert.doesNotMatch(workflow, /Build Bloom runtime bridge/);
+  assert.doesNotMatch(workflow, /Copy Bloom runtime bridge to server/);
+  assert.doesNotMatch(workflow, /gh auth status/);
+  assert.doesNotMatch(workflow, /BLOOM_GITHUB_ORGANIZATION is missing/);
+  assert.match(workflow, /started mode=evaluator workerId=/);
 });
