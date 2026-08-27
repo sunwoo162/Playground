@@ -111,6 +111,31 @@ jobs:
               echo "=== end backend diagnostics ==="
             }
 
+            ensure_shared_jwt_secret() {
+              ENV_FILE="/home/ubuntu/playground/.env"
+              test -f "$ENV_FILE" || record_failure "shared production env missing"
+
+              set -a
+              . "$ENV_FILE"
+              set +a
+              JWT_SECRET="${JWT_SECRET:-}"
+
+              if [ "${#JWT_SECRET}" -lt 32 ] || printf '%s' "$JWT_SECRET" | grep -q 'playground-jwt-secret-2024'; then
+                JWT_SECRET="$(node -e "process.stdout.write(require('crypto').randomBytes(48).toString('hex'))")"
+                TEMP_ENV="$(mktemp)"
+                awk -v secret="$JWT_SECRET" '
+                  BEGIN { replaced = 0 }
+                  /^JWT_SECRET=/ { print "JWT_SECRET=" secret; replaced = 1; next }
+                  { print }
+                  END { if (!replaced) print "JWT_SECRET=" secret }
+                ' "$ENV_FILE" > "$TEMP_ENV"
+                chmod 600 "$TEMP_ENV"
+                mv "$TEMP_ENV" "$ENV_FILE"
+                export JWT_SECRET
+                echo "Regenerated invalid production JWT secret."
+              fi
+            }
+
             git fetch origin main || record_failure "git fetch failed"
             git reset --hard origin/main || record_failure "git reset failed"
 
@@ -126,8 +151,8 @@ jobs:
             grep -q '<title>BloomBouquet</title>' dist/index.html || record_failure "BloomBouquet root shell marker missing"
             rm -f "$DEPLOY_LOG" dist/deploy-error.txt
 
-            export $(grep -v '^#' /home/ubuntu/playground/.env | xargs)
-            test -n "${JWT_SECRET:-}" || { echo "JWT_SECRET is missing in /home/ubuntu/playground/.env"; exit 1; }
+            ensure_shared_jwt_secret
+            SHARED_JWT_SECRET="$JWT_SECRET"
             SERVER_PORT="${PORT:-3000}"
 
             pm2 delete playground 2>/dev/null || true
@@ -137,8 +162,11 @@ jobs:
 
             if [ "$BACKEND_CHANGED" = "true" ] || ! pm2 describe backend >/dev/null 2>&1; then
               if [ -f /home/ubuntu/playground/.env.backend ]; then
-                export $(grep -v '^#' /home/ubuntu/playground/.env.backend | xargs)
+                set -a
+                . /home/ubuntu/playground/.env.backend
+                set +a
               fi
+              export JWT_SECRET="$SHARED_JWT_SECRET"
 
               test -n "${JWT_SECRET:-}" || { echo "JWT_SECRET is missing for backend"; exit 1; }
               test -n "${GITHUB_CLIENT_ID:-}" || { echo "GITHUB_CLIENT_ID is missing for backend"; exit 1; }
