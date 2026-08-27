@@ -43,10 +43,27 @@ export type SeniorEvaluatorRunner = {
   aggregate(input: AggregateEvaluatorInput): Promise<AggregateEvaluationResult>;
 };
 
+export type EvaluatorWorkerTimer = {
+  setInterval(callback: () => void, intervalMs: number): unknown;
+  clearInterval(handle: unknown): void;
+};
+
 export type BloomBouquetEvaluatorOutcome =
   | { status: "idle" }
   | { status: "completed"; runId: number }
-  | { status: "partial"; runId: number };
+  | { status: "partial"; runId: number }
+  | { status: "lease-lost"; runId: number; reason: string };
+
+export const BLOOM_BOUQUET_EVALUATOR_HEARTBEAT_INTERVAL_MS = 30_000;
+
+const DEFAULT_TIMER: EvaluatorWorkerTimer = {
+  setInterval(callback, intervalMs) {
+    return globalThis.setInterval(callback, intervalMs);
+  },
+  clearInterval(handle) {
+    globalThis.clearInterval(handle as number);
+  },
+};
 
 function submissionFromClaim(claim: BloomBouquetEvaluationClaim): ProjectSubmissionInput {
   return {
@@ -138,67 +155,141 @@ function normalizeAggregate(result: AggregateEvaluationResult): AggregateEvaluat
   };
 }
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export async function runBloomBouquetEvaluatorOnce(
   client: BloomBouquetEvaluatorClient,
+  workerId: string,
   runner: SeniorEvaluatorRunner,
+  options: {
+    heartbeatIntervalMs?: number;
+    timer?: EvaluatorWorkerTimer;
+  } = {},
 ): Promise<BloomBouquetEvaluatorOutcome> {
-  const claim = await client.claim();
+  const claim = await client.claim(workerId);
   if (!claim) return { status: "idle" };
 
-  const submission = submissionFromClaim(claim);
-  const authChecklist = bouquetAuthEvaluationChecklist(submission);
-  const requiredRoles = requiredIndependentRoles(submission);
-  const requiredRoleSet = new Set<IndependentEvaluatorRole>(requiredRoles);
-
-  const persisted = await client.listAgentEvaluations(claim.runId);
-  const evaluationsByRole = new Map<IndependentEvaluatorRole, AgentEvaluation>();
-
-  for (const item of persisted) {
-    const evaluation = responseToEvaluation(item);
-    if (!evaluation || !requiredRoleSet.has(evaluation.role)) continue;
-    evaluationsByRole.set(evaluation.role, evaluation);
+  const intervalMs = options.heartbeatIntervalMs ?? BLOOM_BOUQUET_EVALUATOR_HEARTBEAT_INTERVAL_MS;
+  if (!Number.isInteger(intervalMs) || intervalMs <= 0 || intervalMs >= 90_000) {
+    throw new Error("BloomBouquet evaluator heartbeat interval은 1ms 이상 90초 미만이어야 합니다.");
   }
 
-  for (const role of requiredRoles) {
-    if (evaluationsByRole.has(role)) continue;
+  const timer = options.timer ?? DEFAULT_TIMER;
+  let stopped = false;
+  let leaseError: string | null = null;
+  let heartbeatChain: Promise<void> = Promise.resolve();
 
-    const result = normalizeAgentEvaluation(await runner.evaluate({
-      role,
+  const scheduleHeartbeat = () => {
+    heartbeatChain = heartbeatChain.then(async () => {
+      if (stopped || leaseError) return;
+      try {
+        await client.heartbeat(claim.runId, workerId);
+      } catch (error) {
+        leaseError = `heartbeat 실패: ${errorMessage(error)}`;
+      }
+    });
+  };
+
+  const waitForScheduledHeartbeat = async (): Promise<string | null> => {
+    await heartbeatChain;
+    return leaseError;
+  };
+
+  const timerHandle = timer.setInterval(scheduleHeartbeat, intervalMs);
+
+  try {
+    const submission = submissionFromClaim(claim);
+    const authChecklist = bouquetAuthEvaluationChecklist(submission);
+    const requiredRoles = requiredIndependentRoles(submission);
+    const requiredRoleSet = new Set<IndependentEvaluatorRole>(requiredRoles);
+
+    const persisted = await client.listAgentEvaluations(claim.runId, workerId);
+    const listLeaseError = await waitForScheduledHeartbeat();
+    if (listLeaseError) {
+      return { status: "lease-lost", runId: claim.runId, reason: listLeaseError };
+    }
+
+    const evaluationsByRole = new Map<IndependentEvaluatorRole, AgentEvaluation>();
+
+    for (const item of persisted) {
+      const evaluation = responseToEvaluation(item);
+      if (!evaluation || !requiredRoleSet.has(evaluation.role)) continue;
+      evaluationsByRole.set(evaluation.role, evaluation);
+    }
+
+    for (const role of requiredRoles) {
+      if (evaluationsByRole.has(role)) continue;
+
+      const result = normalizeAgentEvaluation(await runner.evaluate({
+        role,
+        runId: claim.runId,
+        projectName: claim.projectName,
+        teamName: claim.teamName,
+        submission,
+        authChecklist,
+      }));
+
+      const evaluationLeaseError = await waitForScheduledHeartbeat();
+      if (evaluationLeaseError) {
+        return { status: "lease-lost", runId: claim.runId, reason: evaluationLeaseError };
+      }
+
+      if (result.role !== role) {
+        throw new Error(`Evaluator role mismatch: expected=${role}, actual=${result.role}`);
+      }
+
+      const saved = await client.recordAgentEvaluation(
+        claim.runId,
+        workerId,
+        evaluationToPayload(result),
+      );
+      const persistenceLeaseError = await waitForScheduledHeartbeat();
+      if (persistenceLeaseError) {
+        return { status: "lease-lost", runId: claim.runId, reason: persistenceLeaseError };
+      }
+
+      const persistedResult = responseToEvaluation(saved);
+      if (!persistedResult || persistedResult.role !== role) {
+        throw new Error(`저장된 Evaluator 결과 역할이 예상과 다릅니다: ${role}`);
+      }
+      evaluationsByRole.set(role, persistedResult);
+    }
+
+    const evaluations = requiredRoles.map((role) => evaluationsByRole.get(role));
+    if (evaluations.some((item) => !item)) {
+      return { status: "partial", runId: claim.runId };
+    }
+
+    const aggregate = normalizeAggregate(await runner.aggregate({
       runId: claim.runId,
       projectName: claim.projectName,
       teamName: claim.teamName,
       submission,
-      authChecklist,
+      evaluations: evaluations as AgentEvaluation[],
     }));
 
-    if (result.role !== role) {
-      throw new Error(`Evaluator role mismatch: expected=${role}, actual=${result.role}`);
+    const aggregateLeaseError = await waitForScheduledHeartbeat();
+    if (aggregateLeaseError) {
+      return { status: "lease-lost", runId: claim.runId, reason: aggregateLeaseError };
     }
 
-    const saved = await client.recordAgentEvaluation(
-      claim.runId,
-      evaluationToPayload(result),
-    );
-    const persistedResult = responseToEvaluation(saved);
-    if (!persistedResult || persistedResult.role !== role) {
-      throw new Error(`저장된 Evaluator 결과 역할이 예상과 다릅니다: ${role}`);
+    try {
+      await client.heartbeat(claim.runId, workerId);
+    } catch (error) {
+      return {
+        status: "lease-lost",
+        runId: claim.runId,
+        reason: `terminal heartbeat 실패: ${errorMessage(error)}`,
+      };
     }
-    evaluationsByRole.set(role, persistedResult);
+
+    await client.complete(claim.runId, workerId, aggregate);
+    return { status: "completed", runId: claim.runId };
+  } finally {
+    stopped = true;
+    timer.clearInterval(timerHandle);
+    await heartbeatChain;
   }
-
-  const evaluations = requiredRoles.map((role) => evaluationsByRole.get(role));
-  if (evaluations.some((item) => !item)) {
-    return { status: "partial", runId: claim.runId };
-  }
-
-  const aggregate = normalizeAggregate(await runner.aggregate({
-    runId: claim.runId,
-    projectName: claim.projectName,
-    teamName: claim.teamName,
-    submission,
-    evaluations: evaluations as AgentEvaluation[],
-  }));
-
-  await client.complete(claim.runId, aggregate);
-  return { status: "completed", runId: claim.runId };
 }
