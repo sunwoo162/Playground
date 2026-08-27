@@ -8,6 +8,7 @@ import type {
 import type { AgentEvaluation } from "./evaluationPlatform";
 import {
   runBloomBouquetEvaluatorOnce,
+  type AggregateEvaluatorInput,
   type IndependentEvaluatorInput,
   type SeniorEvaluatorRunner,
 } from "./bloomBouquetEvaluatorWorker";
@@ -122,21 +123,21 @@ async function testIndependentEvaluationsSkipPersistedRolesAndAggregateLast() {
   };
 
   const runner: SeniorEvaluatorRunner = {
-    async evaluate(input) {
+    async evaluate(input: IndependentEvaluatorInput) {
       independentInputs.push(input);
       assert.equal(Object.prototype.hasOwnProperty.call(input, "evaluations"), false);
       assert.equal(Object.prototype.hasOwnProperty.call(input, "existingEvaluations"), false);
       assert.equal(input.submission.projectId, String(CLAIM.projectId));
       assert.equal(input.submission.teamId, String(CLAIM.teamId));
-      assert.ok(input.authChecklist.some((item) => item.includes("SSO")));
+      assert.ok(input.authChecklist.some((item: string) => item.includes("SSO")));
       return evaluation(input.role);
     },
-    async aggregate(input) {
+    async aggregate(input: AggregateEvaluatorInput) {
       aggregateCalls += 1;
       assert.equal(recordedRoles.length, 9, "all missing independent results must persist before aggregate");
       assert.equal(input.evaluations.length, 10);
       assert.deepEqual(
-        new Set(input.evaluations.map((item) => item.role)),
+        new Set(input.evaluations.map((item: AgentEvaluation) => item.role)),
         new Set([
           "user-a", "user-b", "ux-research", "frontend", "security",
           "accessibility", "performance", "qa", "documentation", "code-review",
@@ -180,7 +181,7 @@ async function testAgentFailurePreservesEarlierResultsAndNeverAggregates() {
     },
   };
   const runner: SeniorEvaluatorRunner = {
-    async evaluate(input) {
+    async evaluate(input: IndependentEvaluatorInput) {
       if (input.role === "security") throw new Error("security evaluator unavailable");
       return evaluation(input.role);
     },
