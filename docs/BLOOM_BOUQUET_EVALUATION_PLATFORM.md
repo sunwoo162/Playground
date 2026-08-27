@@ -1,1 +1,0 @@
-# BloomBouquet Evaluation Platform
