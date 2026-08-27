@@ -44,6 +44,7 @@
     "ts/builderWorkerHttpClient.ts",
     "ts/builderWorkerAdapter.policy-test.ts",
     "ts/headlessBuilderExecutor.ts",
-    "ts/headlessBuilderExecutor.policy-test.ts"
+    "ts/headlessBuilderExecutor.policy-test.ts",
+    "ts/headlessCrashRecovery.policy-test.ts"
   ]
 }
