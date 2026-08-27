@@ -14,6 +14,7 @@
     "ts/builderWorkerHttpClient.ts",
     "ts/bloomBouquetEvaluatorHttpClient.ts",
     "ts/bloomBouquetEvaluatorWorker.ts",
+    "ts/bloomBouquetSeniorEvaluator.ts",
     "ts/headlessBuilderExecutor.ts",
     "ts/schedulerObservability.ts",
     "ts/observedHeadlessBuilderExecutor.ts"
