@@ -1,8 +1,10 @@
 import {
   ORCHESTRATION_MAX_PARALLEL_TASKS,
+  orchestrationConcurrencyTarget,
   prepareOrchestrationPlan,
   projectStatusForActiveRoles,
   refreshOrchestrationReadiness,
+  selectAdaptiveOrchestrationWave,
   selectOrchestrationWave,
   summarizeTaskRuns,
 } from "./orchestrationCore";
@@ -136,9 +138,9 @@ function testBoundedAgentExclusiveWave() {
   ];
   const wave = selectOrchestrationWave(candidates);
 
-  assert(ORCHESTRATION_MAX_PARALLEL_TASKS === 6, "default orchestration concurrency must be six");
+  assert(ORCHESTRATION_MAX_PARALLEL_TASKS === 6, "orchestration hard cap must remain six");
   assert(wave.length === 4, "different Agent identities may share one wave even when their roles match");
-  assert(wave[0].taskId === "FE-001", "wave selection must preserve task order");
+  assert(wave[0].taskId === "FE-001", "base wave selection must preserve task order");
   assert(wave[1].taskId === "FE-002", "a second Frontend Agent must be independently schedulable");
 
   const withBusyAgent = selectOrchestrationWave([
@@ -176,6 +178,122 @@ function testBoundedAgentExclusiveWave() {
   );
 }
 
+function testAdaptiveConcurrencyTargets() {
+  assert(
+    orchestrationConcurrencyTarget([
+      taskRun("FE-001", "frontend", "ready", "rose:frontend"),
+      taskRun("BE-001", "backend", "ready", "rose:backend"),
+    ]) === 2,
+    "one or two runnable Agents must use the two-task target",
+  );
+  assert(
+    orchestrationConcurrencyTarget([
+      taskRun("FE-001", "frontend", "ready", "rose:frontend"),
+      taskRun("FE-002", "frontend", "ready", "rose:frontend-2"),
+      taskRun("BE-001", "backend", "ready", "rose:backend"),
+    ]) === 4,
+    "three or four runnable Agents must use the four-task target",
+  );
+  assert(
+    orchestrationConcurrencyTarget([
+      taskRun("FE-001", "frontend", "ready", "rose:frontend"),
+      taskRun("FE-002", "frontend", "ready", "rose:frontend-2"),
+      taskRun("FE-003", "frontend", "ready", "rose:frontend-3"),
+      taskRun("BE-001", "backend", "ready", "rose:backend"),
+      taskRun("BE-002", "backend", "ready", "rose:backend-2"),
+    ]) === 6,
+    "five or more runnable Agents must use the six-task target",
+  );
+  assert(
+    orchestrationConcurrencyTarget([
+      taskRun("FE-001", "frontend", "running", "rose:frontend"),
+      taskRun("FE-002", "frontend", "ready", "rose:frontend-2"),
+      taskRun("FE-003", "frontend", "ready", "rose:frontend-3"),
+      taskRun("BE-001", "backend", "ready", "rose:backend"),
+      taskRun("BE-002", "backend", "ready", "rose:backend-2"),
+    ]) === 6,
+    "running work must count toward total concurrency demand",
+  );
+}
+
+function testDagAwarePriority() {
+  const plan: ProjectPlan = {
+    ...basePlan(),
+    needsAuth: false,
+    tasks: [
+      { id: "LEAF-001", title: "Leaf", role: "frontend", taskSlug: "leaf", summary: "Leaf task", dependsOn: [], acceptanceCriteria: ["done"] },
+      { id: "CHAIN-001", title: "Chain root", role: "backend", taskSlug: "chain-root", summary: "Chain root", dependsOn: [], acceptanceCriteria: ["done"] },
+      { id: "FAN-001", title: "Fan root", role: "designer", taskSlug: "fan-root", summary: "Fan root", dependsOn: [], acceptanceCriteria: ["done"] },
+      { id: "CHAIN-002", title: "Chain middle", role: "documentation", taskSlug: "chain-middle", summary: "Chain middle", dependsOn: ["CHAIN-001"], acceptanceCriteria: ["done"] },
+      { id: "CHAIN-003", title: "Chain end", role: "qa", taskSlug: "chain-end", summary: "Chain end", dependsOn: ["CHAIN-002"], acceptanceCriteria: ["done"] },
+      { id: "FAN-002", title: "Fan child A", role: "code-review", taskSlug: "fan-child-a", summary: "Fan child A", dependsOn: ["FAN-001"], acceptanceCriteria: ["done"] },
+      { id: "FAN-003", title: "Fan child B", role: "reviewer", taskSlug: "fan-child-b", summary: "Fan child B", dependsOn: ["FAN-001"], acceptanceCriteria: ["done"] },
+    ],
+  };
+  const runs = [
+    taskRun("LEAF-001", "frontend", "ready", "rose:frontend"),
+    taskRun("CHAIN-001", "backend", "ready", "rose:backend"),
+    taskRun("FAN-001", "designer", "ready", "rose:designer"),
+    taskRun("CHAIN-002", "documentation", "pending", "rose:documentation"),
+    taskRun("CHAIN-003", "qa", "pending", "rose:qa"),
+    taskRun("FAN-002", "code-review", "pending", "rose:code-review"),
+    taskRun("FAN-003", "reviewer", "pending", "rose:reviewer"),
+  ];
+
+  const wave = selectAdaptiveOrchestrationWave(plan, runs, 2);
+  assert(wave.length === 2, "explicit narrow adaptive wave must honor the caller limit");
+  assert(wave[0].taskId === "FAN-001", "task that immediately unlocks more downstream work must run first");
+  assert(wave[1].taskId === "CHAIN-001", "critical-path task must outrank an unrelated leaf task");
+}
+
+function testAdaptiveFairnessSlot() {
+  const roots = ["A", "B", "C", "D", "E", "F"];
+  const plan: ProjectPlan = {
+    ...basePlan(),
+    needsAuth: false,
+    tasks: [
+      { id: "LEAF-001", title: "Old leaf", role: "idea", taskSlug: "old-leaf", summary: "Old ready leaf", dependsOn: [], acceptanceCriteria: ["done"] },
+      ...roots.flatMap((prefix, index) => [
+        {
+          id: `${prefix}-001`,
+          title: `${prefix} root`,
+          role: index % 2 === 0 ? "frontend" as const : "backend" as const,
+          taskSlug: `${prefix.toLowerCase()}-root`,
+          summary: `${prefix} root`,
+          dependsOn: [],
+          acceptanceCriteria: ["done"],
+        },
+        {
+          id: `${prefix}-002`,
+          title: `${prefix} child`,
+          role: "documentation" as const,
+          taskSlug: `${prefix.toLowerCase()}-child`,
+          summary: `${prefix} child`,
+          dependsOn: [`${prefix}-001`],
+          acceptanceCriteria: ["done"],
+        },
+      ]),
+    ],
+  };
+  const runs = [
+    taskRun("LEAF-001", "idea", "ready", "rose:idea"),
+    ...roots.map((prefix, index) => taskRun(
+      `${prefix}-001`,
+      index % 2 === 0 ? "frontend" : "backend",
+      "ready",
+      `rose:${index % 2 === 0 ? "frontend" : "backend"}-${index + 10}`,
+    )),
+    ...roots.map((prefix) => taskRun(`${prefix}-002`, "documentation", "pending", `rose:documentation-${prefix.toLowerCase()}`)),
+  ];
+
+  const wave = selectAdaptiveOrchestrationWave(plan, runs, 4);
+  assert(wave.length === 4, "medium adaptive wave must fill its four available slots");
+  assert(
+    wave.some((run) => run.taskId === "LEAF-001"),
+    "wide contested waves must reserve one FIFO fairness slot for older ready work",
+  );
+}
+
 function testTaskSummaryAndPhase() {
   const summary = summarizeTaskRuns([
     taskRun("A", "frontend", "done"),
@@ -194,6 +312,9 @@ function run() {
   testPlanPreparation();
   testDependencyReadiness();
   testBoundedAgentExclusiveWave();
+  testAdaptiveConcurrencyTargets();
+  testDagAwarePriority();
+  testAdaptiveFairnessSlot();
   testTaskSummaryAndPhase();
   console.log("orchestrationCore policy tests passed");
 }

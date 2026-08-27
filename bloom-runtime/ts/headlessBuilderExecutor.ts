@@ -9,7 +9,7 @@ import { evaluateProjectMergeGate } from "./mergeGate";
 import {
   prepareOrchestrationPlan,
   refreshOrchestrationReadiness,
-  selectOrchestrationWave,
+  selectAdaptiveOrchestrationWave,
   summarizeTaskRuns,
 } from "./orchestrationCore";
 import { seniorAgentContext } from "./seniorAgent";
@@ -535,7 +535,7 @@ export function createHeadlessBuilderExecutor(
         await failBlocked("하나 이상의 Agent Task가 blocked 상태라 orchestration을 계속할 수 없습니다.");
       }
 
-      const wave = selectOrchestrationWave(payload.taskRuns);
+      const wave = selectAdaptiveOrchestrationWave(payload.plan, payload.taskRuns);
       if (wave.length === 0) {
         await failBlocked("실행 가능한 Agent Task가 없지만 Task DAG가 완료되지 않았습니다.");
       }
