@@ -19,6 +19,18 @@ export type BloomBouquetEvaluationClaim = {
   authPolicyId: string | null;
   bouquetClientId: string | null;
   bouquetRedirectUri: string | null;
+  workerId: string;
+  leaseExpiresAt: string;
+  claimCount: number;
+};
+
+export type BloomBouquetEvaluationLease = {
+  runId: number;
+  workerId: string;
+  status: "RUNNING" | "COMPLETED";
+  heartbeatAt: string | null;
+  leaseExpiresAt: string | null;
+  claimCount: number;
 };
 
 export type BloomBouquetAgentResultPayload = {
@@ -63,14 +75,20 @@ export type BloomBouquetSubmissionResponse = {
 };
 
 export type BloomBouquetEvaluatorClient = {
-  claim(): Promise<BloomBouquetEvaluationClaim | null>;
-  listAgentEvaluations(runId: number): Promise<BloomBouquetAgentEvaluationResponse[]>;
+  claim(workerId: string): Promise<BloomBouquetEvaluationClaim | null>;
+  heartbeat(runId: number, workerId: string): Promise<BloomBouquetEvaluationLease>;
+  listAgentEvaluations(
+    runId: number,
+    workerId: string,
+  ): Promise<BloomBouquetAgentEvaluationResponse[]>;
   recordAgentEvaluation(
     runId: number,
+    workerId: string,
     payload: BloomBouquetAgentResultPayload,
   ): Promise<BloomBouquetAgentEvaluationResponse>;
   complete(
     runId: number,
+    workerId: string,
     payload: BloomBouquetCompleteEvaluationPayload,
   ): Promise<BloomBouquetSubmissionResponse>;
 };
@@ -131,6 +149,14 @@ function requireToken(value: string): string {
   return token;
 }
 
+function requireWorkerId(value: string): string {
+  const workerId = value.trim();
+  if (workerId.length < 3 || workerId.length > 120 || !/^[A-Za-z0-9_.:-]+$/.test(workerId)) {
+    throw new Error("BloomBouquet evaluator workerId 형식이 올바르지 않습니다.");
+  }
+  return workerId;
+}
+
 async function parseJson<T>(response: BloomBouquetEvaluatorFetchResponse): Promise<T> {
   try {
     return await response.json() as T;
@@ -163,11 +189,13 @@ export function createBloomBouquetEvaluatorHttpClient(
   const request = async <T>(
     method: "GET" | "POST" | "PUT",
     path: string,
+    workerId: string,
     body: unknown | undefined,
     allowNoContent = false,
   ): Promise<T | null> => {
     const headers: Record<string, string> = {
       "X-Builder-Worker-Token": token,
+      "X-Bloom-Worker-Id": requireWorkerId(workerId),
     };
     const init: {
       method: "GET" | "POST" | "PUT";
@@ -195,36 +223,50 @@ export function createBloomBouquetEvaluatorHttpClient(
   };
 
   return {
-    async claim() {
+    async claim(workerId) {
       return request<BloomBouquetEvaluationClaim>(
         "POST",
         "/internal/builder/worker/bloom-bouquet/runs/claim",
+        workerId,
         undefined,
         true,
       );
     },
-    async listAgentEvaluations(runId) {
+    async heartbeat(runId, workerId) {
+      const result = await request<BloomBouquetEvaluationLease>(
+        "POST",
+        `/internal/builder/worker/bloom-bouquet/runs/${runId}/heartbeat`,
+        workerId,
+        undefined,
+      );
+      if (!result) throw new Error("BloomBouquet evaluator heartbeat 응답이 비어 있습니다.");
+      return result;
+    },
+    async listAgentEvaluations(runId, workerId) {
       const result = await request<BloomBouquetAgentEvaluationResponse[]>(
         "GET",
         `/internal/builder/worker/bloom-bouquet/runs/${runId}/agents`,
+        workerId,
         undefined,
       );
       if (!result) throw new Error("BloomBouquet evaluator Agent 목록 응답이 비어 있습니다.");
       return result;
     },
-    async recordAgentEvaluation(runId, payload) {
+    async recordAgentEvaluation(runId, workerId, payload) {
       const result = await request<BloomBouquetAgentEvaluationResponse>(
         "POST",
         `/internal/builder/worker/bloom-bouquet/runs/${runId}/agents`,
+        workerId,
         payload,
       );
       if (!result) throw new Error("BloomBouquet evaluator Agent 저장 응답이 비어 있습니다.");
       return result;
     },
-    async complete(runId, payload) {
+    async complete(runId, workerId, payload) {
       const result = await request<BloomBouquetSubmissionResponse>(
         "POST",
         `/internal/builder/worker/bloom-bouquet/runs/${runId}/complete`,
+        workerId,
         payload,
       );
       if (!result) throw new Error("BloomBouquet evaluator 완료 응답이 비어 있습니다.");
