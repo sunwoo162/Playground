@@ -14,7 +14,19 @@ const ALLOWED_TASK_ROLES: &[&str] = &[
     "design-system",
     "designer",
     "frontend",
+    "frontend-ui",
+    "frontend-state",
     "backend",
+    "backend-api",
+    "backend-domain",
+    "integration",
+    "test-automation",
+    "performance",
+    "observability",
+    "database",
+    "security",
+    "devops",
+    "accessibility",
     "code-review",
     "reviewer",
     "qa",
@@ -27,7 +39,20 @@ const REPOSITORY_WRITER_ROLES: &[&str] = &[
     "design-system",
     "designer",
     "frontend",
+    "frontend-ui",
+    "frontend-state",
     "backend",
+    "backend-api",
+    "backend-domain",
+    "integration",
+    "test-automation",
+    "performance",
+    "observability",
+    "database",
+    "security",
+    "devops",
+    "accessibility",
+    "data-marketing",
     "documentation",
     "debug-router",
 ];
@@ -81,7 +106,19 @@ const REPLAN_SCHEMA: &str = r#"{
               "design-system",
               "designer",
               "frontend",
+              "frontend-ui",
+              "frontend-state",
               "backend",
+              "backend-api",
+              "backend-domain",
+              "integration",
+              "test-automation",
+              "performance",
+              "observability",
+              "database",
+              "security",
+              "devops",
+              "accessibility",
               "code-review",
               "reviewer",
               "qa",
@@ -510,7 +547,7 @@ fn prompt(input: &ReplanProjectInput) -> Result<String, String> {
     let reopenable = input.reopenable_task_ids.join(", ");
 
     Ok(format!(
-        r#"You are the independent PM Codex Agent for Luna team {team_name} ({team_id}).
+        r#"You are the independent PM Codex Agent for Bloom team {team_name} ({team_id}).
 
 Project: {project_id}
 Existing repository: {repository}
@@ -531,24 +568,26 @@ Failure route evidence:
 Current PM tasks and actual runtime status:
 {tasks}
 
-Tasks Luna permits you to retire because they have no completed/external Git work:
+Tasks Bloom permits you to retire because they have no completed/external Git work:
 {retirable}
 
-Tasks Luna permits you to reopen on their existing branch/worktree where applicable:
+Tasks Bloom permits you to reopen on their existing branch/worktree where applicable:
 {reopenable}
 
 Replan attempt: {replan_attempt}/{max_attempts}
 
-Your job is a repair replan only. You MUST NOT create a repository, rename the repository, modify files, commit, push, merge, deploy, or claim tests passed. Luna will apply only the validated plan operations you return.
+Your job is a repair replan only. You MUST NOT create a repository, rename the repository, modify files, commit, push, merge, deploy, or claim tests passed. Bloom will apply only the validated plan operations you return.
 
 Rules:
 - Preserve completed/external Git work. You cannot edit existing Task definitions in this response.
 - `retireTaskIds` may contain only IDs from the retirable list.
 - `reopenTaskIds` may contain only IDs from the reopenable list. Use reopen when the existing Agent/branch should own the fix or its verification must be repeated.
 - `newTasks` are appended repair Tasks. Their IDs must be brand-new and must not reuse any current Task ID, even a retired one.
+- New repair Tasks may use the implementation swarm roles: frontend-ui, frontend-state, backend-api, backend-domain, integration, test-automation, performance, observability, plus database, security, devops, and accessibility when those are the real repair owners.
+- Split a repair into a specialist role only when the ownership boundary is concrete; do not create extra Agents merely to appear parallel.
 - Do not create a normal `debug-router` Task; the dedicated Debug Router already ran.
 - New dependencies may reference current non-retired Tasks or other new Tasks only.
-- Resolve the escalated failed Task: either retire it, reopen it, or reopen one of its actual upstream Tasks so that Luna can rewind and re-run the failed downstream chain.
+- Resolve the escalated failed Task: either retire it, reopen it, or reopen one of its actual upstream Tasks so that Bloom can rewind and re-run the failed downstream chain.
 - Every repository-changing Task in the resulting DAG must still have a downstream Code Review → Reviewer → QA chain.
 - Prefer the smallest repair plan that addresses the evidence. Do not rewrite unrelated product scope.
 - If the evidence actually requires a Product Owner choice or unavailable credential instead of PM replanning, do not invent a workaround. Return a minimal safe plan only if one truly exists; otherwise the Runtime validation may reject this proposal and keep the project blocked.

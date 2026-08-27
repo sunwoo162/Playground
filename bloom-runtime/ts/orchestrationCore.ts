@@ -1,6 +1,7 @@
 import { ensureBouquetAuthPlan } from "./bouquetAuth";
 import { ensureMarketingDocumentationPlan } from "./dataMarketing";
 import { validateProjectPlanReviewTopology } from "./planTopology";
+import { ensureSpecialistAgentPlan } from "./specialistPlanning";
 import type {
   ExecutableAgentRole,
   ProjectPlan,
@@ -23,7 +24,8 @@ export type TaskRunSummary = {
 
 export function prepareOrchestrationPlan(plan: ProjectPlan): ProjectPlan {
   const authPlan = ensureBouquetAuthPlan(plan);
-  const prepared = ensureMarketingDocumentationPlan(authPlan);
+  const specialistPlan = ensureSpecialistAgentPlan(authPlan);
+  const prepared = ensureMarketingDocumentationPlan(specialistPlan);
   validateProjectPlanReviewTopology(prepared);
   return prepared;
 }
@@ -119,7 +121,7 @@ export function projectStatusForActiveRoles(
     { roles: ["user-a", "user-b"], status: "user-test" },
     { roles: ["qa"], status: "qa" },
     { roles: ["code-review", "reviewer", "documentation", "data-marketing"], status: "review" },
-    { roles: ["frontend", "backend", "debug-router"], status: "development" },
+    { roles: ["frontend", "frontend-ui", "frontend-state", "backend", "backend-api", "backend-domain", "integration", "test-automation", "performance", "observability", "database", "security", "devops", "accessibility", "debug-router"], status: "development" },
     { roles: ["design-system", "designer"], status: "design" },
     { roles: ["idea"], status: "planning" },
   ];
