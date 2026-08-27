@@ -28,6 +28,13 @@ test('Bloom worker entrypoint wires evaluator runtime and gates builder behind m
   assert.match(source, /mode === ['"]builder['"]/);
 });
 
+test('evaluator mode passes worker identity and heartbeat policy into the lease-aware cycle', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'bloom-worker/run.js'), 'utf8');
+
+  assert.match(source, /runBloomBouquetEvaluatorOnce\(client,\s*workerId,\s*runner,\s*\{[\s\S]*heartbeatIntervalMs/);
+  assert.match(source, /started mode=evaluator workerId=\$\{workerId\}/);
+});
+
 test('production PM2 config explicitly pins Bloom worker to evaluator mode', () => {
   const ecosystem = fs.readFileSync(path.join(ROOT, 'ecosystem.config.js'), 'utf8');
 
