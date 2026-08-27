@@ -67,7 +67,7 @@ public class BloomBouquetService {
                 .name(name)
                 .slug(slug)
                 .description(required(request.getDescription(), "description", 4000))
-                .published(true)
+                .published(false)
                 .build());
         return toProjectResponse(project);
     }
