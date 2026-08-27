@@ -42,6 +42,8 @@ module.exports = {
         ...backendEnv,
         JWT_SECRET: sharedEnv.JWT_SECRET || backendEnv.JWT_SECRET || '',
         BUILDER_WORKER_TOKEN: workerToken,
+        HIBERNATE_DDL_AUTO: 'validate',
+        FLYWAY_ENABLED: 'true',
       },
     },
     {
