@@ -1,4 +1,4 @@
-import { assignInitialTaskRunAgents } from "./agentRoster";
+import { assignTaskRunAgentsPreservingStarted } from "./agentRoster";
 import { ensureBouquetAuthPlan } from "./bouquetAuth";
 import { ensureMarketingDocumentationPlan } from "./dataMarketing";
 import { validateProjectPlanReviewTopology } from "./planTopology";
@@ -50,7 +50,7 @@ export function refreshOrchestrationReadiness(
     return ready ? { ...run, status: "ready" as const } : run;
   });
 
-  return assignInitialTaskRunAgents(refreshed);
+  return assignTaskRunAgentsPreservingStarted(refreshed);
 }
 
 export function selectOrchestrationWave(
