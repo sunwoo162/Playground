@@ -7,8 +7,8 @@ import java.util.List;
 import java.util.Optional;
 
 public interface BloomBouquetProjectRepository extends JpaRepository<BloomBouquetProject, Long> {
-    boolean existsByTeamIdAndSlug(Long teamId, String slug);
-    Optional<BloomBouquetProject> findByIdAndTeamOwnerId(Long id, String ownerId);
-    List<BloomBouquetProject> findByTeamOwnerIdOrderByUpdatedAtDesc(String ownerId);
+    boolean existsByTeam_IdAndSlug(Long teamId, String slug);
+    Optional<BloomBouquetProject> findByIdAndTeam_OwnerId(Long id, String ownerId);
+    List<BloomBouquetProject> findByTeam_OwnerIdOrderByUpdatedAtDesc(String ownerId);
     List<BloomBouquetProject> findByPublishedTrueOrderByUpdatedAtDesc();
 }
