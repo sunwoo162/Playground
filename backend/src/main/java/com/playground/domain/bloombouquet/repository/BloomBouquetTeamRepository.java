@@ -9,5 +9,6 @@ import java.util.Optional;
 public interface BloomBouquetTeamRepository extends JpaRepository<BloomBouquetTeam, Long> {
     List<BloomBouquetTeam> findByOwnerIdOrderByCreatedAtDesc(String ownerId);
     Optional<BloomBouquetTeam> findByIdAndOwnerId(Long id, String ownerId);
+    Optional<BloomBouquetTeam> findByOwnerIdAndSlug(String ownerId, String slug);
     boolean existsByOwnerIdAndSlug(String ownerId, String slug);
 }
