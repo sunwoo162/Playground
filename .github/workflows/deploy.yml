@@ -136,17 +136,29 @@ jobs:
             rm -f dist/deploy-error.txt
             rm -f dist/deploy-command.log
 
-            # playground (Node.js) 재시작 - ecosystem으로 환경변수 포함
-            pm2 delete playground 2>/dev/null || true
+            # 공용 환경변수를 먼저 읽고 서비스별 env는 override로 적용
             export $(grep -v '^#' /home/ubuntu/playground/.env | xargs)
-            test -n "$JWT_SECRET" || { echo "JWT_SECRET is missing in /home/ubuntu/playground/.env"; exit 1; }
-            pm2 start ecosystem.config.js --only playground || record_failure "playground pm2 start failed"
+            test -n "${JWT_SECRET:-}" || { echo "JWT_SECRET is missing in /home/ubuntu/playground/.env"; exit 1; }
 
-            # backend (Spring Boot) 재시작 - backend 변경이 있을 때만 새 JAR 반영
-            if [ "$BACKEND_CHANGED" = "true" ]; then
+            # playground (Node.js) 재시작
+            pm2 delete playground 2>/dev/null || true
+            pm2 start ecosystem.config.js --only playground --update-env || record_failure "playground pm2 start failed"
+
+            # backend는 변경됐거나 현재 내려가 있을 때 복구/재시작
+            if [ "$BACKEND_CHANGED" = "true" ] || ! pm2 describe backend >/dev/null 2>&1; then
+              if [ -f /home/ubuntu/playground/.env.backend ]; then
+                export $(grep -v '^#' /home/ubuntu/playground/.env.backend | xargs)
+              fi
+
+              test -n "${JWT_SECRET:-}" || { echo "JWT_SECRET is missing for backend"; exit 1; }
+              test -n "${GITHUB_CLIENT_ID:-}" || { echo "GITHUB_CLIENT_ID is missing for backend"; exit 1; }
+              test -n "${GITHUB_CLIENT_SECRET:-}" || { echo "GITHUB_CLIENT_SECRET is missing for backend"; exit 1; }
+
               pm2 delete backend 2>/dev/null || true
-              grep -q '^JWT_SECRET=' /home/ubuntu/playground/.env.backend || { echo "JWT_SECRET is missing in /home/ubuntu/playground/.env.backend"; exit 1; }
-              pm2 start ecosystem.config.js --only backend
+              pm2 start ecosystem.config.js --only backend --update-env || record_failure "backend pm2 start failed"
+
+              BACKEND_PID="$(pm2 pid backend)"
+              test -n "$BACKEND_PID" && [ "$BACKEND_PID" != "0" ] || record_failure "backend did not stay online"
             fi
 
             pm2 save
