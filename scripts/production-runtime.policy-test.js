@@ -56,3 +56,12 @@ test('backend-specific env cannot override the shared JWT secret at PM2 startup'
   assert.match(backendBlock, /\. \/home\/ubuntu\/playground\/\.env\.backend/);
   assert.match(backendBlock, /export JWT_SECRET="\$SHARED_JWT_SECRET"/);
 });
+
+test('JWT recovery or a failed backend health probe forces a backend restart', () => {
+  const workflow = readDeployWorkflow();
+  assert.match(workflow, /JWT_REGENERATED=false/);
+  assert.match(workflow, /JWT_REGENERATED=true/);
+  const backendCondition = workflow.match(/if \[ "\$BACKEND_CHANGED"[\s\S]*?; then/)?.[0] ?? '';
+  assert.match(backendCondition, /\[ "\$JWT_REGENERATED" = "true" \]/);
+  assert.match(backendCondition, /curl -fsS --max-time 3 http:\/\/127\.0\.0\.1:8080\/api\/bouquet\/auth\/me/);
+});
