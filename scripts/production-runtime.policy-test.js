@@ -72,3 +72,33 @@ test('backend cold-start smoke check allows at least 60 seconds', () => {
   assert.match(smokeBlock, /for attempt in \$\(seq 1 30\); do/);
   assert.match(smokeBlock, /sleep 2/);
 });
+
+test('production backend validates schema and uses Flyway instead of Hibernate mutation', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bloombouquet-flyway-'));
+  const copiedConfig = path.join(tempDir, 'ecosystem.config.cjs');
+
+  try {
+    fs.copyFileSync(path.join(ROOT, 'ecosystem.config.js'), copiedConfig);
+    fs.writeFileSync(path.join(tempDir, '.env'), 'JWT_SECRET=shared-production-jwt-secret-0123456789abcdef\n');
+    fs.writeFileSync(path.join(tempDir, '.env.backend'), 'GITHUB_CLIENT_ID=test-client\nGITHUB_CLIENT_SECRET=test-secret\n');
+
+    delete require.cache[copiedConfig];
+    const config = require(copiedConfig);
+    const backend = config.apps.find((app) => app.name === 'backend');
+    assert.ok(backend, 'backend PM2 app must exist');
+    assert.equal(backend.env.HIBERNATE_DDL_AUTO, 'validate');
+    assert.equal(backend.env.FLYWAY_ENABLED, 'true');
+
+    const applicationYaml = fs.readFileSync(path.join(ROOT, 'backend/src/main/resources/application.yml'), 'utf8');
+    assert.match(applicationYaml, /ddl-auto:\s*\$\{HIBERNATE_DDL_AUTO:update\}/);
+    assert.match(applicationYaml, /flyway:[\s\S]*enabled:\s*\$\{FLYWAY_ENABLED:false\}/);
+    assert.match(applicationYaml, /baseline-on-migrate:\s*true/);
+    assert.match(applicationYaml, /baseline-version:\s*1/);
+
+    const buildGradle = fs.readFileSync(path.join(ROOT, 'backend/build.gradle'), 'utf8');
+    assert.match(buildGradle, /org\.flywaydb:flyway-core/);
+    assert.match(buildGradle, /org\.flywaydb:flyway-mysql/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
