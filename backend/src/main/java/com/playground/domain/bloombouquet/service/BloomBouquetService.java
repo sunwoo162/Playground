@@ -126,6 +126,24 @@ public class BloomBouquetService {
                 .build();
     }
 
+    @Transactional(readOnly = true)
+    public BloomBouquetDto.EvaluationReportResponse getPublicEvaluationReport(Long runId) {
+        BloomBouquetEvaluationRun run = runRepository.findById(runId)
+                .filter(item -> item.getSubmission().getProject().isPublished())
+                .orElseThrow(() -> new NoSuchElementException("평가 보고서를 찾을 수 없습니다."));
+        return BloomBouquetDto.EvaluationReportResponse.builder()
+                .runId(run.getId())
+                .status(run.getStatus())
+                .overallScore(run.getOverallScore())
+                .overallStars(run.getOverallStars())
+                .reportSummary(run.getReportSummary())
+                .agentEvaluations(agentEvaluationRepository.findByRunIdOrderByIdAsc(runId).stream()
+                        .map(this::toAgentEvaluationResponse).toList())
+                .startedAt(run.getStartedAt())
+                .completedAt(run.getCompletedAt())
+                .build();
+    }
+
     @Transactional
     public Optional<BloomBouquetDto.EvaluationClaimResponse> claimNextEvaluation() {
         Optional<BloomBouquetEvaluationRun> candidate = runRepository.findFirstByStatusOrderByCreatedAtAsc("QUEUED");
