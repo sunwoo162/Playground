@@ -21,9 +21,12 @@ fi
 
 cat > "$BIN_DIR/codex" <<EOF
 #!/usr/bin/env bash
-exec node "$ROOT_DIR/bloom-worker/local-codex-shim.js" "\$@"
+exec node -r "$ROOT_DIR/bloom-worker/local-path-compat.js" "$ROOT_DIR/bloom-worker/local-codex-shim.js" "\$@"
 EOF
-chmod +x "$BIN_DIR/codex" "$ROOT_DIR/bloom-worker/start-local-llm.sh" "$ROOT_DIR/bloom-worker/local-codex-shim.js"
+chmod +x \
+  "$BIN_DIR/codex" \
+  "$ROOT_DIR/bloom-worker/start-local-llm.sh" \
+  "$ROOT_DIR/bloom-worker/local-codex-shim.js"
 
 if ! command -v pm2 >/dev/null 2>&1; then
   echo "[bloom-local] pm2 is required by the current production worker deployment" >&2
@@ -38,7 +41,7 @@ pm2 save >/dev/null
 
 HEALTH_URL="http://127.0.0.1:${BLOOM_LOCAL_LLM_PORT:-8091}/health"
 echo "[bloom-local] waiting for model server: $HEALTH_URL"
-for _ in $(seq 1 180); do
+for _ in $(seq 1 450); do
   if curl -fsS "$HEALTH_URL" >/dev/null 2>&1; then
     echo "[bloom-local] local model is ready"
     echo "[bloom-local] engine: Qwen2.5-Coder-1.5B-Instruct Q4_K_M / llama.cpp / parallel=1"
@@ -48,6 +51,6 @@ for _ in $(seq 1 180); do
   sleep 2
 done
 
-echo "[bloom-local] local model did not become healthy within 6 minutes" >&2
+echo "[bloom-local] local model did not become healthy within 15 minutes" >&2
 pm2 logs bloom-local-llm --lines 80 --nostream || true
 exit 1
