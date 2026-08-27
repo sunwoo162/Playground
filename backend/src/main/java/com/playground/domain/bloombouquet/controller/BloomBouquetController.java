@@ -2,6 +2,7 @@ package com.playground.domain.bloombouquet.controller;
 
 import com.playground.config.BouquetAuthenticationToken;
 import com.playground.domain.bloombouquet.dto.BloomBouquetDto;
+import com.playground.domain.bloombouquet.service.BloomBouquetOwnerProjectQueryService;
 import com.playground.domain.bloombouquet.service.BloomBouquetService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -17,6 +18,7 @@ import java.util.NoSuchElementException;
 @RequiredArgsConstructor
 public class BloomBouquetController {
     private final BloomBouquetService service;
+    private final BloomBouquetOwnerProjectQueryService ownerProjectQueryService;
 
     @PostMapping("/teams")
     public ResponseEntity<BloomBouquetDto.TeamResponse> createTeam(
@@ -31,6 +33,13 @@ public class BloomBouquetController {
             @AuthenticationPrincipal BouquetAuthenticationToken auth
     ) {
         return ResponseEntity.ok(service.listTeams(auth.getAccountId()));
+    }
+
+    @GetMapping("/projects")
+    public ResponseEntity<List<BloomBouquetDto.ProjectResponse>> listProjects(
+            @AuthenticationPrincipal BouquetAuthenticationToken auth
+    ) {
+        return ResponseEntity.ok(ownerProjectQueryService.listProjects(auth.getAccountId()));
     }
 
     @PostMapping("/projects")
