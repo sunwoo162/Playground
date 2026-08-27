@@ -90,7 +90,7 @@ function waveCompletionTimestamp(
     .filter((run) => selectedTaskIds.has(run.taskId) && run.completedAt !== null)
     .map((run) => run.completedAt as string)
     .sort((left, right) => Date.parse(left) - Date.parse(right));
-  return timestamps.at(-1) ?? null;
+  return timestamps.length > 0 ? timestamps[timestamps.length - 1] : null;
 }
 
 export function decorateSchedulerObservability(
