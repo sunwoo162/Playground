@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.playground.config.JwtAuthenticationToken;
 import com.playground.domain.bloombouquet.entity.BloomBouquetEvaluationRun;
 import com.playground.domain.bloombouquet.repository.BloomBouquetEvaluationRunRepository;
+import com.playground.domain.bouquetauth.controller.BouquetAuthController;
+import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -15,6 +17,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -54,12 +57,28 @@ class BloomBouquetProjectRegistrationE2ETest {
 
     @Test
     void projectIsPublishedOnlyAfterSubmissionAndQueuesBouquetEvaluation() throws Exception {
-        JwtAuthenticationToken user = new JwtAuthenticationToken(
-                "e2e-owner", "e2e-owner", "E2E Owner", "https://example.test/avatar.png"
+        Cookie ownerCookie = signUpBouquetAccount("e2e-owner@example.test", "E2E Owner");
+
+        mockMvc.perform(post("/api/bloom-bouquet/teams")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Anonymous Team","slug":"anonymous-team"}
+                                """))
+                .andExpect(status().isUnauthorized());
+
+        JwtAuthenticationToken legacyUser = new JwtAuthenticationToken(
+                "legacy-owner", "legacy-owner", "Legacy Owner", "https://example.test/avatar.png"
         );
+        mockMvc.perform(post("/api/bloom-bouquet/teams")
+                        .with(authentication(legacyUser))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Legacy Team","slug":"legacy-team"}
+                                """))
+                .andExpect(status().isForbidden());
 
         MvcResult teamResult = mockMvc.perform(post("/api/bloom-bouquet/teams")
-                        .with(authentication(user))
+                        .cookie(ownerCookie)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"Team Lily","slug":"team-lily"}
@@ -70,7 +89,7 @@ class BloomBouquetProjectRegistrationE2ETest {
         long teamId = json(teamResult).get("id").asLong();
 
         MvcResult projectResult = mockMvc.perform(post("/api/bloom-bouquet/projects")
-                        .with(authentication(user))
+                        .cookie(ownerCookie)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"teamId":%d,"name":"Bouquet E2E Project","slug":"bouquet-e2e-project","description":"BloomBouquet registration E2E fixture"}
@@ -84,7 +103,7 @@ class BloomBouquetProjectRegistrationE2ETest {
                 .andExpect(status().isNotFound());
 
         MvcResult submissionResult = mockMvc.perform(post("/api/bloom-bouquet/projects/{projectId}/submissions", projectId)
-                        .with(authentication(user))
+                        .cookie(ownerCookie)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -156,6 +175,21 @@ class BloomBouquetProjectRegistrationE2ETest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("RUNNING"))
                 .andExpect(jsonPath("$.agentEvaluations").isEmpty());
+    }
+
+    private Cookie signUpBouquetAccount(String email, String displayName) throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/bouquet/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","password":"password-1234","displayName":"%s"}
+                                """.formatted(email, displayName)))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        return Arrays.stream(result.getResponse().getCookies())
+                .filter(cookie -> BouquetAuthController.SESSION_COOKIE.equals(cookie.getName()))
+                .findFirst()
+                .orElseThrow();
     }
 
     private JsonNode json(MvcResult result) throws Exception {
