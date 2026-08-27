@@ -18,6 +18,8 @@ function readEnvFile(filePath) {
 }
 
 const root = __dirname;
+const sharedEnv = readEnvFile(path.join(root, '.env'));
+const backendEnv = readEnvFile(path.join(root, '.env.backend'));
 
 module.exports = {
   apps: [
@@ -26,7 +28,7 @@ module.exports = {
       script: './server/index.js',
       cwd: '/home/ubuntu/playground',
       env_file: '/home/ubuntu/playground/.env',
-      env: readEnvFile(path.join(root, '.env')),
+      env: sharedEnv,
     },
     {
       name: 'backend',
@@ -34,8 +36,10 @@ module.exports = {
       interpreter: 'java',
       interpreter_args: '-jar',
       cwd: '/home/ubuntu/playground',
-      env_file: '/home/ubuntu/playground/.env.backend',
-      env: readEnvFile(path.join(root, '.env.backend')),
+      env: {
+        ...sharedEnv,
+        ...backendEnv,
+      },
     },
   ],
 };
