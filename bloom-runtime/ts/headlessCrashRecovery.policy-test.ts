@@ -13,8 +13,14 @@ import {
 import { REPOSITORY_WRITER_ROLES } from "./planTopology";
 import type { ExecutableAgentRole, ProjectPlan, TeamId } from "./types";
 
-function assert(condition: unknown, message: string): asserts condition {
+function check(condition: unknown, message: string) {
   if (!condition) throw new Error(message);
+}
+
+function checkEqual(actual: number | undefined, expected: number, message: string) {
+  if (actual !== expected) {
+    throw new Error(`${message}: expected=${expected}, actual=${String(actual)}`);
+  }
 }
 
 const TEAM_ID: TeamId = "rose";
@@ -43,17 +49,15 @@ const BASE_PLAN: ProjectPlan = {
   architectureSummary: "Frontend 결과를 review topology로 검증한다.",
   needsAuth: false,
   technologyDecisions: [],
-  tasks: [
-    {
-      id: "FE-001",
-      title: "Frontend 구현",
-      role: "frontend",
-      taskSlug: "frontend-shell",
-      summary: "Frontend shell을 구현한다.",
-      dependsOn: [],
-      acceptanceCriteria: ["Frontend 결과가 검증된다."],
-    },
-  ],
+  tasks: [{
+    id: "FE-001",
+    title: "Frontend 구현",
+    role: "frontend",
+    taskSlug: "frontend-shell",
+    summary: "Frontend shell을 구현한다.",
+    dependsOn: [],
+    acceptanceCriteria: ["Frontend 결과가 검증된다."],
+  }],
 };
 
 function runState(status: BuilderWorkerRunState["status"]): BuilderWorkerRunState {
@@ -72,8 +76,9 @@ function runState(status: BuilderWorkerRunState["status"]): BuilderWorkerRunStat
 }
 
 function parsePayload(snapshot: BuilderOrchestrationSnapshot | null) {
-  if (!snapshot) return null;
-  return JSON.parse(snapshot.payloadJson) as HeadlessBuilderSnapshotPayload;
+  return snapshot
+    ? JSON.parse(snapshot.payloadJson) as HeadlessBuilderSnapshotPayload
+    : null;
 }
 
 type CrashPredicate = (
@@ -88,29 +93,21 @@ function persistentClient(crashPredicate: CrashPredicate) {
   let crashCount = 0;
 
   const client: BuilderWorkerClient = {
-    async claim() {
-      return { ...CLAIM, orchestrationSnapshot: stored };
-    },
-    async heartbeat() {
-      return runState("running");
-    },
-    async loadSnapshot() {
-      return stored;
-    },
+    async claim() { return { ...CLAIM, orchestrationSnapshot: stored }; },
+    async heartbeat() { return runState("running"); },
+    async loadSnapshot() { return stored; },
     async saveSnapshot(_runId, workerId, write) {
       const currentVersion = stored?.version ?? 0;
       if (write.expectedVersion !== currentVersion) {
         throw new Error(`snapshot version conflict: expected=${write.expectedVersion}, actual=${currentVersion}`);
       }
-
-      const nextPayload = JSON.parse(write.payloadJson) as HeadlessBuilderSnapshotPayload;
-      const previousPayload = parsePayload(stored);
-      if (crashArmed && crashPredicate(nextPayload, previousPayload, write.phase)) {
+      const next = JSON.parse(write.payloadJson) as HeadlessBuilderSnapshotPayload;
+      const previous = parsePayload(stored);
+      if (crashArmed && crashPredicate(next, previous, write.phase)) {
         crashArmed = false;
         crashCount += 1;
         throw new Error("[FAILURE-INJECTION] simulated worker crash before snapshot commit");
       }
-
       stored = {
         schemaVersion: write.schemaVersion,
         version: currentVersion + 1,
@@ -121,19 +118,11 @@ function persistentClient(crashPredicate: CrashPredicate) {
       };
       return stored;
     },
-    async complete() {
-      return runState("completed");
-    },
-    async fail() {
-      return runState("failed");
-    },
+    async complete() { return runState("completed"); },
+    async fail() { return runState("failed"); },
   };
 
-  return {
-    client,
-    get snapshot() { return stored; },
-    get crashCount() { return crashCount; },
-  };
+  return { client, get crashCount() { return crashCount; } };
 }
 
 function fakeRuntime() {
@@ -153,21 +142,17 @@ function fakeRuntime() {
     input: Parameters<HeadlessBuilderRuntime["dispatchTask"]>[0],
   ): HeadlessAgentTaskRunResult => {
     const writer = REPOSITORY_WRITER_ROLES.includes(input.role);
-    let pullRequestNumber: number | null = null;
-    let branchName: string | null = null;
-
-    if (writer) {
-      pullRequestNumber = pullRequestByTask.get(input.taskId) ?? null;
-      if (pullRequestNumber === null) {
-        pullRequestNumber = nextPullRequest++;
-        pullRequestByTask.set(input.taskId, pullRequestNumber);
-      }
-      branchName = `agent/${input.teamId}/${input.agentId.replace(":", "-")}/${input.taskSlug}`;
-      branchEffects.add(branchName);
+    let pullRequestNumber = writer ? pullRequestByTask.get(input.taskId) ?? null : null;
+    if (writer && pullRequestNumber === null) {
+      pullRequestNumber = nextPullRequest++;
+      pullRequestByTask.set(input.taskId, pullRequestNumber);
     }
-
+    const branchName = writer
+      ? `agent/${input.teamId}/${input.agentId.replace(":", "-")}/${input.taskSlug}`
+      : null;
+    if (branchName) branchEffects.add(branchName);
     const reviewedPullRequests = ["code-review", "reviewer", "qa"].includes(input.role)
-      ? [...pullRequestByTask.values()].sort((left, right) => left - right)
+      ? [...pullRequestByTask.values()].sort((a, b) => a - b)
       : [];
 
     return {
@@ -257,8 +242,8 @@ function fakeRuntime() {
     },
     async mergePullRequests(input) {
       mergeCalls += 1;
-      const uniqueNumbers = [...new Set(input.pullRequestNumbers)].sort((left, right) => left - right);
-      for (const number of uniqueNumbers) {
+      const numbers = [...new Set(input.pullRequestNumbers)].sort((a, b) => a - b);
+      for (const number of numbers) {
         if (!mergedPullRequests.has(number)) {
           mergedPullRequests.add(number);
           mergeEffects += 1;
@@ -266,7 +251,7 @@ function fakeRuntime() {
       }
       return {
         repositoryFullName: input.repositoryFullName,
-        mergedPullRequests: uniqueNumbers.map((number) => ({
+        mergedPullRequests: numbers.map((number) => ({
           number,
           url: `https://github.com/example/crash-recovery-test/pull/${number}`,
           headBranch: `agent/recovered-${number}`,
@@ -299,115 +284,93 @@ function makeExecutor(runtime: HeadlessBuilderRuntime) {
     teamId: TEAM_ID,
     teamName: "Rose",
     runtime,
-    now: () => `2026-08-27T07:${String(Math.floor(tick / 60)).padStart(2, "0")}:${String(tick++ % 60).padStart(2, "0")}Z`,
+    now: () => `2026-08-27T07:00:${String(tick++).padStart(2, "0")}Z`,
   });
 }
 
-async function expectInjectedCrash(
-  executor: ReturnType<typeof makeExecutor>,
-  client: BuilderWorkerClient,
-) {
-  let crashed = false;
+async function expectCrash(executor: ReturnType<typeof makeExecutor>, client: BuilderWorkerClient) {
   try {
     await executor(CLAIM, client);
   } catch (error) {
-    crashed = error instanceof Error && error.message.includes("[FAILURE-INJECTION]");
+    if (error instanceof Error && error.message.includes("[FAILURE-INJECTION]")) return;
+    throw error;
   }
-  assert(crashed, "first execution must stop at the configured failure injection boundary");
+  throw new Error("first execution must stop at the configured failure injection boundary");
 }
 
-async function resumeToCompletion(
-  executor: ReturnType<typeof makeExecutor>,
-  client: BuilderWorkerClient,
-) {
+async function resume(executor: ReturnType<typeof makeExecutor>, client: BuilderWorkerClient) {
   const result = await executor(CLAIM, client);
-  assert(result.repositoryFullName === "example/crash-recovery-test", "resumed executor must complete the same repository");
+  check(result.repositoryFullName === "example/crash-recovery-test", "resumed executor must finish the same repository");
 }
 
-function transitionedRoleToDone(
-  role: ExecutableAgentRole,
-): CrashPredicate {
+function transitionedRoleToDone(role: ExecutableAgentRole): CrashPredicate {
   return (next, previous, phase) => {
     if (phase !== "building" || !previous) return false;
-    const nextRun = next.taskRuns.find((run) => run.role === role && run.status === "done");
-    if (!nextRun) return false;
-    const previousRun = previous.taskRuns.find((run) => run.taskId === nextRun.taskId);
-    return previousRun?.status === "running";
+    const done = next.taskRuns.find((run) => run.role === role && run.status === "done");
+    if (!done) return false;
+    return previous.taskRuns.find((run) => run.taskId === done.taskId)?.status === "running";
   };
 }
 
-async function testRepositoryBootstrapIsSafeAcrossSnapshotCrash() {
+async function testRepositoryBootstrapRecovery() {
   const runtime = fakeRuntime();
   const storage = persistentClient((next, previous, phase) =>
-    phase === "building"
-    && previous?.repository === null
-    && next.repository !== null);
+    phase === "building" && previous?.repository === null && next.repository !== null);
   const executor = makeExecutor(runtime.runtime);
-
-  await expectInjectedCrash(executor, storage.client);
-  await resumeToCompletion(executor, storage.client);
-
-  assert(storage.crashCount === 1, "repository failure injection must fire exactly once");
-  assert(runtime.bootstrapCalls === 2, "repository bootstrap may be re-entered after an uncommitted snapshot");
-  assert(runtime.repositoryCreateEffects === 1, "idempotent bootstrap must not create the repository twice");
+  await expectCrash(executor, storage.client);
+  await resume(executor, storage.client);
+  checkEqual(storage.crashCount, 1, "repository failure injection must fire once");
+  checkEqual(runtime.bootstrapCalls, 2, "bootstrap may be re-entered after an uncommitted snapshot");
+  checkEqual(runtime.repositoryCreateEffects, 1, "repository must not be created twice");
 }
 
-async function testWriterCommitAndPullRequestRecoverWithoutRedispatch() {
+async function testWriterEvidenceRecovery() {
   const runtime = fakeRuntime();
   const storage = persistentClient(transitionedRoleToDone("frontend"));
   const executor = makeExecutor(runtime.runtime);
-
-  await expectInjectedCrash(executor, storage.client);
-  const frontendEvidence = [...runtime.evidenceByTask.values()].find((result) => result.role === "frontend");
-  assert(frontendEvidence?.report.commitSha, "failure must occur after writer commit evidence exists");
-  assert(frontendEvidence?.report.pullRequestNumber, "failure must occur after writer PR evidence exists");
-
-  await resumeToCompletion(executor, storage.client);
-
-  const taskId = frontendEvidence.taskId;
-  assert(runtime.dispatchCount.get(taskId) === 1, "recovered writer task must not be dispatched twice");
-  assert(runtime.reconcileCount.get(taskId) === 1, "reclaimed writer task must reconcile repository/session evidence once");
-  assert(runtime.branchEffects.size === runtime.pullRequestByTask.size, "each writer PR must keep one deterministic branch side effect");
+  await expectCrash(executor, storage.client);
+  const evidence = [...runtime.evidenceByTask.values()].find((item) => item.role === "frontend");
+  if (!evidence) throw new Error("frontend evidence must exist before injected crash");
+  check(evidence.report.commitSha !== null, "writer commit must exist before crash");
+  check(evidence.report.pullRequestNumber !== null, "writer PR must exist before crash");
+  await resume(executor, storage.client);
+  checkEqual(runtime.dispatchCount.get(evidence.taskId), 1, "writer must not redispatch after recovery");
+  checkEqual(runtime.reconcileCount.get(evidence.taskId), 1, "writer must recover through reconciliation");
+  checkEqual(runtime.branchEffects.size, runtime.pullRequestByTask.size, "writer branch side effects must stay unique");
 }
 
-async function testReviewEvidenceRecoversWithoutDuplicateReview() {
+async function testReviewEvidenceRecovery() {
   const runtime = fakeRuntime();
   const storage = persistentClient(transitionedRoleToDone("code-review"));
   const executor = makeExecutor(runtime.runtime);
-
-  await expectInjectedCrash(executor, storage.client);
-  const reviewEvidence = [...runtime.evidenceByTask.values()].find((result) => result.role === "code-review");
-  assert(reviewEvidence, "failure injection must reach a code-review task");
-  assert(reviewEvidence.report.reviewedPullRequests.length > 0, "review evidence must reference upstream PRs before the crash");
-
-  await resumeToCompletion(executor, storage.client);
-
-  assert(runtime.dispatchCount.get(reviewEvidence.taskId) === 1, "recovered code review must not be executed twice");
-  assert(runtime.reconcileCount.get(reviewEvidence.taskId) === 1, "recovered code review must use reconciliation evidence");
+  await expectCrash(executor, storage.client);
+  const evidence = [...runtime.evidenceByTask.values()].find((item) => item.role === "code-review");
+  if (!evidence) throw new Error("code-review evidence must exist before injected crash");
+  check(evidence.report.reviewedPullRequests.length > 0, "review must reference upstream PR evidence");
+  await resume(executor, storage.client);
+  checkEqual(runtime.dispatchCount.get(evidence.taskId), 1, "review must not execute twice after recovery");
+  checkEqual(runtime.reconcileCount.get(evidence.taskId), 1, "review must recover through reconciliation");
 }
 
-async function testMergedPullRequestsAreIdempotentAcrossCompletedSnapshotCrash() {
+async function testIntegrationRecovery() {
   const runtime = fakeRuntime();
   const storage = persistentClient((_next, _previous, phase) => phase === "completed");
   const executor = makeExecutor(runtime.runtime);
-
-  await expectInjectedCrash(executor, storage.client);
+  await expectCrash(executor, storage.client);
   const mergedBeforeRestart = runtime.mergedPullRequests.size;
-  assert(mergedBeforeRestart > 0, "integration side effects must exist before the completed snapshot crash");
-  assert(runtime.mergeCalls === 1, "first execution must invoke integration once before crashing");
-
-  await resumeToCompletion(executor, storage.client);
-
-  assert(runtime.mergeCalls === 2, "restart may re-enter the idempotent integration command when completed evidence was not snapshotted");
-  assert(runtime.mergeEffects === mergedBeforeRestart, "idempotent integration must not merge any PR twice");
-  assert(runtime.mergedPullRequests.size === mergedBeforeRestart, "restart must preserve the same merged PR set");
+  check(mergedBeforeRestart > 0, "merge side effects must exist before completed snapshot crash");
+  checkEqual(runtime.mergeCalls, 1, "first execution must invoke integration once");
+  await resume(executor, storage.client);
+  checkEqual(runtime.mergeCalls, 2, "restart may re-enter the idempotent integration command");
+  checkEqual(runtime.mergeEffects, mergedBeforeRestart, "no PR may be merged twice");
+  checkEqual(runtime.mergedPullRequests.size, mergedBeforeRestart, "merged PR set must remain stable");
 }
 
 async function run() {
-  await testRepositoryBootstrapIsSafeAcrossSnapshotCrash();
-  await testWriterCommitAndPullRequestRecoverWithoutRedispatch();
-  await testReviewEvidenceRecoversWithoutDuplicateReview();
-  await testMergedPullRequestsAreIdempotentAcrossCompletedSnapshotCrash();
+  await testRepositoryBootstrapRecovery();
+  await testWriterEvidenceRecovery();
+  await testReviewEvidenceRecovery();
+  await testIntegrationRecovery();
   console.log("headless crash recovery policy tests passed");
 }
 
