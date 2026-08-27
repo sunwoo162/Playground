@@ -4,6 +4,7 @@ import { createBloomBouquetEvaluatorHttpClient } from "./bloomBouquetEvaluatorHt
 
 const token = "bloom-bouquet-worker-token-1234567890";
 const baseUrl = "http://localhost:8080";
+const workerId = "bouquet-evaluator-test";
 const calls: Array<{
   url: string;
   method: "GET" | "POST" | "PUT";
@@ -52,6 +53,20 @@ const fetchImpl = async (
       authPolicyId: "bouquet",
       bouquetClientId: "bouquet-submission-51",
       bouquetRedirectUri: "https://example.com/auth/bouquet/callback",
+      workerId,
+      leaseExpiresAt: "2026-08-27T15:00:00",
+      claimCount: 1,
+    });
+  }
+
+  if (url.endsWith("/internal/builder/worker/bloom-bouquet/runs/41/heartbeat")) {
+    return response(200, {
+      runId: 41,
+      workerId,
+      status: "RUNNING",
+      heartbeatAt: "2026-08-27T14:58:30",
+      leaseExpiresAt: "2026-08-27T15:00:00",
+      claimCount: 1,
     });
   }
 
@@ -78,12 +93,18 @@ const fetchImpl = async (
 async function main() {
   const client = createBloomBouquetEvaluatorHttpClient({ baseUrl, token, fetchImpl });
 
-  assert.equal(await client.claim(), null);
-  const claim = await client.claim();
+  assert.equal(await client.claim(workerId), null);
+  const claim = await client.claim(workerId);
   assert.equal(claim?.runId, 41);
   assert.equal(claim?.projectName, "Bouquet Shop");
+  assert.equal(claim?.workerId, workerId);
+  assert.equal(claim?.claimCount, 1);
 
-  assert.deepEqual(await client.listAgentEvaluations(41), []);
+  const lease = await client.heartbeat(41, workerId);
+  assert.equal(lease.workerId, workerId);
+  assert.equal(lease.status, "RUNNING");
+
+  assert.deepEqual(await client.listAgentEvaluations(41, workerId), []);
 
   const agentPayload = {
     agentRole: "frontend" as const,
@@ -98,26 +119,28 @@ async function main() {
     confidence: "high" as const,
     technicalTerms: ["component boundary"],
   };
-  const recorded = await client.recordAgentEvaluation(41, agentPayload);
+  const recorded = await client.recordAgentEvaluation(41, workerId, agentPayload);
   assert.equal(recorded.agentRole, "frontend");
 
-  const completed = await client.complete(41, {
+  const completed = await client.complete(41, workerId, {
     overallScore: 88,
     overallStars: 4.4,
     reportSummary: "Independent senior evaluations are complete.",
   });
   assert.equal(completed.evaluationStatus, "COMPLETED");
 
-  assert.equal(calls.length, 5);
+  assert.equal(calls.length, 6);
   for (const call of calls) {
     assert.equal(call.headers["X-Builder-Worker-Token"], token);
+    assert.equal(call.headers["X-Bloom-Worker-Id"], workerId);
   }
   assert.equal(calls[0].method, "POST");
   assert.equal(calls[0].body, undefined);
-  assert.equal(calls[2].method, "GET");
-  assert.equal(calls[3].headers["Content-Type"], "application/json");
-  assert.deepEqual(JSON.parse(calls[3].body || "{}"), agentPayload);
-  assert.deepEqual(JSON.parse(calls[4].body || "{}"), {
+  assert.equal(calls[2].method, "POST");
+  assert.equal(calls[3].method, "GET");
+  assert.equal(calls[4].headers["Content-Type"], "application/json");
+  assert.deepEqual(JSON.parse(calls[4].body || "{}"), agentPayload);
+  assert.deepEqual(JSON.parse(calls[5].body || "{}"), {
     overallScore: 88,
     overallStars: 4.4,
     reportSummary: "Independent senior evaluations are complete.",
