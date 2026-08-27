@@ -56,7 +56,7 @@ public class SecurityConfig {
                 .anyRequest().permitAll()
             )
             .addFilterBefore(bouquetSessionAuthFilter, JwtAuthFilter.class)
-            .addFilterBefore(builderWorkerTokenFilter, BouquetSessionAuthFilter.class)
+            .addFilterBefore(builderWorkerTokenFilter, JwtAuthFilter.class)
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
             .exceptionHandling(ex -> ex
                 .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
