@@ -1,11 +1,16 @@
+import { agentRoleCapacity } from "./agentPool";
 import { createInitialProjectTeamsState } from "./catalog";
-import { ORCHESTRATION_MAX_PARALLEL_TASKS } from "./orchestrationCore";
+import {
+  ORCHESTRATION_MAX_PARALLEL_TASKS,
+  refreshOrchestrationReadiness,
+  selectOrchestrationWave,
+} from "./orchestrationCore";
 import { REPOSITORY_WRITER_ROLES } from "./planTopology";
 import {
   SPECIALIST_AGENT_ROLES,
   routeSpecialistAgentTasks,
 } from "./specialistRouting";
-import type { ProjectPlan } from "./types";
+import type { ProjectPlan, ProjectTaskRun, TeamId } from "./types";
 
 function assert(condition: boolean, message: string) {
   if (!condition) throw new Error(message);
@@ -109,6 +114,69 @@ function specialistPlan(): ProjectPlan {
   };
 }
 
+function parallelPlan(): ProjectPlan {
+  return {
+    projectName: "Parallel capacity",
+    repositoryName: "parallel-capacity",
+    productSummary: "Exercise independent frontend and backend Agent pools.",
+    architectureSummary: "Six independent implementation tasks can run in parallel.",
+    needsAuth: false,
+    technologyDecisions: [],
+    tasks: [
+      ...[1, 2, 3].map((index) => ({
+        id: `FE-${String(index).padStart(3, "0")}`,
+        title: `Frontend slice ${index}`,
+        role: "frontend" as const,
+        taskSlug: `frontend-slice-${index}`,
+        summary: `Implement independent frontend slice ${index}.`,
+        dependsOn: [],
+        acceptanceCriteria: [`Frontend slice ${index} is complete.`],
+      })),
+      ...[1, 2, 3].map((index) => ({
+        id: `BE-${String(index).padStart(3, "0")}`,
+        title: `Backend slice ${index}`,
+        role: "backend" as const,
+        taskSlug: `backend-slice-${index}`,
+        summary: `Implement independent backend slice ${index}.`,
+        dependsOn: [],
+        acceptanceCriteria: [`Backend slice ${index} is complete.`],
+      })),
+    ],
+  };
+}
+
+function initialRun(
+  teamId: TeamId,
+  task: ProjectPlan["tasks"][number],
+): ProjectTaskRun {
+  return {
+    taskId: task.id,
+    role: task.role,
+    agentId: `${teamId}:${task.role}`,
+    status: "pending",
+    attempts: 0,
+    branchName: null,
+    worktreePath: null,
+    threadId: null,
+    sessionId: null,
+    turnId: null,
+    eventsPath: null,
+    stderrPath: null,
+    commitSha: null,
+    pullRequestNumber: null,
+    pullRequestUrl: null,
+    reviewedPullRequests: [],
+    summary: null,
+    rationaleSummary: null,
+    evidence: [],
+    verification: [],
+    blockers: [],
+    lastError: null,
+    startedAt: null,
+    completedAt: null,
+  };
+}
+
 function run() {
   const state = createInitialProjectTeamsState();
   for (const team of state.teams) {
@@ -128,6 +196,43 @@ function run() {
     }
   }
 
+  assert(agentRoleCapacity("frontend") === 3, "Frontend pool capacity must be three");
+  assert(agentRoleCapacity("backend") === 3, "Backend pool capacity must be three");
+  assert(agentRoleCapacity("code-review") === 2, "Code Review pool capacity must be two");
+  assert(agentRoleCapacity("qa") === 2, "QA pool capacity must be two");
+  assert(agentRoleCapacity("documentation") === 2, "Documentation pool capacity must be two");
+
+  const parallel = parallelPlan();
+  const pooledRuns = refreshOrchestrationReadiness(
+    parallel,
+    parallel.tasks.map((task) => initialRun("rose", task)),
+  );
+  const expectedIds = [
+    "rose:frontend",
+    "rose:frontend-2",
+    "rose:frontend-3",
+    "rose:backend",
+    "rose:backend-2",
+    "rose:backend-3",
+  ];
+  assert(
+    pooledRuns.map((run) => run.agentId).join("|") === expectedIds.join("|"),
+    "independent implementation tasks must spread deterministically across role Agent pools",
+  );
+  const wave = selectOrchestrationWave(pooledRuns);
+  assert(ORCHESTRATION_MAX_PARALLEL_TASKS === 6, "Bloom must allow up to six independent Agent tasks per wave");
+  assert(wave.length === 6, "three Frontend and three Backend Agents should fill one six-task wave");
+  assert(new Set(wave.map((run) => run.agentId)).size === 6, "a parallel wave must never double-book one Agent identity");
+
+  const runningFirstFrontend = pooledRuns.map((run) => run.taskId === "FE-001"
+    ? { ...run, status: "running" as const, attempts: 1, startedAt: "2026-08-27T03:00:00Z" }
+    : run);
+  const withoutDoubleBooking = selectOrchestrationWave(runningFirstFrontend);
+  assert(
+    !withoutDoubleBooking.some((run) => run.agentId === "rose:frontend"),
+    "a running Agent identity must never receive another task in the same wave",
+  );
+
   const routed = routeSpecialistAgentTasks(specialistPlan());
   const roleByTask = new Map(routed.tasks.map((task) => [task.id, task.role]));
   assert(roleByTask.get("BE-001") === "database", "database work must route to Database Agent");
@@ -146,9 +251,8 @@ function run() {
     JSON.stringify(routedAgain) === JSON.stringify(routeSpecialistAgentTasks(original)),
     "specialist routing must be idempotent",
   );
-  assert(ORCHESTRATION_MAX_PARALLEL_TASKS === 2, "30-Agent roster expansion must keep concurrency optimization deferred");
 
-  console.log("PASS  Bloom 30-Agent team capacity and specialist routing scenarios passed.");
+  console.log("PASS  Bloom 30-Agent pool assignment and six-way scheduling scenarios passed.");
 }
 
 run();
