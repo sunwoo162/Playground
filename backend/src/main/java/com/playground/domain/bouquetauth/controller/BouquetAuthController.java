@@ -11,6 +11,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -74,12 +75,16 @@ public class BouquetAuthController {
     @GetMapping("/oauth/authorize")
     public ResponseEntity<Void> authorize(
             HttpServletRequest request,
+            @RequestParam(name = "response_type", defaultValue = "code") String responseType,
             @RequestParam("client_id") String clientId,
             @RequestParam("redirect_uri") String redirectUri,
             @RequestParam String state,
             @RequestParam("code_challenge") String codeChallenge,
             @RequestParam(name = "code_challenge_method", defaultValue = "S256") String codeChallengeMethod
     ) {
+        if (!"code".equals(responseType)) {
+            throw new BouquetAuthException("unsupported_response_type");
+        }
         String location = authService.authorize(
                 extractCookie(request, SESSION_COOKIE),
                 clientId,
@@ -91,19 +96,28 @@ public class BouquetAuthController {
         return ResponseEntity.status(HttpStatus.FOUND).location(URI.create(location)).build();
     }
 
-    @PostMapping("/oauth/token")
-    public ResponseEntity<?> token(@RequestBody TokenRequest request) {
-        TokenResult result = authService.exchangeCode(
+    @PostMapping(value = "/oauth/token", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> tokenJson(@RequestBody TokenRequest request) {
+        return tokenResponse(authService.exchangeCode(
                 request.clientId(),
                 request.code(),
                 request.redirectUri(),
                 request.codeVerifier()
-        );
-        return ResponseEntity.ok(Map.of(
-                "access_token", result.accessToken(),
-                "token_type", result.tokenType(),
-                "expires_in", result.expiresInSeconds()
         ));
+    }
+
+    @PostMapping(value = "/oauth/token", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
+    public ResponseEntity<?> tokenForm(
+            @RequestParam(name = "grant_type", defaultValue = "authorization_code") String grantType,
+            @RequestParam("client_id") String clientId,
+            @RequestParam String code,
+            @RequestParam("redirect_uri") String redirectUri,
+            @RequestParam("code_verifier") String codeVerifier
+    ) {
+        if (!"authorization_code".equals(grantType)) {
+            throw new BouquetAuthException("unsupported_grant_type");
+        }
+        return tokenResponse(authService.exchangeCode(clientId, code, redirectUri, codeVerifier));
     }
 
     @GetMapping("/oauth/userinfo")
@@ -126,6 +140,14 @@ public class BouquetAuthController {
             default -> HttpStatus.BAD_REQUEST;
         };
         return ResponseEntity.status(status).body(Map.of("error", error));
+    }
+
+    private ResponseEntity<?> tokenResponse(TokenResult result) {
+        return ResponseEntity.ok(Map.of(
+                "access_token", result.accessToken(),
+                "token_type", result.tokenType(),
+                "expires_in", result.expiresInSeconds()
+        ));
     }
 
     private void setSessionCookie(HttpServletResponse response, SessionResult result) {
