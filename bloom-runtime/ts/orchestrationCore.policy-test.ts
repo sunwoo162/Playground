@@ -16,11 +16,12 @@ function taskRun(
   taskId: string,
   role: ExecutableAgentRole,
   status: TaskRunStatus,
+  agentId = `rose:${role}`,
 ): ProjectTaskRun {
   return {
     taskId,
     role,
-    agentId: `rose:${role}`,
+    agentId,
     status,
     attempts: 0,
     branchName: null,
@@ -126,33 +127,53 @@ function testDependencyReadiness() {
   assert(stillPending[1].status === "pending", "task must remain pending while a dependency is unfinished");
 }
 
-function testBoundedRoleExclusiveWave() {
+function testBoundedAgentExclusiveWave() {
   const candidates = [
-    taskRun("FE-001", "frontend", "ready"),
-    taskRun("FE-002", "frontend", "ready"),
-    taskRun("BE-001", "backend", "ready"),
-    taskRun("DS-001", "designer", "ready"),
+    taskRun("FE-001", "frontend", "ready", "rose:frontend"),
+    taskRun("FE-002", "frontend", "ready", "rose:frontend-2"),
+    taskRun("BE-001", "backend", "ready", "rose:backend"),
+    taskRun("DS-001", "designer", "ready", "rose:designer"),
   ];
   const wave = selectOrchestrationWave(candidates);
 
-  assert(ORCHESTRATION_MAX_PARALLEL_TASKS === 2, "default orchestration concurrency must remain two");
-  assert(wave.length === 2, "default wave must contain at most two tasks");
+  assert(ORCHESTRATION_MAX_PARALLEL_TASKS === 6, "default orchestration concurrency must be six");
+  assert(wave.length === 4, "different Agent identities may share one wave even when their roles match");
   assert(wave[0].taskId === "FE-001", "wave selection must preserve task order");
-  assert(wave[1].taskId === "BE-001", "same-role ready task must be skipped within the same wave");
+  assert(wave[1].taskId === "FE-002", "a second Frontend Agent must be independently schedulable");
 
-  const oversizedRequest = selectOrchestrationWave(candidates, 10);
+  const withBusyAgent = selectOrchestrationWave([
+    taskRun("FE-RUNNING", "frontend", "running", "rose:frontend"),
+    taskRun("FE-SAME-ID", "frontend", "ready", "rose:frontend"),
+    taskRun("FE-SECOND", "frontend", "ready", "rose:frontend-2"),
+    taskRun("BE-READY", "backend", "ready", "rose:backend"),
+  ]);
   assert(
-    oversizedRequest.length === ORCHESTRATION_MAX_PARALLEL_TASKS,
-    "caller-provided limit must never raise concurrency above the orchestration hard cap",
+    !withBusyAgent.some((run) => run.taskId === "FE-SAME-ID"),
+    "an Agent identity already running must not receive another task",
+  );
+  assert(
+    withBusyAgent.some((run) => run.taskId === "FE-SECOND"),
+    "another idle Agent of the same role must remain schedulable",
+  );
+  assert(
+    withBusyAgent.some((run) => run.taskId === "BE-READY"),
+    "other idle Agent identities remain schedulable",
   );
 
-  const withBusyFrontend = selectOrchestrationWave([
-    taskRun("FE-RUNNING", "frontend", "running"),
-    taskRun("FE-READY", "frontend", "ready"),
-    taskRun("BE-READY", "backend", "ready"),
-  ]);
-  assert(withBusyFrontend.length === 1, "a role already running must not receive another task");
-  assert(withBusyFrontend[0].taskId === "BE-READY", "other idle roles remain schedulable");
+  const sixReady = [
+    taskRun("FE-001", "frontend", "ready", "rose:frontend"),
+    taskRun("FE-002", "frontend", "ready", "rose:frontend-2"),
+    taskRun("FE-003", "frontend", "ready", "rose:frontend-3"),
+    taskRun("BE-001", "backend", "ready", "rose:backend"),
+    taskRun("BE-002", "backend", "ready", "rose:backend-2"),
+    taskRun("BE-003", "backend", "ready", "rose:backend-3"),
+    taskRun("QA-001", "qa", "ready", "rose:qa"),
+  ];
+  const capped = selectOrchestrationWave(sixReady, 10);
+  assert(
+    capped.length === ORCHESTRATION_MAX_PARALLEL_TASKS,
+    "caller-provided limit must never raise concurrency above the orchestration hard cap",
+  );
 }
 
 function testTaskSummaryAndPhase() {
@@ -172,7 +193,7 @@ function testTaskSummaryAndPhase() {
 function run() {
   testPlanPreparation();
   testDependencyReadiness();
-  testBoundedRoleExclusiveWave();
+  testBoundedAgentExclusiveWave();
   testTaskSummaryAndPhase();
   console.log("orchestrationCore policy tests passed");
 }
