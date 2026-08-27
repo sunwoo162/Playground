@@ -3,6 +3,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN_DIR="${HOME}/.local/bin"
+LLAMA_INSTALLER_COMMIT="4ee224e8b16ad6c48be85609e74dd8b1e8d740ae"
+LLAMA_INSTALLER_URL="https://raw.githubusercontent.com/ggml-org/llama-install.sh/${LLAMA_INSTALLER_COMMIT}/install.sh"
 mkdir -p "$BIN_DIR"
 export PATH="$BIN_DIR:${HOME}/.llama/bin:$PATH"
 
@@ -12,8 +14,13 @@ if ! command -v curl >/dev/null 2>&1; then
 fi
 
 if ! command -v llama >/dev/null 2>&1; then
-  echo "[bloom-evaluator-local] installing llama.cpp launcher"
-  curl --fail --show-error --silent --location https://llama.app/install.sh | sh
+  echo "[bloom-evaluator-local] installing llama.cpp launcher from pinned installer ${LLAMA_INSTALLER_COMMIT}"
+  INSTALLER_PATH="$(mktemp)"
+  trap 'rm -f "$INSTALLER_PATH"' EXIT
+  curl --fail --show-error --silent --location "$LLAMA_INSTALLER_URL" --output "$INSTALLER_PATH"
+  sh "$INSTALLER_PATH"
+  rm -f "$INSTALLER_PATH"
+  trap - EXIT
   hash -r
 fi
 
