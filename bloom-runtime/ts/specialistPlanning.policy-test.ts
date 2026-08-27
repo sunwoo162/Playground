@@ -52,10 +52,14 @@ function testFullStackSpecialists() {
   const accessibility = prepared.tasks.find((task) => task.role === "accessibility");
   const devops = prepared.tasks.find((task) => task.role === "devops");
 
-  assert(database?.dependsOn.includes("BE-001"), "Database Agent must wait for backend implementation evidence");
-  assert(security?.dependsOn.includes(database.id), "Security Agent must inspect the database specialist result when present");
-  assert(accessibility?.dependsOn.includes("FE-001"), "Accessibility Agent must inspect frontend implementation evidence");
-  assert(devops?.dependsOn.includes(security.id), "DevOps Agent must consume security hardening evidence when present");
+  assert(database, "Database Agent task must exist");
+  assert(security, "Security Agent task must exist");
+  assert(accessibility, "Accessibility Agent task must exist");
+  assert(devops, "DevOps Agent task must exist");
+  assert(database.dependsOn.includes("BE-001"), "Database Agent must wait for backend implementation evidence");
+  assert(security.dependsOn.includes(database.id), "Security Agent must inspect the database specialist result when present");
+  assert(accessibility.dependsOn.includes("FE-001"), "Accessibility Agent must inspect frontend implementation evidence");
+  assert(devops.dependsOn.includes(security.id), "DevOps Agent must consume security hardening evidence when present");
 }
 
 function testSpecialistRoutingIsIdempotent() {
