@@ -39,5 +39,5 @@ test('production diagnostics never print PM2 environment details', () => {
 test('PM2 ecosystem config changes trigger a backend restart', () => {
   const workflow = readDeployWorkflow();
   const detectionBlock = workflow.match(/- name: Detect backend changes[\s\S]*?- name: Set up JDK 17/)?.[0] ?? '';
-  assert.match(detectionBlock, /ecosystem\.config\.js/);
+  assert.ok(detectionBlock.includes('ecosystem\\.config\\.js'), 'backend change detection must include ecosystem.config.js');
 });
