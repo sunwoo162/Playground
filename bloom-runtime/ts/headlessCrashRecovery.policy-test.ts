@@ -340,23 +340,14 @@ async function testRepositoryBootstrapIsSafeAcrossSnapshotCrash() {
   const runtime = fakeRuntime();
   const storage = persistentClient((next, previous, phase) =>
     phase === "building"
-    && previous?.phase === undefined
-    && next.repository !== null);
-
-  // The first durable snapshot before repository bootstrap is phase=repository. Detect the
-  // following building snapshot by inspecting the stored payload rather than relying on a
-  // process-local flag.
-  const storageWithRepositoryBoundary = persistentClient((next, previous, phase) =>
-    phase === "building"
     && previous?.repository === null
     && next.repository !== null);
   const executor = makeExecutor(runtime.runtime);
 
-  void storage;
-  await expectInjectedCrash(executor, storageWithRepositoryBoundary.client);
-  await resumeToCompletion(executor, storageWithRepositoryBoundary.client);
+  await expectInjectedCrash(executor, storage.client);
+  await resumeToCompletion(executor, storage.client);
 
-  assert(storageWithRepositoryBoundary.crashCount === 1, "repository failure injection must fire exactly once");
+  assert(storage.crashCount === 1, "repository failure injection must fire exactly once");
   assert(runtime.bootstrapCalls === 2, "repository bootstrap may be re-entered after an uncommitted snapshot");
   assert(runtime.repositoryCreateEffects === 1, "idempotent bootstrap must not create the repository twice");
 }
