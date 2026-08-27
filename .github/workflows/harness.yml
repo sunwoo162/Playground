@@ -27,10 +27,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build deployed playground web
-        run: pnpm run build:playground-web
-
-      - name: Build Bloom web control plane
+      - name: Build BloomBouquet root web
         run: pnpm run build:bloom-web
 
       - name: Setup Java
