@@ -11,4 +11,12 @@ public interface BloomBouquetProjectRepository extends JpaRepository<BloomBouque
     Optional<BloomBouquetProject> findByIdAndTeam_OwnerId(Long id, String ownerId);
     List<BloomBouquetProject> findByTeam_OwnerIdOrderByUpdatedAtDesc(String ownerId);
     List<BloomBouquetProject> findByPublishedTrueOrderByUpdatedAtDesc();
+
+    default boolean existsByTeamIdAndSlug(Long teamId, String slug) {
+        return existsByTeam_IdAndSlug(teamId, slug);
+    }
+
+    default Optional<BloomBouquetProject> findByIdAndTeamOwnerId(Long id, String ownerId) {
+        return findByIdAndTeam_OwnerId(id, ownerId);
+    }
 }
