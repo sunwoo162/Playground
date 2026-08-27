@@ -102,3 +102,15 @@ test('production backend validates schema and uses Flyway instead of Hibernate m
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
 });
+
+test('production secret files stay untracked and deploy diagnostics never dump them', () => {
+  const gitignore = fs.readFileSync(path.join(ROOT, '.gitignore'), 'utf8');
+  assert.match(gitignore, /^\.env\.\*$/m);
+  assert.match(gitignore, /^!\.env\.example$/m);
+
+  const workflow = readDeployWorkflow();
+  assert.doesNotMatch(workflow, /\bprintenv\b/);
+  assert.doesNotMatch(workflow, /\bpm2\s+env\b/);
+  assert.doesNotMatch(workflow, /\bset\s+-x\b/);
+  assert.doesNotMatch(workflow, /\bcat\s+[^\n]*\.env(?:\.backend)?\b/);
+});
