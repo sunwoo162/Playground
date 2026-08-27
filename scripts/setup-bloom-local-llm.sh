@@ -4,15 +4,18 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN_DIR="${HOME}/.local/bin"
 mkdir -p "$BIN_DIR"
+export PATH="$BIN_DIR:${HOME}/.llama/bin:$PATH"
 
 if ! command -v llama >/dev/null 2>&1; then
   echo "[bloom-local] installing llama.cpp launcher"
   curl -LsSf https://llama.app/install.sh | sh
+  hash -r
 fi
 
 LLAMA_BIN="$(command -v llama || true)"
 if [[ -z "$LLAMA_BIN" ]]; then
   echo "[bloom-local] llama install completed but executable is not on PATH" >&2
+  echo "[bloom-local] checked: $BIN_DIR and ${HOME}/.llama/bin" >&2
   exit 1
 fi
 
@@ -21,8 +24,6 @@ cat > "$BIN_DIR/codex" <<EOF
 exec node "$ROOT_DIR/bloom-worker/local-codex-shim.js" "\$@"
 EOF
 chmod +x "$BIN_DIR/codex" "$ROOT_DIR/bloom-worker/start-local-llm.sh" "$ROOT_DIR/bloom-worker/local-codex-shim.js"
-
-export PATH="$BIN_DIR:$PATH"
 
 if ! command -v pm2 >/dev/null 2>&1; then
   echo "[bloom-local] pm2 is required by the current production worker deployment" >&2
