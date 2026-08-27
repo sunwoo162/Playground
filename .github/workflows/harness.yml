@@ -31,7 +31,10 @@ jobs:
         run: pnpm run build:playground-web
 
       - name: Build Bloom web control plane
-        run: pnpm run build:bloom-web
+        run: |
+          pnpm run build:bloom-web
+          test -f dist/bloom/index.html
+          grep -q '/bloom/assets/' dist/bloom/index.html
 
       - name: Setup Java
         uses: actions/setup-java@v5
