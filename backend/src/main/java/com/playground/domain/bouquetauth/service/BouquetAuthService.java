@@ -246,8 +246,9 @@ public class BouquetAuthService {
             if ((!https && !localHttp) || uri.getHost() == null || uri.getFragment() != null || uri.getUserInfo() != null) {
                 throw new BouquetAuthException("invalid_redirect_uri");
             }
+        } catch (BouquetAuthException e) {
+            throw e;
         } catch (IllegalArgumentException e) {
-            if (e instanceof BouquetAuthException bouquetAuthException) throw bouquetAuthException;
             throw new BouquetAuthException("invalid_redirect_uri");
         }
     }
