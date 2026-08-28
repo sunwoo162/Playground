@@ -1,4 +1,4 @@
-name: Task 7 Owner Context Probe
+name: Task 7 Nginx Context Probe
 
 on:
   push:
@@ -9,10 +9,10 @@ permissions:
   contents: read
 
 jobs:
-  probe-owner-context:
+  probe-nginx:
     runs-on: ubuntu-latest
     steps:
-      - name: Read project context with worker kept stopped
+      - name: Locate active BloomBouquet nginx config
         uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262
         with:
           host: ssh.gsmsv.site
@@ -22,32 +22,24 @@ jobs:
           command_timeout: 5m
           script: |
             set -eu
-            cd /home/ubuntu/bloombouquet
-            WORKER_STATUS="$(pm2 jlist | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const x=JSON.parse(s).find(v=>v.name==="bloom-worker");process.stdout.write(x?.pm2_env?.status||"missing")})')"
-            [ "$WORKER_STATUS" = "stopped" ] || { echo "bloom-worker must stay stopped, found=$WORKER_STATUS" >&2; exit 1; }
-            echo "bloom-worker=$WORKER_STATUS"
+            STATUS="$(pm2 jlist | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const x=JSON.parse(s).find(v=>v.name==="bloom-worker");process.stdout.write(x?.pm2_env?.status||"missing")})')"
+            [ "$STATUS" = "stopped" ] || { echo "bloom-worker must stay stopped, found=$STATUS" >&2; exit 1; }
+            echo "bloom-worker=$STATUS"
 
-            DB_USER="$(awk '/^[[:space:]]+username:/{print $2; exit}' backend/src/main/resources/application.yml)"
-            DB_PASS="$(awk '/^[[:space:]]+password:/{print $2; exit}' backend/src/main/resources/application.yml)"
+            echo '=== FILE MATCHES ==='
+            sudo grep -RIlE 'server_name[[:space:]]+bloombouquet\.https\.gsmsv\.site([[:space:];]|$)' /etc/nginx 2>/dev/null || true
 
-            echo '=== EVIDENCE VAULT PROJECT CANDIDATES ==='
-            MYSQL_PWD="$DB_PASS" mysql -h 127.0.0.1 -u "$DB_USER" playground_db -N -B -e "
-              SELECT p.id,t.id,t.name,p.name,p.slug,p.published,
-                     COALESCE(s.id,''),COALESCE(s.version_label,''),COALESCE(s.demo_url,'')
-              FROM bloom_bouquet_projects p
-              JOIN bloom_bouquet_teams t ON t.id=p.team_id
-              LEFT JOIN bloom_bouquet_submissions s ON s.id=(
-                SELECT s2.id FROM bloom_bouquet_submissions s2 WHERE s2.project_id=p.id ORDER BY s2.created_at DESC LIMIT 1
-              )
-              WHERE LOWER(p.name) LIKE '%evidence%'
-                 OR LOWER(p.slug) LIKE '%evidence%'
-                 OR s.frontend_repository_url='https://github.com/BloomBouquet/evidence-vault'
-                 OR s.backend_repository_url='https://github.com/BloomBouquet/evidence-vault'
-              ORDER BY p.updated_at DESC;"
+            echo '=== NGINX -T CONTEXT ==='
+            sudo nginx -T 2>&1 | awk '
+              /# configuration file / { file=$0 }
+              /bloombouquet\.https\.gsmsv\.site/ {
+                print file;
+                print;
+                show=18;
+                next;
+              }
+              show>0 { print; show--; }
+            '
 
-            echo '=== ALL OWNER CONSOLE PROJECTS ==='
-            MYSQL_PWD="$DB_PASS" mysql -h 127.0.0.1 -u "$DB_USER" playground_db -N -B -e "
-              SELECT p.id,t.name,p.name,p.slug,p.published
-              FROM bloom_bouquet_projects p
-              JOIN bloom_bouquet_teams t ON t.id=p.team_id
-              ORDER BY t.id,p.id;"
+            echo '=== ROOT PROXY REFERENCES ==='
+            sudo grep -RInE 'proxy_pass[[:space:]]+http://(127\.0\.0\.1|localhost):3000' /etc/nginx 2>/dev/null || true
