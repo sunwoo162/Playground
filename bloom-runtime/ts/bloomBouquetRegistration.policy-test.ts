@@ -18,6 +18,7 @@ const evidenceVaultUrl = buildBloomBouquetRegistrationUrl({
 });
 
 assert.ok(evidenceVaultUrl);
+assert.ok(evidenceVaultUrl.length <= LUNA_BLOOM_BOUQUET_HANDOFF_MAX_LENGTH);
 const parsedUrl = new URL(evidenceVaultUrl);
 assert.equal(parsedUrl.origin, "https://bloombouquet.https.gsmsv.site");
 assert.equal(parsedUrl.searchParams.get("mode"), "manage");
