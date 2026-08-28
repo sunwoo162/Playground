@@ -55,7 +55,7 @@ public class BuilderProject {
     @Column(name = "preview_url", length = 500)
     private String previewUrl;
 
-    @Column(name = "bloom_bouquet_registration_url", length = 6000)
+    @Column(name = "bloom_bouquet_registration_url", columnDefinition = "TEXT")
     private String bloomBouquetRegistrationUrl;
 
     @CreationTimestamp
