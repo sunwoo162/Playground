@@ -24,7 +24,7 @@ jobs:
           fi
           echo "PROBE_SSH=available"
 
-      - name: Probe Evidence Vault infrastructure read-only
+      - name: Probe bootstrap prerequisites read-only
         uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262
         with:
           host: ssh.gsmsv.site
@@ -34,103 +34,46 @@ jobs:
           script_stop: false
           script: |
             echo "PROBE_HOST_REACHED=yes"
-            echo "PROBE_TARGET_SHA=0ddff8f5734928b5b275ff27aeda41fe8aea5430"
+            . /etc/os-release 2>/dev/null || true
+            echo "PROBE_OS_ID=${ID:-unknown}"
+            echo "PROBE_OS_VERSION=${VERSION_ID:-unknown}"
 
-            command -v node >/dev/null 2>&1 && echo "PROBE_NODE=present" || echo "PROBE_NODE=missing"
-            command -v pnpm >/dev/null 2>&1 && echo "PROBE_PNPM=present" || echo "PROBE_PNPM=missing"
-            command -v pm2 >/dev/null 2>&1 && echo "PROBE_PM2=present" || echo "PROBE_PM2=missing"
-            command -v psql >/dev/null 2>&1 && echo "PROBE_PSQL=present" || echo "PROBE_PSQL=missing"
-            command -v nginx >/dev/null 2>&1 && echo "PROBE_NGINX=present" || echo "PROBE_NGINX=missing"
-            command -v git >/dev/null 2>&1 && echo "PROBE_GIT=present" || echo "PROBE_GIT=missing"
-            command -v curl >/dev/null 2>&1 && echo "PROBE_CURL=present" || echo "PROBE_CURL=missing"
-            command -v openssl >/dev/null 2>&1 && echo "PROBE_OPENSSL=present" || echo "PROBE_OPENSSL=missing"
+            sudo -n true >/dev/null 2>&1 && echo "PROBE_SUDO=passwordless" || echo "PROBE_SUDO=unavailable"
+            command -v docker >/dev/null 2>&1 && echo "PROBE_DOCKER=present" || echo "PROBE_DOCKER=missing"
+            command -v certbot >/dev/null 2>&1 && echo "PROBE_CERTBOT=present" || echo "PROBE_CERTBOT=missing"
+            command -v snap >/dev/null 2>&1 && echo "PROBE_SNAP=present" || echo "PROBE_SNAP=missing"
+            command -v corepack >/dev/null 2>&1 && echo "PROBE_COREPACK=present" || echo "PROBE_COREPACK=missing"
+            command -v npm >/dev/null 2>&1 && echo "PROBE_NPM=present" || echo "PROBE_NPM=missing"
 
-            if test -d /home/ubuntu/evidence-vault/.git; then
-              echo "PROBE_REPOSITORY=present"
-              CURRENT_SHA="$(git -C /home/ubuntu/evidence-vault rev-parse HEAD 2>/dev/null || true)"
-              test -n "$CURRENT_SHA" && echo "PROBE_REPOSITORY_SHA=$CURRENT_SHA" || true
+            if command -v systemctl >/dev/null 2>&1; then
+              systemctl is-active --quiet postgresql && echo "PROBE_POSTGRES_SERVICE=active" || echo "PROBE_POSTGRES_SERVICE=inactive-or-missing"
+              systemctl is-enabled --quiet postgresql >/dev/null 2>&1 && echo "PROBE_POSTGRES_ENABLED=yes" || echo "PROBE_POSTGRES_ENABLED=no-or-missing"
+            fi
+
+            if command -v dpkg-query >/dev/null 2>&1; then
+              dpkg-query -W -f='${Status}\n' postgresql 2>/dev/null | grep -q 'install ok installed' && echo "PROBE_POSTGRES_PACKAGE=installed" || echo "PROBE_POSTGRES_PACKAGE=missing"
+              dpkg-query -W -f='${Status}\n' postgresql-client 2>/dev/null | grep -q 'install ok installed' && echo "PROBE_POSTGRES_CLIENT_PACKAGE=installed" || echo "PROBE_POSTGRES_CLIENT_PACKAGE=missing"
+            fi
+
+            if command -v docker >/dev/null 2>&1; then
+              sudo -n docker info >/dev/null 2>&1 && echo "PROBE_DOCKER_DAEMON=ready" || echo "PROBE_DOCKER_DAEMON=unavailable"
+              sudo -n docker ps --format '{{.Image}}' 2>/dev/null | grep -qi 'postgres' && echo "PROBE_DOCKER_POSTGRES=present" || echo "PROBE_DOCKER_POSTGRES=absent"
+            fi
+
+            if command -v nginx >/dev/null 2>&1; then
+              sudo -n nginx -t >/dev/null 2>&1 && echo "PROBE_NGINX_CONFIG=valid" || echo "PROBE_NGINX_CONFIG=invalid-or-unavailable"
+              test -d /etc/nginx/sites-available && echo "PROBE_NGINX_SITES_AVAILABLE=yes" || echo "PROBE_NGINX_SITES_AVAILABLE=no"
+              test -d /etc/nginx/sites-enabled && echo "PROBE_NGINX_SITES_ENABLED=yes" || echo "PROBE_NGINX_SITES_ENABLED=no"
+            fi
+
+            if command -v certbot >/dev/null 2>&1; then
+              certbot plugins 2>/dev/null | grep -q 'nginx' && echo "PROBE_CERTBOT_NGINX_PLUGIN=present" || echo "PROBE_CERTBOT_NGINX_PLUGIN=missing"
+            fi
+
+            if getent ahosts evidence-vault.https.gsmsv.site >/dev/null 2>&1; then
+              echo "PROBE_DNS=resolved"
             else
-              echo "PROBE_REPOSITORY=missing"
+              echo "PROBE_DNS=unresolved"
             fi
 
-            if test -f /home/ubuntu/evidence-vault/.env.production; then
-              echo "PROBE_ENVIRONMENT=present"
-              ENV_MODE="$(stat -c '%a' /home/ubuntu/evidence-vault/.env.production 2>/dev/null || true)"
-              ENV_OWNER="$(stat -c '%U' /home/ubuntu/evidence-vault/.env.production 2>/dev/null || true)"
-              echo "PROBE_ENV_MODE=${ENV_MODE:-unknown}"
-              echo "PROBE_ENV_OWNER=${ENV_OWNER:-unknown}"
-            else
-              echo "PROBE_ENVIRONMENT=missing"
-            fi
-
-            if ss -ltn 2>/dev/null | awk '$4 ~ /:3011$/ { found=1 } END { exit found ? 0 : 1 }'; then
-              echo "PROBE_PORT_3011=occupied"
-            else
-              echo "PROBE_PORT_3011=free"
-            fi
-
-            if command -v pm2 >/dev/null 2>&1; then
-              if pm2 pid evidence-vault-preview 2>/dev/null | grep -Eq '^[1-9][0-9]*$'; then
-                echo "PROBE_PM2_EVIDENCE_VAULT=online"
-              else
-                echo "PROBE_PM2_EVIDENCE_VAULT=absent"
-              fi
-            fi
-
-            if command -v pg_isready >/dev/null 2>&1; then
-              pg_isready -q && echo "PROBE_POSTGRES=ready" || echo "PROBE_POSTGRES=not-ready"
-            else
-              echo "PROBE_POSTGRES=client-unavailable"
-            fi
-
-            getent ahosts evidence-vault.https.gsmsv.site >/dev/null 2>&1 && echo "PROBE_DNS=resolved" || echo "PROBE_DNS=unresolved"
-
-            if command -v nginx >/dev/null 2>&1 && sudo -n nginx -T >/tmp/evidence-vault-nginx-probe.txt 2>/dev/null; then
-              grep -Fq 'server_name evidence-vault.https.gsmsv.site' /tmp/evidence-vault-nginx-probe.txt && echo "PROBE_NGINX_ROUTE=present" || echo "PROBE_NGINX_ROUTE=missing"
-              grep -Fq 'proxy_pass http://127.0.0.1:3011' /tmp/evidence-vault-nginx-probe.txt && echo "PROBE_NGINX_UPSTREAM=correct" || echo "PROBE_NGINX_UPSTREAM=missing"
-              rm -f /tmp/evidence-vault-nginx-probe.txt
-            else
-              echo "PROBE_NGINX_ROUTE=unavailable"
-              echo "PROBE_NGINX_UPSTREAM=unavailable"
-            fi
-
-            CERT_COVERAGE=unavailable
-            if command -v openssl >/dev/null 2>&1 && sudo -n test -d /etc/letsencrypt/live 2>/dev/null; then
-              CERT_COVERAGE=missing
-              for CERT in $(sudo -n find /etc/letsencrypt/live -name fullchain.pem -type f -print 2>/dev/null); do
-                if sudo -n openssl x509 -in "$CERT" -noout -ext subjectAltName 2>/dev/null | grep -Eq 'DNS:(\*\.https\.gsmsv\.site|evidence-vault\.https\.gsmsv\.site)'; then
-                  CERT_COVERAGE=covered
-                  break
-                fi
-              done
-            fi
-            echo "PROBE_TLS_CERT=$CERT_COVERAGE"
-
-            LOOPBACK_HEALTH=unavailable
-            if command -v curl >/dev/null 2>&1; then
-              if BODY="$(curl -fsS --max-time 5 http://127.0.0.1:3011/api/health 2>/dev/null)"; then
-                if printf '%s' "$BODY" | grep -q '"ok":true' && printf '%s' "$BODY" | grep -q '"service":"evidence-vault"'; then
-                  LOOPBACK_HEALTH=ok
-                else
-                  LOOPBACK_HEALTH=unexpected
-                fi
-              else
-                LOOPBACK_HEALTH=down
-              fi
-            fi
-            echo "PROBE_LOOPBACK_HEALTH=$LOOPBACK_HEALTH"
-
-            PUBLIC_HEALTH=unavailable
-            if command -v curl >/dev/null 2>&1; then
-              if BODY="$(curl -fsS --max-time 7 https://evidence-vault.https.gsmsv.site/api/health 2>/dev/null)"; then
-                if printf '%s' "$BODY" | grep -q '"ok":true' && printf '%s' "$BODY" | grep -q '"service":"evidence-vault"'; then
-                  PUBLIC_HEALTH=ok
-                else
-                  PUBLIC_HEALTH=unexpected
-                fi
-              else
-                PUBLIC_HEALTH=down
-              fi
-            fi
-            echo "PROBE_PUBLIC_HEALTH=$PUBLIC_HEALTH"
-            echo "PROBE_COMPLETE=yes"
+            echo "PROBE_BOOTSTRAP_COMPLETE=yes"
