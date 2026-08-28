@@ -1,0 +1,73 @@
+name: Task 7 Readonly Probe
+
+on:
+  push:
+    branches:
+      - ops/task7-readonly-probe
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe production state
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          command_timeout: 5m
+          script: |
+            set -eu
+            echo '=== PM2 ==='
+            pm2 jlist | node -e '
+              let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
+                const rows=JSON.parse(s).filter(x=>["playground","backend","bloom-worker","bloom-evaluator-llm","evidence-vault-preview"].includes(x.name));
+                for (const x of rows) console.log([x.name,x.pm2_env?.status,x.pm2_env?.pm_cwd||"",x.pm2_env?.pm_exec_path||""].join("\t"));
+              })'
+
+            echo '=== EVALUATION RUNS ==='
+            cd /home/ubuntu/bloombouquet
+            DB_USER="$(awk '/^[[:space:]]+username:/{print $2; exit}' backend/src/main/resources/application.yml)"
+            DB_PASS="$(awk '/^[[:space:]]+password:/{print $2; exit}' backend/src/main/resources/application.yml)"
+            MYSQL_PWD="$DB_PASS" mysql -h 127.0.0.1 -u "$DB_USER" playground_db -N -B -e "
+              SELECT r.id,r.status,COALESCE(r.worker_id,''),COALESCE(DATE_FORMAT(r.heartbeat_at,'%Y-%m-%dT%H:%i:%s'),''),COALESCE(DATE_FORMAT(r.lease_expires_at,'%Y-%m-%dT%H:%i:%s'),''),p.name,s.version_label,s.demo_url
+              FROM bloom_bouquet_evaluation_runs r
+              JOIN bloom_bouquet_submissions s ON s.id=r.submission_id
+              JOIN bloom_bouquet_projects p ON p.id=s.project_id
+              WHERE r.status IN ('QUEUED','RUNNING')
+              ORDER BY r.created_at ASC;"
+
+            echo '=== EXACT PATH SUBMISSION ==='
+            MYSQL_PWD="$DB_PASS" mysql -h 127.0.0.1 -u "$DB_USER" playground_db -N -B -e "
+              SELECT s.id,p.id,p.name,s.version_label,s.demo_url,s.requires_auth,COALESCE(s.bouquet_client_id,''),COALESCE(s.bouquet_redirect_uri,''),COALESCE(r.id,''),COALESCE(r.status,'')
+              FROM bloom_bouquet_submissions s
+              JOIN bloom_bouquet_projects p ON p.id=s.project_id
+              LEFT JOIN bloom_bouquet_evaluation_runs r ON r.submission_id=s.id
+              WHERE s.demo_url='https://bloombouquet.https.gsmsv.site/apps/evidence-vault/'
+                AND s.bouquet_redirect_uri='https://bloombouquet.https.gsmsv.site/apps/evidence-vault/auth/bouquet/callback'
+                AND s.requires_auth=1
+              ORDER BY s.created_at DESC,r.created_at DESC;"
+
+            echo '=== EVIDENCE VAULT ==='
+            cd /home/ubuntu/evidence-vault
+            printf 'sha='; git rev-parse HEAD
+            if [ -f .env.production ]; then
+              awk -F= '/^(NODE_ENV|PORT|APP_BASE_URL|BOUQUET_BASE_URL|BOUQUET_CLIENT_ID|BOUQUET_REDIRECT_URI)=/{print $1"="$2}' .env.production
+              printf 'env_mode='; stat -c '%a' .env.production
+            else
+              echo 'env=missing'
+            fi
+            printf 'health_old='; curl -sS -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:3011/api/health || true; echo
+            printf 'health_path='; curl -sS -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:3011/apps/evidence-vault/api/health || true; echo
+
+            echo '=== NGINX GATEWAY ==='
+            MATCHES="$(grep -lE 'server_name[[:space:]]+bloombouquet\.https\.gsmsv\.site([[:space:];]|$)' /etc/nginx/sites-enabled/* 2>/dev/null || true)"
+            printf '%s\n' "$MATCHES"
+            if [ -n "$MATCHES" ]; then
+              TARGET="$(printf '%s\n' "$MATCHES" | awk 'NF{print;exit}')"
+              grep -nE 'apps/evidence-vault|proxy_pass http://127\.0\.0\.1:(3000|3011)' "$TARGET" || true
+            fi
