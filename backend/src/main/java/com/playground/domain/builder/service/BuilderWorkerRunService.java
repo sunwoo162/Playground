@@ -20,6 +20,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class BuilderWorkerRunService {
     static final long LEASE_SECONDS = 90;
+    static final int MAX_BLOOM_BOUQUET_REGISTRATION_URL_LENGTH = 12_000;
 
     private final BuilderProjectRepository projectRepository;
     private final BuilderProjectRunRepository runRepository;
@@ -96,7 +97,7 @@ public class BuilderWorkerRunService {
         String preview = normalizeOptional(previewUrl, 500, "미리보기 URL");
         String registrationUrl = normalizeOptional(
                 bloomBouquetRegistrationUrl,
-                6000,
+                MAX_BLOOM_BOUQUET_REGISTRATION_URL_LENGTH,
                 "BloomBouquet 등록 URL"
         );
         if (repository != null) {
