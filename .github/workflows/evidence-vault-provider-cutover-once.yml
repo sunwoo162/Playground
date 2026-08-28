@@ -31,7 +31,7 @@ jobs:
           port: 24136
           username: ubuntu
           password: ${{ secrets.SSH_PASSWORD }}
-          script_stop: true
+          script_stop: false
           script: |
             set -euo pipefail
             APP_DIR="/home/ubuntu/evidence-vault"
@@ -42,11 +42,22 @@ jobs:
             NEW="https://bloombouquet.https.gsmsv.site"
             BACKUP="$(mktemp)"
             TARGET_SCRIPT="$(mktemp)"
+            TMP_ENV=""
+            ROLLBACK_ARMED=false
 
-            cleanup() {
+            finish() {
+              CODE=$?
+              trap - EXIT
+              if [ "$ROLLBACK_ARMED" = "true" ] && [ "$CODE" -ne 0 ]; then
+                install -m 600 "$BACKUP" "$ENV_FILE" || true
+                pm2 restart "$PROCESS_NAME" --update-env >/dev/null 2>&1 || true
+                echo "PROVIDER_CUTOVER=rolled-back" >&2
+              fi
+              if [ -n "$TMP_ENV" ]; then rm -f "$TMP_ENV"; fi
               rm -f "$BACKUP" "$TARGET_SCRIPT"
+              exit "$CODE"
             }
-            trap cleanup EXIT
+            trap finish EXIT
 
             test -d "$APP_DIR/.git"
             test -f "$ENV_FILE"
@@ -91,20 +102,17 @@ jobs:
                 { print }
                 END { if (!replaced) exit 42 }
               ' "$ENV_FILE" > "$TMP_ENV"
+              ROLLBACK_ARMED=true
               install -m 600 "$TMP_ENV" "$ENV_FILE"
               rm -f "$TMP_ENV"
+              TMP_ENV=""
             fi
 
             test "$(stat -c '%a' "$ENV_FILE")" = "600"
             test "$(grep -Ec '^BOUQUET_BASE_URL=' "$ENV_FILE")" = "1"
             grep -E '^BOUQUET_BASE_URL=' "$ENV_FILE" | grep -Fq "$NEW"
 
-            if ! "$TARGET_SCRIPT" "$TARGET_SHA"; then
-              install -m 600 "$BACKUP" "$ENV_FILE"
-              pm2 restart "$PROCESS_NAME" --update-env >/dev/null 2>&1 || true
-              echo "PROVIDER_CUTOVER=rolled-back" >&2
-              exit 1
-            fi
+            "$TARGET_SCRIPT" "$TARGET_SHA"
 
             BODY="$(curl -fsS --retry 10 --retry-delay 2 --max-time 5 http://127.0.0.1:3011/api/health)"
             printf '%s' "$BODY" | grep -q '"ok":true'
@@ -113,6 +121,7 @@ jobs:
             grep -E '^BOUQUET_BASE_URL=' "$ENV_FILE" | grep -Fq "$NEW"
             test "$(stat -c '%a' "$ENV_FILE")" = "600"
             pm2 save >/dev/null
+            ROLLBACK_ARMED=false
             echo "PROVIDER_CUTOVER_ENV_AFTER=new"
             echo "PROVIDER_CUTOVER_LOCAL_HEALTH=ok"
 
