@@ -1,4 +1,4 @@
-name: Task 7 Nginx Context Probe
+name: Task 7 Nginx Default Probe
 
 on:
   push:
@@ -9,10 +9,10 @@ permissions:
   contents: read
 
 jobs:
-  probe-nginx:
+  probe-nginx-default:
     runs-on: ubuntu-latest
     steps:
-      - name: Locate active BloomBouquet nginx config
+      - name: Read active default nginx config
         uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262
         with:
           host: ssh.gsmsv.site
@@ -25,21 +25,10 @@ jobs:
             STATUS="$(pm2 jlist | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const x=JSON.parse(s).find(v=>v.name==="bloom-worker");process.stdout.write(x?.pm2_env?.status||"missing")})')"
             [ "$STATUS" = "stopped" ] || { echo "bloom-worker must stay stopped, found=$STATUS" >&2; exit 1; }
             echo "bloom-worker=$STATUS"
-
-            echo '=== FILE MATCHES ==='
-            sudo grep -RIlE 'server_name[[:space:]]+bloombouquet\.https\.gsmsv\.site([[:space:];]|$)' /etc/nginx 2>/dev/null || true
-
-            echo '=== NGINX -T CONTEXT ==='
-            sudo nginx -T 2>&1 | awk '
-              /# configuration file / { file=$0 }
-              /bloombouquet\.https\.gsmsv\.site/ {
-                print file;
-                print;
-                show=18;
-                next;
-              }
-              show>0 { print; show--; }
-            '
-
-            echo '=== ROOT PROXY REFERENCES ==='
-            sudo grep -RInE 'proxy_pass[[:space:]]+http://(127\.0\.0\.1|localhost):3000' /etc/nginx 2>/dev/null || true
+            ENABLED=/etc/nginx/sites-enabled/default
+            [ -e "$ENABLED" ] || { echo 'default nginx config missing' >&2; exit 1; }
+            printf 'enabled='; readlink -f "$ENABLED"
+            echo '=== CONFIG ==='
+            sudo sed -n '1,220p' "$ENABLED"
+            echo '=== NGINX TEST ==='
+            sudo nginx -t
