@@ -1,0 +1,172 @@
+name: Evidence Vault Final Provider Cutover Once
+
+on:
+  push:
+    branches:
+      - ops/evidence-vault-final-cutover-20260828
+
+permissions:
+  contents: read
+
+jobs:
+  cutover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Verify public routes before mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          EV_BODY="$(curl -fsS --retry 5 --retry-delay 2 --max-time 10 'https://evidence-vault.https.gsmsv.site/api/health')"
+          printf '%s' "$EV_BODY" | grep -q '"ok":true'
+          printf '%s' "$EV_BODY" | grep -q '"service":"evidence-vault"'
+          curl -fsS --retry 5 --retry-delay 2 --max-time 10 'https://bloombouquet.https.gsmsv.site/api/bouquet/auth/me' >/dev/null
+          echo "EV_FINAL_CUTOVER_PUBLIC_PREFLIGHT=ok"
+
+      - name: Require authorized SSH secret
+        env:
+          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+        shell: bash
+        run: |
+          test -n "$SSH_PASSWORD"
+          echo "EV_FINAL_CUTOVER_SSH=available"
+
+      - name: Cut over provider with rollback
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          script_stop: false
+          script: |
+            set -euo pipefail
+            APP_DIR="/home/ubuntu/evidence-vault"
+            ENV_FILE="$APP_DIR/.env.production"
+            PROCESS_NAME="evidence-vault-preview"
+            TARGET_SHA="99f483cbf3603c1e42f99e70010b4c9364c352a4"
+            NEW_PROVIDER="https://bloombouquet.https.gsmsv.site"
+            OLD_PROVIDER="https://playground.https.gsmsv.site"
+            PM2_BIN="$(command -v pm2)"
+            BACKUP_ENV="$ENV_FILE.cutover-backup"
+            PREVIOUS_SHA=""
+            CUTOVER_COMMITTED=false
+
+            activate_pnpm() {
+              export PATH="$HOME/.local/node_modules/.bin:$PATH"
+              corepack enable >/dev/null 2>&1 || true
+              corepack prepare pnpm@10.33.0 --activate >/dev/null 2>&1 || true
+              if ! command -v pnpm >/dev/null 2>&1; then
+                npm install --prefix "$HOME/.local" pnpm@10.33.0 >/dev/null 2>&1
+              fi
+              command -v pnpm >/dev/null
+            }
+
+            rollback_cutover() {
+              status=$?
+              if [ "$status" -eq 0 ] || [ "$CUTOVER_COMMITTED" = "true" ]; then
+                return
+              fi
+              set +e
+              echo "EV_FINAL_CUTOVER_ROLLBACK=begin"
+              if [ -f "$BACKUP_ENV" ]; then
+                cp "$BACKUP_ENV" "$ENV_FILE"
+                chmod 600 "$ENV_FILE"
+              fi
+              if [ -n "$PREVIOUS_SHA" ]; then
+                git -C "$APP_DIR" reset --hard "$PREVIOUS_SHA" >/dev/null 2>&1
+              fi
+              activate_pnpm >/dev/null 2>&1 || true
+              "$PM2_BIN" restart "$PROCESS_NAME" --update-env >/dev/null 2>&1 || true
+              echo "EV_FINAL_CUTOVER_ROLLBACK=attempted"
+              exit "$status"
+            }
+            trap rollback_cutover EXIT
+
+            test -d "$APP_DIR/.git"
+            test -f "$ENV_FILE"
+            test "$(stat -c '%a' "$ENV_FILE")" = "600"
+            test -z "$(sudo -n "$PM2_BIN" pid "$PROCESS_NAME" 2>/dev/null | awk 'NF && $1 != 0 { print $1; exit }' || true)"
+            test -n "$($PM2_BIN pid "$PROCESS_NAME" 2>/dev/null | awk 'NF && $1 != 0 { print $1; exit }' || true)"
+
+            LOCAL_BODY="$(curl -fsS --max-time 5 http://127.0.0.1:3011/api/health)"
+            printf '%s' "$LOCAL_BODY" | grep -q '"ok":true'
+            printf '%s' "$LOCAL_BODY" | grep -q '"service":"evidence-vault"'
+            echo "EV_FINAL_CUTOVER_LOCAL_PREFLIGHT=ok"
+
+            CURRENT_PROVIDER_LINE="$(grep -E '^BOUQUET_BASE_URL=' "$ENV_FILE" | tail -n 1 || true)"
+            printf '%s' "$CURRENT_PROVIDER_LINE" | grep -Fq "$OLD_PROVIDER"
+            echo "EV_FINAL_CUTOVER_PROVIDER_BEFORE=old"
+
+            cd "$APP_DIR"
+            PREVIOUS_SHA="$(git rev-parse HEAD)"
+            cp "$ENV_FILE" "$BACKUP_ENV"
+            chmod 600 "$BACKUP_ENV"
+
+            git fetch origin develop >/dev/null
+            git cat-file -e "$TARGET_SHA^{commit}"
+            git merge-base --is-ancestor "$TARGET_SHA" origin/develop
+            git reset --hard "$TARGET_SHA" >/dev/null
+            test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+            grep -Fq "$NEW_PROVIDER" scripts/start-preview.sh
+            ! grep -Fq "$OLD_PROVIDER" scripts/start-preview.sh
+            echo "EV_FINAL_CUTOVER_SOURCE_SHA=verified"
+
+            TMP_ENV="$(mktemp)"
+            awk -v new_line="BOUQUET_BASE_URL=$NEW_PROVIDER" '
+              BEGIN { found=0 }
+              /^BOUQUET_BASE_URL=/ { print new_line; found=1; next }
+              { print }
+              END { if (!found) exit 42 }
+            ' "$ENV_FILE" > "$TMP_ENV"
+            chmod 600 "$TMP_ENV"
+            mv "$TMP_ENV" "$ENV_FILE"
+            test "$(stat -c '%a' "$ENV_FILE")" = "600"
+            NEW_PROVIDER_LINE="$(grep -E '^BOUQUET_BASE_URL=' "$ENV_FILE" | tail -n 1 || true)"
+            printf '%s' "$NEW_PROVIDER_LINE" | grep -Fq "$NEW_PROVIDER"
+            ! printf '%s' "$NEW_PROVIDER_LINE" | grep -Fq "$OLD_PROVIDER"
+            echo "EV_FINAL_CUTOVER_PROVIDER_AFTER=new"
+
+            activate_pnpm
+            "$PM2_BIN" restart "$PROCESS_NAME" --update-env >/dev/null
+
+            READY=false
+            for attempt in $(seq 1 30); do
+              BODY="$(curl -fsS --max-time 3 http://127.0.0.1:3011/api/health 2>/dev/null || true)"
+              if printf '%s' "$BODY" | grep -q '"ok":true' && printf '%s' "$BODY" | grep -q '"service":"evidence-vault"'; then
+                READY=true
+                break
+              fi
+              sleep 2
+            done
+            test "$READY" = "true"
+            test -n "$($PM2_BIN pid "$PROCESS_NAME" 2>/dev/null | awk 'NF && $1 != 0 { print $1; exit }' || true)"
+            test -z "$(sudo -n "$PM2_BIN" pid "$PROCESS_NAME" 2>/dev/null | awk 'NF && $1 != 0 { print $1; exit }' || true)"
+            "$PM2_BIN" save >/dev/null
+
+            rm -f "$BACKUP_ENV"
+            CUTOVER_COMMITTED=true
+            trap - EXIT
+            echo "EV_FINAL_CUTOVER_LOCAL_HEALTH=ok"
+            echo "EV_FINAL_CUTOVER_COMMITTED=yes"
+
+      - name: Verify public health and OAuth provider
+        shell: bash
+        run: |
+          set -euo pipefail
+          BODY="$(curl -fsS --retry 10 --retry-delay 2 --max-time 10 'https://evidence-vault.https.gsmsv.site/api/health')"
+          printf '%s' "$BODY" | grep -q '"ok":true'
+          printf '%s' "$BODY" | grep -q '"service":"evidence-vault"'
+
+          STATUS="$(curl -sS -D /tmp/ev-oauth-headers -o /dev/null --max-time 10 -w '%{http_code}' 'https://evidence-vault.https.gsmsv.site/auth/bouquet/start')"
+          case "$STATUS" in
+            301|302|303|307|308) ;;
+            *) echo "Unexpected OAuth start status: $STATUS" >&2; exit 1 ;;
+          esac
+          LOCATION="$(awk 'BEGIN{IGNORECASE=1} /^location:/ {sub(/^[^:]+:[[:space:]]*/,""); gsub(/\r/,""); print; exit}' /tmp/ev-oauth-headers)"
+          printf '%s' "$LOCATION" | grep -Fq 'https://bloombouquet.https.gsmsv.site/bloom/'
+          printf '%s' "$LOCATION" | grep -Fq 'mode=auth'
+          ! printf '%s' "$LOCATION" | grep -Fq 'playground.https.gsmsv.site'
+          rm -f /tmp/ev-oauth-headers
+          echo "EV_FINAL_CUTOVER_PUBLIC_HEALTH=ok"
+          echo "EV_FINAL_CUTOVER_OAUTH_PROVIDER=bloombouquet"
