@@ -44,7 +44,7 @@ jobs:
             echo "EV_PM2_NORMALIZE_ENV=old"
 
             cd "$APP_DIR"
-            test -x scripts/start-preview.sh
+            test -f scripts/start-preview.sh
             command -v pnpm >/dev/null
             echo "EV_PM2_NORMALIZE_UBUNTU_PNPM=available"
 
