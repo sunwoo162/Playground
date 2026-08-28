@@ -46,6 +46,31 @@ jobs:
               command -v pnpm >/dev/null
             }
 
+            classify_start_error() {
+              ERROR_LOG="$HOME/.pm2/logs/${PROCESS_NAME}-error.log"
+              if [ ! -f "$ERROR_LOG" ]; then
+                echo "EV_PM2_NORMALIZE_ERROR_LOG=missing"
+                return
+              fi
+              if grep -Fq 'BOUQUET_BASE_URL does not match preview contract' "$ERROR_LOG"; then
+                echo "EV_PM2_NORMALIZE_START_ERROR=provider-contract"
+              elif grep -Fq 'APP_BASE_URL does not match preview contract' "$ERROR_LOG"; then
+                echo "EV_PM2_NORMALIZE_START_ERROR=app-base-contract"
+              elif grep -Fq 'BOUQUET_REDIRECT_URI does not match preview contract' "$ERROR_LOG"; then
+                echo "EV_PM2_NORMALIZE_START_ERROR=redirect-contract"
+              elif grep -Fq 'preview environment missing' "$ERROR_LOG"; then
+                echo "EV_PM2_NORMALIZE_START_ERROR=env-missing"
+              elif grep -Fq 'pnpm: command not found' "$ERROR_LOG"; then
+                echo "EV_PM2_NORMALIZE_START_ERROR=pnpm-path"
+              elif grep -Fq 'Could not find a production build' "$ERROR_LOG"; then
+                echo "EV_PM2_NORMALIZE_START_ERROR=build-missing"
+              elif grep -Fq 'EADDRINUSE' "$ERROR_LOG"; then
+                echo "EV_PM2_NORMALIZE_START_ERROR=port-in-use"
+              else
+                echo "EV_PM2_NORMALIZE_START_ERROR=unclassified"
+              fi
+            }
+
             test -d "$APP_DIR/.git"
             test -f "$ENV_FILE"
             test "$(stat -c '%a' "$ENV_FILE")" = "600"
@@ -82,7 +107,13 @@ jobs:
               "$PM2_BIN" delete "$PROCESS_NAME" >/dev/null
             fi
 
-            "$PM2_BIN" start scripts/start-preview.sh --name "$PROCESS_NAME" --interpreter bash --update-env >/dev/null
+            rm -f "$HOME/.pm2/logs/${PROCESS_NAME}-error.log" "$HOME/.pm2/logs/${PROCESS_NAME}-out.log"
+            if ! "$PM2_BIN" start scripts/start-preview.sh --name "$PROCESS_NAME" --interpreter bash >/dev/null 2>&1; then
+              echo "EV_PM2_NORMALIZE_START=failed"
+              classify_start_error
+              exit 1
+            fi
+            echo "EV_PM2_NORMALIZE_START=accepted"
 
             READY=false
             for attempt in $(seq 1 30); do
@@ -93,7 +124,11 @@ jobs:
               fi
               sleep 2
             done
-            test "$READY" = "true"
+            if [ "$READY" != "true" ]; then
+              echo "EV_PM2_NORMALIZE_HEALTH=failed"
+              classify_start_error
+              exit 1
+            fi
 
             USER_PID="$($PM2_BIN pid "$PROCESS_NAME" 2>/dev/null | awk 'NF && $1 != 0 { print $1; exit }' || true)"
             test -n "$USER_PID"
