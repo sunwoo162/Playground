@@ -57,10 +57,13 @@ jobs:
             sudo systemctl reload nginx
             echo "HTTPS_BOOTSTRAP_NGINX_HTTP=ready"
 
-            HTTP_BODY="$(curl -fsS --max-time 7 "http://$DOMAIN/api/health")"
-            printf '%s' "$HTTP_BODY" | grep -q '"ok":true'
-            printf '%s' "$HTTP_BODY" | grep -q '"service":"evidence-vault"'
-            echo "HTTPS_BOOTSTRAP_PUBLIC_HTTP=ok"
+            HOST_BODY="$(curl -fsS --max-time 5 --resolve "$DOMAIN:80:127.0.0.1" "http://$DOMAIN/api/health")"
+            printf '%s' "$HOST_BODY" | grep -q '"ok":true'
+            printf '%s' "$HOST_BODY" | grep -q '"service":"evidence-vault"'
+            echo "HTTPS_BOOTSTRAP_NGINX_HOST_ROUTE=ok"
+
+            EXTERNAL_HTTP_STATUS="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 7 "http://$DOMAIN/api/health" || true)"
+            echo "HTTPS_BOOTSTRAP_SERVER_HAIRPIN_HTTP_STATUS=${EXTERNAL_HTTP_STATUS:-000}"
 
             sudo certbot --nginx \
               --non-interactive \
@@ -73,24 +76,35 @@ jobs:
             sudo systemctl reload nginx
             echo "HTTPS_BOOTSTRAP_TLS_CONFIG=ready"
 
-            echo | openssl s_client -connect "$DOMAIN:443" -servername "$DOMAIN" 2>/dev/null \
+            TLS_BODY="$(curl -fsS --max-time 7 --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/health")"
+            printf '%s' "$TLS_BODY" | grep -q '"ok":true'
+            printf '%s' "$TLS_BODY" | grep -q '"service":"evidence-vault"'
+            echo "HTTPS_BOOTSTRAP_LOCAL_TLS_HEALTH=ok"
+
+            echo | openssl s_client -connect "127.0.0.1:443" -servername "$DOMAIN" 2>/dev/null \
               | openssl x509 -noout -ext subjectAltName 2>/dev/null \
               | grep -Fq "DNS:$DOMAIN"
             echo "HTTPS_BOOTSTRAP_CERT_COVERAGE=ok"
 
-            HTTPS_BODY="$(curl -fsS --max-time 7 "https://$DOMAIN/api/health")"
-            printf '%s' "$HTTPS_BODY" | grep -q '"ok":true'
-            printf '%s' "$HTTPS_BODY" | grep -q '"service":"evidence-vault"'
-            echo "HTTPS_BOOTSTRAP_PUBLIC_HEALTH=ok"
+      - name: Verify public HTTPS from runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          DOMAIN="evidence-vault.https.gsmsv.site"
 
-            ROOT_STATUS="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 7 "https://$DOMAIN/")"
-            test "$ROOT_STATUS" = "200"
-            echo "HTTPS_BOOTSTRAP_ANONYMOUS_ROOT=ok"
+          HTTPS_BODY="$(curl -fsS --retry 4 --retry-delay 2 --max-time 10 "https://$DOMAIN/api/health")"
+          grep -q '"ok":true' <<<"$HTTPS_BODY"
+          grep -q '"service":"evidence-vault"' <<<"$HTTPS_BODY"
+          echo "HTTPS_BOOTSTRAP_PUBLIC_HEALTH=ok"
 
-            AUTH_STATUS="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 7 "https://$DOMAIN/auth/bouquet/start")"
-            case "$AUTH_STATUS" in
-              301|302|303|307|308) echo "HTTPS_BOOTSTRAP_OAUTH_START=redirect" ;;
-              *) echo "unexpected OAuth start status: $AUTH_STATUS" >&2; exit 1 ;;
-            esac
+          ROOT_STATUS="$(curl -sS -o /dev/null -w '%{http_code}' --retry 4 --retry-delay 2 --max-time 10 "https://$DOMAIN/")"
+          [[ "$ROOT_STATUS" == "200" ]]
+          echo "HTTPS_BOOTSTRAP_ANONYMOUS_ROOT=ok"
 
-            echo "HTTPS_BOOTSTRAP_STAGE_B_COMPLETE=yes"
+          AUTH_STATUS="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "https://$DOMAIN/auth/bouquet/start")"
+          case "$AUTH_STATUS" in
+            301|302|303|307|308) echo "HTTPS_BOOTSTRAP_OAUTH_START=redirect" ;;
+            *) echo "unexpected OAuth start status: $AUTH_STATUS" >&2; exit 1 ;;
+          esac
+
+          echo "HTTPS_BOOTSTRAP_STAGE_B_COMPLETE=yes"
