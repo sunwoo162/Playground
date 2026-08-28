@@ -102,13 +102,13 @@ jobs:
             ACTUAL_SHA256="$(sha256sum "$CANDIDATE" | awk '{print $1}')"
             [ "$ACTUAL_SHA256" = "$GATEWAY_CONFIG_SHA256" ] || fail "gateway config digest mismatch"
 
-            sudo cp -a "$TARGET_CONFIG" "$BACKUP"
+            sudo cat "$TARGET_CONFIG" > "$BACKUP"
             MUTATED=false
 
             restore_gateway() {
               if [ "$MUTATED" = "true" ]; then
                 echo "Restoring previous BloomBouquet Nginx config" >&2
-                sudo cp -a "$BACKUP" "$TARGET_CONFIG" || true
+                sudo cp "$BACKUP" "$TARGET_CONFIG" || true
                 sudo nginx -t || true
                 sudo systemctl reload nginx || true
               fi
