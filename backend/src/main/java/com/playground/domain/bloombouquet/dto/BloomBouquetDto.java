@@ -30,6 +30,21 @@ public class BloomBouquetDto {
         }
     }
 
+    @Getter @Setter @NoArgsConstructor @AllArgsConstructor
+    public static class LunaRegistrationRequest {
+        private Integer schemaVersion;
+        private String teamId;
+        private String teamName;
+        private String projectName;
+        private String projectSlug;
+        private String description;
+        private String version;
+        private String demoUrl;
+        private String repositoryUrl;
+        private boolean requiresAuth;
+        private String authRedirectUri;
+    }
+
     @Getter @Builder @AllArgsConstructor
     public static class TeamResponse {
         private Long id; private String name; private String slug; private LocalDateTime createdAt;
@@ -50,6 +65,13 @@ public class BloomBouquetDto {
         private Long id; private Long teamId; private String teamName;
         private String name; private String slug; private String description; private boolean published;
         private SubmissionResponse latestSubmission; private LocalDateTime createdAt; private LocalDateTime updatedAt;
+    }
+
+    @Getter @Builder @AllArgsConstructor
+    public static class LunaRegistrationResponse {
+        private TeamResponse team;
+        private ProjectResponse project;
+        private SubmissionResponse submission;
     }
 
     @Getter @Builder @AllArgsConstructor
