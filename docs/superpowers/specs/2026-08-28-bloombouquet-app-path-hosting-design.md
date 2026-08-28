@@ -159,40 +159,54 @@ Public showcase changes:
 
 The management surface itself is not deleted. Operators may still reach it directly through the management mode while project registration is required.
 
-## Project Registration and Evaluation
+## Project Registration, OAuth Client Bootstrap, and Evaluation
 
 Path hosting does not bypass the existing BloomBouquet project/submission model.
 
-For Evidence Vault, once the path-hosted application and OAuth callback are production-green, the project should receive a new normal Submission whose `demoUrl` is:
+The existing `SubmissionResponse` returns `bouquetClientId` and `bouquetRedirectUri`. A `requiresAuth=true` Submission creates the OAuth client and evaluation Run together. Therefore the path migration must not assume a client with the new callback exists before the new Submission is created.
 
-`https://bloombouquet.https.gsmsv.site/apps/evidence-vault/`
+Evidence Vault bootstrap contract:
 
-This preserves the evaluator evidence contract and creates a normal evaluation Run. No production DB record is edited directly.
+1. Confirm there is no unrelated Bloom evaluation in `RUNNING` state and stop the evaluator worker before creating the migration Submission.
+2. Through the normal authenticated BloomBouquet management flow, publish a new Evidence Vault Submission with:
+   - `demoUrl=https://bloombouquet.https.gsmsv.site/apps/evidence-vault/`
+   - `requiresAuth=true`
+   - `authRedirectUri=https://bloombouquet.https.gsmsv.site/apps/evidence-vault/auth/bouquet/callback`
+   - canonical Evidence Vault frontend/backend repository URLs.
+3. Read the returned `bouquetClientId` from the normal Submission response; do not read or modify the production DB directly.
+4. Put that client ID and the new app/provider/callback URLs into the Evidence Vault server-only environment.
+5. Deploy/restart Evidence Vault under the new base path and verify OAuth end-to-end.
+6. Resume the evaluator worker only after Evidence Vault is reachable and its login/callback flow is proven.
+7. Observe the queued Submission Run through `RUNNING -> COMPLETED` and preserve the resulting evaluation evidence.
+
+If a migration Submission already exists for the exact new demo/callback contract, reuse its returned client ID rather than creating a duplicate Submission.
 
 ## Deployment Sequence
 
 To avoid a broken callback window:
 
 1. Merge and deploy the pending BloomBouquet server-path migration so `/home/ubuntu/bloombouquet` is canonical for every Bloom runtime, including the evaluator LLM.
-2. Add Evidence Vault base-path support and tests on its repository.
-3. Build and restart Evidence Vault on loopback port 3011 with the new app/auth URL contract.
-4. Add the BloomBouquet Nginx `/apps/evidence-vault/` route.
-5. Verify public landing page, `/_next` assets through the base path, project health route, and dashboard redirect behavior.
-6. Update the registered Bouquet OAuth redirect URI through the normal BloomBouquet owner/submission flow as required by the existing auth client lifecycle.
-7. Verify real Evidence Vault login from the project page through provider and callback.
-8. Publish a new Evidence Vault Submission using the canonical path-hosted demo URL.
-9. Verify the evaluation Run lifecycle.
-10. Remove `evidence-vault.https.gsmsv.site` from GSM-SV only after all new-path checks pass.
+2. Add Evidence Vault base-path support and tests on its repository while the existing standalone domain remains available.
+3. Prepare the BloomBouquet Nginx `/apps/evidence-vault/` route and validate the candidate config with `nginx -t` before reload.
+4. Ensure there is no unrelated `RUNNING` evaluation and stop the evaluator worker for the short auth-client bootstrap window.
+5. Publish the normal authenticated Evidence Vault migration Submission using the new path-hosted demo URL and callback URI, then capture the returned `bouquetClientId`.
+6. Update the Evidence Vault server-only environment with the new app URL, provider URL, callback URI, and returned client ID.
+7. Build and restart Evidence Vault on loopback port 3011 with `basePath=/apps/evidence-vault` and reload the validated Nginx gateway config.
+8. Verify public landing page, prefixed `/_next` assets, path health route, login start redirect, provider callback, project session, and dashboard.
+9. Resume the evaluator worker and verify the migration Submission Run lifecycle.
+10. Verify the BloomBouquet project card opens the canonical path-hosted Evidence Vault URL.
+11. Remove `evidence-vault.https.gsmsv.site` from GSM-SV only after all new-path checks pass.
 
-The current `evidence-vault.https.gsmsv.site` route remains a rollback path until step 10.
+The current `evidence-vault.https.gsmsv.site` route remains a rollback path until step 11.
 
 ## Failure and Rollback Rules
 
 - Nginx config changes require `nginx -t` before reload.
 - Evidence Vault old external route is not removed before the new route and OAuth callback succeed.
-- Evidence Vault production env is backed up before changing app/callback URLs.
-- If the project fails to start after base-path changes, restore the previous env/SHA and PM2 process.
-- If OAuth callback fails, keep the old external route and do not publish the new Submission.
+- Evidence Vault production env is backed up before changing app/callback/client values.
+- If project deployment fails after the migration Submission is created, keep the old external route and restore the previous Evidence Vault SHA/env/process while the evaluator remains stopped until the migration is either repaired or deliberately allowed to fail.
+- Never resume the evaluator under the assumption that the new path works; run the explicit public and OAuth smoke checks first.
+- Do not create a second migration Submission merely to repair deployment; reuse the client ID from the first exact-contract Submission.
 - No direct production DB mutation is used to repair project/submission/auth records.
 
 ## Testing Requirements
@@ -230,6 +244,7 @@ Required before deleting the standalone Evidence Vault domain:
 - Evidence Vault project login redirects to Bouquet provider;
 - provider callback returns to Evidence Vault path;
 - authenticated Evidence Vault session resolves;
+- migration evaluation reaches `COMPLETED` after the worker is resumed;
 - public standalone Evidence Vault domain is deleted only after the above pass.
 
 ## Security Boundaries
@@ -241,6 +256,7 @@ Required before deleting the standalone Evidence Vault domain:
 - Shared provider cookie remains HttpOnly/Secure.
 - Nginx forwards only required proxy headers.
 - Existing evaluator worker/internal endpoints are not exposed through project path routing.
+- Evaluator pause/resume is an operator-only deployment action and never exposed to the public management UI.
 
 ## Non-goals
 
@@ -265,6 +281,6 @@ The migration is complete when:
 3. Evidence Vault initiates shared authentication only from inside Evidence Vault.
 4. OAuth callback and project session work entirely through the path-hosted URL.
 5. BloomBouquet project card opens the path-hosted Evidence Vault site.
-6. New Evidence Vault Submission uses the path-hosted demo URL and evaluator can consume it.
+6. The migration Evidence Vault Submission uses the path-hosted demo URL and its evaluator Run reaches `COMPLETED`.
 7. `evidence-vault.https.gsmsv.site` is removed from GSM-SV.
 8. The pattern is documented well enough that the next project needs only a unique slug, internal port, app base-path support, and one static gateway mapping.
