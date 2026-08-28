@@ -10,13 +10,16 @@ test('public showcase is a launcher, not a login surface', () => {
   assert.doesNotMatch(source, /target="_blank"/);
 });
 
-test('gateway uses only fixed BloomBouquet project mappings', () => {
+test('gateway uses only fixed BloomBouquet project mappings and preserves proxy protocol', () => {
   const nginx = fs.readFileSync('deploy/nginx/bloombouquet.conf', 'utf8');
+  assert.match(nginx, /server_name playground\.https\.gsmsv\.site bloombouquet\.https\.gsmsv\.site;/);
   assert.match(nginx, /location = \/apps\/evidence-vault/);
   assert.match(nginx, /return 308 \/apps\/evidence-vault\//);
   assert.match(nginx, /location \^~ \/apps\/evidence-vault\//);
   assert.match(nginx, /proxy_pass http:\/\/127\.0\.0\.1:3011;/);
   assert.match(nginx, /location \/[\s\S]*proxy_pass http:\/\/127\.0\.0\.1:3000;/);
+  assert.doesNotMatch(nginx, /proxy_set_header X-Forwarded-Proto \$scheme/);
+  assert.equal((nginx.match(/proxy_set_header X-Forwarded-Proto https;/g) ?? []).length, 2);
 });
 
 test('gateway deployment is manual-only', () => {
@@ -26,14 +29,17 @@ test('gateway deployment is manual-only', () => {
   assert.doesNotMatch(workflow, /pull_request:/);
 });
 
-test('gateway deployment probes fixed upstreams and owns a reversible nginx backup', () => {
+test('gateway deployment targets the actual enabled default config with a guarded rollback', () => {
   const workflow = fs.readFileSync('.github/workflows/deploy-bloombouquet-app-gateway.yml', 'utf8');
 
   assert.match(workflow, /appleboy\/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262/);
   assert.match(workflow, /http:\/\/127\.0\.0\.1:3000\//);
   assert.match(workflow, /http:\/\/127\.0\.0\.1:3011\/apps\/evidence-vault\/api\/health/);
-  assert.match(workflow, /readlink -f/);
-  assert.match(workflow, /MATCH_COUNT/);
+  assert.match(workflow, /ENABLED_CONFIG="\/etc\/nginx\/sites-enabled\/default"/);
+  assert.match(workflow, /readlink -f "\$ENABLED_CONFIG"/);
+  assert.match(workflow, /proxy_pass http:\/\/127\.0\.0\.1:3000;/);
+  assert.match(workflow, /Refusing gateway mutation/);
+  assert.doesNotMatch(workflow, /MATCH_COUNT/);
   assert.match(workflow, /sudo cat "\$TARGET_CONFIG" > "\$BACKUP"/);
   assert.match(workflow, /trap restore_gateway EXIT/);
   assert.match(workflow, /sudo nginx -t/);
