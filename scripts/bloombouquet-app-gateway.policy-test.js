@@ -17,9 +17,13 @@ test('gateway uses only fixed BloomBouquet project mappings and preserves proxy 
   assert.match(nginx, /return 308 \/apps\/evidence-vault\//);
   assert.match(nginx, /location \^~ \/apps\/evidence-vault\//);
   assert.match(nginx, /proxy_pass http:\/\/127\.0\.0\.1:3011;/);
+  assert.match(nginx, /location = \/apps\/beriday/);
+  assert.match(nginx, /return 308 \/apps\/beriday\//);
+  assert.match(nginx, /location \^~ \/apps\/beriday\//);
+  assert.match(nginx, /proxy_pass http:\/\/127\.0\.0\.1:3012\//);
   assert.match(nginx, /location \/[\s\S]*proxy_pass http:\/\/127\.0\.0\.1:3000;/);
   assert.doesNotMatch(nginx, /proxy_set_header X-Forwarded-Proto \$scheme/);
-  assert.equal((nginx.match(/proxy_set_header X-Forwarded-Proto https;/g) ?? []).length, 2);
+  assert.equal((nginx.match(/proxy_set_header X-Forwarded-Proto https;/g) ?? []).length, 3);
 });
 
 test('gateway deployment is manual-only', () => {
@@ -29,12 +33,31 @@ test('gateway deployment is manual-only', () => {
   assert.doesNotMatch(workflow, /pull_request:/);
 });
 
+test('Beriday deployment is manual-only and targets the fixed production process', () => {
+  const workflowPath = '.github/workflows/deploy-beriday.yml';
+  assert.equal(fs.existsSync(workflowPath), true, 'deploy-beriday.yml must exist');
+  const workflow = fs.readFileSync(workflowPath, 'utf8');
+
+  assert.match(workflow, /workflow_dispatch:/);
+  assert.doesNotMatch(workflow, /push:/);
+  assert.doesNotMatch(workflow, /pull_request:/);
+  assert.match(workflow, /\/home\/ubuntu\/bloombouquet\/apps\/beriday/);
+  assert.match(workflow, /git reset --hard origin\/main/);
+  assert.match(workflow, /npm ci/);
+  assert.match(workflow, /npm run build/);
+  assert.match(workflow, /pm2 serve dist 3012 --spa --name beriday/);
+  assert.match(workflow, /http:\/\/127\.0\.0\.1:3012\//);
+  assert.match(workflow, /http:\/\/127\.0\.0\.1:3012\/data\/runtime\/manifest\.json/);
+});
+
 test('gateway deployment targets the actual enabled default config with a guarded rollback', () => {
   const workflow = fs.readFileSync('.github/workflows/deploy-bloombouquet-app-gateway.yml', 'utf8');
 
   assert.match(workflow, /appleboy\/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262/);
   assert.match(workflow, /http:\/\/127\.0\.0\.1:3000\//);
   assert.match(workflow, /http:\/\/127\.0\.0\.1:3011\/apps\/evidence-vault\/api\/health/);
+  assert.match(workflow, /http:\/\/127\.0\.0\.1:3012\//);
+  assert.match(workflow, /http:\/\/127\.0\.0\.1:3012\/data\/runtime\/manifest\.json/);
   assert.match(workflow, /ENABLED_CONFIG="\/etc\/nginx\/sites-enabled\/default"/);
   assert.match(workflow, /readlink -f "\$ENABLED_CONFIG"/);
   assert.match(workflow, /proxy_pass http:\/\/127\.0\.0\.1:3000;/);
@@ -45,4 +68,6 @@ test('gateway deployment targets the actual enabled default config with a guarde
   assert.match(workflow, /sudo nginx -t/);
   assert.match(workflow, /sudo systemctl reload nginx/);
   assert.match(workflow, /https:\/\/\$\{DOMAIN\}\/apps\/evidence-vault\/api\/health/);
+  assert.match(workflow, /https:\/\/\$\{DOMAIN\}\/apps\/beriday\//);
+  assert.match(workflow, /https:\/\/\$\{DOMAIN\}\/apps\/beriday\/data\/runtime\/manifest\.json/);
 });
