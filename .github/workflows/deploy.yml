@@ -99,6 +99,16 @@ jobs:
               exit 1
             }
 
+            secure_production_env_files() {
+              SHARED_ENV_FILE="/home/ubuntu/bloombouquet/.env"
+              BACKEND_ENV_FILE="/home/ubuntu/bloombouquet/.env.backend"
+              test -f "$SHARED_ENV_FILE" || record_failure "shared production env missing"
+              chmod 600 "$SHARED_ENV_FILE"
+              if [ -f "$BACKEND_ENV_FILE" ]; then
+                chmod 600 "$BACKEND_ENV_FILE"
+              fi
+            }
+
             dump_backend_diagnostics() {
               echo "=== BloomBouquet backend diagnostics ==="
               pm2 status backend || true
@@ -140,6 +150,7 @@ jobs:
 
             git fetch origin main || record_failure "git fetch failed"
             git reset --hard origin/main || record_failure "git reset failed"
+            secure_production_env_files
 
             export PATH="$HOME/.local/node_modules/.bin:$PATH"
             corepack enable || true
