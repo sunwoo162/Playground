@@ -2,6 +2,7 @@ import type { TeamId } from "./types";
 
 export const BLOOM_BOUQUET_MANAGE_ORIGIN = "https://bloombouquet.https.gsmsv.site";
 export const LUNA_BLOOM_BOUQUET_REGISTRATION_SCHEMA_VERSION = 1 as const;
+export const LUNA_BLOOM_BOUQUET_HANDOFF_MAX_LENGTH = 12_000;
 
 const TEAM_NAMES: Record<TeamId, string> = {
   rose: "장미",
@@ -112,6 +113,9 @@ function isTeamId(value: unknown): value is TeamId {
 export function decodeBloomBouquetRegistrationPayload(
   encoded: string,
 ): LunaBloomBouquetRegistrationPayload {
+  if (encoded.length > LUNA_BLOOM_BOUQUET_HANDOFF_MAX_LENGTH) {
+    throw new Error("Luna BloomBouquet 등록 payload가 허용 길이를 초과했습니다.");
+  }
   const parsed = JSON.parse(decodeBase64UrlUtf8(encoded)) as Partial<LunaBloomBouquetRegistrationPayload>;
   if (parsed.schemaVersion !== LUNA_BLOOM_BOUQUET_REGISTRATION_SCHEMA_VERSION) {
     throw new Error("지원하지 않는 Luna BloomBouquet 등록 schema입니다.");
@@ -159,8 +163,11 @@ export function buildBloomBouquetRegistrationUrl(
     authRedirectUri: input.requiresAuth ? authCallbackUrl(demoUrl) : null,
   };
 
+  const encoded = encodeBase64UrlUtf8(JSON.stringify(payload));
+  if (encoded.length > LUNA_BLOOM_BOUQUET_HANDOFF_MAX_LENGTH) return null;
+
   const url = new URL(BLOOM_BOUQUET_MANAGE_ORIGIN);
   url.searchParams.set("mode", "manage");
-  url.searchParams.set("luna", encodeBase64UrlUtf8(JSON.stringify(payload)));
+  url.searchParams.set("luna", encoded);
   return url.toString();
 }
