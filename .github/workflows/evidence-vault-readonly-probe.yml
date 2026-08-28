@@ -1,4 +1,4 @@
-name: Evidence Vault HTTPS Bootstrap
+name: Evidence Vault ACME Diagnose
 
 on:
   push:
@@ -9,9 +9,9 @@ permissions:
   contents: read
 
 jobs:
-  https-bootstrap:
+  diagnose:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
       - name: Require authorized SSH secret
         env:
@@ -19,92 +19,49 @@ jobs:
         shell: bash
         run: |
           if [[ -z "$SSH_PASSWORD" ]]; then
-            echo "HTTPS_BOOTSTRAP_SSH=unavailable"
+            echo "ACME_DIAG_SSH=unavailable"
             exit 1
           fi
-          echo "HTTPS_BOOTSTRAP_SSH=available"
+          echo "ACME_DIAG_SSH=available"
 
-      - name: Configure Nginx and TLS for Evidence Vault
+      - name: Diagnose ACME routing read-only
         uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262
         with:
           host: ssh.gsmsv.site
           port: 24136
           username: ubuntu
           password: ${{ secrets.SSH_PASSWORD }}
-          command_timeout: 15m
           script_stop: false
           script: |
             set -eu
-            APP_DIR="/home/ubuntu/evidence-vault"
             DOMAIN="evidence-vault.https.gsmsv.site"
-            SITE="evidence-vault-preview"
 
-            echo "HTTPS_BOOTSTRAP_HOST_REACHED=yes"
+            echo "ACME_DIAG_HOST_REACHED=yes"
+            echo "ACME_DIAG_DNS_V4=$(getent ahostsv4 "$DOMAIN" | awk 'NR==1 {print $1}')"
 
-            test -d "$APP_DIR/.git"
-            test "$(git -C "$APP_DIR" rev-parse HEAD)" = "0ddff8f5734928b5b275ff27aeda41fe8aea5430"
-            test -f "$APP_DIR/.env.production"
-            test "$(stat -c '%a' "$APP_DIR/.env.production")" = "600"
+            LOCAL_STATUS="$(curl -sS -o /dev/null -w '%{http_code}' --resolve "$DOMAIN:80:127.0.0.1" "http://$DOMAIN/.well-known/acme-challenge/probe")"
+            echo "ACME_DIAG_LOCAL_HTTP_STATUS=$LOCAL_STATUS"
 
-            BODY="$(curl -fsS --max-time 5 http://127.0.0.1:3011/api/health)"
-            printf '%s' "$BODY" | grep -q '"ok":true'
-            printf '%s' "$BODY" | grep -q '"service":"evidence-vault"'
-            echo "HTTPS_BOOTSTRAP_LOOPBACK_HEALTH=ok"
+            EXTERNAL_STATUS="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 7 "http://$DOMAIN/.well-known/acme-challenge/probe" || true)"
+            echo "ACME_DIAG_EXTERNAL_HTTP_STATUS=${EXTERNAL_STATUS:-000}"
 
-            sudo install -m 0644 "$APP_DIR/deploy/nginx/evidence-vault-preview.conf.template" "/etc/nginx/sites-available/$SITE"
-            sudo ln -sfn "/etc/nginx/sites-available/$SITE" "/etc/nginx/sites-enabled/$SITE"
-            sudo nginx -t >/dev/null
-            sudo systemctl reload nginx
-            echo "HTTPS_BOOTSTRAP_NGINX_HTTP=ready"
+            REDIRECT_TARGET="$(curl -sSI --max-time 7 "http://$DOMAIN/.well-known/acme-challenge/probe" 2>/dev/null | awk 'BEGIN{IGNORECASE=1} /^location:/ {sub(/\r$/, ""); print $2; exit}' || true)"
+            case "$REDIRECT_TARGET" in
+              https://$DOMAIN/*) echo "ACME_DIAG_EXTERNAL_REDIRECT=https-same-host" ;;
+              "") echo "ACME_DIAG_EXTERNAL_REDIRECT=none" ;;
+              *) echo "ACME_DIAG_EXTERNAL_REDIRECT=other" ;;
+            esac
 
-            HOST_BODY="$(curl -fsS --max-time 5 --resolve "$DOMAIN:80:127.0.0.1" "http://$DOMAIN/api/health")"
-            printf '%s' "$HOST_BODY" | grep -q '"ok":true'
-            printf '%s' "$HOST_BODY" | grep -q '"service":"evidence-vault"'
-            echo "HTTPS_BOOTSTRAP_NGINX_HOST_ROUTE=ok"
+            echo "ACME_DIAG_CERTBOT_ERRORS_BEGIN"
+            sudo grep -E 'unauthorized|Invalid response|Detail:|Type:|Domain:|challenge|Connection refused|Timeout' /var/log/letsencrypt/letsencrypt.log 2>/dev/null | tail -n 40 || true
+            echo "ACME_DIAG_CERTBOT_ERRORS_END"
 
-            EXTERNAL_HTTP_STATUS="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 7 "http://$DOMAIN/api/health" || true)"
-            echo "HTTPS_BOOTSTRAP_SERVER_HAIRPIN_HTTP_STATUS=${EXTERNAL_HTTP_STATUS:-000}"
-
-            sudo certbot --nginx \
-              --non-interactive \
-              --agree-tos \
-              --register-unsafely-without-email \
-              --redirect \
-              -d "$DOMAIN" >/dev/null
-
-            sudo nginx -t >/dev/null
-            sudo systemctl reload nginx
-            echo "HTTPS_BOOTSTRAP_TLS_CONFIG=ready"
-
-            TLS_BODY="$(curl -fsS --max-time 7 --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/health")"
-            printf '%s' "$TLS_BODY" | grep -q '"ok":true'
-            printf '%s' "$TLS_BODY" | grep -q '"service":"evidence-vault"'
-            echo "HTTPS_BOOTSTRAP_LOCAL_TLS_HEALTH=ok"
-
-            echo | openssl s_client -connect "127.0.0.1:443" -servername "$DOMAIN" 2>/dev/null \
-              | openssl x509 -noout -ext subjectAltName 2>/dev/null \
-              | grep -Fq "DNS:$DOMAIN"
-            echo "HTTPS_BOOTSTRAP_CERT_COVERAGE=ok"
-
-      - name: Verify public HTTPS from runner
+      - name: Diagnose public routing from runner
         shell: bash
         run: |
           set -euo pipefail
           DOMAIN="evidence-vault.https.gsmsv.site"
-
-          HTTPS_BODY="$(curl -fsS --retry 4 --retry-delay 2 --max-time 10 "https://$DOMAIN/api/health")"
-          grep -q '"ok":true' <<<"$HTTPS_BODY"
-          grep -q '"service":"evidence-vault"' <<<"$HTTPS_BODY"
-          echo "HTTPS_BOOTSTRAP_PUBLIC_HEALTH=ok"
-
-          ROOT_STATUS="$(curl -sS -o /dev/null -w '%{http_code}' --retry 4 --retry-delay 2 --max-time 10 "https://$DOMAIN/")"
-          [[ "$ROOT_STATUS" == "200" ]]
-          echo "HTTPS_BOOTSTRAP_ANONYMOUS_ROOT=ok"
-
-          AUTH_STATUS="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "https://$DOMAIN/auth/bouquet/start")"
-          case "$AUTH_STATUS" in
-            301|302|303|307|308) echo "HTTPS_BOOTSTRAP_OAUTH_START=redirect" ;;
-            *) echo "unexpected OAuth start status: $AUTH_STATUS" >&2; exit 1 ;;
-          esac
-
-          echo "HTTPS_BOOTSTRAP_STAGE_B_COMPLETE=yes"
+          HTTP_STATUS="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "http://$DOMAIN/.well-known/acme-challenge/probe" || true)"
+          HTTPS_STATUS="$(curl -ksS -o /dev/null -w '%{http_code}' --max-time 10 "https://$DOMAIN/.well-known/acme-challenge/probe" || true)"
+          echo "ACME_DIAG_RUNNER_HTTP_STATUS=${HTTP_STATUS:-000}"
+          echo "ACME_DIAG_RUNNER_HTTPS_STATUS=${HTTPS_STATUS:-000}"
