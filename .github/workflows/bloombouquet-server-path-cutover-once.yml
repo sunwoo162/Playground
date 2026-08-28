@@ -1,0 +1,215 @@
+name: BloomBouquet Server Path Cutover Once
+
+on:
+  push:
+    branches:
+      - ops/bloombouquet-server-path-cutover-20260828
+
+permissions:
+  contents: read
+
+jobs:
+  cutover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Verify public service before mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$(curl -fsS --retry 5 --retry-delay 2 --max-time 10 https://bloombouquet.https.gsmsv.site/)"
+          printf '%s' "$ROOT" | grep -q '<title>BloomBouquet</title>'
+          AUTH="$(curl -fsS --retry 5 --retry-delay 2 --max-time 10 https://bloombouquet.https.gsmsv.site/api/bouquet/auth/me)"
+          printf '%s' "$AUTH" | grep -q '"user":null'
+          echo "BLOOM_PATH_CUTOVER_PUBLIC_PREFLIGHT=ok"
+
+      - name: Require authorized SSH secret
+        env:
+          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+        shell: bash
+        run: |
+          test -n "$SSH_PASSWORD"
+          echo "BLOOM_PATH_CUTOVER_SSH=available"
+
+      - name: Prepare and switch production path with rollback
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          command_timeout: 18m
+          script_stop: false
+          script: |
+            set -eu
+            OLD="/home/ubuntu/playground"
+            NEW="/home/ubuntu/bloombouquet"
+            TARGET_SHA="1d81ef5f2ab215158ef0d54c455cedc65df14e59"
+            TARGET_BRANCH="refactor/bloombouquet-server-path"
+            PM2_BIN="$(command -v pm2)"
+            CUTOVER_STARTED=false
+            CUTOVER_COMMITTED=false
+
+            activate_pnpm() {
+              export PATH="$HOME/.local/node_modules/.bin:$PATH"
+              corepack enable >/dev/null 2>&1 || true
+              corepack prepare pnpm@10.33.0 --activate >/dev/null 2>&1 || true
+              if ! command -v pnpm >/dev/null 2>&1; then
+                npm install --prefix "$HOME/.local" pnpm@10.33.0 >/dev/null 2>&1
+              fi
+              command -v pnpm >/dev/null 2>&1
+            }
+
+            restore_old_runtime() {
+              set +e
+              echo "BLOOM_PATH_CUTOVER_ROLLBACK=begin"
+              "$PM2_BIN" delete bloom-worker >/dev/null 2>&1 || true
+              "$PM2_BIN" delete backend >/dev/null 2>&1 || true
+              "$PM2_BIN" delete playground >/dev/null 2>&1 || true
+              if [ -d "$OLD/.git" ]; then
+                cd "$OLD"
+                "$PM2_BIN" start ecosystem.config.js --only playground --update-env >/dev/null 2>&1 || true
+                "$PM2_BIN" start ecosystem.config.js --only backend --update-env >/dev/null 2>&1 || true
+                "$PM2_BIN" start ecosystem.config.js --only bloom-worker --update-env >/dev/null 2>&1 || true
+                "$PM2_BIN" save >/dev/null 2>&1 || true
+              fi
+              echo "BLOOM_PATH_CUTOVER_ROLLBACK=attempted"
+            }
+
+            on_exit() {
+              STATUS=$?
+              if [ "$STATUS" -eq 0 ] && [ "$CUTOVER_COMMITTED" = "true" ]; then
+                return
+              fi
+              if [ "$CUTOVER_STARTED" = "true" ]; then
+                restore_old_runtime
+              fi
+              if [ -d "$NEW" ]; then
+                rm -rf "$NEW"
+              fi
+              exit "$STATUS"
+            }
+            trap on_exit EXIT
+
+            test -d "$OLD/.git"
+            test ! -e "$NEW"
+            test -f "$OLD/.env"
+            chmod 600 "$OLD/.env"
+            if [ -f "$OLD/.env.backend" ]; then
+              chmod 600 "$OLD/.env.backend"
+            fi
+            echo "BLOOM_PATH_CUTOVER_OLD_ENV_PERMISSIONS=secured"
+
+            ROOT="$(curl -fsS --max-time 5 http://127.0.0.1:3000/)"
+            printf '%s' "$ROOT" | grep -q '<title>BloomBouquet</title>'
+            curl -fsS --max-time 5 http://127.0.0.1:8080/api/bouquet/auth/me >/dev/null
+            curl -fsS --max-time 5 http://127.0.0.1:8091/health >/dev/null
+            echo "BLOOM_PATH_CUTOVER_LOCAL_PREFLIGHT=ok"
+
+            node <<'NODE'
+            const { execFileSync } = require('node:child_process');
+            const list = JSON.parse(execFileSync('pm2', ['jlist'], { encoding: 'utf8' }));
+            for (const name of ['playground', 'backend', 'bloom-worker', 'bloom-evaluator-llm']) {
+              const app = list.find((entry) => entry.name === name);
+              if (!app || app.pm2_env?.status !== 'online') process.exit(1);
+              const cwd = app.pm2_env?.pm_cwd || '';
+              const execPath = app.pm2_env?.pm_exec_path || '';
+              if (!cwd.includes('/home/ubuntu/playground') && !execPath.includes('/home/ubuntu/playground')) process.exit(1);
+            }
+            console.log('BLOOM_PATH_CUTOVER_PM2_PREFLIGHT=old-online');
+            NODE
+
+            git clone --quiet --no-checkout https://github.com/sunwoo162/Playground.git "$NEW"
+            git -C "$NEW" fetch --quiet origin "$TARGET_BRANCH"
+            git -C "$NEW" cat-file -e "$TARGET_SHA^{commit}"
+            git -C "$NEW" merge-base --is-ancestor "$TARGET_SHA" "origin/$TARGET_BRANCH"
+            git -C "$NEW" checkout --quiet --detach "$TARGET_SHA"
+            test "$(git -C "$NEW" rev-parse HEAD)" = "$TARGET_SHA"
+
+            install -m 600 "$OLD/.env" "$NEW/.env"
+            if [ -f "$OLD/.env.backend" ]; then
+              install -m 600 "$OLD/.env.backend" "$NEW/.env.backend"
+            fi
+            test "$(stat -c '%a' "$NEW/.env")" = "600"
+            if [ -f "$NEW/.env.backend" ]; then
+              test "$(stat -c '%a' "$NEW/.env.backend")" = "600"
+            fi
+            echo "BLOOM_PATH_CUTOVER_NEW_ENV_PERMISSIONS=600"
+
+            activate_pnpm
+            cd "$NEW"
+            pnpm install --frozen-lockfile >/tmp/bloom-path-pnpm.log 2>&1 || { cat /tmp/bloom-path-pnpm.log; exit 1; }
+            pnpm run build:bloom-web >/tmp/bloom-path-web.log 2>&1 || { cat /tmp/bloom-path-web.log; exit 1; }
+            pnpm run build:bloom-worker >/tmp/bloom-path-worker.log 2>&1 || { cat /tmp/bloom-path-worker.log; exit 1; }
+            chmod +x backend/gradlew
+            (cd backend && ./gradlew bootJar -x test --no-daemon >/tmp/bloom-path-backend.log 2>&1) || { cat /tmp/bloom-path-backend.log; exit 1; }
+            test -f dist/index.html
+            grep -q '<title>BloomBouquet</title>' dist/index.html
+            test -f backend/build/libs/playground-backend-0.0.1-SNAPSHOT.jar
+            rm -f /tmp/bloom-path-pnpm.log /tmp/bloom-path-web.log /tmp/bloom-path-worker.log /tmp/bloom-path-backend.log
+            echo "BLOOM_PATH_CUTOVER_NEW_BUILD=ready"
+
+            CUTOVER_STARTED=true
+            "$PM2_BIN" delete bloom-worker >/dev/null 2>&1 || true
+            "$PM2_BIN" delete backend >/dev/null 2>&1 || true
+            "$PM2_BIN" delete playground >/dev/null 2>&1 || true
+
+            cd "$NEW"
+            "$PM2_BIN" start ecosystem.config.js --only playground --update-env >/dev/null
+            "$PM2_BIN" start ecosystem.config.js --only backend --update-env >/dev/null
+
+            ROOT_OK=false
+            AUTH_OK=false
+            for attempt in $(seq 1 40); do
+              ROOT_BODY="$(curl -fsS --max-time 3 http://127.0.0.1:3000/ 2>/dev/null || true)"
+              if printf '%s' "$ROOT_BODY" | grep -q '<title>BloomBouquet</title>'; then ROOT_OK=true; fi
+              if curl -fsS --max-time 3 http://127.0.0.1:8080/api/bouquet/auth/me >/dev/null 2>&1; then AUTH_OK=true; fi
+              if [ "$ROOT_OK" = "true" ] && [ "$AUTH_OK" = "true" ]; then break; fi
+              sleep 2
+            done
+            test "$ROOT_OK" = "true"
+            test "$AUTH_OK" = "true"
+
+            "$PM2_BIN" start ecosystem.config.js --only bloom-worker --update-env >/dev/null
+            sleep 3
+            WORKER_PID="$($PM2_BIN pid bloom-worker 2>/dev/null | awk 'NF && $1 != 0 { print $1; exit }')"
+            test -n "$WORKER_PID"
+            curl -fsS --max-time 5 http://127.0.0.1:8091/health >/dev/null
+
+            node <<'NODE'
+            const { execFileSync } = require('node:child_process');
+            const list = JSON.parse(execFileSync('pm2', ['jlist'], { encoding: 'utf8' }));
+            for (const name of ['playground', 'backend', 'bloom-worker']) {
+              const app = list.find((entry) => entry.name === name);
+              if (!app || app.pm2_env?.status !== 'online') process.exit(1);
+              const cwd = app.pm2_env?.pm_cwd || '';
+              const execPath = app.pm2_env?.pm_exec_path || '';
+              if (!cwd.includes('/home/ubuntu/bloombouquet') && !execPath.includes('/home/ubuntu/bloombouquet')) process.exit(1);
+            }
+            const llm = list.find((entry) => entry.name === 'bloom-evaluator-llm');
+            if (!llm || llm.pm2_env?.status !== 'online') process.exit(1);
+            console.log('BLOOM_PATH_CUTOVER_PM2_CORE_PATHS=new');
+            console.log('BLOOM_PATH_CUTOVER_EVALUATOR=online-pending-post-merge-rehome');
+            NODE
+
+            "$PM2_BIN" save >/dev/null
+            CUTOVER_COMMITTED=true
+            trap - EXIT
+            echo "BLOOM_PATH_CUTOVER_SERVER=committed"
+
+      - name: Verify public service after cutover
+        shell: bash
+        run: |
+          set -euo pipefail
+          OK=false
+          for attempt in $(seq 1 20); do
+            ROOT="$(curl -fsS --max-time 10 https://bloombouquet.https.gsmsv.site/ 2>/dev/null || true)"
+            AUTH="$(curl -fsS --max-time 10 https://bloombouquet.https.gsmsv.site/api/bouquet/auth/me 2>/dev/null || true)"
+            if printf '%s' "$ROOT" | grep -q '<title>BloomBouquet</title>' && printf '%s' "$AUTH" | grep -q '"user":null'; then
+              OK=true
+              break
+            fi
+            sleep 2
+          done
+          test "$OK" = "true"
+          echo "BLOOM_PATH_CUTOVER_PUBLIC_POSTCHECK=ok"
