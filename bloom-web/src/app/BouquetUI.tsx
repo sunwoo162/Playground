@@ -41,7 +41,7 @@ function statusTone(status: string | null) {
 }
 
 export function StatusBadge({ status, children }: { status: string | null; children?: ReactNode }) {
-  const text = children ?? (status ? status.replaceAll('_', ' ') : '미평가')
+  const text = children ?? (status ? status.replace(/_/g, ' ') : '미평가')
   return <span className={cx('bouquet-status-badge', `is-${statusTone(status)}`)}>{text}</span>
 }
 
@@ -110,7 +110,7 @@ export function ProjectVisual({ name, teamName, status, featured = false }: { na
       <div className="bouquet-project-visual-copy">
         <small>TEAM {teamName}</small>
         <strong>{name}</strong>
-        <span>{status ? status.replaceAll('_', ' ') : 'CURATED BUILD'}</span>
+        <span>{status ? status.replace(/_/g, ' ') : 'CURATED BUILD'}</span>
       </div>
     </div>
   )
