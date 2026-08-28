@@ -1,4 +1,4 @@
-name: BloomBouquet Domain Probe
+name: BloomBouquet Domain Override Probe
 
 on:
   push:
@@ -13,32 +13,53 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Verify replacement domain from runner
+      - name: Require authorized SSH secret
+        env:
+          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
         shell: bash
         run: |
-          set -euo pipefail
-          NEW_DOMAIN="bloombouquet.https.gsmsv.site"
-          OLD_DOMAIN="playground.https.gsmsv.site"
+          if [[ -z "$SSH_PASSWORD" ]]; then
+            echo "DOMAIN_OVERRIDE_SSH=unavailable"
+            exit 1
+          fi
+          echo "DOMAIN_OVERRIDE_SSH=available"
 
-          NEW_ROOT_STATUS="$(curl -sS -o /tmp/new-root -w '%{http_code}' --max-time 10 "https://$NEW_DOMAIN/" || true)"
-          NEW_AUTH_STATUS="$(curl -sS -o /tmp/new-auth -w '%{http_code}' --max-time 10 "https://$NEW_DOMAIN/api/bouquet/auth/me" || true)"
-          OLD_ROOT_STATUS="$(curl -sS -o /tmp/old-root -w '%{http_code}' --max-time 10 "https://$OLD_DOMAIN/" || true)"
+      - name: Inspect hostname overrides read-only
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          script_stop: false
+          script: |
+            set -eu
+            OLD="playground.https.gsmsv.site"
+            NEW="bloombouquet.https.gsmsv.site"
 
-          echo "DOMAIN_PROBE_NEW_ROOT_STATUS=${NEW_ROOT_STATUS:-000}"
-          echo "DOMAIN_PROBE_NEW_AUTH_STATUS=${NEW_AUTH_STATUS:-000}"
-          echo "DOMAIN_PROBE_OLD_ROOT_STATUS=${OLD_ROOT_STATUS:-000}"
+            classify_key() {
+              FILE="$1"
+              KEY="$2"
+              LABEL="$3"
+              if test ! -f "$FILE"; then
+                echo "$LABEL=file-missing"
+                return
+              fi
+              LINE="$(grep -E "^${KEY}=" "$FILE" | tail -n 1 || true)"
+              if test -z "$LINE"; then
+                echo "$LABEL=absent"
+              elif printf '%s' "$LINE" | grep -Fq "$NEW"; then
+                echo "$LABEL=new"
+              elif printf '%s' "$LINE" | grep -Fq "$OLD"; then
+                echo "$LABEL=old"
+              else
+                echo "$LABEL=other"
+              fi
+            }
 
-          NEW_TITLE="$(grep -o '<title>[^<]*</title>' /tmp/new-root | head -n 1 || true)"
-          OLD_TITLE="$(grep -o '<title>[^<]*</title>' /tmp/old-root | head -n 1 || true)"
-          echo "DOMAIN_PROBE_NEW_TITLE=${NEW_TITLE:-missing}"
-          echo "DOMAIN_PROBE_OLD_TITLE=${OLD_TITLE:-missing}"
-          echo "DOMAIN_PROBE_AUTH_BODY=$(head -c 200 /tmp/new-auth | tr '\n' ' ')"
+            classify_key /home/ubuntu/playground/.env APP_CORS_ALLOWED_ORIGINS PLAYGROUND_SHARED_CORS_OVERRIDE
+            classify_key /home/ubuntu/playground/.env.backend APP_CORS_ALLOWED_ORIGINS PLAYGROUND_BACKEND_CORS_OVERRIDE
+            classify_key /home/ubuntu/evidence-vault/.env.production BOUQUET_BASE_URL EVIDENCE_VAULT_PROVIDER_OVERRIDE
 
-          test "$NEW_ROOT_STATUS" = "200"
-          test "$NEW_AUTH_STATUS" = "200"
-          test "$OLD_ROOT_STATUS" = "200"
-          test "$NEW_TITLE" = "$OLD_TITLE"
-
-          echo "DOMAIN_PROBE_NEW_DOMAIN=route-ready"
-          echo "DOMAIN_PROBE_OLD_DOMAIN=still-ready"
-          rm -f /tmp/new-root /tmp/new-auth /tmp/old-root
+            test "$(stat -c '%a' /home/ubuntu/evidence-vault/.env.production)" = "600"
+            echo "EVIDENCE_VAULT_ENV_MODE=600"
