@@ -61,7 +61,7 @@ test('production deploy repairs an invalid shared JWT secret before PM2 startup'
 test('backend-specific env cannot override the shared JWT secret at PM2 startup', () => {
   const workflow = readDeployWorkflow();
   const backendBlock = workflow.match(/if \[ "\$BACKEND_CHANGED"[\s\S]*?pm2 start ecosystem\.config\.js --only backend/)?.[0] ?? '';
-  assert.match(backendBlock, /\. \/home\/ubuntu\/playground\/\.env\.backend/);
+  assert.match(backendBlock, /\. \/home\/ubuntu\/bloombouquet\/\.env\.backend/);
   assert.match(backendBlock, /export JWT_SECRET="\$SHARED_JWT_SECRET"/);
 });
 
@@ -111,12 +111,14 @@ test('production backend validates schema and uses Flyway instead of Hibernate m
   }
 });
 
-test('production secret files stay untracked and deploy diagnostics never dump them', () => {
+test('production secret files stay untracked, private, and deploy diagnostics never dump them', () => {
   const gitignore = fs.readFileSync(path.join(ROOT, '.gitignore'), 'utf8');
   assert.match(gitignore, /^\.env\.\*$/m);
   assert.match(gitignore, /^!\.env\.example$/m);
 
   const workflow = readDeployWorkflow();
+  assert.match(workflow, /chmod 600 "\$SHARED_ENV_FILE"/);
+  assert.match(workflow, /chmod 600 "\$BACKEND_ENV_FILE"/);
   assert.doesNotMatch(workflow, /\bprintenv\b/);
   assert.doesNotMatch(workflow, /\bpm2\s+env\b/);
   assert.doesNotMatch(workflow, /\bset\s+-x\b/);

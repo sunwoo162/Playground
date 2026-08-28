@@ -26,16 +26,16 @@ module.exports = {
     {
       name: 'playground',
       script: './server/index.js',
-      cwd: '/home/ubuntu/playground',
-      env_file: '/home/ubuntu/playground/.env',
+      cwd: '/home/ubuntu/bloombouquet',
+      env_file: '/home/ubuntu/bloombouquet/.env',
       env: sharedEnv,
     },
     {
       name: 'backend',
-      script: '/home/ubuntu/playground/backend/build/libs/playground-backend-0.0.1-SNAPSHOT.jar',
+      script: '/home/ubuntu/bloombouquet/backend/build/libs/playground-backend-0.0.1-SNAPSHOT.jar',
       interpreter: 'java',
       interpreter_args: '-jar',
-      cwd: '/home/ubuntu/playground',
+      cwd: '/home/ubuntu/bloombouquet',
       env: {
         ...sharedEnv,
         ...backendEnv,
@@ -49,7 +49,7 @@ module.exports = {
     {
       name: 'bloom-worker',
       script: './bloom-worker/run.js',
-      cwd: '/home/ubuntu/playground',
+      cwd: '/home/ubuntu/bloombouquet',
       autorestart: true,
       restart_delay: 5000,
       max_restarts: 20,

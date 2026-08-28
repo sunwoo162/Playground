@@ -50,7 +50,7 @@ jobs:
           command_timeout: 20m
           script: |
             set -eu
-            cd /home/ubuntu/playground
+            cd /home/ubuntu/bloombouquet
             export PATH="$HOME/.local/bin:$HOME/.llama/bin:$HOME/.local/node_modules/.bin:$PATH"
 
             git fetch origin main
@@ -60,7 +60,7 @@ jobs:
             pnpm install --frozen-lockfile
             pnpm run build:bloom-worker
 
-            ENV_FILE=/home/ubuntu/playground/.env
+            ENV_FILE=/home/ubuntu/bloombouquet/.env
             touch "$ENV_FILE"
 
             TOKEN_CREATED=false

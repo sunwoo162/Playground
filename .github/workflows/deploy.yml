@@ -74,7 +74,7 @@ jobs:
           username: ubuntu
           password: ${{ secrets.SSH_PASSWORD }}
           source: "backend/build/libs/playground-backend-0.0.1-SNAPSHOT.jar"
-          target: "/home/ubuntu/playground/backend/build/libs/"
+          target: "/home/ubuntu/bloombouquet/backend/build/libs/"
           strip_components: 3
 
       - name: Deploy via SSH
@@ -91,12 +91,22 @@ jobs:
             set -eu
             BACKEND_CHANGED="${BACKEND_CHANGED:-false}"
             JWT_REGENERATED=false
-            cd ~/playground
+            cd ~/bloombouquet
 
             record_failure() {
               mkdir -p dist
               printf '%s\n' "$1" > dist/deploy-error.txt
               exit 1
+            }
+
+            secure_production_env_files() {
+              SHARED_ENV_FILE="/home/ubuntu/bloombouquet/.env"
+              BACKEND_ENV_FILE="/home/ubuntu/bloombouquet/.env.backend"
+              test -f "$SHARED_ENV_FILE" || record_failure "shared production env missing"
+              chmod 600 "$SHARED_ENV_FILE"
+              if [ -f "$BACKEND_ENV_FILE" ]; then
+                chmod 600 "$BACKEND_ENV_FILE"
+              fi
             }
 
             dump_backend_diagnostics() {
@@ -113,7 +123,7 @@ jobs:
             }
 
             ensure_shared_jwt_secret() {
-              ENV_FILE="/home/ubuntu/playground/.env"
+              ENV_FILE="/home/ubuntu/bloombouquet/.env"
               test -f "$ENV_FILE" || record_failure "shared production env missing"
 
               set -a
@@ -140,6 +150,7 @@ jobs:
 
             git fetch origin main || record_failure "git fetch failed"
             git reset --hard origin/main || record_failure "git reset failed"
+            secure_production_env_files
 
             export PATH="$HOME/.local/node_modules/.bin:$PATH"
             corepack enable || true
@@ -163,9 +174,9 @@ jobs:
             test -n "$PLAYGROUND_PID" && [ "$PLAYGROUND_PID" != "0" ] || record_failure "BloomBouquet Node server did not stay online"
 
             if [ "$BACKEND_CHANGED" = "true" ] || [ "$JWT_REGENERATED" = "true" ] || ! curl -fsS --max-time 3 http://127.0.0.1:8080/api/bouquet/auth/me >/dev/null 2>&1; then
-              if [ -f /home/ubuntu/playground/.env.backend ]; then
+              if [ -f /home/ubuntu/bloombouquet/.env.backend ]; then
                 set -a
-                . /home/ubuntu/playground/.env.backend
+                . /home/ubuntu/bloombouquet/.env.backend
                 set +a
               fi
               export JWT_SECRET="$SHARED_JWT_SECRET"

@@ -13,7 +13,7 @@
     "build:bloom-web": "pnpm exec tsc -p bloom-web/tsconfig.json --noEmit && vite build bloom-web --outDir ../dist --emptyOutDir",
     "build:web": "pnpm run build:bloom-web",
     "test:bloom-runtime": "node -e \"require('fs').rmSync('.tmp/bloom-policy-tests',{recursive:true,force:true})\" && pnpm --dir apps/desktop exec tsc -p ../../bloom-runtime/tsconfig.policy-tests.json && node bloom-runtime/run-policy-tests.cjs",
-    "test:production-runtime": "node --test scripts/production-runtime.policy-test.js bloom-worker/run.policy-test.js scripts/bloom-management.policy-test.js scripts/bloombouquet-domain.policy-test.js",
+    "test:production-runtime": "node --test scripts/production-runtime.policy-test.js bloom-worker/run.policy-test.js scripts/bloom-management.policy-test.js scripts/bloombouquet-domain.policy-test.js scripts/bloombouquet-server-path.policy-test.js",
     "build:bloom-worker": "pnpm --dir apps/desktop exec tsc -p ../../bloom-runtime/tsconfig.worker.json && node --check bloom-worker/run.js",
     "build:bloom-runtime-bridge": "cargo build --manifest-path bloom-runtime/Cargo.toml --bin bloom-runtime-bridge --release",
     "start:bloom-worker": "pnpm run build:bloom-worker && node bloom-worker/run.js",
