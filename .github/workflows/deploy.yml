@@ -205,3 +205,29 @@ jobs:
             sudo systemctl reload nginx 2>/dev/null || true
 
             node scripts/notion-sync.js update || true
+
+      - name: Verify BloomBouquet public domain
+        shell: bash
+        run: |
+          set -euo pipefail
+          DOMAIN="bloombouquet.https.gsmsv.site"
+          PUBLIC_OK=false
+
+          for attempt in $(seq 1 20); do
+            ROOT_STATUS="$(curl -sS -o /tmp/bloombouquet-root -w '%{http_code}' --max-time 10 "https://$DOMAIN/" || true)"
+            AUTH_STATUS="$(curl -sS -o /tmp/bloombouquet-auth -w '%{http_code}' --max-time 10 "https://$DOMAIN/api/bouquet/auth/me" || true)"
+
+            if [ "$ROOT_STATUS" = "200" ] \
+              && grep -q '<title>BloomBouquet</title>' /tmp/bloombouquet-root \
+              && [ "$AUTH_STATUS" = "200" ] \
+              && grep -q '"user":null' /tmp/bloombouquet-auth; then
+              PUBLIC_OK=true
+              break
+            fi
+
+            sleep 3
+          done
+
+          rm -f /tmp/bloombouquet-root /tmp/bloombouquet-auth
+          [ "$PUBLIC_OK" = "true" ] || { echo "BloomBouquet public domain smoke failed" >&2; exit 1; }
+          echo "BloomBouquet public domain smoke passed"
