@@ -1,299 +1,211 @@
-:root {
-  font-family: Inter, Pretendard, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-}
-
 .bouquet-auth-shell {
   min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 72px 20px;
+  padding: 28px clamp(18px, 4vw, 56px);
   background:
-    radial-gradient(circle at 10% 12%, rgba(224, 185, 205, .42), transparent 30%),
-    radial-gradient(circle at 88% 82%, rgba(211, 226, 204, .45), transparent 28%),
-    #f8f5f7;
-  color: #29232a;
+    radial-gradient(circle at 12% 16%, rgba(118, 88, 111, .10), transparent 28%),
+    radial-gradient(circle at 88% 84%, rgba(57, 112, 82, .08), transparent 24%),
+    var(--bouquet-bg);
 }
 
-.bouquet-auth-home {
-  position: fixed;
-  top: 24px;
-  left: clamp(20px, 4vw, 56px);
-  display: inline-flex;
+.bouquet-auth-editorial {
+  width: min(1320px, 100%);
+  min-height: calc(100vh - 56px);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(420px, 4fr);
+  gap: clamp(40px, 7vw, 104px);
   align-items: center;
-  gap: 9px;
-  color: #382d34;
-  text-decoration: none;
-  font-size: 14px;
-  letter-spacing: -.01em;
 }
 
-.bouquet-auth-home span {
-  width: 30px;
-  height: 30px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: #efd8e4;
-  color: #7a5368;
+.bouquet-auth-story {
+  min-height: 640px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 8px 0 18px;
 }
 
-.bouquet-auth-card {
-  width: min(480px, 100%);
-  padding: clamp(28px, 5vw, 44px);
-  border: 1px solid rgba(222, 208, 218, .9);
-  border-radius: 32px;
-  background: rgba(255, 255, 255, .94);
-  box-shadow: 0 28px 80px rgba(72, 45, 62, .12);
-  backdrop-filter: blur(20px);
+.bouquet-auth-story-copy {
+  max-width: 720px;
+  margin: auto 0;
+  padding: 64px 0;
+}
+.bouquet-auth-story-copy h1 {
+  margin: 14px 0 0;
+  font-size: clamp(54px, 7vw, 96px);
+  line-height: .91;
+  letter-spacing: -.075em;
+}
+.bouquet-auth-story-copy > p:last-child {
+  max-width: 640px;
+  margin: 28px 0 0;
+  color: var(--bouquet-muted);
+  font-size: clamp(15px, 1.5vw, 18px);
+  line-height: 1.72;
 }
 
-.bouquet-auth-brand {
-  text-align: center;
+.bouquet-auth-project-context {
+  max-width: 620px;
+  padding-top: 20px;
+  border-top: 1px solid var(--bouquet-line);
 }
-
-.bouquet-auth-flower {
-  width: 54px;
-  height: 54px;
-  display: grid;
-  place-items: center;
-  margin: 0 auto 18px;
-  border-radius: 50%;
-  background: linear-gradient(145deg, #f2d7e4, #f9edf3);
-  color: #80566d;
-  font-size: 26px;
-  box-shadow: inset 0 0 0 1px rgba(126, 83, 106, .08);
-}
-
-.bouquet-auth-brand p {
-  margin: 0 0 8px;
-  color: #9a7488;
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: .18em;
-}
-
-.bouquet-auth-brand h1 {
-  margin: 0;
-  font-size: clamp(30px, 6vw, 40px);
-  letter-spacing: -.045em;
-}
-
-.bouquet-auth-brand > span {
+.bouquet-auth-project-context > span:not(.bouquet-status-badge),
+.bouquet-auth-project-context small {
   display: block;
   margin-top: 12px;
-  color: #777078;
-  font-size: 14px;
-  line-height: 1.65;
-}
-
-.bouquet-auth-project {
-  margin: 26px 0 0;
-  padding: 16px 18px;
-  border: 1px solid #eadde4;
-  border-radius: 18px;
-  background: #fcf8fa;
-}
-
-.bouquet-auth-project span,
-.bouquet-auth-project small {
-  display: block;
-  color: #8b7d85;
+  color: var(--bouquet-muted);
   font-size: 11px;
 }
-
-.bouquet-auth-project strong {
+.bouquet-auth-project-context strong {
   display: block;
-  margin: 5px 0 7px;
+  margin-top: 5px;
+  font-size: clamp(20px, 2vw, 30px);
+  letter-spacing: -.04em;
   overflow-wrap: anywhere;
-  font-size: 15px;
+}
+.bouquet-auth-project-context small { margin-top: 6px; }
+
+.bouquet-auth-panel {
+  width: 100%;
+  padding: clamp(26px, 4vw, 44px);
+  box-shadow: 0 26px 80px rgba(32, 26, 30, .09);
+}
+.bouquet-auth-panel-heading h2 {
+  margin: 9px 0 0;
+  font-size: clamp(30px, 4vw, 48px);
+  line-height: 1;
+  letter-spacing: -.06em;
+}
+.bouquet-auth-panel-heading > p:last-child {
+  margin: 12px 0 0;
+  color: var(--bouquet-muted);
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .bouquet-auth-tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 4px;
-  margin-top: 28px;
+  margin-top: 30px;
   padding: 4px;
-  border-radius: 14px;
-  background: #f2eef1;
+  border-radius: 999px;
+  background: rgba(23, 21, 24, .055);
 }
-
 .bouquet-auth-tabs button {
-  min-height: 42px;
+  min-height: 44px;
   border: 0;
-  border-radius: 11px;
+  border-radius: 999px;
   background: transparent;
-  color: #80767d;
-  font-weight: 800;
+  color: var(--bouquet-muted);
+  font-weight: 850;
   cursor: pointer;
+  transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease;
 }
-
 .bouquet-auth-tabs button.active {
-  background: #fff;
-  color: #493942;
-  box-shadow: 0 3px 12px rgba(66, 45, 57, .08);
+  background: var(--bouquet-surface);
+  color: var(--bouquet-ink);
+  box-shadow: 0 5px 16px rgba(32, 26, 30, .08);
 }
 
 .bouquet-auth-form {
   display: grid;
-  gap: 16px;
-  margin-top: 22px;
+  gap: 17px;
+  margin-top: 24px;
 }
-
-.bouquet-auth-form label {
-  display: grid;
-  gap: 7px;
-}
-
-.bouquet-auth-form label > span {
-  padding-left: 2px;
-  color: #625b61;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.bouquet-auth-form input {
-  width: 100%;
-  height: 50px;
-  padding: 0 15px;
-  border: 1px solid #dfd6dc;
-  border-radius: 14px;
-  outline: none;
-  background: #fff;
-  color: #2d272b;
-  font: inherit;
-  transition: border-color .15s ease, box-shadow .15s ease;
-}
-
-.bouquet-auth-form input:focus {
-  border-color: #a97891;
-  box-shadow: 0 0 0 4px rgba(169, 120, 145, .12);
-}
-
-.bouquet-auth-primary,
-.bouquet-auth-secondary {
-  width: 100%;
-  min-height: 50px;
-  border-radius: 14px;
-  font: inherit;
-  font-weight: 900;
-  cursor: pointer;
-}
-
-.bouquet-auth-primary {
-  border: 1px solid #3d3038;
-  background: #3d3038;
-  color: #fff;
-  box-shadow: 0 12px 26px rgba(57, 43, 51, .16);
-}
-
-.bouquet-auth-primary:hover:not(:disabled) {
-  background: #2f252b;
-}
-
-.bouquet-auth-primary:disabled,
-.bouquet-auth-secondary:disabled {
-  opacity: .5;
-  cursor: not-allowed;
-}
-
-.bouquet-auth-primary-link {
-  display: grid;
-  place-items: center;
-  text-decoration: none;
-}
-
-.bouquet-auth-secondary {
-  margin-top: 10px;
-  border: 1px solid #dfd5db;
-  background: #fff;
-  color: #675b63;
-}
+.bouquet-auth-form .bouquet-action { width: 100%; margin-top: 3px; }
 
 .bouquet-auth-alert {
-  margin-top: 16px;
-  padding: 12px 14px;
-  border-radius: 12px;
+  margin-top: 18px;
+  padding: 13px 14px;
+  border-radius: var(--bouquet-radius-sm);
   font-size: 12px;
   line-height: 1.55;
 }
-
 .bouquet-auth-alert-error {
-  border: 1px solid #efcece;
-  background: #fff3f3;
-  color: #964747;
+  border: 1px solid rgba(165, 72, 72, .18);
+  background: rgba(165, 72, 72, .07);
+  color: var(--bouquet-danger);
 }
 
 .bouquet-auth-loading {
-  min-height: 170px;
+  min-height: 250px;
   display: grid;
   place-items: center;
-  color: #8b8389;
-  font-size: 13px;
+  gap: 14px;
+  color: var(--bouquet-muted);
+  font-size: 12px;
+}
+.bouquet-auth-loading .bouquet-skeleton {
+  width: 100%;
+  min-height: 150px;
 }
 
-.bouquet-auth-session {
-  margin-top: 28px;
-  text-align: center;
+.bouquet-auth-session { margin-top: 32px; }
+.bouquet-auth-session-identity {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 20px;
+  border: 1px solid var(--bouquet-line);
+  border-radius: var(--bouquet-radius-md);
+  background: rgba(255,255,255,.46);
 }
-
 .bouquet-auth-avatar {
-  width: 64px;
-  height: 64px;
+  width: 58px;
+  height: 58px;
+  flex: 0 0 58px;
   display: grid;
   place-items: center;
-  margin: 0 auto 14px;
   border-radius: 50%;
-  background: #ead8e1;
-  color: #6c4b5c;
-  font-size: 24px;
+  background: var(--bouquet-accent-soft);
+  color: #5f4559;
+  font-size: 22px;
   font-weight: 900;
 }
-
-.bouquet-auth-session p {
+.bouquet-auth-session-identity p {
   margin: 0;
-  color: #92868d;
-  font-size: 11px;
-  font-weight: 800;
+  color: var(--bouquet-accent);
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: .08em;
+  text-transform: uppercase;
 }
-
-.bouquet-auth-session h2 {
-  margin: 6px 0 3px;
+.bouquet-auth-session-identity h3 {
+  margin: 5px 0 2px;
   font-size: 24px;
-  letter-spacing: -.035em;
+  letter-spacing: -.04em;
 }
-
-.bouquet-auth-session > div + span,
-.bouquet-auth-session > div:nth-child(2) > span {
-  color: #7c7479;
-  font-size: 13px;
+.bouquet-auth-session-identity span {
+  color: var(--bouquet-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
 }
-
-.bouquet-auth-session .bouquet-auth-primary {
-  margin-top: 24px;
+.bouquet-auth-session-actions {
+  display: grid;
+  gap: 9px;
+  margin-top: 18px;
 }
+.bouquet-auth-session-actions .bouquet-action { width: 100%; }
 
 .bouquet-auth-footnote {
   margin: 18px 0 0;
-  color: #9a9297;
-  text-align: center;
+  color: var(--bouquet-muted);
   font-size: 11px;
   line-height: 1.6;
+  text-align: center;
 }
 
-@media (max-width: 560px) {
-  .bouquet-auth-shell {
-    place-items: start center;
-    padding: 82px 12px 28px;
-  }
+@media (max-width: 900px) {
+  .bouquet-auth-shell { padding: 20px 14px 38px; }
+  .bouquet-auth-editorial { min-height: auto; grid-template-columns: 1fr; gap: 24px; }
+  .bouquet-auth-story { min-height: auto; padding: 0; }
+  .bouquet-auth-story-copy { padding: 70px 0 28px; }
+  .bouquet-auth-story-copy h1 { font-size: clamp(48px, 13vw, 76px); }
+  .bouquet-auth-project-context { margin-top: 20px; }
+  .bouquet-auth-panel { padding: 24px 18px; }
+}
 
-  .bouquet-auth-home {
-    top: 18px;
-    left: 16px;
-  }
-
-  .bouquet-auth-card {
-    padding: 26px 20px;
-    border-radius: 24px;
-  }
+@media (prefers-reduced-motion: reduce) {
+  .bouquet-auth-tabs button { transition: none; }
 }

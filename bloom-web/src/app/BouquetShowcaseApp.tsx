@@ -1,5 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 
+import {
+  BouquetWordmark,
+  EmptyState,
+  Metric,
+  PrimaryButton,
+  ProjectVisual,
+  ScoreBadge,
+  SecondaryButton,
+  StatusBadge,
+} from './BouquetUI'
 import './bouquet-showcase.css'
 
 type Submission = {
@@ -70,6 +80,13 @@ const ROLE_LABELS: Record<string, string> = {
   'code-review': 'Code Review',
 }
 
+const SEVERITY_ORDER: Record<string, number> = {
+  CRITICAL: 0,
+  HIGH: 1,
+  MEDIUM: 2,
+  LOW: 3,
+}
+
 function stars(value: number | null) {
   if (value == null) return '평가 전'
   return `★ ${value.toFixed(1)}`
@@ -83,6 +100,13 @@ function statusLabel(status: string | null) {
     case 'FAILED': return '평가 실패'
     default: return '미평가'
   }
+}
+
+function cardSize(index: number) {
+  if (index === 0) return 'bouquet-project-featured'
+  if (index % 5 === 1) return 'is-wide'
+  if (index % 5 === 2) return 'is-tall'
+  return 'is-compact'
 }
 
 export default function BouquetShowcaseApp() {
@@ -113,6 +137,12 @@ export default function BouquetShowcaseApp() {
     () => projects.filter((project) => project.latestSubmission?.evaluationStatus === 'COMPLETED').length,
     [projects],
   )
+  const keyFindings = useMemo(() => {
+    if (!report) return []
+    return [...report.agentEvaluations]
+      .sort((a, b) => (SEVERITY_ORDER[a.severity.toUpperCase()] ?? 9) - (SEVERITY_ORDER[b.severity.toUpperCase()] ?? 9))
+      .slice(0, 3)
+  }, [report])
 
   async function openReport(runId: number) {
     setReportLoading(true)
@@ -128,148 +158,162 @@ export default function BouquetShowcaseApp() {
   }
 
   return (
-    <main className="bouquet-shell">
-      <header className="bouquet-hero">
-        <div>
-          <p className="bouquet-eyebrow">PROJECT SHOWCASE · SENIOR AGENT REVIEW</p>
-          <h1>BloomBouquet</h1>
-          <p className="bouquet-lead">
-            여러 팀의 웹 프로젝트를 한곳에 모으고, 독립적인 10년+ 시니어 Agent들이 실제 사용성과 기술 완성도를 평가합니다.
-          </p>
+    <main className="bouquet-showcase-shell">
+      <header className="bouquet-showcase-header">
+        <div className="bouquet-showcase-nav"><BouquetWordmark /></div>
+        <div className="bouquet-showcase-intro">
+          <p className="bouquet-kicker">CURATED BUILDS · INDEPENDENT REVIEW</p>
+          <h1>만든 프로젝트를<br />제대로 보여주고, 제대로 평가합니다.</h1>
+          <p className="bouquet-showcase-copy">여러 팀의 실제 배포 프로젝트를 한곳에 모으고, 독립적인 10년+ 시니어 Agent들이 사용성과 기술 완성도를 검토합니다.</p>
         </div>
-        <div className="bouquet-stats" aria-label="BloomBouquet summary">
-          <div><strong>{projects.length}</strong><span>Projects</span></div>
-          <div><strong>{teams}</strong><span>Teams</span></div>
-          <div><strong>{completed}</strong><span>Reviewed</span></div>
+        <div className="bouquet-showcase-metrics" aria-label="BloomBouquet summary">
+          <Metric value={projects.length} label="Projects" />
+          <Metric value={teams} label="Teams" />
+          <Metric value={completed} label="Reviewed" />
         </div>
       </header>
 
-      <section className="bouquet-auth-note" aria-label="Project authentication policy">
-        <span className="bouquet-auth-mark">✿</span>
-        <div className="bouquet-auth-copy">
-          <strong>로그인은 각 프로젝트에서 시작합니다</strong>
-          <p>필요한 프로젝트만 꽃다발 공통 인증을 사용합니다.</p>
-        </div>
-      </section>
-
-      {loading && <div className="bouquet-state">프로젝트를 불러오는 중...</div>}
-      {error && <div className="bouquet-state bouquet-state-error">{error}</div>}
-      {!loading && !error && projects.length === 0 && (
-        <div className="bouquet-state">
-          <strong>아직 공개된 프로젝트가 없습니다.</strong>
-          <span>첫 프로젝트를 등록하면 평가 Run이 자동으로 생성됩니다.</span>
-        </div>
+      {loading && (
+        <section className="bouquet-bento-grid" aria-label="프로젝트를 불러오는 중">
+          <div className="bouquet-skeleton bouquet-project-featured" />
+          <div className="bouquet-skeleton is-wide" />
+          <div className="bouquet-skeleton is-compact" />
+        </section>
       )}
 
-      <section className="bouquet-grid" aria-label="Projects">
-        {projects.map((project) => {
-          const submission = project.latestSubmission
-          return (
-            <article className="bouquet-card" key={project.id}>
-              <div className="bouquet-card-topline">
-                <span className="bouquet-team">팀 {project.teamName}</span>
-                <span className={`bouquet-status bouquet-status-${(submission?.evaluationStatus ?? 'none').toLowerCase()}`}>
-                  {statusLabel(submission?.evaluationStatus ?? null)}
-                </span>
-              </div>
+      {error && (
+        <EmptyState
+          eyebrow="LOAD ERROR"
+          title="프로젝트를 불러오지 못했습니다."
+          description={error}
+          action={<SecondaryButton onClick={() => window.location.reload()}>다시 불러오기</SecondaryButton>}
+        />
+      )}
 
-              <div className="bouquet-card-heading">
-                <div>
-                  <h2>{project.name}</h2>
-                  <p>{project.description}</p>
+      {!loading && !error && projects.length === 0 && (
+        <EmptyState
+          eyebrow="FIRST BLOOM"
+          title="아직 공개된 프로젝트가 없습니다."
+          description="첫 프로젝트가 등록되면 배포 화면과 Senior Agent 평가 결과가 이곳에 함께 나타납니다."
+        />
+      )}
+
+      {!loading && !error && projects.length > 0 && (
+        <section className="bouquet-bento-grid" aria-label="Projects">
+          {projects.map((project, index) => {
+            const submission = project.latestSubmission
+            const featured = index === 0
+            return (
+              <article className={`bouquet-project-card ${cardSize(index)}`} key={project.id}>
+                <ProjectVisual
+                  name={project.name}
+                  teamName={project.teamName}
+                  status={submission?.evaluationStatus ?? null}
+                  featured={featured}
+                />
+                <div className="bouquet-project-card-body">
+                  <div className="bouquet-project-card-topline">
+                    <span>TEAM {project.teamName}</span>
+                    <StatusBadge status={submission?.evaluationStatus ?? null}>{statusLabel(submission?.evaluationStatus ?? null)}</StatusBadge>
+                  </div>
+                  <div className="bouquet-project-heading">
+                    <div>
+                      <h2>{project.name}</h2>
+                      <p>{project.description}</p>
+                    </div>
+                    <ScoreBadge score={submission?.overallScore ?? null} stars={submission?.overallStars ?? null} />
+                  </div>
+                  <div className="bouquet-project-meta">
+                    <span>{submission ? `v${submission.version}` : '버전 없음'}</span>
+                    <span>{stars(submission?.overallStars ?? null)}</span>
+                    {submission?.requiresAuth && <span>꽃다발 인증</span>}
+                  </div>
+                  <div className="bouquet-project-actions">
+                    {submission?.demoUrl && <PrimaryButton href={submission.demoUrl}>프로젝트 보기</PrimaryButton>}
+                    {submission?.evaluationRunId && (
+                      <SecondaryButton disabled={reportLoading} onClick={() => openReport(submission.evaluationRunId!)}>평가 보기</SecondaryButton>
+                    )}
+                  </div>
                 </div>
-                <div className="bouquet-score" aria-label="Latest score">
-                  <strong>{submission?.overallScore ?? '—'}</strong>
-                  <span>/ 100</span>
-                </div>
-              </div>
-
-              <div className="bouquet-meta">
-                <span>{stars(submission?.overallStars ?? null)}</span>
-                <span>{submission ? `v${submission.version}` : '버전 없음'}</span>
-                {submission?.requiresAuth && <span className="bouquet-auth-chip">꽃다발 인증</span>}
-              </div>
-
-              <div className="bouquet-card-actions">
-                {submission?.demoUrl && (
-                  <a href={submission.demoUrl}>프로젝트 열기 →</a>
-                )}
-                {submission?.evaluationRunId && (
-                  <button type="button" disabled={reportLoading} onClick={() => openReport(submission.evaluationRunId!)}>
-                    평가 보고서
-                  </button>
-                )}
-              </div>
-            </article>
-          )
-        })}
-      </section>
+              </article>
+            )
+          })}
+        </section>
+      )}
 
       {report && (
         <div className="bouquet-report-backdrop" role="presentation" onMouseDown={() => setReport(null)}>
           <section
-            className="bouquet-report"
+            className="bouquet-report-sheet"
             role="dialog"
             aria-modal="true"
             aria-label="BloomBouquet evaluation report"
             onMouseDown={(event) => event.stopPropagation()}
           >
-            <div className="bouquet-report-header">
+            <div className="bouquet-report-sticky">
               <div>
-                <p className="bouquet-eyebrow">EVALUATION RUN #{report.runId}</p>
-                <h2>Senior Agent Evaluation Report</h2>
+                <p className="bouquet-kicker">EVALUATION RUN #{report.runId}</p>
+                <h2>Senior Agent Review</h2>
               </div>
-              <button className="bouquet-close" type="button" onClick={() => setReport(null)} aria-label="Close report">×</button>
+              <button className="bouquet-report-close" type="button" onClick={() => setReport(null)} aria-label="Close report">×</button>
             </div>
 
-            <div className="bouquet-report-summary">
-              <div><strong>{report.overallScore ?? '—'}</strong><span>Overall / 100</span></div>
-              <div><strong>{stars(report.overallStars)}</strong><span>Overall Rating</span></div>
-              <div><strong>{statusLabel(report.status)}</strong><span>Run Status</span></div>
+            <div className="bouquet-report-hero">
+              <div className="bouquet-report-score"><strong>{report.overallScore ?? '—'}</strong><span>Overall / 100</span></div>
+              <div className="bouquet-report-rating"><strong>{stars(report.overallStars)}</strong><span>Independent senior-agent rating</span></div>
+              <StatusBadge status={report.status}>{statusLabel(report.status)}</StatusBadge>
             </div>
 
             {report.reportSummary && (
-              <section className="bouquet-process-summary">
-                <h3>Process Evaluator</h3>
+              <section className="bouquet-report-summary-copy">
+                <p className="bouquet-kicker">EVALUATOR SUMMARY</p>
                 <p>{report.reportSummary}</p>
               </section>
             )}
 
-            <div className="bouquet-agent-list">
+            {keyFindings.length > 0 && (
+              <section className="bouquet-key-findings" aria-label="Key findings">
+                <div className="bouquet-report-section-heading"><p className="bouquet-kicker">KEY FINDINGS</p><span>우선순위가 높은 리뷰</span></div>
+                <div className="bouquet-key-finding-grid">
+                  {keyFindings.map((evaluation) => (
+                    <article key={evaluation.agentRole}>
+                      <StatusBadge status={evaluation.severity === 'CRITICAL' || evaluation.severity === 'HIGH' ? 'FAILED' : evaluation.severity === 'MEDIUM' ? 'QUEUED' : null}>
+                        {evaluation.severity} · {evaluation.priority}
+                      </StatusBadge>
+                      <h3>{ROLE_LABELS[evaluation.agentRole] ?? evaluation.agentRole}</h3>
+                      <p>{evaluation.recommendation}</p>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            <section className="bouquet-agent-reviews">
+              <div className="bouquet-report-section-heading"><p className="bouquet-kicker">AGENT REVIEWS</p><span>{report.agentEvaluations.length} independent reviews</span></div>
               {report.agentEvaluations.map((evaluation) => (
                 <article className="bouquet-agent-review" key={evaluation.agentRole}>
-                  <div className="bouquet-agent-heading">
-                    <div>
-                      <span>{ROLE_LABELS[evaluation.agentRole] ?? evaluation.agentRole}</span>
-                      <strong>{evaluation.score} / 100 · {stars(evaluation.stars)}</strong>
-                    </div>
-                    <span className={`bouquet-severity bouquet-severity-${evaluation.severity.toLowerCase()}`}>
-                      {evaluation.severity.toUpperCase()} · {evaluation.priority.toUpperCase()}
-                    </span>
-                  </div>
-
-                  {evaluation.technicalTerms.length > 0 && (
-                    <div className="bouquet-terms">
-                      {evaluation.technicalTerms.map((term) => <span key={term}>{term}</span>)}
-                    </div>
-                  )}
-
-                  <div className="bouquet-review-section">
-                    <h4>Assessment</h4>
-                    <p>{evaluation.assessment}</p>
-                  </div>
-                  <div className="bouquet-review-section">
-                    <h4>Evidence</h4>
-                    <ul>{evaluation.evidence.map((item) => <li key={item}>{item}</li>)}</ul>
-                  </div>
-                  <div className="bouquet-review-grid">
-                    <div><h4>Impact</h4><p>{evaluation.impact}</p></div>
+                  <header className="bouquet-agent-review-header">
+                    <div><span>{ROLE_LABELS[evaluation.agentRole] ?? evaluation.agentRole}</span><strong>{evaluation.score} / 100 · {stars(evaluation.stars)}</strong></div>
+                    <StatusBadge status={evaluation.severity === 'CRITICAL' || evaluation.severity === 'HIGH' ? 'FAILED' : evaluation.severity === 'MEDIUM' ? 'QUEUED' : null}>
+                      {evaluation.severity} · {evaluation.priority}
+                    </StatusBadge>
+                  </header>
+                  <div className="bouquet-agent-primary-copy">
+                    <div><h4>Assessment</h4><p>{evaluation.assessment}</p></div>
                     <div><h4>Recommendation</h4><p>{evaluation.recommendation}</p></div>
                   </div>
-                  <p className="bouquet-confidence">Confidence: {evaluation.confidence}</p>
+                  <details className="bouquet-agent-details">
+                    <summary>Evidence & technical detail</summary>
+                    <div className="bouquet-agent-detail-grid">
+                      <div><h4>Impact</h4><p>{evaluation.impact}</p></div>
+                      <div><h4>Confidence</h4><p>{evaluation.confidence}</p></div>
+                    </div>
+                    {evaluation.evidence.length > 0 && <ul>{evaluation.evidence.map((item) => <li key={item}>{item}</li>)}</ul>}
+                    {evaluation.technicalTerms.length > 0 && <div className="bouquet-agent-terms">{evaluation.technicalTerms.map((term) => <span key={term}>{term}</span>)}</div>}
+                  </details>
                 </article>
               ))}
-            </div>
+            </section>
           </section>
         </div>
       )}
