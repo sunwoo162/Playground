@@ -74,7 +74,7 @@ jobs:
           username: ubuntu
           password: ${{ secrets.SSH_PASSWORD }}
           source: "backend/build/libs/playground-backend-0.0.1-SNAPSHOT.jar"
-          target: "/home/ubuntu/playground/backend/build/libs/"
+          target: "/home/ubuntu/bloombouquet/backend/build/libs/"
           strip_components: 3
 
       - name: Deploy via SSH
@@ -91,7 +91,7 @@ jobs:
             set -eu
             BACKEND_CHANGED="${BACKEND_CHANGED:-false}"
             JWT_REGENERATED=false
-            cd ~/playground
+            cd ~/bloombouquet
 
             record_failure() {
               mkdir -p dist
@@ -113,7 +113,7 @@ jobs:
             }
 
             ensure_shared_jwt_secret() {
-              ENV_FILE="/home/ubuntu/playground/.env"
+              ENV_FILE="/home/ubuntu/bloombouquet/.env"
               test -f "$ENV_FILE" || record_failure "shared production env missing"
 
               set -a
@@ -163,9 +163,9 @@ jobs:
             test -n "$PLAYGROUND_PID" && [ "$PLAYGROUND_PID" != "0" ] || record_failure "BloomBouquet Node server did not stay online"
 
             if [ "$BACKEND_CHANGED" = "true" ] || [ "$JWT_REGENERATED" = "true" ] || ! curl -fsS --max-time 3 http://127.0.0.1:8080/api/bouquet/auth/me >/dev/null 2>&1; then
-              if [ -f /home/ubuntu/playground/.env.backend ]; then
+              if [ -f /home/ubuntu/bloombouquet/.env.backend ]; then
                 set -a
-                . /home/ubuntu/playground/.env.backend
+                . /home/ubuntu/bloombouquet/.env.backend
                 set +a
               fi
               export JWT_SECRET="$SHARED_JWT_SECRET"
