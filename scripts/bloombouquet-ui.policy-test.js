@@ -72,7 +72,10 @@ test('owner management uses a focused rail workspace', () => {
 });
 
 test('shared UI keeps accessibility and reduced-motion contracts', () => {
+  const ui = source(paths.ui);
   const css = source(paths.css);
+  assert.match(ui, /HTMLAttributes/);
+  assert.match(ui, /\.\.\.rest/);
   assert.match(css, /prefers-reduced-motion/);
   assert.match(css, /:focus-visible/);
 });
