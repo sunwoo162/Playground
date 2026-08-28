@@ -31,6 +31,7 @@ public class BuilderProjectDto {
         private String templateId;
         private String repositoryFullName;
         private String previewUrl;
+        private String bloomBouquetRegistrationUrl;
         private LocalDateTime createdAt;
         private LocalDateTime updatedAt;
     }

@@ -55,6 +55,9 @@ public class BuilderProject {
     @Column(name = "preview_url", length = 500)
     private String previewUrl;
 
+    @Column(name = "bloom_bouquet_registration_url", columnDefinition = "TEXT")
+    private String bloomBouquetRegistrationUrl;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

@@ -64,7 +64,8 @@ public class BuilderWorkerController {
                 runId,
                 request.getWorkerId(),
                 request.getRepositoryFullName(),
-                request.getPreviewUrl()
+                request.getPreviewUrl(),
+                request.getBloomBouquetRegistrationUrl()
         ));
     }
 
