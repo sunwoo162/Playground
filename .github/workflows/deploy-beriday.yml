@@ -1,0 +1,132 @@
+name: Deploy Beriday
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require deploy credential
+        env:
+          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+        run: |
+          test -n "$SSH_PASSWORD" || { echo "SSH_PASSWORD is required for deploy" >&2; exit 1; }
+
+      - name: Deploy Beriday to BloomBouquet server
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          command_timeout: 15m
+          script: |
+            set -eu
+
+            APP_ROOT="/home/ubuntu/bloombouquet/apps/beriday"
+            SOURCE_DIR="$APP_ROOT/source"
+            RELEASES_DIR="$APP_ROOT/releases"
+            REPOSITORY="https://github.com/BloomBouquet/beriday.git"
+            LOCAL_ROOT="http://127.0.0.1:3012/"
+            LOCAL_MANIFEST="http://127.0.0.1:3012/data/runtime/manifest.json"
+
+            fail() {
+              echo "Beriday deploy: $1" >&2
+              pm2 status beriday 2>/dev/null || true
+              exit 1
+            }
+
+            verify_manifest() {
+              node -e '
+                let body = "";
+                process.stdin.setEncoding("utf8");
+                process.stdin.on("data", chunk => body += chunk);
+                process.stdin.on("end", () => {
+                  const manifest = JSON.parse(body);
+                  if (manifest.schemaVersion !== 1) process.exit(1);
+                  if (!Array.isArray(manifest.regions) || manifest.regions.length === 0) process.exit(1);
+                  if (!manifest.shards || Object.keys(manifest.shards).length === 0) process.exit(1);
+                });
+              '
+            }
+
+            mkdir -p "$APP_ROOT" "$RELEASES_DIR"
+
+            if [ ! -d "$SOURCE_DIR/.git" ]; then
+              rm -rf "$SOURCE_DIR"
+              git clone "$REPOSITORY" "$SOURCE_DIR"
+            fi
+
+            cd "$SOURCE_DIR"
+            git fetch --prune origin main
+            git reset --hard origin/main
+            git clean -fdx
+            DEPLOY_SHA="$(git rev-parse HEAD)"
+
+            npm ci
+            npm run verify:production-data
+            npm run build:runtime-data
+            npm run verify:runtime-data
+            npm run test:domain
+            npm test
+            npm run typecheck
+            npm run build
+
+            test -s dist/index.html || fail "production index is missing"
+            grep -q '<title>버리데이 | 오늘 뭐 버리지?</title>' dist/index.html || fail "production index marker is missing"
+            test -s dist/data/runtime/manifest.json || fail "runtime manifest is missing"
+            cat dist/data/runtime/manifest.json | verify_manifest || fail "runtime manifest is invalid"
+
+            RELEASE_DIR="$RELEASES_DIR/$DEPLOY_SHA"
+            rm -rf "$RELEASE_DIR"
+            mkdir -p "$RELEASE_DIR"
+            cp -a dist "$RELEASE_DIR/dist"
+
+            PREVIOUS_CWD="$(pm2 jlist 2>/dev/null | node -e '
+              let body = "";
+              process.stdin.setEncoding("utf8");
+              process.stdin.on("data", chunk => body += chunk);
+              process.stdin.on("end", () => {
+                try {
+                  const processInfo = JSON.parse(body).find(item => item.name === "beriday");
+                  process.stdout.write(processInfo?.pm2_env?.pm_cwd ?? "");
+                } catch {}
+              });
+            ' || true)"
+
+            rollback() {
+              if [ -n "$PREVIOUS_CWD" ] && [ -d "$PREVIOUS_CWD/dist" ]; then
+                echo "Restoring previous Beriday release" >&2
+                pm2 delete beriday >/dev/null 2>&1 || true
+                cd "$PREVIOUS_CWD"
+                pm2 serve dist 3012 --spa --name beriday >/dev/null 2>&1 || true
+                pm2 save >/dev/null 2>&1 || true
+              fi
+            }
+
+            pm2 delete beriday >/dev/null 2>&1 || true
+            cd "$RELEASE_DIR"
+            pm2 serve dist 3012 --spa --name beriday
+
+            BERIDAY_PID="$(pm2 pid beriday | head -n 1)"
+            if [ -z "$BERIDAY_PID" ] || [ "$BERIDAY_PID" = "0" ]; then
+              rollback
+              fail "PM2 process did not start"
+            fi
+
+            if ! curl -fsS --max-time 10 "$LOCAL_ROOT" | grep -q '<title>버리데이 | 오늘 뭐 버리지?</title>'; then
+              rollback
+              fail "local root smoke check failed"
+            fi
+
+            if ! curl -fsS --max-time 10 "$LOCAL_MANIFEST" | verify_manifest; then
+              rollback
+              fail "local runtime manifest smoke check failed"
+            fi
+
+            pm2 save
+            echo "Beriday deploy OK: $DEPLOY_SHA"
