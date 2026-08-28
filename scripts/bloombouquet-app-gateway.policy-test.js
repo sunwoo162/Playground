@@ -25,3 +25,18 @@ test('gateway deployment is manual-only', () => {
   assert.doesNotMatch(workflow, /push:/);
   assert.doesNotMatch(workflow, /pull_request:/);
 });
+
+test('gateway deployment probes fixed upstreams and owns a reversible nginx backup', () => {
+  const workflow = fs.readFileSync('.github/workflows/deploy-bloombouquet-app-gateway.yml', 'utf8');
+
+  assert.match(workflow, /appleboy\/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262/);
+  assert.match(workflow, /http:\/\/127\.0\.0\.1:3000\//);
+  assert.match(workflow, /http:\/\/127\.0\.0\.1:3011\/apps\/evidence-vault\/api\/health/);
+  assert.match(workflow, /readlink -f/);
+  assert.match(workflow, /MATCH_COUNT/);
+  assert.match(workflow, /sudo cat "\$TARGET_CONFIG" > "\$BACKUP"/);
+  assert.match(workflow, /trap restore_gateway EXIT/);
+  assert.match(workflow, /sudo nginx -t/);
+  assert.match(workflow, /sudo systemctl reload nginx/);
+  assert.match(workflow, /https:\/\/\$\{DOMAIN\}\/apps\/evidence-vault\/api\/health/);
+});
