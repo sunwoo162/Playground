@@ -76,8 +76,8 @@ export default function LunaBouquetRegisterApp({ handoff }: Props) {
         throw new Error(detail || `프로젝트 등록 실패 (HTTP ${response.status})`)
       }
       const body = await response.json() as RegistrationResponse
-      if (body.submission.evaluationRunId == null || body.submission.evaluationStatus !== 'QUEUED') {
-        throw new Error('평가 Run이 정상적으로 생성되지 않았습니다.')
+      if (body.submission.evaluationRunId == null || !body.submission.evaluationStatus) {
+        throw new Error('평가 Run 정보를 확인하지 못했습니다.')
       }
       setResult(body)
     } catch (reason) {
