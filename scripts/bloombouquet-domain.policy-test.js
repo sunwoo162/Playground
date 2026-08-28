@@ -13,6 +13,7 @@ test('active BloomBouquet production contracts use the replacement domain', () =
   const activeFiles = [
     'README.md',
     'backend/src/main/resources/application.yml',
+    'ecosystem.config.js',
     '.github/workflows/deploy.yml',
   ];
 
@@ -29,6 +30,10 @@ test('active BloomBouquet production contracts use the replacement domain', () =
   assert.match(
     read('backend/src/main/resources/application.yml'),
     /allowed-origins:\s*https:\/\/bloombouquet\.https\.gsmsv\.site/,
+  );
+  assert.match(
+    read('ecosystem.config.js'),
+    /APP_CORS_ALLOWED_ORIGINS:\s*['"]https:\/\/bloombouquet\.https\.gsmsv\.site['"]/,
   );
 
   const deploy = read('.github/workflows/deploy.yml');
