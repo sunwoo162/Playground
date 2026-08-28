@@ -39,6 +39,20 @@ test('BloomBouquet shares one premium visual system', () => {
   assert.match(manage, /StatusBadge/);
 });
 
+test('public showcase uses editorial bento hierarchy and premium review sheet', () => {
+  const showcase = source(paths.showcase);
+  assert.match(showcase, /bouquet-showcase-header/);
+  assert.match(showcase, /bouquet-bento-grid/);
+  assert.match(showcase, /bouquet-project-featured/);
+  assert.match(showcase, /프로젝트 보기/);
+  assert.match(showcase, /평가 보기/);
+  assert.match(showcase, /bouquet-report-sheet/);
+  assert.match(showcase, /bouquet-report-sticky/);
+  assert.match(showcase, /bouquet-key-findings/);
+  assert.match(showcase, /aria-modal="true"/);
+  assert.match(showcase, /aria-label="Close report"/);
+});
+
 test('public showcase stays free of management entry points', () => {
   const showcase = source(paths.showcase);
   assert.doesNotMatch(showcase, /\?mode=manage|\?mode=auth/);
