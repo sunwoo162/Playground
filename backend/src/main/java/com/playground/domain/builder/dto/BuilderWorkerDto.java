@@ -75,6 +75,7 @@ public class BuilderWorkerDto {
         private String workerId;
         private String repositoryFullName;
         private String previewUrl;
+        private String bloomBouquetRegistrationUrl;
     }
 
     @Getter
