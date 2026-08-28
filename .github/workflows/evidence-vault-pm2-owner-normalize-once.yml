@@ -36,6 +36,16 @@ jobs:
             PROCESS_NAME="evidence-vault-preview"
             PM2_BIN="$(command -v pm2)"
 
+            activate_pnpm() {
+              export PATH="$HOME/.local/node_modules/.bin:$PATH"
+              corepack enable >/dev/null 2>&1 || true
+              corepack prepare pnpm@10.33.0 --activate >/dev/null 2>&1 || true
+              if ! command -v pnpm >/dev/null 2>&1; then
+                npm install --prefix "$HOME/.local" pnpm@10.33.0 >/dev/null 2>&1
+              fi
+              command -v pnpm >/dev/null
+            }
+
             test -d "$APP_DIR/.git"
             test -f "$ENV_FILE"
             test "$(stat -c '%a' "$ENV_FILE")" = "600"
@@ -45,7 +55,7 @@ jobs:
 
             cd "$APP_DIR"
             test -f scripts/start-preview.sh
-            command -v pnpm >/dev/null
+            activate_pnpm
             echo "EV_PM2_NORMALIZE_UBUNTU_PNPM=available"
 
             LISTENER="$(sudo -n ss -ltnp 2>/dev/null | awk '$4 ~ /:3011$/ { print; exit }' || true)"
