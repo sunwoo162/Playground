@@ -30,37 +30,92 @@ jobs:
           password: ${{ secrets.SSH_PASSWORD }}
           script_stop: false
           script: |
-            set -euo pipefail
+            set -u
             PROCESS_NAME="evidence-vault-preview"
             PORT="3011"
-            PM2_PID="$(pm2 pid "$PROCESS_NAME" 2>/dev/null | awk 'NF && $1 != 0 { print $1; exit }')"
-            test -n "$PM2_PID"
-            echo "PORT_OWNER_PROBE_PM2_PID=present"
+            PM2_BIN="$(command -v pm2 2>/dev/null || true)"
 
-            USER_LINE="$(ss -ltnp 2>/dev/null | awk -v port=":$PORT" '$4 ~ port"$" { print; exit }' || true)"
-            test -n "$USER_LINE"
-            if printf '%s' "$USER_LINE" | grep -Eq 'pid=[0-9]+'; then
-              echo "PORT_OWNER_PROBE_USER_SS_PID=visible"
+            USER_PM2_PID=""
+            if [ -n "$PM2_BIN" ]; then
+              USER_PM2_PID="$($PM2_BIN pid "$PROCESS_NAME" 2>/dev/null | awk 'NF && $1 != 0 { print $1; exit }' || true)"
+            fi
+            if [ -n "$USER_PM2_PID" ]; then
+              echo "PORT_OWNER_PROBE_USER_PM2=present"
             else
-              echo "PORT_OWNER_PROBE_USER_SS_PID=hidden"
+              echo "PORT_OWNER_PROBE_USER_PM2=absent"
             fi
 
-            if sudo -n ss -ltnp >/tmp/evidence-vault-port-owner.txt 2>/dev/null; then
-              SUDO_LINE="$(awk -v port=":$PORT" '$4 ~ port"$" { print; exit }' /tmp/evidence-vault-port-owner.txt || true)"
-              rm -f /tmp/evidence-vault-port-owner.txt
-              test -n "$SUDO_LINE"
-              if printf '%s' "$SUDO_LINE" | grep -Eq 'pid=[0-9]+'; then
-                echo "PORT_OWNER_PROBE_SUDO_SS_PID=visible"
+            ROOT_PM2_PID=""
+            if [ -n "$PM2_BIN" ]; then
+              ROOT_PM2_PID="$(sudo -n "$PM2_BIN" pid "$PROCESS_NAME" 2>/dev/null | awk 'NF && $1 != 0 { print $1; exit }' || true)"
+            fi
+            if [ -n "$ROOT_PM2_PID" ]; then
+              echo "PORT_OWNER_PROBE_ROOT_PM2=present"
+            else
+              echo "PORT_OWNER_PROBE_ROOT_PM2=absent"
+            fi
+
+            USER_LINE="$(ss -ltnp 2>/dev/null | awk -v port=":$PORT" '$4 ~ port"$" { print; exit }' || true)"
+            if [ -n "$USER_LINE" ]; then
+              echo "PORT_OWNER_PROBE_LISTENER=present"
+              if printf '%s' "$USER_LINE" | grep -Eq 'pid=[0-9]+'; then
+                echo "PORT_OWNER_PROBE_USER_SS_PID=visible"
               else
-                echo "PORT_OWNER_PROBE_SUDO_SS_PID=hidden"
-              fi
-              if printf '%s' "$SUDO_LINE" | grep -Fq "pid=$PM2_PID,"; then
-                echo "PORT_OWNER_PROBE_PM2_MATCH=yes"
-              else
-                echo "PORT_OWNER_PROBE_PM2_MATCH=no"
+                echo "PORT_OWNER_PROBE_USER_SS_PID=hidden"
               fi
             else
+              echo "PORT_OWNER_PROBE_LISTENER=absent"
+            fi
+
+            SUDO_LINE=""
+            if sudo -n ss -ltnp >/tmp/evidence-vault-port-owner.txt 2>/dev/null; then
+              echo "PORT_OWNER_PROBE_SUDO_SS=available"
+              SUDO_LINE="$(awk -v port=":$PORT" '$4 ~ port"$" { print; exit }' /tmp/evidence-vault-port-owner.txt || true)"
+            else
               echo "PORT_OWNER_PROBE_SUDO_SS=unavailable"
+            fi
+            rm -f /tmp/evidence-vault-port-owner.txt
+
+            LISTENER_PID="$(printf '%s' "$SUDO_LINE" | sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p' | head -n 1)"
+            if [ -n "$LISTENER_PID" ]; then
+              echo "PORT_OWNER_PROBE_SUDO_SS_PID=visible"
+              if [ -n "$USER_PM2_PID" ] && [ "$LISTENER_PID" = "$USER_PM2_PID" ]; then
+                echo "PORT_OWNER_PROBE_USER_PM2_MATCH=yes"
+              else
+                echo "PORT_OWNER_PROBE_USER_PM2_MATCH=no"
+              fi
+              if [ -n "$ROOT_PM2_PID" ] && [ "$LISTENER_PID" = "$ROOT_PM2_PID" ]; then
+                echo "PORT_OWNER_PROBE_ROOT_PM2_MATCH=yes"
+              else
+                echo "PORT_OWNER_PROBE_ROOT_PM2_MATCH=no"
+              fi
+              LISTENER_USER="$(sudo -n ps -o user= -p "$LISTENER_PID" 2>/dev/null | awk 'NF {print $1; exit}' || true)"
+              LISTENER_COMM="$(sudo -n ps -o comm= -p "$LISTENER_PID" 2>/dev/null | awk 'NF {print $1; exit}' || true)"
+              if [ "$LISTENER_USER" = "ubuntu" ]; then
+                echo "PORT_OWNER_PROBE_LISTENER_USER=ubuntu"
+              elif [ "$LISTENER_USER" = "root" ]; then
+                echo "PORT_OWNER_PROBE_LISTENER_USER=root"
+              elif [ -n "$LISTENER_USER" ]; then
+                echo "PORT_OWNER_PROBE_LISTENER_USER=other"
+              else
+                echo "PORT_OWNER_PROBE_LISTENER_USER=unknown"
+              fi
+              if [ "$LISTENER_COMM" = "node" ]; then
+                echo "PORT_OWNER_PROBE_LISTENER_PROCESS=node"
+              elif [ -n "$LISTENER_COMM" ]; then
+                echo "PORT_OWNER_PROBE_LISTENER_PROCESS=other"
+              else
+                echo "PORT_OWNER_PROBE_LISTENER_PROCESS=unknown"
+              fi
+            else
+              echo "PORT_OWNER_PROBE_SUDO_SS_PID=hidden-or-absent"
+            fi
+
+            HEALTH="$(curl -fsS --max-time 3 http://127.0.0.1:3011/api/health 2>/dev/null || true)"
+            if printf '%s' "$HEALTH" | grep -q '"ok":true' && printf '%s' "$HEALTH" | grep -q '"service":"evidence-vault"'; then
+              echo "PORT_OWNER_PROBE_LOCAL_HEALTH=evidence-vault"
+            else
+              echo "PORT_OWNER_PROBE_LOCAL_HEALTH=unexpected"
             fi
 
             ENV_LINE="$(grep -E '^BOUQUET_BASE_URL=' /home/ubuntu/evidence-vault/.env.production | tail -n 1 || true)"
@@ -70,7 +125,9 @@ jobs:
               echo "PORT_OWNER_PROBE_ENV=new"
             else
               echo "PORT_OWNER_PROBE_ENV=unexpected"
-              exit 1
             fi
-            test "$(stat -c '%a' /home/ubuntu/evidence-vault/.env.production)" = "600"
-            echo "PORT_OWNER_PROBE_ENV_MODE=600"
+            if [ "$(stat -c '%a' /home/ubuntu/evidence-vault/.env.production 2>/dev/null || true)" = "600" ]; then
+              echo "PORT_OWNER_PROBE_ENV_MODE=600"
+            else
+              echo "PORT_OWNER_PROBE_ENV_MODE=invalid"
+            fi
