@@ -21,7 +21,7 @@ jobs:
           test -n "$SSH_PASSWORD"
           echo "PORT_OWNER_PROBE_SSH=available"
 
-      - name: Inspect port ownership read-only
+      - name: Inspect port ownership and ingress read-only
         uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262
         with:
           host: ssh.gsmsv.site
@@ -33,6 +33,7 @@ jobs:
             set -u
             PROCESS_NAME="evidence-vault-preview"
             PORT="3011"
+            HOST_NAME="evidence-vault.https.gsmsv.site"
             PM2_BIN="$(command -v pm2 2>/dev/null || true)"
 
             USER_PM2_PID=""
@@ -79,16 +80,6 @@ jobs:
             LISTENER_PID="$(printf '%s' "$SUDO_LINE" | sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p' | head -n 1)"
             if [ -n "$LISTENER_PID" ]; then
               echo "PORT_OWNER_PROBE_SUDO_SS_PID=visible"
-              if [ -n "$USER_PM2_PID" ] && [ "$LISTENER_PID" = "$USER_PM2_PID" ]; then
-                echo "PORT_OWNER_PROBE_USER_PM2_MATCH=yes"
-              else
-                echo "PORT_OWNER_PROBE_USER_PM2_MATCH=no"
-              fi
-              if [ -n "$ROOT_PM2_PID" ] && [ "$LISTENER_PID" = "$ROOT_PM2_PID" ]; then
-                echo "PORT_OWNER_PROBE_ROOT_PM2_MATCH=yes"
-              else
-                echo "PORT_OWNER_PROBE_ROOT_PM2_MATCH=no"
-              fi
               LISTENER_USER="$(sudo -n ps -o user= -p "$LISTENER_PID" 2>/dev/null | awk 'NF {print $1; exit}' || true)"
               LISTENER_COMM="$(sudo -n ps -o comm= -p "$LISTENER_PID" 2>/dev/null | awk 'NF {print $1; exit}' || true)"
               if [ "$LISTENER_USER" = "ubuntu" ]; then
@@ -100,8 +91,8 @@ jobs:
               else
                 echo "PORT_OWNER_PROBE_LISTENER_USER=unknown"
               fi
-              if [ "$LISTENER_COMM" = "node" ]; then
-                echo "PORT_OWNER_PROBE_LISTENER_PROCESS=node"
+              if [ "$LISTENER_COMM" = "node" ] || [ "$LISTENER_COMM" = "next-server" ]; then
+                echo "PORT_OWNER_PROBE_LISTENER_PROCESS=node-like"
               elif [ -n "$LISTENER_COMM" ]; then
                 echo "PORT_OWNER_PROBE_LISTENER_PROCESS=other"
               else
@@ -131,3 +122,33 @@ jobs:
             else
               echo "PORT_OWNER_PROBE_ENV_MODE=invalid"
             fi
+
+            if systemctl is-active --quiet nginx 2>/dev/null; then
+              echo "INGRESS_PROBE_NGINX_SERVICE=active"
+            else
+              echo "INGRESS_PROBE_NGINX_SERVICE=inactive-or-missing"
+            fi
+
+            if sudo -n nginx -t >/dev/null 2>&1; then
+              echo "INGRESS_PROBE_NGINX_CONFIG=valid"
+            else
+              echo "INGRESS_PROBE_NGINX_CONFIG=invalid-or-unavailable"
+            fi
+
+            MATCHED_CONFIGS="$(sudo -n grep -R -l -F "$HOST_NAME" /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null || true)"
+            if [ -n "$MATCHED_CONFIGS" ]; then
+              echo "INGRESS_PROBE_HOST_CONFIG=present"
+              if printf '%s\n' "$MATCHED_CONFIGS" | while IFS= read -r file; do sudo -n grep -Eq 'proxy_pass[[:space:]]+http://127\.0\.0\.1:3011' "$file" || exit 1; done; then
+                echo "INGRESS_PROBE_PROXY_TARGET=3011"
+              else
+                echo "INGRESS_PROBE_PROXY_TARGET=unexpected"
+              fi
+            else
+              echo "INGRESS_PROBE_HOST_CONFIG=absent"
+            fi
+
+            LOCAL_NGINX_STATUS="$(curl -sS -o /dev/null --max-time 5 -w '%{http_code}' -H "Host: $HOST_NAME" http://127.0.0.1/api/health 2>/dev/null || true)"
+            echo "INGRESS_PROBE_LOCAL_NGINX_STATUS=${LOCAL_NGINX_STATUS:-request-failed}"
+
+            PUBLIC_STATUS="$(curl -sS -o /dev/null --max-time 8 -w '%{http_code}' "https://$HOST_NAME/api/health" 2>/dev/null || true)"
+            echo "INGRESS_PROBE_PUBLIC_STATUS=${PUBLIC_STATUS:-request-failed}"
