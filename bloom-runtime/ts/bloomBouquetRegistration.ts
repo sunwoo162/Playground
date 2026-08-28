@@ -169,5 +169,8 @@ export function buildBloomBouquetRegistrationUrl(
   const url = new URL(BLOOM_BOUQUET_MANAGE_ORIGIN);
   url.searchParams.set("mode", "manage");
   url.searchParams.set("luna", encoded);
-  return url.toString();
+  const registrationUrl = url.toString();
+  return registrationUrl.length <= LUNA_BLOOM_BOUQUET_HANDOFF_MAX_LENGTH
+    ? registrationUrl
+    : null;
 }
