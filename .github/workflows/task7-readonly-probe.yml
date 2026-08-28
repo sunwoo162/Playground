@@ -1,4 +1,4 @@
-name: Task 7 Nginx Default Probe
+name: Task 7 Evidence Vault Nginx Probe
 
 on:
   push:
@@ -9,10 +9,10 @@ permissions:
   contents: read
 
 jobs:
-  probe-nginx-default:
+  probe-evidence-nginx:
     runs-on: ubuntu-latest
     steps:
-      - name: Read active default nginx config
+      - name: Read current standalone Evidence Vault nginx config
         uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262
         with:
           host: ssh.gsmsv.site
@@ -25,10 +25,15 @@ jobs:
             STATUS="$(pm2 jlist | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const x=JSON.parse(s).find(v=>v.name==="bloom-worker");process.stdout.write(x?.pm2_env?.status||"missing")})')"
             [ "$STATUS" = "stopped" ] || { echo "bloom-worker must stay stopped, found=$STATUS" >&2; exit 1; }
             echo "bloom-worker=$STATUS"
-            ENABLED=/etc/nginx/sites-enabled/default
-            [ -e "$ENABLED" ] || { echo 'default nginx config missing' >&2; exit 1; }
-            printf 'enabled='; readlink -f "$ENABLED"
-            echo '=== CONFIG ==='
-            sudo sed -n '1,220p' "$ENABLED"
-            echo '=== NGINX TEST ==='
+
+            echo '=== EVIDENCE VAULT NGINX FILES ==='
+            MATCHES="$(sudo grep -RIlE 'server_name[[:space:]]+evidence-vault\.https\.gsmsv\.site([[:space:];]|$)' /etc/nginx 2>/dev/null || true)"
+            printf '%s\n' "$MATCHES"
+            for FILE in $MATCHES; do
+              echo "--- $FILE ---"
+              sudo sed -n '1,180p' "$FILE"
+            done
+
+            echo '=== PORT 3011 REFERENCES ==='
+            sudo grep -RInE '127\.0\.0\.1:3011|localhost:3011' /etc/nginx 2>/dev/null || true
             sudo nginx -t
