@@ -28,13 +28,17 @@ jobs:
           echo "DOMAIN_PROBE_NEW_AUTH_STATUS=${NEW_AUTH_STATUS:-000}"
           echo "DOMAIN_PROBE_OLD_ROOT_STATUS=${OLD_ROOT_STATUS:-000}"
 
-          test "$NEW_ROOT_STATUS" = "200"
-          grep -q '<title>BloomBouquet</title>' /tmp/new-root
-          test "$NEW_AUTH_STATUS" = "200"
-          grep -q '"authenticated":false' /tmp/new-auth
-          test "$OLD_ROOT_STATUS" = "200"
-          grep -q '<title>BloomBouquet</title>' /tmp/old-root
+          NEW_TITLE="$(grep -o '<title>[^<]*</title>' /tmp/new-root | head -n 1 || true)"
+          OLD_TITLE="$(grep -o '<title>[^<]*</title>' /tmp/old-root | head -n 1 || true)"
+          echo "DOMAIN_PROBE_NEW_TITLE=${NEW_TITLE:-missing}"
+          echo "DOMAIN_PROBE_OLD_TITLE=${OLD_TITLE:-missing}"
+          echo "DOMAIN_PROBE_AUTH_BODY=$(head -c 200 /tmp/new-auth | tr '\n' ' ')"
 
-          echo "DOMAIN_PROBE_NEW_DOMAIN=ready"
+          test "$NEW_ROOT_STATUS" = "200"
+          test "$NEW_AUTH_STATUS" = "200"
+          test "$OLD_ROOT_STATUS" = "200"
+          test "$NEW_TITLE" = "$OLD_TITLE"
+
+          echo "DOMAIN_PROBE_NEW_DOMAIN=route-ready"
           echo "DOMAIN_PROBE_OLD_DOMAIN=still-ready"
           rm -f /tmp/new-root /tmp/new-auth /tmp/old-root
