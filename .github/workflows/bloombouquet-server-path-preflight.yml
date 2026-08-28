@@ -1,0 +1,102 @@
+name: BloomBouquet Server Path Preflight
+
+on:
+  push:
+    branches:
+      - ops/bloombouquet-server-path-preflight-20260828
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Require SSH
+        env:
+          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+        shell: bash
+        run: |
+          test -n "$SSH_PASSWORD"
+          echo "BLOOM_PATH_PREFLIGHT_SSH=available"
+
+      - name: Inspect production paths read-only
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          script_stop: false
+          script: |
+            set -eu
+            OLD=/home/ubuntu/playground
+            NEW=/home/ubuntu/bloombouquet
+
+            test -d "$OLD/.git"
+            echo "BLOOM_PATH_PREFLIGHT_OLD_REPO=present"
+            if [ -e "$NEW" ]; then
+              echo "BLOOM_PATH_PREFLIGHT_NEW_PATH=present"
+            else
+              echo "BLOOM_PATH_PREFLIGHT_NEW_PATH=absent"
+            fi
+
+            OLD_SHA="$(git -C "$OLD" rev-parse HEAD)"
+            echo "BLOOM_PATH_PREFLIGHT_OLD_SHA=$OLD_SHA"
+
+            for file in .env .env.backend; do
+              if [ -f "$OLD/$file" ]; then
+                MODE="$(stat -c '%a' "$OLD/$file")"
+                echo "BLOOM_PATH_PREFLIGHT_${file#.}_MODE=$MODE"
+              else
+                echo "BLOOM_PATH_PREFLIGHT_${file#.}_MODE=missing"
+              fi
+            done
+
+            OLD_KB="$(du -sk "$OLD" 2>/dev/null | awk '{print $1}')"
+            FREE_KB="$(df -Pk /home/ubuntu | awk 'NR==2 {print $4}')"
+            if [ "$FREE_KB" -gt "$((OLD_KB * 2))" ]; then
+              echo "BLOOM_PATH_PREFLIGHT_DISK=ample"
+            elif [ "$FREE_KB" -gt "$OLD_KB" ]; then
+              echo "BLOOM_PATH_PREFLIGHT_DISK=sufficient"
+            else
+              echo "BLOOM_PATH_PREFLIGHT_DISK=insufficient"
+              exit 1
+            fi
+
+            node <<'NODE'
+            const { execFileSync } = require('node:child_process');
+            const list = JSON.parse(execFileSync('pm2', ['jlist'], { encoding: 'utf8' }));
+            const names = ['playground', 'backend', 'bloom-worker', 'bloom-evaluator-llm'];
+            for (const name of names) {
+              const app = list.find((entry) => entry.name === name);
+              if (!app) {
+                console.log(`BLOOM_PATH_PREFLIGHT_PM2_${name}=missing`);
+                continue;
+              }
+              const cwd = app.pm2_env?.pm_cwd || '';
+              const execPath = app.pm2_env?.pm_exec_path || '';
+              const old = cwd.includes('/home/ubuntu/playground') || execPath.includes('/home/ubuntu/playground');
+              const newer = cwd.includes('/home/ubuntu/bloombouquet') || execPath.includes('/home/ubuntu/bloombouquet');
+              const external = !old && !newer;
+              console.log(`BLOOM_PATH_PREFLIGHT_PM2_${name}_STATUS=${app.pm2_env?.status || 'unknown'}`);
+              console.log(`BLOOM_PATH_PREFLIGHT_PM2_${name}_PATH=${old ? 'old' : newer ? 'new' : external ? 'external' : 'unknown'}`);
+            }
+            NODE
+
+            ROOT="$(curl -fsS --max-time 5 http://127.0.0.1:3000/ 2>/dev/null || true)"
+            printf '%s' "$ROOT" | grep -q '<title>BloomBouquet</title>'
+            curl -fsS --max-time 5 http://127.0.0.1:8080/api/bouquet/auth/me >/dev/null
+            curl -fsS --max-time 5 http://127.0.0.1:8091/health >/dev/null
+            echo "BLOOM_PATH_PREFLIGHT_LOCAL_HEALTH=ok"
+
+      - name: Verify public BloomBouquet read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$(curl -fsS --max-time 10 https://bloombouquet.https.gsmsv.site/)"
+          printf '%s' "$ROOT" | grep -q '<title>BloomBouquet</title>'
+          AUTH="$(curl -fsS --max-time 10 https://bloombouquet.https.gsmsv.site/api/bouquet/auth/me)"
+          printf '%s' "$AUTH" | grep -q '"user":null'
+          echo "BLOOM_PATH_PREFLIGHT_PUBLIC_HEALTH=ok"
