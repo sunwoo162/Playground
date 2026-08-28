@@ -167,6 +167,7 @@ export function createBuilderWorkerHttpClient(
           workerId,
           repositoryFullName: result.repositoryFullName,
           previewUrl: result.previewUrl,
+          bloomBouquetRegistrationUrl: result.bloomBouquetRegistrationUrl ?? null,
         },
       );
       if (!state) throw new Error("complete 응답이 비어 있습니다.");
