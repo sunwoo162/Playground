@@ -1,4 +1,4 @@
-name: Evidence Vault Readonly Probe
+name: Evidence Vault Bootstrap
 
 on:
   push:
@@ -9,9 +9,9 @@ permissions:
   contents: read
 
 jobs:
-  probe:
+  bootstrap:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
       - name: Require authorized SSH secret
         env:
@@ -19,61 +19,106 @@ jobs:
         shell: bash
         run: |
           if [[ -z "$SSH_PASSWORD" ]]; then
-            echo "PROBE_SSH=unavailable"
+            echo "BOOTSTRAP_SSH=unavailable"
             exit 1
           fi
-          echo "PROBE_SSH=available"
+          echo "BOOTSTRAP_SSH=available"
 
-      - name: Probe bootstrap prerequisites read-only
+      - name: Bootstrap PostgreSQL and Evidence Vault runtime
         uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262
         with:
           host: ssh.gsmsv.site
           port: 24136
           username: ubuntu
           password: ${{ secrets.SSH_PASSWORD }}
-          script_stop: false
+          command_timeout: 25m
+          script_stop: true
           script: |
-            echo "PROBE_HOST_REACHED=yes"
-            . /etc/os-release 2>/dev/null || true
-            echo "PROBE_OS_ID=${ID:-unknown}"
-            echo "PROBE_OS_VERSION=${VERSION_ID:-unknown}"
+            set -eu
+            TARGET_SHA="0ddff8f5734928b5b275ff27aeda41fe8aea5430"
+            APP_DIR="/home/ubuntu/evidence-vault"
+            ENV_FILE="$APP_DIR/.env.production"
+            DB_ROLE="evidence_vault_preview"
+            DB_NAME="evidence_vault_preview"
 
-            sudo -n true >/dev/null 2>&1 && echo "PROBE_SUDO=passwordless" || echo "PROBE_SUDO=unavailable"
-            command -v docker >/dev/null 2>&1 && echo "PROBE_DOCKER=present" || echo "PROBE_DOCKER=missing"
-            command -v certbot >/dev/null 2>&1 && echo "PROBE_CERTBOT=present" || echo "PROBE_CERTBOT=missing"
-            command -v snap >/dev/null 2>&1 && echo "PROBE_SNAP=present" || echo "PROBE_SNAP=missing"
-            command -v corepack >/dev/null 2>&1 && echo "PROBE_COREPACK=present" || echo "PROBE_COREPACK=missing"
-            command -v npm >/dev/null 2>&1 && echo "PROBE_NPM=present" || echo "PROBE_NPM=missing"
+            echo "BOOTSTRAP_HOST_REACHED=yes"
+            echo "BOOTSTRAP_TARGET_SHA=$TARGET_SHA"
 
-            if command -v systemctl >/dev/null 2>&1; then
-              systemctl is-active --quiet postgresql && echo "PROBE_POSTGRES_SERVICE=active" || echo "PROBE_POSTGRES_SERVICE=inactive-or-missing"
-              systemctl is-enabled --quiet postgresql >/dev/null 2>&1 && echo "PROBE_POSTGRES_ENABLED=yes" || echo "PROBE_POSTGRES_ENABLED=no-or-missing"
-            fi
-
-            if command -v dpkg-query >/dev/null 2>&1; then
-              dpkg-query -W -f='${Status}\n' postgresql 2>/dev/null | grep -q 'install ok installed' && echo "PROBE_POSTGRES_PACKAGE=installed" || echo "PROBE_POSTGRES_PACKAGE=missing"
-              dpkg-query -W -f='${Status}\n' postgresql-client 2>/dev/null | grep -q 'install ok installed' && echo "PROBE_POSTGRES_CLIENT_PACKAGE=installed" || echo "PROBE_POSTGRES_CLIENT_PACKAGE=missing"
-            fi
-
-            if command -v docker >/dev/null 2>&1; then
-              sudo -n docker info >/dev/null 2>&1 && echo "PROBE_DOCKER_DAEMON=ready" || echo "PROBE_DOCKER_DAEMON=unavailable"
-              sudo -n docker ps --format '{{.Image}}' 2>/dev/null | grep -qi 'postgres' && echo "PROBE_DOCKER_POSTGRES=present" || echo "PROBE_DOCKER_POSTGRES=absent"
-            fi
-
-            if command -v nginx >/dev/null 2>&1; then
-              sudo -n nginx -t >/dev/null 2>&1 && echo "PROBE_NGINX_CONFIG=valid" || echo "PROBE_NGINX_CONFIG=invalid-or-unavailable"
-              test -d /etc/nginx/sites-available && echo "PROBE_NGINX_SITES_AVAILABLE=yes" || echo "PROBE_NGINX_SITES_AVAILABLE=no"
-              test -d /etc/nginx/sites-enabled && echo "PROBE_NGINX_SITES_ENABLED=yes" || echo "PROBE_NGINX_SITES_ENABLED=no"
-            fi
-
-            if command -v certbot >/dev/null 2>&1; then
-              certbot plugins 2>/dev/null | grep -q 'nginx' && echo "PROBE_CERTBOT_NGINX_PLUGIN=present" || echo "PROBE_CERTBOT_NGINX_PLUGIN=missing"
-            fi
-
-            if getent ahosts evidence-vault.https.gsmsv.site >/dev/null 2>&1; then
-              echo "PROBE_DNS=resolved"
+            if ! command -v psql >/dev/null 2>&1; then
+              echo "BOOTSTRAP_POSTGRES_INSTALL=required"
+              sudo apt-get update -y
+              sudo DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql postgresql-client
             else
-              echo "PROBE_DNS=unresolved"
+              echo "BOOTSTRAP_POSTGRES_INSTALL=already-present"
             fi
 
-            echo "PROBE_BOOTSTRAP_COMPLETE=yes"
+            sudo systemctl enable --now postgresql >/dev/null
+            sudo -u postgres pg_isready -q
+            echo "BOOTSTRAP_POSTGRES=ready"
+
+            if test ! -d "$APP_DIR/.git"; then
+              git clone https://github.com/BloomBouquet/evidence-vault.git "$APP_DIR" >/dev/null 2>&1
+              echo "BOOTSTRAP_REPOSITORY=cloned"
+            else
+              echo "BOOTSTRAP_REPOSITORY=preserved"
+            fi
+
+            cd "$APP_DIR"
+            git fetch origin develop >/dev/null 2>&1
+            git cat-file -e "${TARGET_SHA}^{commit}"
+            git merge-base --is-ancestor "$TARGET_SHA" origin/develop
+            git checkout -B develop origin/develop >/dev/null 2>&1
+            git reset --hard "$TARGET_SHA" >/dev/null
+            echo "BOOTSTRAP_REPOSITORY_SHA=$(git rev-parse HEAD)"
+
+            if test ! -f "$ENV_FILE"; then
+              DB_PASSWORD="$(openssl rand -hex 32)"
+              SESSION_SECRET="$(openssl rand -hex 48)"
+
+              if sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='$DB_ROLE'" | grep -q 1; then
+                printf "ALTER ROLE %s WITH LOGIN PASSWORD '%s';\n" "$DB_ROLE" "$DB_PASSWORD" | sudo -u postgres psql -v ON_ERROR_STOP=1 >/dev/null
+                echo "BOOTSTRAP_DB_ROLE=rotated-dedicated-role"
+              else
+                printf "CREATE ROLE %s WITH LOGIN PASSWORD '%s';\n" "$DB_ROLE" "$DB_PASSWORD" | sudo -u postgres psql -v ON_ERROR_STOP=1 >/dev/null
+                echo "BOOTSTRAP_DB_ROLE=created"
+              fi
+
+              if sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'" | grep -q 1; then
+                printf "ALTER DATABASE %s OWNER TO %s;\n" "$DB_NAME" "$DB_ROLE" | sudo -u postgres psql -v ON_ERROR_STOP=1 >/dev/null
+                echo "BOOTSTRAP_DATABASE=preserved"
+              else
+                sudo -u postgres createdb --owner="$DB_ROLE" "$DB_NAME"
+                echo "BOOTSTRAP_DATABASE=created"
+              fi
+
+              umask 077
+              cat > "$ENV_FILE" <<EOF
+            NODE_ENV=production
+            PORT=3011
+            APP_BASE_URL=https://evidence-vault.https.gsmsv.site
+            DATABASE_URL=postgresql://$DB_ROLE:$DB_PASSWORD@127.0.0.1:5432/$DB_NAME
+            SESSION_SECRET=$SESSION_SECRET
+            BOUQUET_BASE_URL=https://playground.https.gsmsv.site
+            BOUQUET_CLIENT_ID=evidence-vault-preview-bootstrap
+            BOUQUET_REDIRECT_URI=https://evidence-vault.https.gsmsv.site/auth/bouquet/callback
+            EOF
+              chmod 600 "$ENV_FILE"
+              echo "BOOTSTRAP_ENVIRONMENT=created"
+            else
+              echo "BOOTSTRAP_ENVIRONMENT=preserved"
+            fi
+
+            test "$(stat -c '%a' "$ENV_FILE")" = "600"
+            echo "BOOTSTRAP_ENV_MODE=600"
+
+            bash scripts/deploy-preview.sh "$TARGET_SHA"
+
+            PM2_PID="$(pm2 pid evidence-vault-preview 2>/dev/null | awk 'NF && $1 != 0 { print $1; exit }')"
+            test -n "$PM2_PID"
+            echo "BOOTSTRAP_PM2=online"
+
+            BODY="$(curl -fsS --max-time 5 http://127.0.0.1:3011/api/health)"
+            printf '%s' "$BODY" | grep -q '"ok":true'
+            printf '%s' "$BODY" | grep -q '"service":"evidence-vault"'
+            echo "BOOTSTRAP_LOOPBACK_HEALTH=ok"
+            echo "BOOTSTRAP_STAGE_A_COMPLETE=yes"
