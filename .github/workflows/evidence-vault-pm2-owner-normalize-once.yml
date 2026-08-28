@@ -1,0 +1,107 @@
+name: Evidence Vault PM2 Owner Normalize Once
+
+on:
+  push:
+    branches:
+      - ops/evidence-vault-provider-cutover-20260828
+
+permissions:
+  contents: read
+
+jobs:
+  normalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Require SSH
+        env:
+          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+        shell: bash
+        run: |
+          test -n "$SSH_PASSWORD"
+          echo "EV_PM2_NORMALIZE_SSH=available"
+
+      - name: Normalize preview process owner to ubuntu
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          script_stop: false
+          script: |
+            set -euo pipefail
+            APP_DIR="/home/ubuntu/evidence-vault"
+            ENV_FILE="$APP_DIR/.env.production"
+            PROCESS_NAME="evidence-vault-preview"
+            PM2_BIN="$(command -v pm2)"
+
+            test -d "$APP_DIR/.git"
+            test -f "$ENV_FILE"
+            test "$(stat -c '%a' "$ENV_FILE")" = "600"
+            ENV_LINE="$(grep -E '^BOUQUET_BASE_URL=' "$ENV_FILE" | tail -n 1 || true)"
+            printf '%s' "$ENV_LINE" | grep -Fq 'playground.https.gsmsv.site'
+            echo "EV_PM2_NORMALIZE_ENV=old"
+
+            cd "$APP_DIR"
+            test -x scripts/start-preview.sh
+            command -v pnpm >/dev/null
+            echo "EV_PM2_NORMALIZE_UBUNTU_PNPM=available"
+
+            LISTENER="$(sudo -n ss -ltnp 2>/dev/null | awk '$4 ~ /:3011$/ { print; exit }' || true)"
+            if [ -n "$LISTENER" ]; then
+              ROOT_PID="$(sudo -n "$PM2_BIN" pid "$PROCESS_NAME" 2>/dev/null | awk 'NF && $1 != 0 { print $1; exit }' || true)"
+              LISTENER_PID="$(printf '%s' "$LISTENER" | sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p' | head -n 1)"
+              test -n "$ROOT_PID"
+              test -n "$LISTENER_PID"
+              test "$ROOT_PID" = "$LISTENER_PID"
+              echo "EV_PM2_NORMALIZE_EXISTING_LISTENER=root-pm2"
+            else
+              echo "EV_PM2_NORMALIZE_EXISTING_LISTENER=absent"
+            fi
+
+            if sudo -n "$PM2_BIN" describe "$PROCESS_NAME" >/dev/null 2>&1; then
+              sudo -n "$PM2_BIN" delete "$PROCESS_NAME" >/dev/null
+              sudo -n "$PM2_BIN" save >/dev/null || true
+              echo "EV_PM2_NORMALIZE_ROOT_ENTRY=removed"
+            else
+              echo "EV_PM2_NORMALIZE_ROOT_ENTRY=absent"
+            fi
+
+            if "$PM2_BIN" describe "$PROCESS_NAME" >/dev/null 2>&1; then
+              "$PM2_BIN" delete "$PROCESS_NAME" >/dev/null
+            fi
+
+            "$PM2_BIN" start scripts/start-preview.sh --name "$PROCESS_NAME" --interpreter bash --update-env >/dev/null
+
+            READY=false
+            for attempt in $(seq 1 30); do
+              BODY="$(curl -fsS --max-time 3 http://127.0.0.1:3011/api/health 2>/dev/null || true)"
+              if printf '%s' "$BODY" | grep -q '"ok":true' && printf '%s' "$BODY" | grep -q '"service":"evidence-vault"'; then
+                READY=true
+                break
+              fi
+              sleep 2
+            done
+            test "$READY" = "true"
+
+            USER_PID="$($PM2_BIN pid "$PROCESS_NAME" 2>/dev/null | awk 'NF && $1 != 0 { print $1; exit }' || true)"
+            test -n "$USER_PID"
+            ROOT_PID="$(sudo -n "$PM2_BIN" pid "$PROCESS_NAME" 2>/dev/null | awk 'NF && $1 != 0 { print $1; exit }' || true)"
+            test -z "$ROOT_PID"
+
+            USER_LINE="$(ss -ltnp 2>/dev/null | awk '$4 ~ /:3011$/ { print; exit }' || true)"
+            printf '%s' "$USER_LINE" | grep -Fq "pid=$USER_PID,"
+
+            "$PM2_BIN" save >/dev/null
+            echo "EV_PM2_NORMALIZE_OWNER=ubuntu"
+            echo "EV_PM2_NORMALIZE_LOCAL_HEALTH=ok"
+
+      - name: Verify public health
+        shell: bash
+        run: |
+          set -euo pipefail
+          BODY="$(curl -fsS --retry 10 --retry-delay 2 --max-time 5 'https://evidence-vault.https.gsmsv.site/api/health')"
+          printf '%s' "$BODY" | grep -q '"ok":true'
+          printf '%s' "$BODY" | grep -q '"service":"evidence-vault"'
+          echo "EV_PM2_NORMALIZE_PUBLIC_HEALTH=ok"
