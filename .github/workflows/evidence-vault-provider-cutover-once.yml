@@ -1,0 +1,144 @@
+name: Evidence Vault Provider Cutover Once
+
+on:
+  push:
+    branches:
+      - ops/evidence-vault-provider-cutover-20260828
+
+permissions:
+  contents: read
+
+jobs:
+  cutover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Require authorized SSH secret
+        env:
+          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+        shell: bash
+        run: |
+          if [[ -z "$SSH_PASSWORD" ]]; then
+            echo "PROVIDER_CUTOVER_SSH=unavailable" >&2
+            exit 1
+          fi
+          echo "PROVIDER_CUTOVER_SSH=available"
+
+      - name: Cut over Evidence Vault provider transactionally
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            APP_DIR="/home/ubuntu/evidence-vault"
+            ENV_FILE="$APP_DIR/.env.production"
+            PROCESS_NAME="evidence-vault-preview"
+            TARGET_SHA="3d20f2805b8566e212de702db21e51f393b98e31"
+            OLD="https://playground.https.gsmsv.site"
+            NEW="https://bloombouquet.https.gsmsv.site"
+            BACKUP="$(mktemp)"
+            TARGET_SCRIPT="$(mktemp)"
+
+            cleanup() {
+              rm -f "$BACKUP" "$TARGET_SCRIPT"
+            }
+            trap cleanup EXIT
+
+            test -d "$APP_DIR/.git"
+            test -f "$ENV_FILE"
+            test "$(stat -c '%a' "$ENV_FILE")" = "600"
+
+            CURRENT_LINE="$(grep -E '^BOUQUET_BASE_URL=' "$ENV_FILE" | tail -n 1 || true)"
+            test -n "$CURRENT_LINE"
+            if printf '%s' "$CURRENT_LINE" | grep -Fq "$NEW"; then
+              CURRENT_STATE="new"
+            elif printf '%s' "$CURRENT_LINE" | grep -Fq "$OLD"; then
+              CURRENT_STATE="old"
+            else
+              echo "PROVIDER_CUTOVER_ENV=unexpected" >&2
+              exit 1
+            fi
+            echo "PROVIDER_CUTOVER_ENV_BEFORE=$CURRENT_STATE"
+
+            cd "$APP_DIR"
+            git fetch origin develop >/dev/null 2>&1
+            git cat-file -e "${TARGET_SHA}^{commit}"
+            git merge-base --is-ancestor "$TARGET_SHA" origin/develop
+            git show "${TARGET_SHA}:scripts/deploy-preview.sh" > "$TARGET_SCRIPT"
+            chmod 700 "$TARGET_SCRIPT"
+            grep -Fq "$NEW" "$TARGET_SCRIPT"
+            if grep -Fq "$OLD" "$TARGET_SCRIPT"; then
+              echo "PROVIDER_CUTOVER_TARGET_SCRIPT=legacy" >&2
+              exit 1
+            fi
+
+            cp -p "$ENV_FILE" "$BACKUP"
+            chmod 600 "$BACKUP"
+
+            if [ "$CURRENT_STATE" = "old" ]; then
+              TMP_ENV="$(mktemp)"
+              awk -v replacement="BOUQUET_BASE_URL=$NEW" '
+                BEGIN { replaced=0 }
+                /^BOUQUET_BASE_URL=/ {
+                  if (!replaced) print replacement
+                  replaced=1
+                  next
+                }
+                { print }
+                END { if (!replaced) exit 42 }
+              ' "$ENV_FILE" > "$TMP_ENV"
+              install -m 600 "$TMP_ENV" "$ENV_FILE"
+              rm -f "$TMP_ENV"
+            fi
+
+            test "$(stat -c '%a' "$ENV_FILE")" = "600"
+            test "$(grep -Ec '^BOUQUET_BASE_URL=' "$ENV_FILE")" = "1"
+            grep -E '^BOUQUET_BASE_URL=' "$ENV_FILE" | grep -Fq "$NEW"
+
+            if ! "$TARGET_SCRIPT" "$TARGET_SHA"; then
+              install -m 600 "$BACKUP" "$ENV_FILE"
+              pm2 restart "$PROCESS_NAME" --update-env >/dev/null 2>&1 || true
+              echo "PROVIDER_CUTOVER=rolled-back" >&2
+              exit 1
+            fi
+
+            BODY="$(curl -fsS --retry 10 --retry-delay 2 --max-time 5 http://127.0.0.1:3011/api/health)"
+            printf '%s' "$BODY" | grep -q '"ok":true'
+            printf '%s' "$BODY" | grep -q '"service":"evidence-vault"'
+            test "$(grep -Ec '^BOUQUET_BASE_URL=' "$ENV_FILE")" = "1"
+            grep -E '^BOUQUET_BASE_URL=' "$ENV_FILE" | grep -Fq "$NEW"
+            test "$(stat -c '%a' "$ENV_FILE")" = "600"
+            pm2 save >/dev/null
+            echo "PROVIDER_CUTOVER_ENV_AFTER=new"
+            echo "PROVIDER_CUTOVER_LOCAL_HEALTH=ok"
+
+      - name: Verify public OAuth provider redirect
+        shell: bash
+        run: |
+          set -euo pipefail
+          HEADERS="$(mktemp)"
+          trap 'rm -f "$HEADERS"' EXIT
+          STATUS="$(curl -sS -D "$HEADERS" -o /dev/null -w '%{http_code}' --max-time 10 'https://evidence-vault.https.gsmsv.site/auth/bouquet/start?returnTo=%2Fdashboard')"
+          test "$STATUS" = "307" -o "$STATUS" = "302"
+          LOCATION="$(awk 'BEGIN{IGNORECASE=1} /^location:/ {sub(/^[^:]*:[[:space:]]*/, ""); sub(/\r$/, ""); print; exit}' "$HEADERS")"
+          test -n "$LOCATION"
+          printf '%s' "$LOCATION" | grep -Eq '^https://bloombouquet\.https\.gsmsv\.site/'
+          if printf '%s' "$LOCATION" | grep -Fq 'playground.https.gsmsv.site'; then
+            echo "PROVIDER_CUTOVER_PUBLIC_REDIRECT=legacy" >&2
+            exit 1
+          fi
+          echo "PROVIDER_CUTOVER_PUBLIC_REDIRECT=new"
+
+      - name: Verify BloomBouquet canonical auth endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          STATUS="$(curl -sS -o /tmp/bouquet-auth -w '%{http_code}' --max-time 10 'https://bloombouquet.https.gsmsv.site/api/bouquet/auth/me')"
+          test "$STATUS" = "200"
+          grep -q '"user":null' /tmp/bouquet-auth
+          rm -f /tmp/bouquet-auth
+          echo "PROVIDER_CUTOVER_BLOOM_AUTH=ok"
