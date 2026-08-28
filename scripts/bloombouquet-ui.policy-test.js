@@ -53,6 +53,15 @@ test('public showcase uses editorial bento hierarchy and premium review sheet', 
   assert.match(showcase, /aria-label="Close report"/);
 });
 
+test('Bouquet auth and Luna handoff use shared editorial surfaces', () => {
+  const auth = source(paths.auth);
+  const luna = source(paths.luna);
+  assert.match(auth, /bouquet-auth-editorial/);
+  assert.match(auth, /Field/);
+  assert.match(luna, /luna-register-summary-grid/);
+  assert.match(luna, /BloomBouquet에 등록하고 평가 시작/);
+});
+
 test('public showcase stays free of management entry points', () => {
   const showcase = source(paths.showcase);
   assert.doesNotMatch(showcase, /\?mode=manage|\?mode=auth/);
