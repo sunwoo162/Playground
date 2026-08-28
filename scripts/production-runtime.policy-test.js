@@ -61,7 +61,7 @@ test('production deploy repairs an invalid shared JWT secret before PM2 startup'
 test('backend-specific env cannot override the shared JWT secret at PM2 startup', () => {
   const workflow = readDeployWorkflow();
   const backendBlock = workflow.match(/if \[ "\$BACKEND_CHANGED"[\s\S]*?pm2 start ecosystem\.config\.js --only backend/)?.[0] ?? '';
-  assert.match(backendBlock, /\. \/home\/ubuntu\/playground\/\.env\.backend/);
+  assert.match(backendBlock, /\. \/home\/ubuntu\/bloombouquet\/\.env\.backend/);
   assert.match(backendBlock, /export JWT_SECRET="\$SHARED_JWT_SECRET"/);
 });
 
