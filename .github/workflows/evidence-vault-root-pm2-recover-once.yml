@@ -1,0 +1,71 @@
+name: Evidence Vault Root PM2 Recover Once
+
+on:
+  push:
+    branches:
+      - ops/evidence-vault-provider-cutover-20260828
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Require SSH
+        env:
+          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+        shell: bash
+        run: |
+          test -n "$SSH_PASSWORD"
+          echo "EV_RECOVERY_SSH=available"
+
+      - name: Recover root PM2 preview
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          script_stop: false
+          script: |
+            set -euo pipefail
+            APP_DIR="/home/ubuntu/evidence-vault"
+            ENV_FILE="$APP_DIR/.env.production"
+            PROCESS_NAME="evidence-vault-preview"
+            PM2_BIN="$(command -v pm2)"
+
+            test -f "$ENV_FILE"
+            test "$(stat -c '%a' "$ENV_FILE")" = "600"
+            ENV_LINE="$(grep -E '^BOUQUET_BASE_URL=' "$ENV_FILE" | tail -n 1 || true)"
+            printf '%s' "$ENV_LINE" | grep -Fq 'playground.https.gsmsv.site'
+            echo "EV_RECOVERY_ENV=old"
+
+            ROOT_PID="$(sudo -n "$PM2_BIN" pid "$PROCESS_NAME" 2>/dev/null | awk 'NF && $1 != 0 { print $1; exit }' || true)"
+            test -n "$ROOT_PID"
+            echo "EV_RECOVERY_ROOT_PM2=present"
+
+            sudo -n "$PM2_BIN" restart "$PROCESS_NAME" --update-env >/dev/null
+
+            READY=false
+            for attempt in $(seq 1 30); do
+              BODY="$(curl -fsS --max-time 3 http://127.0.0.1:3011/api/health 2>/dev/null || true)"
+              if printf '%s' "$BODY" | grep -q '"ok":true' && printf '%s' "$BODY" | grep -q '"service":"evidence-vault"'; then
+                READY=true
+                break
+              fi
+              sleep 2
+            done
+            test "$READY" = "true"
+            sudo -n "$PM2_BIN" save >/dev/null
+            echo "EV_RECOVERY_LOCAL_HEALTH=ok"
+
+      - name: Verify public health
+        shell: bash
+        run: |
+          set -euo pipefail
+          BODY="$(curl -fsS --retry 10 --retry-delay 2 --max-time 5 'https://evidence-vault.https.gsmsv.site/api/health')"
+          printf '%s' "$BODY" | grep -q '"ok":true'
+          printf '%s' "$BODY" | grep -q '"service":"evidence-vault"'
+          echo "EV_RECOVERY_PUBLIC_HEALTH=ok"
