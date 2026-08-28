@@ -1,8 +1,12 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react'
+import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from 'react'
 
 type CommonProps = {
   children?: ReactNode
   className?: string
+}
+
+type SurfaceProps = CommonProps & HTMLAttributes<HTMLElement> & {
+  as?: 'section' | 'article' | 'div'
 }
 
 function cx(...values: Array<string | false | null | undefined>) {
@@ -21,9 +25,9 @@ export function BouquetWordmark({ compact = false }: { compact?: boolean }) {
   )
 }
 
-export function Surface({ children, className = '', as = 'section' }: CommonProps & { as?: 'section' | 'article' | 'div' }) {
+export function Surface({ children, className = '', as = 'section', ...rest }: SurfaceProps) {
   const Component = as
-  return <Component className={cx('bouquet-surface', className)}>{children}</Component>
+  return <Component className={cx('bouquet-surface', className)} {...rest}>{children}</Component>
 }
 
 export function Metric({ value, label }: { value: ReactNode; label: string }) {
