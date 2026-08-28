@@ -69,12 +69,13 @@ jobs:
             }
 
             resolve_enabled_gateway() {
-              MATCHES="$(grep -lE 'server_name[[:space:]]+bloombouquet\.https\.gsmsv\.site([[:space:];]|$)' /etc/nginx/sites-enabled/* 2>/dev/null || true)"
-              MATCH_COUNT="$(printf '%s\n' "$MATCHES" | awk 'NF { count++ } END { print count + 0 }')"
-              [ "$MATCH_COUNT" -eq 1 ] || fail "expected exactly one enabled BloomBouquet Nginx config, found $MATCH_COUNT"
-              ENABLED_CONFIG="$(printf '%s\n' "$MATCHES" | awk 'NF { print; exit }')"
+              ENABLED_CONFIG="/etc/nginx/sites-enabled/default"
+              [ -e "$ENABLED_CONFIG" ] || fail "enabled default Nginx config is missing"
               TARGET_CONFIG="$(readlink -f "$ENABLED_CONFIG")"
-              [ -n "$TARGET_CONFIG" ] && [ -f "$TARGET_CONFIG" ] || fail "enabled BloomBouquet Nginx target cannot be resolved"
+              [ -n "$TARGET_CONFIG" ] && [ -f "$TARGET_CONFIG" ] || fail "enabled default Nginx target cannot be resolved"
+
+              ROOT_PROXY_COUNT="$(grep -Fxc '        proxy_pass http://127.0.0.1:3000;' "$TARGET_CONFIG" 2>/dev/null || true)"
+              [ "$ROOT_PROXY_COUNT" = "1" ] || fail "Refusing gateway mutation: enabled default config must contain exactly one Bloom root proxy_pass http://127.0.0.1:3000;"
               echo "Enabled gateway: $ENABLED_CONFIG -> $TARGET_CONFIG"
             }
 
