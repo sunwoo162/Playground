@@ -40,7 +40,7 @@ logging:
 
 app:
   cors:
-    allowed-origins: https://playground.https.gsmsv.site
+    allowed-origins: https://bloombouquet.https.gsmsv.site
   jwt:
     secret: ${JWT_SECRET:playground-jwt-secret-2024-secure-key}
   builder:
