@@ -19,7 +19,7 @@
 - Evidence Vault `ev_oauth_attempt` cookie path is `/apps/evidence-vault/auth/bouquet`; `ev_session` cookie path is `/apps/evidence-vault`.
 - No iframe, arbitrary dynamic proxy destination, direct production DB mutation, or evaluator/internal worker endpoint exposure.
 - Existing standalone `evidence-vault.https.gsmsv.site` remains until the path-hosted app, OAuth callback, project session, launcher link, and evaluation Run are proven.
-- Existing `requiresAuth=true` Submission flow remains the only OAuth client bootstrap mechanism; its returned `bouquetClientId` must be used.
+- Existing `requiresAuth=true` Submission flow remains the only OAuth client bootstrap mechanism; use the returned `bouquetClientId`.
 - Do not create a duplicate migration Submission if an exact new demo/callback Submission already exists.
 - English Git commit messages; PR title/body follow the existing user-defined PR convention.
 
@@ -38,40 +38,38 @@
 
 - [ ] **Step 1: Re-verify the exact PR head is green**
 
-Run/check: Harness run for PR #116 head `1d81ef5f2ab215158ef0d54c455cedc65df14e59`.
+Check the Harness for head `1d81ef5f2ab215158ef0d54c455cedc65df14e59`.
 
-Expected: build, production runtime policy, backend protocol tests, desktop build, Bloom worker/runtime tests, Rust/Tauri checks, and harness invariants all PASS.
+Expected: production policy, backend tests, web/worker builds, desktop, Rust/Tauri, Bloom runtime, and invariants all PASS.
 
-- [ ] **Step 2: Update PR #116 body with final RED/GREEN and server pre-cutover evidence**
+- [ ] **Step 2: Update PR #116 with final evidence**
 
-Use the exact required sections. Record:
+Record exactly:
 
 ```text
 RED: legacy /home/ubuntu/playground path policy failed
 GREEN: Harness #363 full PASS
-Ops pre-cutover: core playground/backend/bloom-worker paths=new, public postcheck=ok
+Ops pre-cutover: playground/backend/bloom-worker paths=new, public postcheck=ok
 Security: .env and .env.backend mode=600
 ```
 
-- [ ] **Step 3: Mark PR #116 ready and merge to `main` with expected head SHA**
+- [ ] **Step 3: Mark PR #116 ready and merge with expected head SHA**
 
-Expected: merge succeeds only if head is still `1d81ef5f...`; otherwise re-review moved head before merging.
+Expected: merge only if the head is still `1d81ef5f2ab215158ef0d54c455cedc65df14e59`; if it moved, re-review the moved diff and re-run verification.
 
-- [ ] **Step 4: Verify both post-merge workflows**
+- [ ] **Step 4: Verify post-merge server and worker deployments**
 
-Check `Deploy to Server` and `Deploy Bloom Worker` for the merge SHA.
-
-Expected server markers:
+Require:
 
 ```text
 https://bloombouquet.https.gsmsv.site/ -> 200 + <title>BloomBouquet</title>
-/api/bouquet/auth/me -> 200
-bloom-worker health -> 200
+https://bloombouquet.https.gsmsv.site/api/bouquet/auth/me -> 200
+http://127.0.0.1:8091/health -> 200
 ```
 
-- [ ] **Step 5: Verify every Bloom PM2 process uses the new directory before deletion**
+- [ ] **Step 5: Verify every Bloom PM2 process uses the new directory**
 
-Read-only server check:
+Read-only check:
 
 ```js
 const { execFileSync } = require('node:child_process');
@@ -87,9 +85,9 @@ for (const name of ['playground', 'backend', 'bloom-worker', 'bloom-evaluator-ll
 
 Expected: exit `0`.
 
-- [ ] **Step 6: Delete only the legacy server directory and re-run public/worker smoke**
+- [ ] **Step 6: Delete only the legacy server directory and re-run smoke**
 
-Server action after Step 5 only:
+After Step 5 only:
 
 ```bash
 rm -rf /home/ubuntu/playground
@@ -109,28 +107,25 @@ Expected: all commands succeed.
 - Create: `BloomBouquet/evidence-vault/src/routing/app-path.ts`
 - Create: `BloomBouquet/evidence-vault/src/routing/app-path.test.ts`
 - Modify: `BloomBouquet/evidence-vault/src/auth/client-session.ts`
+- Modify: `BloomBouquet/evidence-vault/src/auth/client-session.test.ts`
 - Modify: `BloomBouquet/evidence-vault/src/components/auth/auth-entry-action.tsx`
+- Modify: `BloomBouquet/evidence-vault/src/components/auth/auth-entry-action.test.tsx`
 - Modify: `BloomBouquet/evidence-vault/src/components/auth/sign-out-button.tsx`
+- Modify: `BloomBouquet/evidence-vault/src/components/auth/sign-out-button.test.tsx`
 - Modify: `BloomBouquet/evidence-vault/app/(protected)/layout.tsx`
-- Test: existing component/session/protected-layout tests plus new path helper test
 
 **Interfaces:**
-- Produces: `APP_BASE_PATH`, `appPath(path: string): string`, and `appUrl(origin: URL | string, path: string): URL`.
+- Produces: `APP_BASE_PATH`, `appPath(path?: string): string`, `appUrl(origin: URL | string, path?: string): URL`.
 - Consumers: browser fetch/navigation, auth routes in Task 3, deployment contracts in Task 4.
 
-- [ ] **Step 1: Create a feature branch from `develop`**
+- [ ] **Step 1: Create branch `feat/evidence-vault-bloombouquet-path` from `develop`**
 
-Branch:
-
-```text
-feat/evidence-vault-bloombouquet-path
-```
-
-- [ ] **Step 2: Write failing path-helper and basePath tests**
+- [ ] **Step 2: Write failing helper/basePath tests**
 
 Create `src/routing/app-path.test.ts`:
 
 ```ts
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { APP_BASE_PATH, appPath, appUrl } from './app-path';
 
@@ -146,28 +141,25 @@ describe('Evidence Vault public app path', () => {
     expect(appUrl('https://bloombouquet.https.gsmsv.site', '/dashboard').toString())
       .toBe('https://bloombouquet.https.gsmsv.site/apps/evidence-vault/dashboard');
   });
+
+  it('pins Next to the same public base path', () => {
+    const source = readFileSync('next.config.ts', 'utf8');
+    expect(source).toContain('basePath: "/apps/evidence-vault"');
+  });
 });
 ```
 
-Also extend the existing deployment/path contract test to read `next.config.ts` and require:
-
-```ts
-expect(source).toContain('basePath: "/apps/evidence-vault"');
-```
-
-- [ ] **Step 3: Run focused tests and verify RED**
-
-Run:
+- [ ] **Step 3: Run the new test and verify RED**
 
 ```bash
 pnpm test:run src/routing/app-path.test.ts
 ```
 
-Expected: FAIL because `src/routing/app-path.ts` does not exist.
+Expected: FAIL because `src/routing/app-path.ts` does not exist and `next.config.ts` lacks `basePath`.
 
-- [ ] **Step 4: Implement the minimal reusable path helper and Next basePath**
+- [ ] **Step 4: Implement the helper and Next basePath**
 
-Create `src/routing/app-path.ts`:
+`src/routing/app-path.ts`:
 
 ```ts
 export const APP_BASE_PATH = '/apps/evidence-vault';
@@ -183,7 +175,7 @@ export function appUrl(origin: URL | string, path = '/') {
 }
 ```
 
-Update `next.config.ts`:
+`next.config.ts`:
 
 ```ts
 const nextConfig: NextConfig = {
@@ -195,7 +187,7 @@ const nextConfig: NextConfig = {
 
 - [ ] **Step 5: Move raw browser fetch/navigation to `appPath()`**
 
-Required replacements:
+Required changes:
 
 ```ts
 // src/auth/client-session.ts
@@ -203,7 +195,6 @@ fetchImpl(appPath('/auth/session'), ...)
 
 // src/components/auth/auth-entry-action.tsx
 const LOGIN_HREF = appPath('/auth/bouquet/start?returnTo=/dashboard');
-// authenticated raw anchor
 href={appPath('/dashboard')}
 
 // src/components/auth/sign-out-button.tsx
@@ -214,19 +205,17 @@ navigate(appPath('/'))
 redirect(appPath('/?auth_error=session_required'))
 ```
 
-Keep `next/link` logical hrefs such as `/dashboard`; Next applies `basePath` to its own `Link` component.
+Update the existing tests to expect the prefixed URLs. Keep `next/link` logical hrefs such as `/dashboard`; Next applies its configured `basePath` to `Link`.
 
-- [ ] **Step 6: Run focused tests, then the full Evidence Vault suite/build**
-
-Run:
+- [ ] **Step 6: Run focused tests and full regression**
 
 ```bash
-pnpm test:run src/routing/app-path.test.ts src/auth/client-session.test.ts src/components/auth/sign-out-button.test.tsx
+pnpm test:run src/routing/app-path.test.ts src/auth/client-session.test.ts src/components/auth/auth-entry-action.test.tsx src/components/auth/sign-out-button.test.tsx
 pnpm test:run
 pnpm build
 ```
 
-Expected: all PASS; Next route output is generated under the configured base path.
+Expected: all PASS.
 
 - [ ] **Step 7: Commit**
 
@@ -240,21 +229,21 @@ git commit -m "feat: add Evidence Vault BloomBouquet base path"
 
 **Files:**
 - Modify: `BloomBouquet/evidence-vault/src/auth/config.ts`
+- Modify: `BloomBouquet/evidence-vault/src/auth/config.test.ts`
 - Modify: `BloomBouquet/evidence-vault/app/auth/bouquet/start/route.ts`
+- Modify: `BloomBouquet/evidence-vault/app/auth/bouquet/start/route.test.ts`
 - Modify: `BloomBouquet/evidence-vault/app/auth/bouquet/callback/route.ts`
+- Modify: `BloomBouquet/evidence-vault/app/auth/bouquet/callback/route.test.ts`
 - Modify: `BloomBouquet/evidence-vault/app/auth/sign-out/route.ts`
-- Test: `src/auth/config.test.ts`
-- Test: `app/auth/bouquet/start/route.test.ts`
-- Test: `app/auth/bouquet/callback/route.test.ts`
-- Test: `app/auth/sign-out/route.test.ts`
+- Modify: `BloomBouquet/evidence-vault/app/auth/sign-out/route.test.ts`
 
 **Interfaces:**
 - Consumes: `APP_BASE_PATH`, `appPath`, `appUrl` from Task 2.
-- Produces: exact production callback validation, project-scoped attempt/session cookie contract, project-prefixed success/failure redirects.
+- Produces: exact production callback validation, project-scoped attempt/session cookies, project-prefixed redirects.
 
-- [ ] **Step 1: Write RED assertions for production auth URLs**
+- [ ] **Step 1: Add RED production URL validation**
 
-Add config expectations using:
+Use this valid environment in `src/auth/config.test.ts`:
 
 ```ts
 const env = {
@@ -267,85 +256,82 @@ const env = {
 };
 ```
 
-Require the old callback `/auth/bouquet/callback` without `/apps/evidence-vault` to throw `auth_config_invalid` in production.
+Require `https://bloombouquet.https.gsmsv.site/auth/bouquet/callback` to throw `auth_config_invalid` in production.
 
 - [ ] **Step 2: Add RED cookie/redirect assertions**
 
-Start-route test must expect:
-
-```ts
-expect(setCookie).toContain('Path=/apps/evidence-vault/auth/bouquet');
-```
-
-Callback test must expect successful redirect:
+Require start cookie:
 
 ```text
-https://bloombouquet.https.gsmsv.site/apps/evidence-vault/dashboard
+Path=/apps/evidence-vault/auth/bouquet
 ```
 
-and `ev_session` cookie:
+Require callback success:
+
+```text
+Location: https://bloombouquet.https.gsmsv.site/apps/evidence-vault/dashboard
+Set-Cookie: ev_session=...; Path=/apps/evidence-vault
+```
+
+Require callback failure:
+
+```text
+Location: https://bloombouquet.https.gsmsv.site/apps/evidence-vault/?auth_error=oauth_failed
+```
+
+Require sign-out clear cookie:
 
 ```text
 Path=/apps/evidence-vault
 ```
 
-Failure redirect must be:
-
-```text
-https://bloombouquet.https.gsmsv.site/apps/evidence-vault/?auth_error=oauth_failed
-```
-
-Sign-out clear cookie must also use `Path=/apps/evidence-vault`.
-
 - [ ] **Step 3: Run focused auth tests and verify RED**
-
-Run:
 
 ```bash
 pnpm test:run src/auth/config.test.ts app/auth/bouquet/start/route.test.ts app/auth/bouquet/callback/route.test.ts app/auth/sign-out/route.test.ts
 ```
 
-Expected: failures on callback pathname, redirect URLs, and cookie paths.
+Expected: fail on old callback pathname, redirect URLs, and root-scoped cookie paths.
 
-- [ ] **Step 4: Implement exact config validation**
+- [ ] **Step 4: Implement exact production validation**
 
-In `getAuthConfig`, require in production:
+In `getAuthConfig`:
 
 ```ts
 if (
-  appBaseUrl.pathname !== '/apps/evidence-vault/' ||
-  appBaseUrl.search || appBaseUrl.hash ||
-  bouquetRedirectUri.origin !== appBaseUrl.origin ||
-  bouquetRedirectUri.pathname !== '/apps/evidence-vault/auth/bouquet/callback' ||
-  bouquetRedirectUri.search || bouquetRedirectUri.hash
+  secureCookies && (
+    appBaseUrl.pathname !== '/apps/evidence-vault/' ||
+    appBaseUrl.search || appBaseUrl.hash ||
+    bouquetRedirectUri.origin !== appBaseUrl.origin ||
+    bouquetRedirectUri.pathname !== '/apps/evidence-vault/auth/bouquet/callback' ||
+    bouquetRedirectUri.search || bouquetRedirectUri.hash
+  )
 ) {
   invalid();
 }
 ```
 
-Keep existing HTTPS and session-secret checks.
+Keep the existing HTTPS and 32-byte session secret rules.
 
-- [ ] **Step 5: Implement scoped cookie and redirect behavior**
+- [ ] **Step 5: Implement project-scoped cookies and redirects**
 
-Use constants/helpers instead of duplicated path literals:
+Use the helper/constants:
 
 ```ts
-// login attempt cookie
+// login attempt
 path: `${APP_BASE_PATH}/auth/bouquet`
 
-// callback session cookie and sign-out clear cookie
+// callback session + sign-out clear cookie
 path: APP_BASE_PATH
 
-// callback redirects
+// callback success/failure
 NextResponse.redirect(appUrl(config.appBaseUrl, returnTo))
 NextResponse.redirect(appUrl(config.appBaseUrl, '/?auth_error=oauth_failed'))
 ```
 
-The OAuth provider URL and token/userinfo server-to-server calls remain rooted at `BOUQUET_BASE_URL`; do not prefix them with `/apps/evidence-vault`.
+Do not prefix provider portal/token/userinfo calls; they continue to use `BOUQUET_BASE_URL` directly.
 
-- [ ] **Step 6: Run focused auth tests and full regression**
-
-Run:
+- [ ] **Step 6: Run focused tests, all unit tests, and build**
 
 ```bash
 pnpm test:run src/auth/config.test.ts app/auth/bouquet/start/route.test.ts app/auth/bouquet/callback/route.test.ts app/auth/sign-out/route.test.ts
@@ -369,17 +355,17 @@ git commit -m "fix: scope Evidence Vault auth to project path"
 - Modify: `BloomBouquet/evidence-vault/deploy/preview-contract.json`
 - Modify: `BloomBouquet/evidence-vault/scripts/start-preview.sh`
 - Modify: `BloomBouquet/evidence-vault/scripts/deploy-preview.sh`
+- Modify: `BloomBouquet/evidence-vault/src/deployment/preview-contract.test.ts`
 - Modify: `BloomBouquet/evidence-vault/src/deployment/server-scripts.test.ts`
-- Modify: Evidence Vault preview-contract test file that currently validates `deploy/preview-contract.json`
-- Keep the standalone Nginx file until final deletion: `deploy/nginx/evidence-vault-preview.conf.template`
+- Keep unchanged until Task 8: `BloomBouquet/evidence-vault/deploy/nginx/evidence-vault-preview.conf.template`
 
 **Interfaces:**
-- Consumes: base path and auth contract from Tasks 2-3.
-- Produces: a deployable Evidence Vault build whose loopback health endpoint is `/apps/evidence-vault/api/health` and whose server-only env contract uses the BloomBouquet path URL.
+- Consumes: base path/auth contract from Tasks 2-3.
+- Produces: deployable build with loopback health at `/apps/evidence-vault/api/health` and server-only env contract using the BloomBouquet path URL.
 
-- [ ] **Step 1: Change tests first to require the new deployment contract**
+- [ ] **Step 1: Change deployment tests first**
 
-Expected JSON values:
+`src/deployment/preview-contract.test.ts` must require:
 
 ```json
 {
@@ -394,27 +380,27 @@ Expected JSON values:
 }
 ```
 
-Require `scripts/start-preview.sh` and `scripts/deploy-preview.sh` to contain the same app/callback values and to use:
+`src/deployment/server-scripts.test.ts` must require:
 
 ```text
+https://bloombouquet.https.gsmsv.site/apps/evidence-vault/
+https://bloombouquet.https.gsmsv.site/apps/evidence-vault/auth/bouquet/callback
 http://127.0.0.1:3011/apps/evidence-vault/api/health
 ```
 
+and reject the old standalone app/callback values.
+
 - [ ] **Step 2: Run deployment tests and verify RED**
 
-Run:
-
 ```bash
-pnpm test:run src/deployment/server-scripts.test.ts
+pnpm test:run src/deployment/preview-contract.test.ts src/deployment/server-scripts.test.ts
 ```
 
-plus the existing preview-contract test file.
+Expected: old standalone URL/callback/health contract fails.
 
-Expected: old standalone public URL/callback/health assertions fail.
+- [ ] **Step 3: Implement the exact contract**
 
-- [ ] **Step 3: Implement the minimal contract changes**
-
-Set:
+Update `deploy/preview-contract.json`, then change `scripts/start-preview.sh` and `scripts/deploy-preview.sh` to require:
 
 ```bash
 APP_BASE_URL=https://bloombouquet.https.gsmsv.site/apps/evidence-vault/
@@ -423,28 +409,27 @@ BOUQUET_REDIRECT_URI=https://bloombouquet.https.gsmsv.site/apps/evidence-vault/a
 HEALTH_URL=http://127.0.0.1:3011/apps/evidence-vault/api/health
 ```
 
-Do not alter DB migration, exact-SHA deploy, forward-only migration, PM2 process name, or rollback behavior.
+Do not change DB migration, exact-SHA validation, PM2 process name, port, or forward-only rollback behavior.
 
-- [ ] **Step 4: Verify GREEN and production build**
-
-Run:
+- [ ] **Step 4: Verify GREEN**
 
 ```bash
+pnpm test:run src/deployment/preview-contract.test.ts src/deployment/server-scripts.test.ts
 pnpm test:run
 pnpm build
 ```
 
-Expected: migration contract, all unit tests, and Next production build PASS.
+Expected: all PASS.
 
-- [ ] **Step 5: Open/update the Evidence Vault PR using the required template**
+- [ ] **Step 5: Open Draft PR**
 
-PR title:
+Title:
 
 ```text
 feat : 증빙함 BloomBouquet 하위 경로 호스팅 적용
 ```
 
-Keep it Draft until CI and code review pass.
+Use the exact required PR body section order.
 
 - [ ] **Step 6: Commit**
 
@@ -454,18 +439,18 @@ git commit -m "refactor: update Evidence Vault path hosting contract"
 
 ---
 
-### Task 5: Turn BloomBouquet public main into a launcher and add the static project gateway
+### Task 5: Turn BloomBouquet public main into a launcher and add a manual static gateway deploy
 
 **Files:**
 - Modify: `sunwoo162/Playground/bloom-web/src/app/BouquetShowcaseApp.tsx`
 - Create: `sunwoo162/Playground/deploy/nginx/bloombouquet.conf`
 - Create: `sunwoo162/Playground/scripts/bloombouquet-app-gateway.policy-test.js`
 - Modify: `sunwoo162/Playground/package.json`
-- Modify: `sunwoo162/Playground/.github/workflows/deploy.yml`
+- Create: `sunwoo162/Playground/.github/workflows/deploy-bloombouquet-app-gateway.yml`
 
 **Interfaces:**
-- Consumes: Evidence Vault fixed upstream `127.0.0.1:3011`, base path `/apps/evidence-vault`.
-- Produces: public launcher without visitor auth controls and Nginx routing `/apps/evidence-vault/` to port `3011` while `/` remains port `3000`.
+- Consumes: Evidence Vault fixed upstream `127.0.0.1:3011`, path `/apps/evidence-vault`.
+- Produces: public launcher without visitor auth controls plus an operator-only gateway workflow; normal `main` deploy does not automatically flip the project route before Evidence Vault is ready.
 
 - [ ] **Step 1: Branch from the post-PR-#116 `main`**
 
@@ -475,9 +460,9 @@ Branch:
 feat/bloombouquet-project-launcher-gateway
 ```
 
-- [ ] **Step 2: Add RED launcher/gateway policy tests**
+- [ ] **Step 2: Add RED launcher/gateway policy**
 
-Create `scripts/bloombouquet-app-gateway.policy-test.js` with assertions equivalent to:
+Create `scripts/bloombouquet-app-gateway.policy-test.js`:
 
 ```js
 const fs = require('node:fs');
@@ -492,7 +477,7 @@ test('public showcase is a launcher, not a login surface', () => {
   assert.doesNotMatch(source, /target="_blank"/);
 });
 
-test('gateway routes Evidence Vault by fixed path and preserves Bloom root', () => {
+test('gateway uses only fixed BloomBouquet project mappings', () => {
   const nginx = fs.readFileSync('deploy/nginx/bloombouquet.conf', 'utf8');
   assert.match(nginx, /location = \/apps\/evidence-vault/);
   assert.match(nginx, /return 308 \/apps\/evidence-vault\//);
@@ -500,23 +485,28 @@ test('gateway routes Evidence Vault by fixed path and preserves Bloom root', () 
   assert.match(nginx, /proxy_pass http:\/\/127\.0\.0\.1:3011;/);
   assert.match(nginx, /location \/[\s\S]*proxy_pass http:\/\/127\.0\.0\.1:3000;/);
 });
+
+test('gateway deployment is manual-only', () => {
+  const workflow = fs.readFileSync('.github/workflows/deploy-bloombouquet-app-gateway.yml', 'utf8');
+  assert.match(workflow, /workflow_dispatch:/);
+  assert.doesNotMatch(workflow, /push:/);
+  assert.doesNotMatch(workflow, /pull_request:/);
+});
 ```
 
-Add this file to `test:production-runtime` in `package.json`.
+Add this test to `test:production-runtime`.
 
 - [ ] **Step 3: Run production policy and verify RED**
-
-Run:
 
 ```bash
 pnpm run test:production-runtime
 ```
 
-Expected: fail because public login/manage controls still exist and committed Nginx gateway file does not exist.
+Expected: public auth/manage CTAs still present and gateway files missing.
 
 - [ ] **Step 4: Update `BouquetShowcaseApp` to launcher behavior**
 
-Remove the public login/manage actions. Keep an informational authentication note only if it has no CTA, for example:
+Remove public login/manage actions. Keep only non-clickable explanatory copy if desired:
 
 ```tsx
 <section className="bouquet-auth-note" aria-label="Project authentication policy">
@@ -528,17 +518,15 @@ Remove the public login/manage actions. Keep an informational authentication not
 </section>
 ```
 
-Project action becomes same-tab:
+Make project open same-tab:
 
 ```tsx
-{submission?.demoUrl && (
-  <a href={submission.demoUrl}>프로젝트 열기 →</a>
-)}
+{submission?.demoUrl && <a href={submission.demoUrl}>프로젝트 열기 →</a>}
 ```
 
-Do not remove the management mode implementation itself; only remove its public promotion.
+Do not delete `?mode=manage` implementation from `BloomApp`; only stop promoting it publicly.
 
-- [ ] **Step 5: Add the committed static Nginx gateway**
+- [ ] **Step 5: Add committed gateway config**
 
 Create `deploy/nginx/bloombouquet.conf`:
 
@@ -573,50 +561,47 @@ server {
 }
 ```
 
-- [ ] **Step 6: Make deploy install the committed gateway atomically**
+- [ ] **Step 6: Add operator-only `deploy-bloombouquet-app-gateway.yml`**
 
-In the SSH deploy step, before reload:
+Workflow contract:
 
-```bash
-MATCHES="$(sudo grep -R -l -F 'server_name bloombouquet.https.gsmsv.site' /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null || true)"
-test "$(printf '%s\n' "$MATCHES" | sed '/^$/d' | wc -l)" -eq 1 || record_failure "BloomBouquet nginx host config must resolve exactly once"
-ACTIVE_CONFIG="$(printf '%s\n' "$MATCHES" | sed '/^$/d' | head -n 1)"
-ACTIVE_TARGET="$(readlink -f "$ACTIVE_CONFIG")"
-BACKUP_CONFIG="${ACTIVE_TARGET}.pre-bloom-app-gateway"
-sudo cp "$ACTIVE_TARGET" "$BACKUP_CONFIG"
-sudo install -m 644 deploy/nginx/bloombouquet.conf "$ACTIVE_TARGET"
-if ! sudo nginx -t; then
-  sudo cp "$BACKUP_CONFIG" "$ACTIVE_TARGET"
-  sudo nginx -t
-  record_failure "BloomBouquet nginx gateway validation failed"
-fi
-sudo systemctl reload nginx
+```yaml
+name: Deploy BloomBouquet App Gateway
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: probe or deploy
+        required: true
+        type: choice
+        options: [probe, deploy]
+permissions:
+  contents: read
 ```
 
-Do not expose or alter arbitrary server blocks.
+`probe` must only read current Nginx/app state. `deploy` must:
 
-- [ ] **Step 7: Extend deploy public smoke**
+1. require `SSH_PASSWORD`;
+2. verify `127.0.0.1:3000` Bloom root and `127.0.0.1:3011/apps/evidence-vault/api/health` before mutation;
+3. resolve exactly one enabled config containing `server_name bloombouquet.https.gsmsv.site`;
+4. resolve its real target with `readlink -f`;
+5. back it up;
+6. install committed `deploy/nginx/bloombouquet.conf`;
+7. run `sudo nginx -t`;
+8. restore backup if validation fails;
+9. reload Nginx only after validation;
+10. verify public `/` and `/apps/evidence-vault/api/health`.
 
-Require both launcher and path health after Evidence Vault has been deployed:
+Pin the SSH action to the already-reviewed commit `029f5b4aeeeb58fdfe1410a5d17f967dacf36262`.
 
-```bash
-curl -fsS https://bloombouquet.https.gsmsv.site/ | grep -q '<title>BloomBouquet</title>'
-curl -fsS https://bloombouquet.https.gsmsv.site/apps/evidence-vault/api/health \
-  | grep -q '"service":"evidence-vault"'
-```
-
-For the initial merge before Evidence Vault cutover, gate the Evidence Vault path smoke behind an explicit deployment flag or perform gateway installation in the coordinated production step of Task 7; do not make normal main deploy fail before port 3011 is path-ready.
-
-- [ ] **Step 8: Run full Harness and commit**
-
-Run through PR CI:
+- [ ] **Step 7: Run policy/build/Harness and commit**
 
 ```bash
 pnpm run test:production-runtime
 pnpm run build:bloom-web
 ```
 
-and the full repository Harness.
+Then require full Harness PASS in the PR.
 
 Commit:
 
@@ -626,85 +611,74 @@ git commit -m "feat: add BloomBouquet project app gateway"
 
 ---
 
-### Task 6: Review and merge the two code changes without deploying the new auth contract prematurely
+### Task 6: Review and merge code without prematurely flipping production auth
 
-**Files:**
+**Files / PRs:**
 - Evidence Vault PR from Tasks 2-4
-- BloomBouquet gateway/launcher PR from Task 5
+- BloomBouquet PR from Task 5
 
 **Interfaces:**
-- Produces: code on `develop`/`main` ready for coordinated runtime cutover, while old Evidence Vault runtime remains recoverable until the bootstrap Submission is created.
+- Produces: merged code ready for coordinated cutover; Evidence Vault server env remains on the old standalone contract until Task 7.
 
-- [ ] **Step 1: Run independent code review on Evidence Vault PR**
+- [ ] **Step 1: Review Evidence Vault PR**
 
-Block merge for any of:
+Merge blockers:
 
 ```text
-root-scoped ev_session or ev_oauth_attempt cookies
-raw browser fetch to /auth/* without base path
-callback redirects escaping /apps/evidence-vault
-server-to-server Bouquet calls incorrectly prefixed with /apps/evidence-vault
+root-scoped ev_session or ev_oauth_attempt
+raw browser /auth/* path escaping basePath
+callback success/failure escaping /apps/evidence-vault
+server-to-server Bouquet calls incorrectly prefixed
 old standalone app/callback deployment contract
 ```
 
-- [ ] **Step 2: Run independent code review on BloomBouquet PR**
+- [ ] **Step 2: Review BloomBouquet PR**
 
-Block merge for any of:
+Merge blockers:
 
 ```text
 public login/manage CTA still visible
-arbitrary/dynamic proxy destination
-/apps/evidence-vault route stripping the prefix
-root route no longer targeting 3000
-worker/internal endpoint exposed by Nginx project mapping
+dynamic/arbitrary proxy destination
+project prefix stripped before Next
+root no longer targets 3000
+normal main push auto-flips gateway before coordinated cutover
 ```
 
-- [ ] **Step 3: Require latest CI on exact heads**
+- [ ] **Step 3: Require exact-head CI**
 
-Evidence Vault: PostgreSQL migration + all Vitest tests + production build + preview verify PASS.
+Evidence Vault: PostgreSQL migration, all Vitest tests, production build, Preview verify PASS.
 
 BloomBouquet: full Harness PASS.
 
-- [ ] **Step 4: Merge code PRs but keep production Evidence Vault env on the old runtime contract until Task 7**
+- [ ] **Step 4: Merge both PRs**
 
-Evidence Vault `develop` merge does not auto-deploy; verify deploy workflow remains manual for server mutation.
+Evidence Vault `develop` push remains verify-only; do not dispatch its deploy yet.
 
-BloomBouquet gateway deployment must not create a broken public path before the coordinated cutover; if needed keep the Nginx install step disabled behind the explicit coordinated cutover flag until Task 7.
+BloomBouquet gateway workflow remains manual-only; do not dispatch `mode=deploy` yet.
 
 ---
 
-### Task 7: Bootstrap the new OAuth client and perform coordinated production cutover
+### Task 7: Bootstrap the OAuth client and perform coordinated production cutover
 
-**Files / Systems:**
-- BloomBouquet production management API/UI
-- PM2: `bloom-worker`, `evidence-vault-preview`
-- Evidence Vault `.env.production`
-- BloomBouquet Nginx host configuration
-- Evidence Vault deployed `develop` SHA
+**Systems:**
+- BloomBouquet owner management flow
+- PM2 `bloom-worker`, `evidence-vault-preview`
+- `/home/ubuntu/evidence-vault/.env.production`
+- manual `Deploy BloomBouquet App Gateway` workflow
 
 **Interfaces:**
-- Consumes: merged path-aware Evidence Vault code and fixed BloomBouquet gateway config.
-- Produces: one canonical path-hosted Evidence Vault Submission, its `bouquetClientId`, working OAuth callback/session, and a queued evaluator Run ready to resume.
+- Consumes: merged path-aware Evidence Vault and merged static gateway config.
+- Produces: one canonical path-hosted Submission, its `bouquetClientId`, working OAuth/session, and a queued Run ready for evaluator processing.
 
-- [ ] **Step 1: Read-only preflight evaluation state**
+- [ ] **Step 1: Confirm no unrelated evaluation is RUNNING**
 
-Use public/owner/internal read-only evidence to ensure there is no unrelated evaluation currently `RUNNING`.
+If any unrelated Run is active, wait for it to finish; never interrupt it.
 
-Expected: safe to pause evaluator. If another run is active, wait for it; do not interrupt it.
+- [ ] **Step 2: Stop only `bloom-worker` for the bootstrap window**
 
-- [ ] **Step 2: Stop only the evaluator worker that can claim the new Run**
+Verify it no longer claims Runs while Bloom web/backend and evaluator LLM stay online.
 
-Stop `bloom-worker` through PM2 after confirming no unrelated active claim. Keep backend, Bloom web, and evaluator LLM available.
-
-Verify:
-
-```bash
-pm2 status bloom-worker
-```
-
-Expected: stopped; no public service outage.
-
-- [ ] **Step 3: Check whether the exact migration Submission already exists**
+- [ ] **Step 3: Search owner project/submissions for an exact migration Submission**
 
 Exact contract:
 
@@ -716,11 +690,11 @@ frontendRepositoryUrl=https://github.com/BloomBouquet/evidence-vault
 backendRepositoryUrl=https://github.com/BloomBouquet/evidence-vault
 ```
 
-If found, reuse its `bouquetClientId` and Run. If absent, continue.
+If it exists, reuse `bouquetClientId` and its Run. Otherwise continue.
 
-- [ ] **Step 4: Create the migration Submission through the normal authenticated owner flow**
+- [ ] **Step 4: Create the migration Submission through normal authenticated owner flow**
 
-Do not seed or modify DB directly. Required request body:
+Request body:
 
 ```json
 {
@@ -733,63 +707,64 @@ Do not seed or modify DB directly. Required request body:
 }
 ```
 
-Expected response must contain non-empty `bouquetClientId`, matching `bouquetRedirectUri`, non-null `evaluationRunId`, and `evaluationStatus="QUEUED"`.
+Require response fields:
 
-If an authenticated owner browser/session is unavailable in the execution environment, this is the explicit user-action gate; ask the owner to perform only this normal management action, never for credentials or cookie values.
+```text
+bouquetClientId != null/blank
+bouquetRedirectUri == expected callback
+evaluationRunId != null
+evaluationStatus == QUEUED
+```
+
+If no authenticated owner session is available to the executor, this is the explicit owner-action gate: ask the user to perform only this normal management submission and never request credentials/cookie contents.
 
 - [ ] **Step 5: Back up and atomically update Evidence Vault server-only env**
 
-Do not print values. Replace only these keys while preserving DB/session/storage secrets:
+Replace only:
 
 ```text
 APP_BASE_URL=https://bloombouquet.https.gsmsv.site/apps/evidence-vault/
 BOUQUET_BASE_URL=https://bloombouquet.https.gsmsv.site
-BOUQUET_CLIENT_ID=<SubmissionResponse.bouquetClientId>
+BOUQUET_CLIENT_ID=<returned client id>
 BOUQUET_REDIRECT_URI=https://bloombouquet.https.gsmsv.site/apps/evidence-vault/auth/bouquet/callback
 ```
 
-Keep mode `600`; retain an encrypted/server-local or permission-protected rollback copy until the cutover is proven.
+Do not print secret values. Keep file mode `600` and retain a protected rollback copy until E2E is proven.
 
-- [ ] **Step 6: Deploy the exact merged Evidence Vault `develop` SHA**
+- [ ] **Step 6: Deploy exact merged Evidence Vault `develop` SHA**
 
-Use `scripts/deploy-preview.sh <40-char-sha>`.
+```bash
+scripts/deploy-preview.sh <40-character-develop-sha>
+```
 
-Expected:
+Require:
 
 ```text
-pnpm install --frozen-lockfile PASS
+pnpm install PASS
 pnpm db:migrate PASS
 pnpm build PASS
 PM2 evidence-vault-preview online
 http://127.0.0.1:3011/apps/evidence-vault/api/health -> 200
 ```
 
-If deploy fails, restore previous SHA/env/process; do not create a second Submission.
+On failure restore previous SHA/env/process; do not create another Submission.
 
-- [ ] **Step 7: Install/reload the BloomBouquet Nginx gateway atomically**
+- [ ] **Step 7: Dispatch `Deploy BloomBouquet App Gateway` with `mode=deploy`**
 
-Use the committed config from Task 5, validate `sudo nginx -t`, then reload.
+If the connector cannot dispatch workflow events, run the normal GitHub Actions UI/`gh workflow run` owner action; do not create a backdoor endpoint.
 
-Expected:
+Require Nginx validation + public root/path health PASS.
 
-```text
-/apps/evidence-vault -> 308 /apps/evidence-vault/
-/apps/evidence-vault/ -> Evidence Vault
-/ -> BloomBouquet
-```
-
-- [ ] **Step 8: Verify unauthenticated public path and assets**
-
-Run from an external runner:
+- [ ] **Step 8: Verify public page, health, and one Next asset**
 
 ```bash
 curl -fsS https://bloombouquet.https.gsmsv.site/apps/evidence-vault/ | grep -q '증빙함'
 curl -fsS https://bloombouquet.https.gsmsv.site/apps/evidence-vault/api/health | grep -q '"service":"evidence-vault"'
 ```
 
-Extract one `/_next/` asset URL from the returned HTML and require its public path to begin `/apps/evidence-vault/_next/` and return HTTP `200`.
+Extract one asset URL from HTML; require it to begin `/apps/evidence-vault/_next/` and return HTTP `200`.
 
-- [ ] **Step 9: Verify OAuth start contract before interactive login**
+- [ ] **Step 9: Verify OAuth start contract**
 
 Request:
 
@@ -797,63 +772,53 @@ Request:
 GET https://bloombouquet.https.gsmsv.site/apps/evidence-vault/auth/bouquet/start?returnTo=/dashboard
 ```
 
-Expected `Location` origin: `https://bloombouquet.https.gsmsv.site` with `mode=auth`, expected `client_id`, new path-hosted `redirect_uri`, PKCE state/challenge, and no project session token in the URL.
+Require `Location` origin `https://bloombouquet.https.gsmsv.site`, `mode=auth`, the expected client ID, the new callback URI, PKCE state/challenge, and no project-session token.
 
-- [ ] **Step 10: Perform real owner/user OAuth E2E**
+- [ ] **Step 10: Complete one real OAuth E2E from inside Evidence Vault**
 
-From Evidence Vault, choose `꽃다발로 로그인`; complete provider login/consent through the normal UI.
-
-Expected callback lands at:
+Expected callback destination:
 
 ```text
 https://bloombouquet.https.gsmsv.site/apps/evidence-vault/dashboard
 ```
 
-and session probe:
+Then require `/apps/evidence-vault/auth/session` to report the authenticated user. Browser cookie must be HttpOnly/Secure and Path `/apps/evidence-vault`; no token goes to local/session storage.
 
-```text
-GET /apps/evidence-vault/auth/session -> authenticated user
-```
+- [ ] **Step 11: Resume evaluator only after Steps 8-10 pass**
 
-Browser cookie inspection must show `ev_session` Path `/apps/evidence-vault` and no readable token in local/session storage.
-
-- [ ] **Step 11: Resume evaluator worker only after Steps 8-10 pass**
-
-Start `bloom-worker` from `/home/ubuntu/bloombouquet`, verify health, then observe the migration Run.
-
-Expected lifecycle:
+Start `bloom-worker` from `/home/ubuntu/bloombouquet`, verify worker health, then observe:
 
 ```text
 QUEUED -> RUNNING -> COMPLETED
 ```
 
-and final response contains score/stars/summary plus required independent role evaluations.
+Require final score/stars/summary and persisted independent role evaluations.
 
 ---
 
-### Task 8: Point the launcher at the canonical project URL and remove the standalone domain
+### Task 8: Verify launcher, remove standalone Evidence Vault domain, and document the reusable pattern
 
-**Files / Systems:**
-- BloomBouquet Submission/project public data
-- BloomBouquet public launcher
+**Systems / Files:**
+- BloomBouquet public project data and launcher
 - GSM-SV HTTPS domain configuration
-- Evidence Vault legacy Nginx standalone host config after GSM-SV removal
+- Evidence Vault legacy Nginx host file after domain removal
+- Operational docs in the relevant repo
 
 **Interfaces:**
 - Consumes: completed path-hosted Submission and successful OAuth/evaluation E2E.
-- Produces: one public BloomBouquet domain hosting launcher + Evidence Vault path, with no standalone Evidence Vault external domain.
+- Produces: one external BloomBouquet domain hosting launcher + Evidence Vault path; standalone Evidence Vault domain removed.
 
-- [ ] **Step 1: Verify the public project card uses the new Submission demo URL**
+- [ ] **Step 1: Verify launcher uses the canonical latest Submission URL**
 
-Fetch public project list and require Evidence Vault latest submission:
+Public project data must show:
 
 ```text
 https://bloombouquet.https.gsmsv.site/apps/evidence-vault/
 ```
 
-Open the launcher and confirm project action navigates same-tab to that path.
+Project click must stay in the same tab and browser Back must return to the launcher.
 
-- [ ] **Step 2: Run final pre-delete E2E matrix**
+- [ ] **Step 2: Run the final pre-delete matrix**
 
 Require all:
 
@@ -864,41 +829,41 @@ BloomBouquet / -> 200 + BloomBouquet title
 OAuth start -> Bouquet provider
 OAuth callback -> /apps/evidence-vault/dashboard
 auth/session -> authenticated after login
-evaluation Run -> COMPLETED
+migration evaluation -> COMPLETED
 ```
 
-- [ ] **Step 3: User deletes only `evidence-vault.https.gsmsv.site` in GSM-SV**
+- [ ] **Step 3: Delete only `evidence-vault.https.gsmsv.site` in GSM-SV**
 
-This is the final manual owner UI action if no authenticated GSM-SV browser is connected. Keep `bloombouquet.https.gsmsv.site`.
+If no authenticated GSM-SV browser is connected, this is the final manual owner action. Keep `bloombouquet.https.gsmsv.site`.
 
-- [ ] **Step 4: Verify standalone hostname is no longer a usable application route while canonical path stays healthy**
+- [ ] **Step 4: Re-run canonical path smoke after domain deletion**
 
-Canonical path must still PASS all smoke checks after deletion.
+All BloomBouquet/Evidence Vault path checks must remain green.
 
-- [ ] **Step 5: Remove or disable the obsolete standalone Evidence Vault Nginx host config on the VM**
+- [ ] **Step 5: Remove obsolete standalone Evidence Vault Nginx host config**
 
-Only after GSM-SV deletion and canonical path health. Run `nginx -t` before reload.
+Only after Step 4. Run `sudo nginx -t` before reload; do not touch the BloomBouquet gateway server block.
 
-- [ ] **Step 6: Update operational documentation/pattern**
+- [ ] **Step 6: Document the future-project contract**
 
-Document the reusable requirements for future projects:
+Document:
 
 ```text
 unique slug
 unique loopback port
-app basePath=/apps/<slug>
+basePath=/apps/<slug>
 path-scoped project cookies
-one static Nginx mapping
+one static operator-controlled Nginx mapping
 project-internal Bouquet login
 canonical Submission demoUrl under BloomBouquet origin
 ```
 
-Commit documentation with:
+Commit:
 
 ```bash
 git commit -m "docs: document BloomBouquet project app hosting"
 ```
 
-- [ ] **Step 7: Final verification before completion claim**
+- [ ] **Step 7: Fresh final verification before claiming completion**
 
-Re-run fresh public smoke and inspect PM2/Nginx state. Do not claim the migration complete unless Evidence Vault path, OAuth session, launcher link, and evaluator Run are all proven after the standalone domain removal.
+Inspect public root/path, OAuth session, PM2, Nginx, and evaluation result again after all cleanup. Do not claim complete unless every completion criterion from the spec is observed.
