@@ -1,4 +1,4 @@
-name: Task 7 Stop Bloom Worker
+name: Task 7 Owner Context Probe
 
 on:
   push:
@@ -9,10 +9,10 @@ permissions:
   contents: read
 
 jobs:
-  stop-worker:
+  probe-owner-context:
     runs-on: ubuntu-latest
     steps:
-      - name: Stop only Bloom evaluator worker
+      - name: Read project context with worker kept stopped
         uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262
         with:
           host: ssh.gsmsv.site
@@ -23,33 +23,31 @@ jobs:
           script: |
             set -eu
             cd /home/ubuntu/bloombouquet
+            WORKER_STATUS="$(pm2 jlist | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const x=JSON.parse(s).find(v=>v.name==="bloom-worker");process.stdout.write(x?.pm2_env?.status||"missing")})')"
+            [ "$WORKER_STATUS" = "stopped" ] || { echo "bloom-worker must stay stopped, found=$WORKER_STATUS" >&2; exit 1; }
+            echo "bloom-worker=$WORKER_STATUS"
+
             DB_USER="$(awk '/^[[:space:]]+username:/{print $2; exit}' backend/src/main/resources/application.yml)"
             DB_PASS="$(awk '/^[[:space:]]+password:/{print $2; exit}' backend/src/main/resources/application.yml)"
 
-            RUNNING_COUNT="$(MYSQL_PWD="$DB_PASS" mysql -h 127.0.0.1 -u "$DB_USER" playground_db -N -B -e "SELECT COUNT(*) FROM bloom_bouquet_evaluation_runs WHERE status='RUNNING';")"
-            [ "$RUNNING_COUNT" = "0" ] || { echo "Refusing to stop worker: RUNNING evaluations=$RUNNING_COUNT" >&2; exit 1; }
-
-            pm2 stop bloom-worker
-            pm2 save
-
-            STATUS="$(pm2 jlist | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const x=JSON.parse(s).find(v=>v.name==="bloom-worker");process.stdout.write(x?.pm2_env?.status||"missing")})')"
-            [ "$STATUS" = "stopped" ] || { echo "bloom-worker status=$STATUS" >&2; exit 1; }
-
-            echo "bloom-worker=$STATUS"
-            pm2 jlist | node -e '
-              let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
-                for(const name of ["playground","backend","bloom-evaluator-llm","evidence-vault-preview"]){
-                  const x=JSON.parse(s).find(v=>v.name===name);
-                  console.log(`${name}=${x?.pm2_env?.status||"missing"}`);
-                  if(x?.pm2_env?.status!=="online") process.exitCode=1;
-                }
-              })'
-
-            echo 'active-evaluations:'
+            echo '=== EVIDENCE VAULT PROJECT CANDIDATES ==='
             MYSQL_PWD="$DB_PASS" mysql -h 127.0.0.1 -u "$DB_USER" playground_db -N -B -e "
-              SELECT r.id,r.status,p.name,s.version_label
-              FROM bloom_bouquet_evaluation_runs r
-              JOIN bloom_bouquet_submissions s ON s.id=r.submission_id
-              JOIN bloom_bouquet_projects p ON p.id=s.project_id
-              WHERE r.status IN ('QUEUED','RUNNING')
-              ORDER BY r.created_at ASC;"
+              SELECT p.id,t.id,t.name,p.name,p.slug,p.published,
+                     COALESCE(s.id,''),COALESCE(s.version_label,''),COALESCE(s.demo_url,'')
+              FROM bloom_bouquet_projects p
+              JOIN bloom_bouquet_teams t ON t.id=p.team_id
+              LEFT JOIN bloom_bouquet_submissions s ON s.id=(
+                SELECT s2.id FROM bloom_bouquet_submissions s2 WHERE s2.project_id=p.id ORDER BY s2.created_at DESC LIMIT 1
+              )
+              WHERE LOWER(p.name) LIKE '%evidence%'
+                 OR LOWER(p.slug) LIKE '%evidence%'
+                 OR s.frontend_repository_url='https://github.com/BloomBouquet/evidence-vault'
+                 OR s.backend_repository_url='https://github.com/BloomBouquet/evidence-vault'
+              ORDER BY p.updated_at DESC;"
+
+            echo '=== ALL OWNER CONSOLE PROJECTS ==='
+            MYSQL_PWD="$DB_PASS" mysql -h 127.0.0.1 -u "$DB_USER" playground_db -N -B -e "
+              SELECT p.id,t.name,p.name,p.slug,p.published
+              FROM bloom_bouquet_projects p
+              JOIN bloom_bouquet_teams t ON t.id=p.team_id
+              ORDER BY t.id,p.id;"
