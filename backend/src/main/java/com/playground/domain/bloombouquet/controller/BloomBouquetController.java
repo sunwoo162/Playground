@@ -4,6 +4,7 @@ import com.playground.config.BouquetAuthenticationToken;
 import com.playground.domain.bloombouquet.dto.BloomBouquetDto;
 import com.playground.domain.bloombouquet.service.BloomBouquetOwnerProjectQueryService;
 import com.playground.domain.bloombouquet.service.BloomBouquetService;
+import com.playground.domain.bloombouquet.service.LunaBloomBouquetRegistrationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -19,6 +20,7 @@ import java.util.NoSuchElementException;
 public class BloomBouquetController {
     private final BloomBouquetService service;
     private final BloomBouquetOwnerProjectQueryService ownerProjectQueryService;
+    private final LunaBloomBouquetRegistrationService lunaRegistrationService;
 
     @PostMapping("/teams")
     public ResponseEntity<BloomBouquetDto.TeamResponse> createTeam(
@@ -58,6 +60,15 @@ public class BloomBouquetController {
     ) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(service.publishSubmission(auth.getAccountId(), projectId, request));
+    }
+
+    @PostMapping("/luna/register")
+    public ResponseEntity<BloomBouquetDto.LunaRegistrationResponse> registerLunaProject(
+            @AuthenticationPrincipal BouquetAuthenticationToken auth,
+            @RequestBody BloomBouquetDto.LunaRegistrationRequest request
+    ) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(lunaRegistrationService.register(auth.getAccountId(), request));
     }
 
     @GetMapping("/public/projects")
