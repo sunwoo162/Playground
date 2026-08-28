@@ -3,6 +3,7 @@ import type {
   BuilderWorkerClient,
   BuilderWorkerExecutor,
 } from "./builderWorkerAdapter";
+import { buildBloomBouquetRegistrationUrl } from "./bloomBouquetRegistration";
 import {
   createHeadlessBuilderExecutor,
   type HeadlessBuilderExecutorOptions,
@@ -180,6 +181,26 @@ export function createObservedHeadlessBuilderExecutor(
       },
     };
 
-    return execute(claim, observedClient);
+    const result = await execute(claim, observedClient);
+    const completedPayload = previousPayloadJson ? parsePayload(previousPayloadJson) : null;
+    const plan = completedPayload?.plan;
+    const repository = completedPayload?.repository;
+    const bloomBouquetRegistrationUrl = plan && repository
+      ? buildBloomBouquetRegistrationUrl({
+          teamId: options.teamId,
+          teamName: options.teamName,
+          projectName: plan.projectName,
+          projectSlug: plan.repositoryName,
+          description: plan.productSummary,
+          repositoryFullName: result.repositoryFullName ?? repository.repository,
+          demoUrl: result.previewUrl,
+          requiresAuth: plan.needsAuth || claim.authRequired,
+        })
+      : null;
+
+    return {
+      ...result,
+      bloomBouquetRegistrationUrl,
+    };
   };
 }
