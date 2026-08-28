@@ -1,0 +1,147 @@
+name: Evidence Vault Readonly Probe
+
+on:
+  push:
+    branches:
+      - probe/evidence-vault-infra-20260828
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Require authorized SSH secret
+        env:
+          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+        shell: bash
+        run: |
+          if [[ -z "$SSH_PASSWORD" ]]; then
+            echo "PROBE_SSH=unavailable"
+            exit 1
+          fi
+          echo "PROBE_SSH=available"
+
+      - name: Probe Evidence Vault infrastructure read-only
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          script_stop: true
+          script: |
+            set -u
+            echo "PROBE_HOST_REACHED=yes"
+            echo "PROBE_TARGET_SHA=0ddff8f5734928b5b275ff27aeda41fe8aea5430"
+
+            for cmd in node pnpm pm2 psql nginx git curl openssl; do
+              if command -v "$cmd" >/dev/null 2>&1; then
+                echo "PROBE_${cmd^^}=present"
+              else
+                echo "PROBE_${cmd^^}=missing"
+              fi
+            done
+
+            if test -d /home/ubuntu/evidence-vault/.git; then
+              echo "PROBE_REPOSITORY=present"
+              CURRENT_SHA="$(git -C /home/ubuntu/evidence-vault rev-parse HEAD 2>/dev/null || true)"
+              if test -n "$CURRENT_SHA"; then echo "PROBE_REPOSITORY_SHA=$CURRENT_SHA"; fi
+            else
+              echo "PROBE_REPOSITORY=missing"
+            fi
+
+            if test -f /home/ubuntu/evidence-vault/.env.production; then
+              echo "PROBE_ENVIRONMENT=present"
+              ENV_MODE="$(stat -c '%a' /home/ubuntu/evidence-vault/.env.production 2>/dev/null || true)"
+              ENV_OWNER="$(stat -c '%U' /home/ubuntu/evidence-vault/.env.production 2>/dev/null || true)"
+              echo "PROBE_ENV_MODE=${ENV_MODE:-unknown}"
+              echo "PROBE_ENV_OWNER=${ENV_OWNER:-unknown}"
+            else
+              echo "PROBE_ENVIRONMENT=missing"
+            fi
+
+            if ss -ltn 2>/dev/null | awk '$4 ~ /:3011$/ { found=1 } END { exit found ? 0 : 1 }'; then
+              echo "PROBE_PORT_3011=occupied"
+            else
+              echo "PROBE_PORT_3011=free"
+            fi
+
+            if command -v pm2 >/dev/null 2>&1; then
+              if pm2 pid evidence-vault-preview 2>/dev/null | grep -Eq '^[1-9][0-9]*$'; then
+                echo "PROBE_PM2_EVIDENCE_VAULT=online"
+              else
+                echo "PROBE_PM2_EVIDENCE_VAULT=absent"
+              fi
+            fi
+
+            if command -v pg_isready >/dev/null 2>&1; then
+              if pg_isready -q; then echo "PROBE_POSTGRES=ready"; else echo "PROBE_POSTGRES=not-ready"; fi
+            else
+              echo "PROBE_POSTGRES=client-unavailable"
+            fi
+
+            if getent ahosts evidence-vault.https.gsmsv.site >/dev/null 2>&1; then
+              echo "PROBE_DNS=resolved"
+            else
+              echo "PROBE_DNS=unresolved"
+            fi
+
+            if command -v nginx >/dev/null 2>&1 && sudo -n nginx -T >/tmp/evidence-vault-nginx-probe.txt 2>/dev/null; then
+              if grep -Fq 'server_name evidence-vault.https.gsmsv.site' /tmp/evidence-vault-nginx-probe.txt; then
+                echo "PROBE_NGINX_ROUTE=present"
+              else
+                echo "PROBE_NGINX_ROUTE=missing"
+              fi
+              if grep -Fq 'proxy_pass http://127.0.0.1:3011' /tmp/evidence-vault-nginx-probe.txt; then
+                echo "PROBE_NGINX_UPSTREAM=correct"
+              else
+                echo "PROBE_NGINX_UPSTREAM=missing"
+              fi
+              rm -f /tmp/evidence-vault-nginx-probe.txt
+            else
+              echo "PROBE_NGINX_ROUTE=unavailable"
+              echo "PROBE_NGINX_UPSTREAM=unavailable"
+            fi
+
+            CERT_COVERAGE=unavailable
+            if command -v openssl >/dev/null 2>&1 && sudo -n test -d /etc/letsencrypt/live 2>/dev/null; then
+              CERT_COVERAGE=missing
+              while IFS= read -r CERT; do
+                if sudo -n openssl x509 -in "$CERT" -noout -ext subjectAltName 2>/dev/null | grep -Eq 'DNS:(\*\.https\.gsmsv\.site|evidence-vault\.https\.gsmsv\.site)'; then
+                  CERT_COVERAGE=covered
+                  break
+                fi
+              done < <(sudo -n find /etc/letsencrypt/live -name fullchain.pem -type f -print 2>/dev/null)
+            fi
+            echo "PROBE_TLS_CERT=$CERT_COVERAGE"
+
+            LOOPBACK_HEALTH=unavailable
+            if command -v curl >/dev/null 2>&1; then
+              if BODY="$(curl -fsS --max-time 5 http://127.0.0.1:3011/api/health 2>/dev/null)"; then
+                if printf '%s' "$BODY" | grep -q '"ok":true' && printf '%s' "$BODY" | grep -q '"service":"evidence-vault"'; then
+                  LOOPBACK_HEALTH=ok
+                else
+                  LOOPBACK_HEALTH=unexpected
+                fi
+              else
+                LOOPBACK_HEALTH=down
+              fi
+            fi
+            echo "PROBE_LOOPBACK_HEALTH=$LOOPBACK_HEALTH"
+
+            PUBLIC_HEALTH=unavailable
+            if command -v curl >/dev/null 2>&1; then
+              if BODY="$(curl -fsS --max-time 7 https://evidence-vault.https.gsmsv.site/api/health 2>/dev/null)"; then
+                if printf '%s' "$BODY" | grep -q '"ok":true' && printf '%s' "$BODY" | grep -q '"service":"evidence-vault"'; then
+                  PUBLIC_HEALTH=ok
+                else
+                  PUBLIC_HEALTH=unexpected
+                fi
+              else
+                PUBLIC_HEALTH=down
+              fi
+            fi
+            echo "PROBE_PUBLIC_HEALTH=$PUBLIC_HEALTH"
