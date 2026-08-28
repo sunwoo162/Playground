@@ -6,6 +6,7 @@ import BouquetShowcaseApp from './BouquetShowcaseApp'
 import BuilderApp from './BuilderApp'
 import LiveE2EPanel from './LiveE2EPanel'
 import LunaBouquetRegisterApp from './LunaBouquetRegisterApp'
+import './bouquet-system.css'
 import './bloom-brand.css'
 import './live-e2e.css'
 
