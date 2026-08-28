@@ -37,13 +37,14 @@ jobs:
             echo "PROBE_HOST_REACHED=yes"
             echo "PROBE_TARGET_SHA=0ddff8f5734928b5b275ff27aeda41fe8aea5430"
 
-            for cmd in node pnpm pm2 psql nginx git curl openssl; do
-              if command -v "$cmd" >/dev/null 2>&1; then
-                echo "PROBE_${cmd^^}=present"
-              else
-                echo "PROBE_${cmd^^}=missing"
-              fi
-            done
+            if command -v node >/dev/null 2>&1; then echo "PROBE_NODE=present"; else echo "PROBE_NODE=missing"; fi
+            if command -v pnpm >/dev/null 2>&1; then echo "PROBE_PNPM=present"; else echo "PROBE_PNPM=missing"; fi
+            if command -v pm2 >/dev/null 2>&1; then echo "PROBE_PM2=present"; else echo "PROBE_PM2=missing"; fi
+            if command -v psql >/dev/null 2>&1; then echo "PROBE_PSQL=present"; else echo "PROBE_PSQL=missing"; fi
+            if command -v nginx >/dev/null 2>&1; then echo "PROBE_NGINX=present"; else echo "PROBE_NGINX=missing"; fi
+            if command -v git >/dev/null 2>&1; then echo "PROBE_GIT=present"; else echo "PROBE_GIT=missing"; fi
+            if command -v curl >/dev/null 2>&1; then echo "PROBE_CURL=present"; else echo "PROBE_CURL=missing"; fi
+            if command -v openssl >/dev/null 2>&1; then echo "PROBE_OPENSSL=present"; else echo "PROBE_OPENSSL=missing"; fi
 
             if test -d /home/ubuntu/evidence-vault/.git; then
               echo "PROBE_REPOSITORY=present"
@@ -109,12 +110,12 @@ jobs:
             CERT_COVERAGE=unavailable
             if command -v openssl >/dev/null 2>&1 && sudo -n test -d /etc/letsencrypt/live 2>/dev/null; then
               CERT_COVERAGE=missing
-              while IFS= read -r CERT; do
+              for CERT in $(sudo -n find /etc/letsencrypt/live -name fullchain.pem -type f -print 2>/dev/null); do
                 if sudo -n openssl x509 -in "$CERT" -noout -ext subjectAltName 2>/dev/null | grep -Eq 'DNS:(\*\.https\.gsmsv\.site|evidence-vault\.https\.gsmsv\.site)'; then
                   CERT_COVERAGE=covered
                   break
                 fi
-              done < <(sudo -n find /etc/letsencrypt/live -name fullchain.pem -type f -print 2>/dev/null)
+              done
             fi
             echo "PROBE_TLS_CERT=$CERT_COVERAGE"
 
