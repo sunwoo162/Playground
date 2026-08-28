@@ -55,17 +55,37 @@ jobs:
             DOMAIN="bloombouquet.https.gsmsv.site"
             ROOT_LOCAL="http://127.0.0.1:3000/"
             EVIDENCE_HEALTH_LOCAL="http://127.0.0.1:3011/apps/evidence-vault/api/health"
+            BERIDAY_LOCAL="http://127.0.0.1:3012/"
+            BERIDAY_MANIFEST_LOCAL="http://127.0.0.1:3012/data/runtime/manifest.json"
             ROOT_PUBLIC="https://${DOMAIN}/"
             EVIDENCE_HEALTH_PUBLIC="https://${DOMAIN}/apps/evidence-vault/api/health"
+            BERIDAY_PUBLIC="https://${DOMAIN}/apps/beriday/"
+            BERIDAY_MANIFEST_PUBLIC="https://${DOMAIN}/apps/beriday/data/runtime/manifest.json"
 
             fail() {
               echo "BloomBouquet gateway: $1" >&2
               exit 1
             }
 
+            verify_manifest() {
+              node -e '
+                let body = "";
+                process.stdin.setEncoding("utf8");
+                process.stdin.on("data", chunk => body += chunk);
+                process.stdin.on("end", () => {
+                  const manifest = JSON.parse(body);
+                  if (manifest.schemaVersion !== 1) process.exit(1);
+                  if (!Array.isArray(manifest.regions) || manifest.regions.length === 0) process.exit(1);
+                  if (!manifest.shards || Object.keys(manifest.shards).length === 0) process.exit(1);
+                });
+              '
+            }
+
             verify_local_upstreams() {
               curl -fsS --max-time 5 "$ROOT_LOCAL" | grep -q '<title>BloomBouquet</title>' || fail "BloomBouquet root upstream is not ready"
               curl -fsS --max-time 5 "$EVIDENCE_HEALTH_LOCAL" | grep -q '"ok":true' || fail "Evidence Vault path health is not ready"
+              curl -fsS --max-time 10 "$BERIDAY_LOCAL" | grep -q '<title>버리데이 | 오늘 뭐 버리지?</title>' || fail "Beriday upstream is not ready"
+              curl -fsS --max-time 10 "$BERIDAY_MANIFEST_LOCAL" | verify_manifest || fail "Beriday runtime manifest is not ready"
             }
 
             resolve_enabled_gateway() {
@@ -82,6 +102,8 @@ jobs:
             verify_public_routes() {
               curl -fsS --max-time 10 "$ROOT_PUBLIC" | grep -q '<title>BloomBouquet</title>' || return 1
               curl -fsS --max-time 10 "$EVIDENCE_HEALTH_PUBLIC" | grep -q '"ok":true' || return 1
+              curl -fsS --max-time 10 "$BERIDAY_PUBLIC" | grep -q '<title>버리데이 | 오늘 뭐 버리지?</title>' || return 1
+              curl -fsS --max-time 10 "$BERIDAY_MANIFEST_PUBLIC" | verify_manifest || return 1
             }
 
             verify_local_upstreams
