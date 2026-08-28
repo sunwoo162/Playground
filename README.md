@@ -2,7 +2,7 @@
 
 BloomBouquet is a project showcase and evaluation platform. Teams publish real web projects, BloomBouquet keeps versioned submissions, and independent 10+ year senior Agents leave evidence-based technical evaluation reports with scores and star ratings.
 
-Production: `https://playground.https.gsmsv.site/`
+Production: `https://bloombouquet.https.gsmsv.site/`
 
 ## Product flow
 
@@ -58,4 +58,4 @@ The production web build is written directly to repository-level `dist/`, which 
 
 ## Deployment
 
-Pushes to `main` run the existing production deployment workflow. The server host, PM2 process topology, Nginx proxy, Spring Boot backend, and MySQL persistence remain on the current Playground infrastructure; only the public product surface is now BloomBouquet.
+Pushes to `main` run the production deployment workflow. The server host, PM2 process topology, Nginx proxy, Spring Boot backend, and MySQL persistence remain unchanged during the domain cutover. The canonical public origin is `https://bloombouquet.https.gsmsv.site/`.
