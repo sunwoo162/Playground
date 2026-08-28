@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import BouquetAuthApp from './BouquetAuthApp'
+import BouquetManageApp from './BouquetManageApp'
 import BouquetShowcaseApp from './BouquetShowcaseApp'
 import BuilderApp from './BuilderApp'
 import LiveE2EPanel from './LiveE2EPanel'
@@ -15,18 +16,21 @@ export default function BloomApp() {
   )
   const legacyBuilder = mode === 'builder'
   const bouquetAuth = mode === 'auth'
+  const bouquetManage = mode === 'manage'
 
   useEffect(() => {
     document.title = bouquetAuth
       ? '꽃다발 로그인'
-      : legacyBuilder
-        ? 'Bloom Builder'
-        : 'BloomBouquet'
+      : bouquetManage
+        ? '프로젝트 관리 · BloomBouquet'
+        : legacyBuilder
+          ? 'Bloom Builder'
+          : 'BloomBouquet'
 
     if (!legacyBuilder) return
     document.querySelector('.builder-brand')?.setAttribute('aria-label', 'Bloom')
     document.querySelector('.builder-nav')?.setAttribute('aria-label', 'Bloom navigation')
-  }, [bouquetAuth, legacyBuilder])
+  }, [bouquetAuth, bouquetManage, legacyBuilder])
 
   useEffect(() => {
     if (!liveE2EOpen) return
@@ -38,6 +42,7 @@ export default function BloomApp() {
   }, [liveE2EOpen])
 
   if (bouquetAuth) return <BouquetAuthApp />
+  if (bouquetManage) return <BouquetManageApp />
   if (!legacyBuilder) return <BouquetShowcaseApp />
 
   return (

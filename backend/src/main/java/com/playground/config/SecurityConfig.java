@@ -26,6 +26,7 @@ import java.util.List;
 public class SecurityConfig {
 
     private final BuilderWorkerTokenFilter builderWorkerTokenFilter;
+    private final BouquetSessionAuthFilter bouquetSessionAuthFilter;
     private final JwtAuthFilter jwtAuthFilter;
 
     @Value("${app.cors.allowed-origins}")
@@ -50,10 +51,12 @@ public class SecurityConfig {
                 .requestMatchers("/api/bloom-bouquet/public/**").permitAll()
                 .requestMatchers("/api/bouquet/**").permitAll()
                 .requestMatchers("/internal/builder/worker/**").permitAll()
+                .requestMatchers("/api/bloom-bouquet/**").hasRole("BOUQUET_USER")
                 .requestMatchers("/api/**").authenticated()
                 .anyRequest().permitAll()
             )
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterBefore(bouquetSessionAuthFilter, JwtAuthFilter.class)
             .addFilterBefore(builderWorkerTokenFilter, JwtAuthFilter.class)
             .exceptionHandling(ex -> ex
                 .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))

@@ -1,7 +1,8 @@
 package com.playground.domain.bloombouquet.controller;
 
-import com.playground.config.JwtAuthenticationToken;
+import com.playground.config.BouquetAuthenticationToken;
 import com.playground.domain.bloombouquet.dto.BloomBouquetDto;
+import com.playground.domain.bloombouquet.service.BloomBouquetOwnerProjectQueryService;
 import com.playground.domain.bloombouquet.service.BloomBouquetService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -17,38 +18,46 @@ import java.util.NoSuchElementException;
 @RequiredArgsConstructor
 public class BloomBouquetController {
     private final BloomBouquetService service;
+    private final BloomBouquetOwnerProjectQueryService ownerProjectQueryService;
 
     @PostMapping("/teams")
     public ResponseEntity<BloomBouquetDto.TeamResponse> createTeam(
-            @AuthenticationPrincipal JwtAuthenticationToken auth,
+            @AuthenticationPrincipal BouquetAuthenticationToken auth,
             @RequestBody BloomBouquetDto.CreateTeamRequest request
     ) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.createTeam(auth.getUserId(), request));
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.createTeam(auth.getAccountId(), request));
     }
 
     @GetMapping("/teams")
     public ResponseEntity<List<BloomBouquetDto.TeamResponse>> listTeams(
-            @AuthenticationPrincipal JwtAuthenticationToken auth
+            @AuthenticationPrincipal BouquetAuthenticationToken auth
     ) {
-        return ResponseEntity.ok(service.listTeams(auth.getUserId()));
+        return ResponseEntity.ok(service.listTeams(auth.getAccountId()));
+    }
+
+    @GetMapping("/projects")
+    public ResponseEntity<List<BloomBouquetDto.ProjectResponse>> listProjects(
+            @AuthenticationPrincipal BouquetAuthenticationToken auth
+    ) {
+        return ResponseEntity.ok(ownerProjectQueryService.listProjects(auth.getAccountId()));
     }
 
     @PostMapping("/projects")
     public ResponseEntity<BloomBouquetDto.ProjectResponse> createProject(
-            @AuthenticationPrincipal JwtAuthenticationToken auth,
+            @AuthenticationPrincipal BouquetAuthenticationToken auth,
             @RequestBody BloomBouquetDto.CreateProjectRequest request
     ) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.createProject(auth.getUserId(), request));
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.createProject(auth.getAccountId(), request));
     }
 
     @PostMapping("/projects/{projectId}/submissions")
     public ResponseEntity<BloomBouquetDto.SubmissionResponse> publishSubmission(
-            @AuthenticationPrincipal JwtAuthenticationToken auth,
+            @AuthenticationPrincipal BouquetAuthenticationToken auth,
             @PathVariable Long projectId,
             @RequestBody BloomBouquetDto.CreateSubmissionRequest request
     ) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(service.publishSubmission(auth.getUserId(), projectId, request));
+                .body(service.publishSubmission(auth.getAccountId(), projectId, request));
     }
 
     @GetMapping("/public/projects")

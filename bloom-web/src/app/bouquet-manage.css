@@ -1,0 +1,272 @@
+:root {
+  --manage-ink: #231d22;
+  --manage-muted: #776f75;
+  --manage-line: #e8dfe5;
+  --manage-accent: #7c5369;
+  --manage-soft: #f7edf2;
+}
+
+.bouquet-manage-shell {
+  min-height: 100vh;
+  padding: 48px clamp(18px, 5vw, 72px) 88px;
+  color: var(--manage-ink);
+  background:
+    radial-gradient(circle at 12% 10%, rgba(244, 219, 231, .7), transparent 28%),
+    radial-gradient(circle at 88% 3%, rgba(225, 219, 240, .55), transparent 24%),
+    #f8f5f7;
+}
+
+.bouquet-manage-header {
+  max-width: 1280px;
+  margin: 0 auto 28px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 28px;
+}
+
+.bouquet-manage-home {
+  display: inline-flex;
+  margin-bottom: 22px;
+  color: #725469;
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.bouquet-manage-header p,
+.bouquet-manage-auth-required > p {
+  margin: 0 0 10px;
+  color: #8a6179;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .15em;
+}
+
+.bouquet-manage-header h1,
+.bouquet-manage-auth-required h1 {
+  margin: 0;
+  font-size: clamp(38px, 6vw, 68px);
+  letter-spacing: -.055em;
+  line-height: .98;
+}
+
+.bouquet-manage-header > div:first-child > span,
+.bouquet-manage-auth-required > span:not(.bouquet-manage-flower) {
+  display: block;
+  max-width: 760px;
+  margin-top: 16px;
+  color: var(--manage-muted);
+  line-height: 1.7;
+}
+
+.bouquet-manage-account {
+  min-width: 220px;
+  padding: 16px 18px;
+  border: 1px solid var(--manage-line);
+  border-radius: 18px;
+  background: rgba(255,255,255,.82);
+  box-shadow: 0 10px 32px rgba(71, 46, 62, .05);
+}
+
+.bouquet-manage-account strong,
+.bouquet-manage-account span { display: block; }
+.bouquet-manage-account span { margin-top: 4px; color: #8e858b; font-size: 12px; }
+
+.bouquet-manage-grid {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.bouquet-manage-card {
+  padding: 24px;
+  border: 1px solid var(--manage-line);
+  border-radius: 26px;
+  background: rgba(255,255,255,.93);
+  box-shadow: 0 14px 42px rgba(71, 46, 62, .06);
+}
+
+.bouquet-manage-card-wide { grid-column: 1 / -1; }
+.bouquet-manage-card.is-disabled { opacity: .62; }
+
+.bouquet-manage-card-title {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  margin-bottom: 22px;
+}
+
+.bouquet-manage-card-title > span {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: #30262d;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.bouquet-manage-card-title h2 { margin: 0; font-size: 23px; letter-spacing: -.03em; }
+.bouquet-manage-card-title p { margin: 5px 0 0; color: #817980; font-size: 13px; line-height: 1.55; }
+
+.bouquet-manage-form { display: grid; gap: 12px; margin-top: 14px; }
+.bouquet-manage-submission-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.bouquet-manage-full,
+.bouquet-manage-check,
+.bouquet-manage-submit { grid-column: 1 / -1; }
+
+.bouquet-manage-field { display: grid; gap: 7px; }
+.bouquet-manage-field > span { color: #665d63; font-size: 12px; font-weight: 800; }
+.bouquet-manage-field small { color: #9b9298; font-weight: 500; }
+
+.bouquet-manage-field input,
+.bouquet-manage-field textarea,
+.bouquet-manage-field select {
+  width: 100%;
+  border: 1px solid #ddd4da;
+  border-radius: 13px;
+  padding: 12px 13px;
+  background: #fff;
+  color: var(--manage-ink);
+  font: inherit;
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+.bouquet-manage-field textarea { resize: vertical; }
+.bouquet-manage-field input:focus,
+.bouquet-manage-field textarea:focus,
+.bouquet-manage-field select:focus {
+  border-color: #b98ea5;
+  box-shadow: 0 0 0 3px rgba(185, 142, 165, .14);
+}
+
+.bouquet-manage-form > button,
+.bouquet-manage-primary-link {
+  border: 0;
+  border-radius: 13px;
+  padding: 12px 15px;
+  background: #30262d;
+  color: #fff;
+  font-weight: 900;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.bouquet-manage-form > button:disabled { opacity: .48; cursor: not-allowed; }
+
+.bouquet-manage-selected {
+  margin-top: 13px;
+  padding: 10px 12px;
+  border-radius: 11px;
+  background: var(--manage-soft);
+  color: var(--manage-accent);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.bouquet-manage-check {
+  display: flex;
+  gap: 11px;
+  align-items: flex-start;
+  padding: 14px;
+  border: 1px solid #e5d9e0;
+  border-radius: 14px;
+  background: #fff8fb;
+}
+
+.bouquet-manage-check input { margin-top: 3px; }
+.bouquet-manage-check strong,
+.bouquet-manage-check small { display: block; }
+.bouquet-manage-check small { margin-top: 4px; color: #8a7f86; line-height: 1.5; }
+
+.bouquet-manage-error,
+.bouquet-manage-success,
+.bouquet-manage-state {
+  max-width: 1280px;
+  margin: 0 auto 18px;
+  border-radius: 18px;
+}
+
+.bouquet-manage-error {
+  padding: 13px 15px;
+  border: 1px solid #e8bfc4;
+  background: #fff1f2;
+  color: #9d414b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.bouquet-manage-success {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: center;
+  padding: 18px 20px;
+  border: 1px solid #cfe6d6;
+  background: #f1faf4;
+}
+
+.bouquet-manage-success span,
+.bouquet-manage-success strong,
+.bouquet-manage-success p { display: block; margin: 0; }
+.bouquet-manage-success span { color: #4f7d5d; font-size: 11px; font-weight: 900; letter-spacing: .08em; }
+.bouquet-manage-success strong { margin-top: 4px; font-size: 21px; }
+.bouquet-manage-success p { margin-top: 4px; color: #698171; font-size: 12px; }
+.bouquet-manage-success a { color: #386449; font-size: 12px; font-weight: 900; text-decoration: none; }
+
+.bouquet-manage-state {
+  min-height: 220px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed #d9cfd6;
+  background: #fff;
+  color: #756d73;
+}
+
+.bouquet-manage-auth-required {
+  width: min(620px, 100%);
+  margin: 8vh auto 0;
+  padding: 34px;
+  border: 1px solid var(--manage-line);
+  border-radius: 28px;
+  background: rgba(255,255,255,.94);
+  text-align: center;
+  box-shadow: 0 24px 70px rgba(71, 46, 62, .09);
+}
+
+.bouquet-manage-auth-required .bouquet-manage-home { display: inline-flex; }
+.bouquet-manage-flower {
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 18px;
+  border-radius: 50%;
+  background: #efd7e2;
+  font-size: 28px;
+}
+
+.bouquet-manage-auth-required h1 { font-size: clamp(34px, 6vw, 52px); }
+.bouquet-manage-auth-required .bouquet-manage-primary-link { display: inline-flex; margin-top: 24px; }
+.bouquet-manage-auth-required .bouquet-manage-error { margin-top: 20px; margin-bottom: 0; }
+
+@media (max-width: 820px) {
+  .bouquet-manage-shell { padding: 30px 15px 60px; }
+  .bouquet-manage-header { align-items: stretch; flex-direction: column; }
+  .bouquet-manage-account { min-width: 0; }
+  .bouquet-manage-grid { grid-template-columns: 1fr; }
+  .bouquet-manage-card-wide { grid-column: auto; }
+  .bouquet-manage-submission-form { grid-template-columns: 1fr; }
+  .bouquet-manage-full,
+  .bouquet-manage-check,
+  .bouquet-manage-submit { grid-column: auto; }
+  .bouquet-manage-success { align-items: flex-start; flex-direction: column; }
+}
