@@ -78,6 +78,12 @@ class LunaBloomBouquetRegistrationE2ETest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(payload("https://example.test/apps/evidence-vault-v2/")))
                 .andExpect(status().isBadRequest());
+
+        mockMvc.perform(post("/api/bloom-bouquet/luna/register")
+                        .cookie(ownerCookie)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload.replace("\"projectName\":\"증빙함\"", "\"projectName\":\"다른 프로젝트\"")))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
