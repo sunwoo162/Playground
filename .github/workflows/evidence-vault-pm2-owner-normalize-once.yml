@@ -83,14 +83,24 @@ jobs:
             activate_pnpm
             echo "EV_PM2_NORMALIZE_UBUNTU_PNPM=available"
 
+            SKIP_START=false
             LISTENER="$(sudo -n ss -ltnp 2>/dev/null | awk '$4 ~ /:3011$/ { print; exit }' || true)"
             if [ -n "$LISTENER" ]; then
-              ROOT_PID="$(sudo -n "$PM2_BIN" pid "$PROCESS_NAME" 2>/dev/null | awk 'NF && $1 != 0 { print $1; exit }' || true)"
               LISTENER_PID="$(printf '%s' "$LISTENER" | sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p' | head -n 1)"
-              test -n "$ROOT_PID"
               test -n "$LISTENER_PID"
-              test "$ROOT_PID" = "$LISTENER_PID"
-              echo "EV_PM2_NORMALIZE_EXISTING_LISTENER=root-pm2"
+              LISTENER_USER="$(sudo -n ps -o user= -p "$LISTENER_PID" 2>/dev/null | awk 'NF { print $1; exit }' || true)"
+              USER_PM2_PID="$($PM2_BIN pid "$PROCESS_NAME" 2>/dev/null | awk 'NF && $1 != 0 { print $1; exit }' || true)"
+              ROOT_PM2_PID="$(sudo -n "$PM2_BIN" pid "$PROCESS_NAME" 2>/dev/null | awk 'NF && $1 != 0 { print $1; exit }' || true)"
+
+              if [ "$LISTENER_USER" = "ubuntu" ] && [ -n "$USER_PM2_PID" ]; then
+                SKIP_START=true
+                echo "EV_PM2_NORMALIZE_EXISTING_LISTENER=ubuntu-pm2"
+              elif [ "$LISTENER_USER" = "root" ] && [ -n "$ROOT_PM2_PID" ]; then
+                echo "EV_PM2_NORMALIZE_EXISTING_LISTENER=root-pm2"
+              else
+                echo "EV_PM2_NORMALIZE_EXISTING_LISTENER=unexpected"
+                exit 1
+              fi
             else
               echo "EV_PM2_NORMALIZE_EXISTING_LISTENER=absent"
             fi
@@ -103,17 +113,21 @@ jobs:
               echo "EV_PM2_NORMALIZE_ROOT_ENTRY=absent"
             fi
 
-            if "$PM2_BIN" describe "$PROCESS_NAME" >/dev/null 2>&1; then
-              "$PM2_BIN" delete "$PROCESS_NAME" >/dev/null
-            fi
+            if [ "$SKIP_START" != "true" ]; then
+              if "$PM2_BIN" describe "$PROCESS_NAME" >/dev/null 2>&1; then
+                "$PM2_BIN" delete "$PROCESS_NAME" >/dev/null
+              fi
 
-            rm -f "$HOME/.pm2/logs/${PROCESS_NAME}-error.log" "$HOME/.pm2/logs/${PROCESS_NAME}-out.log"
-            if ! "$PM2_BIN" start scripts/start-preview.sh --name "$PROCESS_NAME" --interpreter bash >/dev/null 2>&1; then
-              echo "EV_PM2_NORMALIZE_START=failed"
-              classify_start_error
-              exit 1
+              rm -f "$HOME/.pm2/logs/${PROCESS_NAME}-error.log" "$HOME/.pm2/logs/${PROCESS_NAME}-out.log"
+              if ! "$PM2_BIN" start scripts/start-preview.sh --name "$PROCESS_NAME" --interpreter bash >/dev/null 2>&1; then
+                echo "EV_PM2_NORMALIZE_START=failed"
+                classify_start_error
+                exit 1
+              fi
+              echo "EV_PM2_NORMALIZE_START=accepted"
+            else
+              echo "EV_PM2_NORMALIZE_START=already-running"
             fi
-            echo "EV_PM2_NORMALIZE_START=accepted"
 
             READY=false
             for attempt in $(seq 1 30); do
@@ -130,13 +144,16 @@ jobs:
               exit 1
             fi
 
-            USER_PID="$($PM2_BIN pid "$PROCESS_NAME" 2>/dev/null | awk 'NF && $1 != 0 { print $1; exit }' || true)"
-            test -n "$USER_PID"
-            ROOT_PID="$(sudo -n "$PM2_BIN" pid "$PROCESS_NAME" 2>/dev/null | awk 'NF && $1 != 0 { print $1; exit }' || true)"
-            test -z "$ROOT_PID"
+            USER_PM2_PID="$($PM2_BIN pid "$PROCESS_NAME" 2>/dev/null | awk 'NF && $1 != 0 { print $1; exit }' || true)"
+            test -n "$USER_PM2_PID"
+            ROOT_PM2_PID="$(sudo -n "$PM2_BIN" pid "$PROCESS_NAME" 2>/dev/null | awk 'NF && $1 != 0 { print $1; exit }' || true)"
+            test -z "$ROOT_PM2_PID"
 
-            USER_LINE="$(ss -ltnp 2>/dev/null | awk '$4 ~ /:3011$/ { print; exit }' || true)"
-            printf '%s' "$USER_LINE" | grep -Fq "pid=$USER_PID,"
+            LISTENER="$(sudo -n ss -ltnp 2>/dev/null | awk '$4 ~ /:3011$/ { print; exit }' || true)"
+            LISTENER_PID="$(printf '%s' "$LISTENER" | sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p' | head -n 1)"
+            test -n "$LISTENER_PID"
+            LISTENER_USER="$(sudo -n ps -o user= -p "$LISTENER_PID" 2>/dev/null | awk 'NF { print $1; exit }' || true)"
+            test "$LISTENER_USER" = "ubuntu"
 
             "$PM2_BIN" save >/dev/null
             echo "EV_PM2_NORMALIZE_OWNER=ubuntu"
