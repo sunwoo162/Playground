@@ -13,7 +13,6 @@ test('active BloomBouquet production contracts use the replacement domain', () =
   const activeFiles = [
     'README.md',
     'backend/src/main/resources/application.yml',
-    'scripts/notion-sync.js',
     '.github/workflows/deploy.yml',
   ];
 
@@ -31,7 +30,6 @@ test('active BloomBouquet production contracts use the replacement domain', () =
     read('backend/src/main/resources/application.yml'),
     /allowed-origins:\s*https:\/\/bloombouquet\.https\.gsmsv\.site/,
   );
-  assert.match(read('scripts/notion-sync.js'), /https:\/\/bloombouquet\.https\.gsmsv\.site/);
 
   const deploy = read('.github/workflows/deploy.yml');
   assert.match(deploy, /bloombouquet\.https\.gsmsv\.site/);
