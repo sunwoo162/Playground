@@ -42,11 +42,14 @@ jobs:
             printf '%s' "$ENV_LINE" | grep -Fq 'playground.https.gsmsv.site'
             echo "EV_RECOVERY_ENV=old"
 
-            ROOT_PID="$(sudo -n "$PM2_BIN" pid "$PROCESS_NAME" 2>/dev/null | awk 'NF && $1 != 0 { print $1; exit }' || true)"
-            test -n "$ROOT_PID"
-            echo "EV_RECOVERY_ROOT_PM2=present"
-
-            sudo -n "$PM2_BIN" restart "$PROCESS_NAME" --update-env >/dev/null
+            cd "$APP_DIR"
+            if sudo -n "$PM2_BIN" describe "$PROCESS_NAME" >/dev/null 2>&1; then
+              echo "EV_RECOVERY_ROOT_PM2_ENTRY=existing"
+              sudo -n "$PM2_BIN" restart "$PROCESS_NAME" --update-env >/dev/null
+            else
+              echo "EV_RECOVERY_ROOT_PM2_ENTRY=recreate"
+              sudo -n "$PM2_BIN" start scripts/start-preview.sh --name "$PROCESS_NAME" --interpreter bash --update-env >/dev/null
+            fi
 
             READY=false
             for attempt in $(seq 1 30); do
@@ -58,7 +61,10 @@ jobs:
               sleep 2
             done
             test "$READY" = "true"
+            ROOT_PID="$(sudo -n "$PM2_BIN" pid "$PROCESS_NAME" 2>/dev/null | awk 'NF && $1 != 0 { print $1; exit }' || true)"
+            test -n "$ROOT_PID"
             sudo -n "$PM2_BIN" save >/dev/null
+            echo "EV_RECOVERY_ROOT_PM2=online"
             echo "EV_RECOVERY_LOCAL_HEALTH=ok"
 
       - name: Verify public health
