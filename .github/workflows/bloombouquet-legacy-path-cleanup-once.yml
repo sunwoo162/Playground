@@ -1,0 +1,81 @@
+name: BloomBouquet Legacy Path Cleanup Once
+
+on:
+  push:
+    branches:
+      - ops/bloombouquet-legacy-path-cleanup-20260828
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Require SSH credential
+        env:
+          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+        shell: bash
+        run: |
+          test -n "$SSH_PASSWORD"
+          echo "BLOOM_LEGACY_CLEANUP_SSH=available"
+
+      - name: Verify new runtime paths and remove legacy directory
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          command_timeout: 8m
+          script: |
+            set -euo pipefail
+            NEW_DIR=/home/ubuntu/bloombouquet
+            OLD_DIR=/home/ubuntu/playground
+            EXPECTED_SHA=037500d6d4aff5aeba2995e42ec5a90d3a7a0c1f
+
+            test -d "$NEW_DIR"
+            test "$(git -C "$NEW_DIR" rev-parse HEAD)" = "$EXPECTED_SHA"
+            test -f "$NEW_DIR/.env"
+            test "$(stat -c '%a' "$NEW_DIR/.env")" = "600"
+            if [ -f "$NEW_DIR/.env.backend" ]; then
+              test "$(stat -c '%a' "$NEW_DIR/.env.backend")" = "600"
+            fi
+
+            node <<'NODE'
+            const { execFileSync } = require('node:child_process');
+            const required = ['playground', 'backend', 'bloom-worker', 'bloom-evaluator-llm'];
+            const list = JSON.parse(execFileSync('pm2', ['jlist'], { encoding: 'utf8' }));
+            for (const name of required) {
+              const app = list.find((entry) => entry.name === name);
+              if (!app) throw new Error(`missing PM2 process: ${name}`);
+              if (app.pm2_env?.status !== 'online') throw new Error(`PM2 process not online: ${name}`);
+              const paths = [app.pm2_env?.pm_cwd, app.pm2_env?.pm_exec_path, app.pm_exec_path]
+                .filter(Boolean)
+                .join('\n');
+              if (paths.includes('/home/ubuntu/playground')) {
+                throw new Error(`legacy path still active: ${name}`);
+              }
+              if (!paths.includes('/home/ubuntu/bloombouquet')) {
+                throw new Error(`canonical path not proven: ${name}`);
+              }
+            }
+            console.log('BLOOM_LEGACY_CLEANUP_PM2_PATHS=new');
+            NODE
+
+            curl -fsS --max-time 5 http://127.0.0.1:8091/health >/dev/null
+            curl -fsS --max-time 5 http://127.0.0.1:8080/api/bouquet/auth/me >/dev/null
+            curl -fsS --max-time 10 https://bloombouquet.https.gsmsv.site/ | grep -q '<title>BloomBouquet</title>'
+            echo "BLOOM_LEGACY_CLEANUP_PREFLIGHT=ok"
+
+            if [ -e "$OLD_DIR" ]; then
+              rm -rf --one-file-system "$OLD_DIR"
+            fi
+            test ! -e "$OLD_DIR"
+            echo "BLOOM_LEGACY_CLEANUP_OLD_DIR=absent"
+
+            curl -fsS --max-time 5 http://127.0.0.1:8091/health >/dev/null
+            curl -fsS --max-time 5 http://127.0.0.1:8080/api/bouquet/auth/me >/dev/null
+            curl -fsS --max-time 10 https://bloombouquet.https.gsmsv.site/ | grep -q '<title>BloomBouquet</title>'
+            echo "BLOOM_LEGACY_CLEANUP_POSTCHECK=ok"
