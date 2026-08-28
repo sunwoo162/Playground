@@ -1,0 +1,76 @@
+name: Evidence Vault Port Owner Probe
+
+on:
+  push:
+    branches:
+      - ops/evidence-vault-provider-cutover-20260828
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Require SSH
+        env:
+          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+        shell: bash
+        run: |
+          test -n "$SSH_PASSWORD"
+          echo "PORT_OWNER_PROBE_SSH=available"
+
+      - name: Inspect port ownership read-only
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          script_stop: false
+          script: |
+            set -euo pipefail
+            PROCESS_NAME="evidence-vault-preview"
+            PORT="3011"
+            PM2_PID="$(pm2 pid "$PROCESS_NAME" 2>/dev/null | awk 'NF && $1 != 0 { print $1; exit }')"
+            test -n "$PM2_PID"
+            echo "PORT_OWNER_PROBE_PM2_PID=present"
+
+            USER_LINE="$(ss -ltnp 2>/dev/null | awk -v port=":$PORT" '$4 ~ port"$" { print; exit }' || true)"
+            test -n "$USER_LINE"
+            if printf '%s' "$USER_LINE" | grep -Eq 'pid=[0-9]+'; then
+              echo "PORT_OWNER_PROBE_USER_SS_PID=visible"
+            else
+              echo "PORT_OWNER_PROBE_USER_SS_PID=hidden"
+            fi
+
+            if sudo -n ss -ltnp >/tmp/evidence-vault-port-owner.txt 2>/dev/null; then
+              SUDO_LINE="$(awk -v port=":$PORT" '$4 ~ port"$" { print; exit }' /tmp/evidence-vault-port-owner.txt || true)"
+              rm -f /tmp/evidence-vault-port-owner.txt
+              test -n "$SUDO_LINE"
+              if printf '%s' "$SUDO_LINE" | grep -Eq 'pid=[0-9]+'; then
+                echo "PORT_OWNER_PROBE_SUDO_SS_PID=visible"
+              else
+                echo "PORT_OWNER_PROBE_SUDO_SS_PID=hidden"
+              fi
+              if printf '%s' "$SUDO_LINE" | grep -Fq "pid=$PM2_PID,"; then
+                echo "PORT_OWNER_PROBE_PM2_MATCH=yes"
+              else
+                echo "PORT_OWNER_PROBE_PM2_MATCH=no"
+              fi
+            else
+              echo "PORT_OWNER_PROBE_SUDO_SS=unavailable"
+            fi
+
+            ENV_LINE="$(grep -E '^BOUQUET_BASE_URL=' /home/ubuntu/evidence-vault/.env.production | tail -n 1 || true)"
+            if printf '%s' "$ENV_LINE" | grep -Fq 'playground.https.gsmsv.site'; then
+              echo "PORT_OWNER_PROBE_ENV=old"
+            elif printf '%s' "$ENV_LINE" | grep -Fq 'bloombouquet.https.gsmsv.site'; then
+              echo "PORT_OWNER_PROBE_ENV=new"
+            else
+              echo "PORT_OWNER_PROBE_ENV=unexpected"
+              exit 1
+            fi
+            test "$(stat -c '%a' /home/ubuntu/evidence-vault/.env.production)" = "600"
+            echo "PORT_OWNER_PROBE_ENV_MODE=600"
