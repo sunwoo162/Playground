@@ -2,7 +2,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 
+const builderPath = 'bloom-web/src/app/BuilderApp.tsx';
 const managePath = 'bloom-web/src/app/BouquetManageApp.tsx';
+const lunaManagePath = 'bloom-web/src/app/LunaBouquetRegisterApp.tsx';
+const lunaParserPath = 'bloom-web/src/app/luna-registration.ts';
 const appPath = 'bloom-web/src/app/BloomApp.tsx';
 const authPath = 'bloom-web/src/app/BouquetAuthApp.tsx';
 const showcasePath = 'bloom-web/src/app/BouquetShowcaseApp.tsx';
@@ -31,10 +34,35 @@ test('Bloom management surface uses bouquet cookie APIs only and stays off the p
   assert.doesNotMatch(showcase, /\?mode=manage/);
 });
 
-test('Bloom auth return target is symbolic and allowlisted', () => {
+test('Luna handoff renders a one-click owner confirmation instead of the three-stage form', () => {
+  assert.equal(fs.existsSync(lunaManagePath), true, 'LunaBouquetRegisterApp.tsx must exist');
+  assert.equal(fs.existsSync(lunaParserPath), true, 'luna-registration.ts must exist');
+
+  const app = source(appPath);
+  const builder = source(builderPath);
+  const luna = source(lunaManagePath);
+  const parser = source(lunaParserPath);
+
+  assert.match(app, /searchParams\.get\(['"]luna['"]\)/);
+  assert.match(app, /<LunaBouquetRegisterApp/);
+  assert.match(builder, /bloomBouquetRegistrationUrl/);
+  assert.match(builder, /BloomBouquet 등록 열기/);
+  assert.match(luna, /\/api\/bloom-bouquet\/luna\/register/);
+  assert.match(luna, /BloomBouquet에 등록하고 평가 시작/);
+  assert.match(luna, /직접 수정해서 등록/);
+  assert.match(luna, /credentials:\s*['"]include['"]/);
+  assert.match(luna, /evaluationRunId\s*==\s*null\s*\|\|\s*!body\.submission\.evaluationStatus/);
+  assert.doesNotMatch(luna, /evaluationStatus\s*!==\s*['"]QUEUED['"]/);
+  assert.match(parser, /schemaVersion\s*!==\s*1/);
+  assert.doesNotMatch(luna, /\/internal\/builder\/worker\//);
+  assert.doesNotMatch(luna, /\blocalStorage\b|\bsessionStorage\b/);
+});
+
+test('Bloom auth return target is symbolic and preserves only bounded Luna handoff data', () => {
   const auth = source(authPath);
 
   assert.match(auth, /params\.get\(['"]return_to['"]\)\s*===\s*['"]manage['"]/);
+  assert.match(auth, /params\.get\(['"]luna['"]\)/);
   assert.match(auth, /\?mode=manage/);
   assert.doesNotMatch(auth, /window\.location\.assign\(returnTarget/);
   assert.doesNotMatch(auth, /window\.location\.href\s*=\s*returnTarget/);

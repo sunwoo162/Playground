@@ -3,6 +3,7 @@ import type {
   BuilderWorkerClient,
   BuilderWorkerExecutor,
 } from "./builderWorkerAdapter";
+import { buildBloomBouquetRegistrationUrl } from "./bloomBouquetRegistration";
 import {
   createHeadlessBuilderExecutor,
   type HeadlessBuilderExecutorOptions,
@@ -26,6 +27,8 @@ export type SchedulerObservabilitySnapshot = {
 type ObservedHeadlessBuilderSnapshotPayload = HeadlessBuilderSnapshotPayload & {
   schedulerObservability?: SchedulerObservabilitySnapshot;
 };
+
+const DEPLOYMENT_EVIDENCE_PREFIX = "deployment-url:";
 
 function parsePayload(payloadJson: string): ObservedHeadlessBuilderSnapshotPayload | null {
   try {
@@ -93,6 +96,44 @@ function waveCompletionTimestamp(
   return timestamps.length > 0 ? timestamps[timestamps.length - 1] : null;
 }
 
+function normalizedPreviewUrl(value: string, requireHttps: boolean) {
+  const url = new URL(value.trim());
+  if (requireHttps ? url.protocol !== "https:" : !["http:", "https:"].includes(url.protocol)) {
+    throw new Error(requireHttps
+      ? "검증된 배포 URL은 HTTPS여야 합니다."
+      : "Builder preview URL은 HTTP(S)여야 합니다.");
+  }
+  if (url.username || url.password || url.hash) {
+    throw new Error("Builder preview URL에 credential 또는 fragment를 포함할 수 없습니다.");
+  }
+  return url.toString();
+}
+
+export function resolveDeploymentPreviewUrl(
+  existingPreviewUrl: string | null,
+  taskRuns: ProjectTaskRun[],
+): string | null {
+  const existing = existingPreviewUrl?.trim() ?? "";
+  if (existing) return normalizedPreviewUrl(existing, false);
+
+  const deploymentUrls = new Set<string>();
+  for (const run of taskRuns) {
+    if (run.status !== "done" || run.role !== "devops") continue;
+    for (const evidence of run.evidence) {
+      const normalized = evidence.trim();
+      if (!normalized.toLowerCase().startsWith(DEPLOYMENT_EVIDENCE_PREFIX)) continue;
+      const value = normalized.slice(DEPLOYMENT_EVIDENCE_PREFIX.length).trim();
+      if (!value || /\s/.test(value)) continue;
+      deploymentUrls.add(normalizedPreviewUrl(value, true));
+    }
+  }
+
+  if (deploymentUrls.size > 1) {
+    throw new Error("완료된 DevOps Task에 서로 다른 deployment-url evidence가 있어 preview URL을 확정할 수 없습니다.");
+  }
+  return deploymentUrls.values().next().value ?? null;
+}
+
 export function decorateSchedulerObservability(
   previousPayloadJson: string | null,
   currentPayloadJson: string,
@@ -152,7 +193,22 @@ function initialPayloadJson(snapshot: BuilderOrchestrationSnapshot | null | unde
 export function createObservedHeadlessBuilderExecutor(
   options: HeadlessBuilderExecutorOptions,
 ): BuilderWorkerExecutor {
-  const execute = createHeadlessBuilderExecutor(options);
+  const runtime = {
+    ...options.runtime,
+    async dispatchTask(input: Parameters<HeadlessBuilderExecutorOptions["runtime"]["dispatchTask"]>[0]) {
+      const deploymentAwareInput = input.role === "devops"
+        ? {
+            ...input,
+            summary: [
+              input.summary,
+              "[Deployment evidence contract] If this task publishes or verifies the live web release, verify the deployed endpoint first and include exactly one evidence entry in the form `deployment-url: https://...`. Never report a deployment URL that was inferred or not actually verified. If live deployment is required by this task but cannot be verified, return blocked instead of fabricating release evidence.",
+            ].join("\n\n"),
+          }
+        : input;
+      return options.runtime.dispatchTask(deploymentAwareInput);
+    },
+  };
+  const execute = createHeadlessBuilderExecutor({ ...options, runtime });
 
   return async (claim, client) => {
     let previousPayloadJson = initialPayloadJson(claim.orchestrationSnapshot);
@@ -180,6 +236,31 @@ export function createObservedHeadlessBuilderExecutor(
       },
     };
 
-    return execute(claim, observedClient);
+    const result = await execute(claim, observedClient);
+    const completedPayload = previousPayloadJson ? parsePayload(previousPayloadJson) : null;
+    const plan = completedPayload?.plan;
+    const repository = completedPayload?.repository;
+    const previewUrl = resolveDeploymentPreviewUrl(
+      result.previewUrl,
+      completedPayload?.taskRuns ?? [],
+    );
+    const bloomBouquetRegistrationUrl = plan && repository
+      ? buildBloomBouquetRegistrationUrl({
+          teamId: options.teamId,
+          teamName: options.teamName,
+          projectName: plan.projectName,
+          projectSlug: plan.repositoryName,
+          description: plan.productSummary,
+          repositoryFullName: result.repositoryFullName ?? repository.repository,
+          demoUrl: previewUrl,
+          requiresAuth: plan.needsAuth || claim.authRequired,
+        })
+      : null;
+
+    return {
+      ...result,
+      previewUrl,
+      bloomBouquetRegistrationUrl,
+    };
   };
 }

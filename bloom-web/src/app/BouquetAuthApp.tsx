@@ -36,6 +36,15 @@ function messageFor(error: string | undefined) {
   return ERROR_MESSAGES[error] ?? '요청을 처리하지 못했습니다. 다시 시도해주세요.'
 }
 
+function boundedLunaHandoff(value: string | null) {
+  if (!value || value.length > 12_000 || !/^[A-Za-z0-9_-]+$/.test(value)) return ''
+  return value
+}
+
+function manageReturnUrl(luna: string) {
+  return luna ? `?mode=manage&luna=${encodeURIComponent(luna)}` : '?mode=manage'
+}
+
 export default function BouquetAuthApp() {
   const [user, setUser] = useState<BouquetUser | null>(null)
   const [loading, setLoading] = useState(true)
@@ -54,6 +63,7 @@ export default function BouquetAuthApp() {
     const codeChallenge = params.get('code_challenge') ?? ''
     const codeChallengeMethod = params.get('code_challenge_method') ?? 'S256'
     const returnToManage = params.get('return_to') === 'manage'
+    const luna = boundedLunaHandoff(params.get('luna'))
     const hasAnyOAuthParam = Boolean(clientId || redirectUri || state || codeChallenge)
     const complete = Boolean(clientId && redirectUri && state && codeChallenge && codeChallengeMethod === 'S256')
 
@@ -76,6 +86,7 @@ export default function BouquetAuthApp() {
       complete,
       projectHost,
       returnToManage,
+      luna,
     }
   }, [])
 
@@ -92,7 +103,7 @@ export default function BouquetAuthApp() {
       .then((body) => {
         setUser(body.user)
         if (body.user && oauth.returnToManage && !oauth.hasAnyOAuthParam) {
-          window.location.assign('?mode=manage')
+          window.location.assign(manageReturnUrl(oauth.luna))
         }
       })
       .catch((reason) => {
@@ -102,7 +113,7 @@ export default function BouquetAuthApp() {
       .finally(() => setLoading(false))
 
     return () => controller.abort()
-  }, [oauth.hasAnyOAuthParam, oauth.returnToManage])
+  }, [oauth.hasAnyOAuthParam, oauth.luna, oauth.returnToManage])
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -127,7 +138,7 @@ export default function BouquetAuthApp() {
       setUser(body.user)
       setPassword('')
       if (oauth.returnToManage && !oauth.hasAnyOAuthParam) {
-        window.location.assign('?mode=manage')
+        window.location.assign(manageReturnUrl(oauth.luna))
       }
     } catch (reason) {
       setError(messageFor(reason instanceof Error ? reason.message : undefined))
@@ -219,7 +230,7 @@ export default function BouquetAuthApp() {
                 {oauth.projectHost ? `${oauth.projectHost} 계속하기` : '프로젝트로 계속하기'}
               </button>
             ) : oauth.returnToManage ? (
-              <a className="bouquet-auth-primary bouquet-auth-primary-link" href="?mode=manage">
+              <a className="bouquet-auth-primary bouquet-auth-primary-link" href={manageReturnUrl(oauth.luna)}>
                 프로젝트 관리로 돌아가기
               </a>
             ) : (

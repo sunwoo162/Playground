@@ -1,4 +1,7 @@
-import { decorateSchedulerObservability } from "./observedHeadlessBuilderExecutor";
+import {
+  decorateSchedulerObservability,
+  resolveDeploymentPreviewUrl,
+} from "./observedHeadlessBuilderExecutor";
 import {
   completeSchedulerWaveTelemetry,
   createSchedulerWaveTelemetry,
@@ -243,11 +246,52 @@ function testTelemetryRetentionBound() {
   assert(trimmed[0].sequence === 6, "telemetry retention must keep the newest wave records");
 }
 
+function testDeploymentPreviewEvidenceResolution() {
+  const deployed = taskRun(
+    "DEP-001",
+    "devops",
+    "done",
+    "rose:devops",
+    "2026-08-27T01:00:00.000Z",
+    "2026-08-27T01:00:10.000Z",
+  );
+  deployed.evidence = [
+    "deployment-url: https://bloombouquet.https.gsmsv.site/apps/sample/",
+  ];
+  assert(
+    resolveDeploymentPreviewUrl(null, [deployed])
+      === "https://bloombouquet.https.gsmsv.site/apps/sample/",
+    "fresh Builder completion must recover the verified HTTPS preview from completed DevOps evidence",
+  );
+  assert(
+    resolveDeploymentPreviewUrl("http://localhost:3000/", [deployed]) === "http://localhost:3000/",
+    "an explicitly persisted preview URL must take precedence over deployment evidence",
+  );
+
+  const nonDevops = taskRun("FE-002", "frontend", "done", "rose:frontend");
+  nonDevops.evidence = ["deployment-url: https://example.test/untrusted/"];
+  assert(
+    resolveDeploymentPreviewUrl(null, [nonDevops]) === null,
+    "deployment evidence from a non-DevOps task must not create a release preview",
+  );
+
+  const secondDeployment = taskRun("DEP-002", "devops", "done", "rose:devops-2");
+  secondDeployment.evidence = ["deployment-url: https://example.test/other/"];
+  let ambiguousRejected = false;
+  try {
+    resolveDeploymentPreviewUrl(null, [deployed, secondDeployment]);
+  } catch {
+    ambiguousRejected = true;
+  }
+  assert(ambiguousRejected, "conflicting verified deployment URLs must block completion instead of picking one");
+}
+
 function run() {
   testWaveDecisionTelemetry();
   testWaveCompletionAndAggregateMetrics();
   testSnapshotDecorationAndRecovery();
   testTelemetryRetentionBound();
+  testDeploymentPreviewEvidenceResolution();
   console.log("schedulerObservability policy tests passed");
 }
 

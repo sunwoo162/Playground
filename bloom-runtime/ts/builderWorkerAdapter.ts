@@ -48,6 +48,7 @@ export type BuilderWorkerRunState = {
 export type BuilderWorkerExecutionResult = {
   repositoryFullName: string | null;
   previewUrl: string | null;
+  bloomBouquetRegistrationUrl?: string | null;
 };
 
 export type BuilderWorkerClient = {

@@ -34,6 +34,7 @@
     "ts/bouquetAuth.policy-test.ts",
     "ts/evaluationPlatform.ts",
     "ts/evaluationPlatform.policy-test.ts",
+    "ts/bloomBouquetRegistration.policy-test.ts",
     "ts/bloomBouquetEvaluatorHttpClient.policy-test.ts",
     "ts/bloomBouquetEvaluatorWorker.policy-test.ts",
     "ts/bloomBouquetSeniorEvaluator.policy-test.ts",

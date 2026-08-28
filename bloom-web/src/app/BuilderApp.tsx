@@ -33,6 +33,7 @@ type BuilderProject = {
   templateId?: string | null
   repositoryFullName?: string | null
   previewUrl?: string | null
+  bloomBouquetRegistrationUrl?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -526,6 +527,15 @@ export default function BuilderApp() {
                           ? '아직 active Run이 없습니다. 아래 버튼으로 Agent 실행 요청을 queue에 등록할 수 있습니다.'
                           : '실행 record를 확인할 수 없습니다. 새 실행을 추정 생성하지 않고 현재 프로젝트 상태를 유지합니다.'}
                 </div>
+
+                {project.bloomBouquetRegistrationUrl && (
+                  <a
+                    className="builder-primary builder-registration-link"
+                    href={project.bloomBouquetRegistrationUrl}
+                  >
+                    BloomBouquet 등록 열기
+                  </a>
+                )}
 
                 {!currentRun && (project.status === 'draft' || project.status === 'failed') && (
                   <button className="builder-primary" type="button" onClick={() => void retryProjectRun()} disabled={runLoading}>
