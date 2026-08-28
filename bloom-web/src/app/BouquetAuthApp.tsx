@@ -53,6 +53,7 @@ export default function BouquetAuthApp() {
     const state = params.get('state') ?? ''
     const codeChallenge = params.get('code_challenge') ?? ''
     const codeChallengeMethod = params.get('code_challenge_method') ?? 'S256'
+    const returnToManage = params.get('return_to') === 'manage'
     const hasAnyOAuthParam = Boolean(clientId || redirectUri || state || codeChallenge)
     const complete = Boolean(clientId && redirectUri && state && codeChallenge && codeChallengeMethod === 'S256')
 
@@ -74,6 +75,7 @@ export default function BouquetAuthApp() {
       hasAnyOAuthParam,
       complete,
       projectHost,
+      returnToManage,
     }
   }, [])
 
@@ -87,7 +89,12 @@ export default function BouquetAuthApp() {
         if (!response.ok) throw new Error('session_check_failed')
         return response.json() as Promise<{ user: BouquetUser | null }>
       })
-      .then((body) => setUser(body.user))
+      .then((body) => {
+        setUser(body.user)
+        if (body.user && oauth.returnToManage && !oauth.hasAnyOAuthParam) {
+          window.location.assign('?mode=manage')
+        }
+      })
       .catch((reason) => {
         if (reason instanceof DOMException && reason.name === 'AbortError') return
         setError('로그인 상태를 확인하지 못했습니다.')
@@ -95,7 +102,7 @@ export default function BouquetAuthApp() {
       .finally(() => setLoading(false))
 
     return () => controller.abort()
-  }, [])
+  }, [oauth.hasAnyOAuthParam, oauth.returnToManage])
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -119,6 +126,9 @@ export default function BouquetAuthApp() {
 
       setUser(body.user)
       setPassword('')
+      if (oauth.returnToManage && !oauth.hasAnyOAuthParam) {
+        window.location.assign('?mode=manage')
+      }
     } catch (reason) {
       setError(messageFor(reason instanceof Error ? reason.message : undefined))
     } finally {
@@ -208,6 +218,10 @@ export default function BouquetAuthApp() {
               <button className="bouquet-auth-primary" type="button" onClick={continueToProject} disabled={submitting}>
                 {oauth.projectHost ? `${oauth.projectHost} 계속하기` : '프로젝트로 계속하기'}
               </button>
+            ) : oauth.returnToManage ? (
+              <a className="bouquet-auth-primary bouquet-auth-primary-link" href="?mode=manage">
+                프로젝트 관리로 돌아가기
+              </a>
             ) : (
               <a className="bouquet-auth-primary bouquet-auth-primary-link" href="/">
                 프로젝트 둘러보기
