@@ -111,12 +111,14 @@ test('production backend validates schema and uses Flyway instead of Hibernate m
   }
 });
 
-test('production secret files stay untracked and deploy diagnostics never dump them', () => {
+test('production secret files stay untracked, private, and deploy diagnostics never dump them', () => {
   const gitignore = fs.readFileSync(path.join(ROOT, '.gitignore'), 'utf8');
   assert.match(gitignore, /^\.env\.\*$/m);
   assert.match(gitignore, /^!\.env\.example$/m);
 
   const workflow = readDeployWorkflow();
+  assert.match(workflow, /chmod 600 "\$SHARED_ENV_FILE"/);
+  assert.match(workflow, /chmod 600 "\$BACKEND_ENV_FILE"/);
   assert.doesNotMatch(workflow, /\bprintenv\b/);
   assert.doesNotMatch(workflow, /\bpm2\s+env\b/);
   assert.doesNotMatch(workflow, /\bset\s+-x\b/);
