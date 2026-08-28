@@ -32,7 +32,7 @@ jobs:
           username: ubuntu
           password: ${{ secrets.SSH_PASSWORD }}
           command_timeout: 25m
-          script_stop: true
+          script_stop: false
           script: |
             set -eu
             TARGET_SHA="0ddff8f5734928b5b275ff27aeda41fe8aea5430"
