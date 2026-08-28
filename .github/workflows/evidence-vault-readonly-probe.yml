@@ -53,6 +53,7 @@ jobs:
             fi
 
             sudo systemctl enable --now postgresql >/dev/null
+            cd /tmp
             sudo -u postgres pg_isready -q
             echo "BOOTSTRAP_POSTGRES=ready"
 
@@ -63,18 +64,18 @@ jobs:
               echo "BOOTSTRAP_REPOSITORY=preserved"
             fi
 
-            cd "$APP_DIR"
-            git fetch origin develop >/dev/null 2>&1
-            git cat-file -e "${TARGET_SHA}^{commit}"
-            git merge-base --is-ancestor "$TARGET_SHA" origin/develop
-            git checkout -B develop origin/develop >/dev/null 2>&1
-            git reset --hard "$TARGET_SHA" >/dev/null
-            echo "BOOTSTRAP_REPOSITORY_SHA=$(git rev-parse HEAD)"
+            git -C "$APP_DIR" fetch origin develop >/dev/null 2>&1
+            git -C "$APP_DIR" cat-file -e "${TARGET_SHA}^{commit}"
+            git -C "$APP_DIR" merge-base --is-ancestor "$TARGET_SHA" origin/develop
+            git -C "$APP_DIR" checkout -B develop origin/develop >/dev/null 2>&1
+            git -C "$APP_DIR" reset --hard "$TARGET_SHA" >/dev/null
+            echo "BOOTSTRAP_REPOSITORY_SHA=$(git -C "$APP_DIR" rev-parse HEAD)"
 
             if test ! -f "$ENV_FILE"; then
               DB_PASSWORD="$(openssl rand -hex 32)"
               SESSION_SECRET="$(openssl rand -hex 48)"
 
+              cd /tmp
               if sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='$DB_ROLE'" | grep -q 1; then
                 printf "ALTER ROLE %s WITH LOGIN PASSWORD '%s';\n" "$DB_ROLE" "$DB_PASSWORD" | sudo -u postgres psql -v ON_ERROR_STOP=1 >/dev/null
                 echo "BOOTSTRAP_DB_ROLE=rotated-dedicated-role"
@@ -111,6 +112,7 @@ jobs:
             test "$(stat -c '%a' "$ENV_FILE")" = "600"
             echo "BOOTSTRAP_ENV_MODE=600"
 
+            cd "$APP_DIR"
             bash scripts/deploy-preview.sh "$TARGET_SHA"
 
             PM2_PID="$(pm2 pid evidence-vault-preview 2>/dev/null | awk 'NF && $1 != 0 { print $1; exit }')"
