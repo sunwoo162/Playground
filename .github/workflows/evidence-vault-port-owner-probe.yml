@@ -34,6 +34,8 @@ jobs:
             PROCESS_NAME="evidence-vault-preview"
             PORT="3011"
             HOST_NAME="evidence-vault.https.gsmsv.site"
+            GOOD_HOST="bloombouquet.https.gsmsv.site"
+            OLD_HOST="playground.https.gsmsv.site"
             PM2_BIN="$(command -v pm2 2>/dev/null || true)"
 
             USER_PM2_PID=""
@@ -150,5 +152,63 @@ jobs:
             LOCAL_NGINX_STATUS="$(curl -sS -o /dev/null --max-time 5 -w '%{http_code}' -H "Host: $HOST_NAME" http://127.0.0.1/api/health 2>/dev/null || true)"
             echo "INGRESS_PROBE_LOCAL_NGINX_STATUS=${LOCAL_NGINX_STATUS:-request-failed}"
 
-            PUBLIC_STATUS="$(curl -sS -o /dev/null --max-time 8 -w '%{http_code}' "https://$HOST_NAME/api/health" 2>/dev/null || true)"
+            PUBLIC_ROOT_STATUS="$(curl -sS -o /tmp/evidence-public-root --max-time 8 -w '%{http_code}' "https://$HOST_NAME/" 2>/dev/null || true)"
+            PUBLIC_STATUS="$(curl -sS -D /tmp/evidence-public-headers -o /tmp/evidence-public-body --max-time 8 -w '%{http_code}' "https://$HOST_NAME/api/health" 2>/dev/null || true)"
+            GOOD_STATUS="$(curl -sS -D /tmp/bloom-public-headers -o /tmp/bloom-public-body --max-time 8 -w '%{http_code}' "https://$GOOD_HOST/api/bouquet/auth/me" 2>/dev/null || true)"
+            OLD_STATUS="$(curl -sS -o /dev/null --max-time 8 -w '%{http_code}' "https://$OLD_HOST/" 2>/dev/null || true)"
+            echo "INGRESS_PROBE_PUBLIC_ROOT_STATUS=${PUBLIC_ROOT_STATUS:-request-failed}"
             echo "INGRESS_PROBE_PUBLIC_STATUS=${PUBLIC_STATUS:-request-failed}"
+            echo "INGRESS_PROBE_GOOD_HOST_STATUS=${GOOD_STATUS:-request-failed}"
+            echo "INGRESS_PROBE_OLD_HOST_STATUS=${OLD_STATUS:-request-failed}"
+
+            EV_IPS="$(getent ahostsv4 "$HOST_NAME" 2>/dev/null | awk '{print $1}' | sort -u | tr '\n' ' ')"
+            GOOD_IPS="$(getent ahostsv4 "$GOOD_HOST" 2>/dev/null | awk '{print $1}' | sort -u | tr '\n' ' ')"
+            OLD_IPS="$(getent ahostsv4 "$OLD_HOST" 2>/dev/null | awk '{print $1}' | sort -u | tr '\n' ' ')"
+            if [ -n "$EV_IPS" ] && [ "$EV_IPS" = "$GOOD_IPS" ]; then
+              echo "INGRESS_PROBE_DNS_MATCH_BLOOM=yes"
+            else
+              echo "INGRESS_PROBE_DNS_MATCH_BLOOM=no"
+            fi
+            if [ -n "$EV_IPS" ] && [ "$EV_IPS" = "$OLD_IPS" ]; then
+              echo "INGRESS_PROBE_DNS_MATCH_OLD=yes"
+            else
+              echo "INGRESS_PROBE_DNS_MATCH_OLD=no"
+            fi
+
+            EVIDENCE_SERVER="$(awk 'BEGIN{IGNORECASE=1} /^server:/ {sub(/^[^:]+:[[:space:]]*/,""); gsub(/\r/,""); print; exit}' /tmp/evidence-public-headers)"
+            BLOOM_SERVER="$(awk 'BEGIN{IGNORECASE=1} /^server:/ {sub(/^[^:]+:[[:space:]]*/,""); gsub(/\r/,""); print; exit}' /tmp/bloom-public-headers)"
+            if [ -n "$EVIDENCE_SERVER" ] && [ "$EVIDENCE_SERVER" = "$BLOOM_SERVER" ]; then
+              echo "INGRESS_PROBE_SERVER_HEADER_MATCH=yes"
+            else
+              echo "INGRESS_PROBE_SERVER_HEADER_MATCH=no"
+            fi
+
+            if grep -qi '<title>BloomBouquet</title>' /tmp/evidence-public-body 2>/dev/null; then
+              echo "INGRESS_PROBE_404_BODY=bloombouquet"
+            elif grep -qi 'nginx' /tmp/evidence-public-body 2>/dev/null; then
+              echo "INGRESS_PROBE_404_BODY=nginx"
+            elif grep -qi '404' /tmp/evidence-public-body 2>/dev/null; then
+              echo "INGRESS_PROBE_404_BODY=generic-404"
+            else
+              echo "INGRESS_PROBE_404_BODY=unclassified"
+            fi
+
+            LOCAL_TLS_STATUS="$(curl -k -sS --resolve "$HOST_NAME:443:127.0.0.1" -o /dev/null --max-time 5 -w '%{http_code}' "https://$HOST_NAME/api/health" 2>/dev/null || true)"
+            echo "INGRESS_PROBE_LOCAL_TLS_STATUS=${LOCAL_TLS_STATUS:-request-failed}"
+
+            PORT_443_LINE="$(sudo -n ss -ltnp 2>/dev/null | awk '$4 ~ /:443$/ { print; exit }' || true)"
+            if [ -n "$PORT_443_LINE" ]; then
+              PORT_443_PID="$(printf '%s' "$PORT_443_LINE" | sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p' | head -n 1)"
+              PORT_443_COMM="$(sudo -n ps -o comm= -p "$PORT_443_PID" 2>/dev/null | awk 'NF {print $1; exit}' || true)"
+              if [ "$PORT_443_COMM" = "nginx" ]; then
+                echo "INGRESS_PROBE_LOCAL_443=nginx"
+              elif [ -n "$PORT_443_COMM" ]; then
+                echo "INGRESS_PROBE_LOCAL_443=other"
+              else
+                echo "INGRESS_PROBE_LOCAL_443=unknown"
+              fi
+            else
+              echo "INGRESS_PROBE_LOCAL_443=absent"
+            fi
+
+            rm -f /tmp/evidence-public-root /tmp/evidence-public-headers /tmp/evidence-public-body /tmp/bloom-public-headers /tmp/bloom-public-body
