@@ -1,4 +1,4 @@
-name: Evidence Vault Bootstrap
+name: Evidence Vault HTTPS Bootstrap
 
 on:
   push:
@@ -9,9 +9,9 @@ permissions:
   contents: read
 
 jobs:
-  bootstrap:
+  https-bootstrap:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
       - name: Require authorized SSH secret
         env:
@@ -19,108 +19,78 @@ jobs:
         shell: bash
         run: |
           if [[ -z "$SSH_PASSWORD" ]]; then
-            echo "BOOTSTRAP_SSH=unavailable"
+            echo "HTTPS_BOOTSTRAP_SSH=unavailable"
             exit 1
           fi
-          echo "BOOTSTRAP_SSH=available"
+          echo "HTTPS_BOOTSTRAP_SSH=available"
 
-      - name: Bootstrap PostgreSQL and Evidence Vault runtime
+      - name: Configure Nginx and TLS for Evidence Vault
         uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262
         with:
           host: ssh.gsmsv.site
           port: 24136
           username: ubuntu
           password: ${{ secrets.SSH_PASSWORD }}
-          command_timeout: 25m
+          command_timeout: 15m
           script_stop: false
           script: |
             set -eu
-            TARGET_SHA="0ddff8f5734928b5b275ff27aeda41fe8aea5430"
             APP_DIR="/home/ubuntu/evidence-vault"
-            ENV_FILE="$APP_DIR/.env.production"
-            DB_ROLE="evidence_vault_preview"
-            DB_NAME="evidence_vault_preview"
+            DOMAIN="evidence-vault.https.gsmsv.site"
+            SITE="evidence-vault-preview"
 
-            echo "BOOTSTRAP_HOST_REACHED=yes"
-            echo "BOOTSTRAP_TARGET_SHA=$TARGET_SHA"
+            echo "HTTPS_BOOTSTRAP_HOST_REACHED=yes"
 
-            if ! command -v psql >/dev/null 2>&1; then
-              echo "BOOTSTRAP_POSTGRES_INSTALL=required"
-              sudo apt-get update -y
-              sudo DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql postgresql-client
-            else
-              echo "BOOTSTRAP_POSTGRES_INSTALL=already-present"
-            fi
-
-            sudo systemctl enable --now postgresql >/dev/null
-            cd /tmp
-            sudo -u postgres pg_isready -q
-            echo "BOOTSTRAP_POSTGRES=ready"
-
-            if test ! -d "$APP_DIR/.git"; then
-              git clone https://github.com/BloomBouquet/evidence-vault.git "$APP_DIR" >/dev/null 2>&1
-              echo "BOOTSTRAP_REPOSITORY=cloned"
-            else
-              echo "BOOTSTRAP_REPOSITORY=preserved"
-            fi
-
-            git -C "$APP_DIR" fetch origin develop >/dev/null 2>&1
-            git -C "$APP_DIR" cat-file -e "${TARGET_SHA}^{commit}"
-            git -C "$APP_DIR" merge-base --is-ancestor "$TARGET_SHA" origin/develop
-            git -C "$APP_DIR" checkout -B develop origin/develop >/dev/null 2>&1
-            git -C "$APP_DIR" reset --hard "$TARGET_SHA" >/dev/null
-            echo "BOOTSTRAP_REPOSITORY_SHA=$(git -C "$APP_DIR" rev-parse HEAD)"
-
-            if test ! -f "$ENV_FILE"; then
-              DB_PASSWORD="$(openssl rand -hex 32)"
-              SESSION_SECRET="$(openssl rand -hex 48)"
-
-              cd /tmp
-              if sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='$DB_ROLE'" | grep -q 1; then
-                printf "ALTER ROLE %s WITH LOGIN PASSWORD '%s';\n" "$DB_ROLE" "$DB_PASSWORD" | sudo -u postgres psql -v ON_ERROR_STOP=1 >/dev/null
-                echo "BOOTSTRAP_DB_ROLE=rotated-dedicated-role"
-              else
-                printf "CREATE ROLE %s WITH LOGIN PASSWORD '%s';\n" "$DB_ROLE" "$DB_PASSWORD" | sudo -u postgres psql -v ON_ERROR_STOP=1 >/dev/null
-                echo "BOOTSTRAP_DB_ROLE=created"
-              fi
-
-              if sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'" | grep -q 1; then
-                printf "ALTER DATABASE %s OWNER TO %s;\n" "$DB_NAME" "$DB_ROLE" | sudo -u postgres psql -v ON_ERROR_STOP=1 >/dev/null
-                echo "BOOTSTRAP_DATABASE=preserved"
-              else
-                sudo -u postgres createdb --owner="$DB_ROLE" "$DB_NAME"
-                echo "BOOTSTRAP_DATABASE=created"
-              fi
-
-              umask 077
-              cat > "$ENV_FILE" <<EOF
-            NODE_ENV=production
-            PORT=3011
-            APP_BASE_URL=https://evidence-vault.https.gsmsv.site
-            DATABASE_URL=postgresql://$DB_ROLE:$DB_PASSWORD@127.0.0.1:5432/$DB_NAME
-            SESSION_SECRET=$SESSION_SECRET
-            BOUQUET_BASE_URL=https://playground.https.gsmsv.site
-            BOUQUET_CLIENT_ID=evidence-vault-preview-bootstrap
-            BOUQUET_REDIRECT_URI=https://evidence-vault.https.gsmsv.site/auth/bouquet/callback
-            EOF
-              chmod 600 "$ENV_FILE"
-              echo "BOOTSTRAP_ENVIRONMENT=created"
-            else
-              echo "BOOTSTRAP_ENVIRONMENT=preserved"
-            fi
-
-            test "$(stat -c '%a' "$ENV_FILE")" = "600"
-            echo "BOOTSTRAP_ENV_MODE=600"
-
-            cd "$APP_DIR"
-            bash scripts/deploy-preview.sh "$TARGET_SHA"
-
-            PM2_PID="$(pm2 pid evidence-vault-preview 2>/dev/null | awk 'NF && $1 != 0 { print $1; exit }')"
-            test -n "$PM2_PID"
-            echo "BOOTSTRAP_PM2=online"
+            test -d "$APP_DIR/.git"
+            test "$(git -C "$APP_DIR" rev-parse HEAD)" = "0ddff8f5734928b5b275ff27aeda41fe8aea5430"
+            test -f "$APP_DIR/.env.production"
+            test "$(stat -c '%a' "$APP_DIR/.env.production")" = "600"
 
             BODY="$(curl -fsS --max-time 5 http://127.0.0.1:3011/api/health)"
             printf '%s' "$BODY" | grep -q '"ok":true'
             printf '%s' "$BODY" | grep -q '"service":"evidence-vault"'
-            echo "BOOTSTRAP_LOOPBACK_HEALTH=ok"
-            echo "BOOTSTRAP_STAGE_A_COMPLETE=yes"
+            echo "HTTPS_BOOTSTRAP_LOOPBACK_HEALTH=ok"
+
+            sudo install -m 0644 "$APP_DIR/deploy/nginx/evidence-vault-preview.conf.template" "/etc/nginx/sites-available/$SITE"
+            sudo ln -sfn "/etc/nginx/sites-available/$SITE" "/etc/nginx/sites-enabled/$SITE"
+            sudo nginx -t >/dev/null
+            sudo systemctl reload nginx
+            echo "HTTPS_BOOTSTRAP_NGINX_HTTP=ready"
+
+            HTTP_BODY="$(curl -fsS --max-time 7 "http://$DOMAIN/api/health")"
+            printf '%s' "$HTTP_BODY" | grep -q '"ok":true'
+            printf '%s' "$HTTP_BODY" | grep -q '"service":"evidence-vault"'
+            echo "HTTPS_BOOTSTRAP_PUBLIC_HTTP=ok"
+
+            sudo certbot --nginx \
+              --non-interactive \
+              --agree-tos \
+              --register-unsafely-without-email \
+              --redirect \
+              -d "$DOMAIN" >/dev/null
+
+            sudo nginx -t >/dev/null
+            sudo systemctl reload nginx
+            echo "HTTPS_BOOTSTRAP_TLS_CONFIG=ready"
+
+            echo | openssl s_client -connect "$DOMAIN:443" -servername "$DOMAIN" 2>/dev/null \
+              | openssl x509 -noout -ext subjectAltName 2>/dev/null \
+              | grep -Fq "DNS:$DOMAIN"
+            echo "HTTPS_BOOTSTRAP_CERT_COVERAGE=ok"
+
+            HTTPS_BODY="$(curl -fsS --max-time 7 "https://$DOMAIN/api/health")"
+            printf '%s' "$HTTPS_BODY" | grep -q '"ok":true'
+            printf '%s' "$HTTPS_BODY" | grep -q '"service":"evidence-vault"'
+            echo "HTTPS_BOOTSTRAP_PUBLIC_HEALTH=ok"
+
+            ROOT_STATUS="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 7 "https://$DOMAIN/")"
+            test "$ROOT_STATUS" = "200"
+            echo "HTTPS_BOOTSTRAP_ANONYMOUS_ROOT=ok"
+
+            AUTH_STATUS="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 7 "https://$DOMAIN/auth/bouquet/start")"
+            case "$AUTH_STATUS" in
+              301|302|303|307|308) echo "HTTPS_BOOTSTRAP_OAUTH_START=redirect" ;;
+              *) echo "unexpected OAuth start status: $AUTH_STATUS" >&2; exit 1 ;;
+            esac
+
+            echo "HTTPS_BOOTSTRAP_STAGE_B_COMPLETE=yes"
