@@ -1,0 +1,128 @@
+name: Deploy BloomBouquet App Gateway
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: probe or deploy
+        required: true
+        type: choice
+        options:
+          - probe
+          - deploy
+
+permissions:
+  contents: read
+
+jobs:
+  gateway:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Require deploy credential
+        if: ${{ inputs.mode == 'deploy' }}
+        env:
+          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+        run: |
+          test -n "$SSH_PASSWORD" || { echo "SSH_PASSWORD is required for deploy" >&2; exit 1; }
+
+      - name: Package committed gateway config
+        if: ${{ inputs.mode == 'deploy' }}
+        run: |
+          CONFIG_B64="$(base64 -w 0 deploy/nginx/bloombouquet.conf)"
+          CONFIG_SHA256="$(sha256sum deploy/nginx/bloombouquet.conf | awk '{print $1}')"
+          echo "GATEWAY_CONFIG_B64=$CONFIG_B64" >> "$GITHUB_ENV"
+          echo "GATEWAY_CONFIG_SHA256=$CONFIG_SHA256" >> "$GITHUB_ENV"
+
+      - name: Probe or deploy BloomBouquet gateway
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262
+        env:
+          MODE: ${{ inputs.mode }}
+          GATEWAY_CONFIG_B64: ${{ env.GATEWAY_CONFIG_B64 }}
+          GATEWAY_CONFIG_SHA256: ${{ env.GATEWAY_CONFIG_SHA256 }}
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          envs: MODE,GATEWAY_CONFIG_B64,GATEWAY_CONFIG_SHA256
+          command_timeout: 10m
+          script: |
+            set -eu
+
+            DOMAIN="bloombouquet.https.gsmsv.site"
+            ROOT_LOCAL="http://127.0.0.1:3000/"
+            EVIDENCE_HEALTH_LOCAL="http://127.0.0.1:3011/apps/evidence-vault/api/health"
+            ROOT_PUBLIC="https://${DOMAIN}/"
+            EVIDENCE_HEALTH_PUBLIC="https://${DOMAIN}/apps/evidence-vault/api/health"
+
+            fail() {
+              echo "BloomBouquet gateway: $1" >&2
+              exit 1
+            }
+
+            verify_local_upstreams() {
+              curl -fsS --max-time 5 "$ROOT_LOCAL" | grep -q '<title>BloomBouquet</title>' || fail "BloomBouquet root upstream is not ready"
+              curl -fsS --max-time 5 "$EVIDENCE_HEALTH_LOCAL" | grep -q '"ok":true' || fail "Evidence Vault path health is not ready"
+            }
+
+            resolve_enabled_gateway() {
+              MATCHES="$(grep -lE 'server_name[[:space:]]+bloombouquet\.https\.gsmsv\.site([[:space:];]|$)' /etc/nginx/sites-enabled/* 2>/dev/null || true)"
+              MATCH_COUNT="$(printf '%s\n' "$MATCHES" | awk 'NF { count++ } END { print count + 0 }')"
+              [ "$MATCH_COUNT" -eq 1 ] || fail "expected exactly one enabled BloomBouquet Nginx config, found $MATCH_COUNT"
+              ENABLED_CONFIG="$(printf '%s\n' "$MATCHES" | awk 'NF { print; exit }')"
+              TARGET_CONFIG="$(readlink -f "$ENABLED_CONFIG")"
+              [ -n "$TARGET_CONFIG" ] && [ -f "$TARGET_CONFIG" ] || fail "enabled BloomBouquet Nginx target cannot be resolved"
+              echo "Enabled gateway: $ENABLED_CONFIG -> $TARGET_CONFIG"
+            }
+
+            verify_public_routes() {
+              curl -fsS --max-time 10 "$ROOT_PUBLIC" | grep -q '<title>BloomBouquet</title>' || return 1
+              curl -fsS --max-time 10 "$EVIDENCE_HEALTH_PUBLIC" | grep -q '"ok":true' || return 1
+            }
+
+            verify_local_upstreams
+            resolve_enabled_gateway
+
+            if [ "$MODE" = "probe" ]; then
+              sudo nginx -t
+              echo "BloomBouquet gateway probe OK"
+              exit 0
+            fi
+
+            [ "$MODE" = "deploy" ] || fail "mode must be probe or deploy"
+            [ -n "${GATEWAY_CONFIG_B64:-}" ] || fail "committed gateway config payload is missing"
+            [ -n "${GATEWAY_CONFIG_SHA256:-}" ] || fail "committed gateway config digest is missing"
+
+            CANDIDATE="$(mktemp)"
+            BACKUP="$(mktemp)"
+            printf '%s' "$GATEWAY_CONFIG_B64" | base64 -d > "$CANDIDATE" || fail "gateway config payload decode failed"
+            ACTUAL_SHA256="$(sha256sum "$CANDIDATE" | awk '{print $1}')"
+            [ "$ACTUAL_SHA256" = "$GATEWAY_CONFIG_SHA256" ] || fail "gateway config digest mismatch"
+
+            sudo cp -a "$TARGET_CONFIG" "$BACKUP"
+            MUTATED=false
+
+            restore_gateway() {
+              if [ "$MUTATED" = "true" ]; then
+                echo "Restoring previous BloomBouquet Nginx config" >&2
+                sudo cp -a "$BACKUP" "$TARGET_CONFIG" || true
+                sudo nginx -t || true
+                sudo systemctl reload nginx || true
+              fi
+              rm -f "$CANDIDATE" "$BACKUP"
+            }
+            trap restore_gateway EXIT
+
+            sudo install -m 0644 "$CANDIDATE" "$TARGET_CONFIG"
+            MUTATED=true
+            sudo nginx -t || fail "Nginx validation failed; previous config will be restored"
+            sudo systemctl reload nginx || fail "Nginx reload failed; previous config will be restored"
+            verify_public_routes || fail "public route verification failed; previous config will be restored"
+
+            MUTATED=false
+            trap - EXIT
+            rm -f "$CANDIDATE" "$BACKUP"
+            echo "BloomBouquet app gateway deploy OK"
