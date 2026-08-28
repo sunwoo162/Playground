@@ -62,6 +62,21 @@ test('Bouquet auth and Luna handoff use shared editorial surfaces', () => {
   assert.match(luna, /BloomBouquet에 등록하고 평가 시작/);
 });
 
+test('owner management uses a focused rail workspace', () => {
+  const manage = source(paths.manage);
+  assert.match(manage, /bouquet-manage-rail/);
+  assert.match(manage, /bouquet-manage-workspace/);
+  assert.match(manage, /activePanel/);
+  assert.match(manage, /StatusBadge/);
+  assert.doesNotMatch(manage, /aria-label="Project registration stages"/);
+});
+
+test('shared UI keeps accessibility and reduced-motion contracts', () => {
+  const css = source(paths.css);
+  assert.match(css, /prefers-reduced-motion/);
+  assert.match(css, /:focus-visible/);
+});
+
 test('public showcase stays free of management entry points', () => {
   const showcase = source(paths.showcase);
   assert.doesNotMatch(showcase, /\?mode=manage|\?mode=auth/);
