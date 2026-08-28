@@ -48,23 +48,38 @@ public class LunaBloomBouquetRegistrationService {
         BloomBouquetDto.TeamResponse team = bloomBouquetService.listTeams(ownerId).stream()
                 .filter(item -> teamId.equals(item.getSlug()))
                 .findFirst()
+                .map(existing -> {
+                    if (!canonicalTeamName.equals(existing.getName())) {
+                        throw new IllegalArgumentException("같은 Luna team slug에 다른 팀이 이미 등록되어 있습니다.");
+                    }
+                    return existing;
+                })
                 .orElseGet(() -> bloomBouquetService.createTeam(
                         ownerId,
                         new BloomBouquetDto.CreateTeamRequest(canonicalTeamName, teamId)
                 ));
 
         String projectSlug = required(request.getProjectSlug(), "projectSlug", 160);
+        String projectName = required(request.getProjectName(), "projectName", 160);
+        String description = required(request.getDescription(), "description", 4000);
         BloomBouquetDto.ProjectResponse project = ownerProjectQueryService.listProjects(ownerId).stream()
                 .filter(item -> team.getId().equals(item.getTeamId()))
                 .filter(item -> projectSlug.equals(item.getSlug()))
                 .findFirst()
+                .map(existing -> {
+                    if (!projectName.equals(existing.getName())
+                            || !description.equals(existing.getDescription())) {
+                        throw new IllegalArgumentException("같은 project slug에 다른 프로젝트가 이미 등록되어 있습니다.");
+                    }
+                    return existing;
+                })
                 .orElseGet(() -> bloomBouquetService.createProject(
                         ownerId,
                         new BloomBouquetDto.CreateProjectRequest(
                                 team.getId(),
-                                required(request.getProjectName(), "projectName", 160),
+                                projectName,
                                 projectSlug,
-                                required(request.getDescription(), "description", 4000)
+                                description
                         )
                 ));
 
