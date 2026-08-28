@@ -147,6 +147,7 @@ public class BuilderProjectService {
                 .templateId(project.getTemplateId())
                 .repositoryFullName(project.getRepositoryFullName())
                 .previewUrl(project.getPreviewUrl())
+                .bloomBouquetRegistrationUrl(project.getBloomBouquetRegistrationUrl())
                 .createdAt(project.getCreatedAt())
                 .updatedAt(project.getUpdatedAt())
                 .build();
