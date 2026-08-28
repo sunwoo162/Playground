@@ -11,7 +11,7 @@ function source(path) {
   return fs.readFileSync(path, 'utf8');
 }
 
-test('Bloom management surface uses bouquet cookie APIs only', () => {
+test('Bloom management surface uses bouquet cookie APIs only and stays off the public showcase', () => {
   assert.equal(fs.existsSync(managePath), true, 'BouquetManageApp.tsx must exist');
 
   const manage = source(managePath);
@@ -28,7 +28,7 @@ test('Bloom management surface uses bouquet cookie APIs only', () => {
   assert.match(manage, /evaluationStatus\s*!==\s*['"]QUEUED['"]/);
   assert.doesNotMatch(manage, /\/internal\/builder\/worker\//);
   assert.doesNotMatch(manage, /\blocalStorage\b|\bsessionStorage\b/);
-  assert.match(showcase, /\?mode=manage/);
+  assert.doesNotMatch(showcase, /\?mode=manage/);
 });
 
 test('Bloom auth return target is symbolic and allowlisted', () => {

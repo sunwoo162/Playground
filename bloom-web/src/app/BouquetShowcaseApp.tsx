@@ -144,15 +144,11 @@ export default function BouquetShowcaseApp() {
         </div>
       </header>
 
-      <section className="bouquet-auth-note" aria-label="Authentication policy">
+      <section className="bouquet-auth-note" aria-label="Project authentication policy">
         <span className="bouquet-auth-mark">✿</span>
         <div className="bouquet-auth-copy">
-          <strong>꽃다발 공통 인증</strong>
-          <p>회원가입/로그인이 필요한 모든 프로젝트는 동일한 꽃다발 인증 정책을 사용합니다.</p>
-        </div>
-        <div className="bouquet-showcase-actions">
-          <a className="bouquet-login-link" href="?mode=manage">프로젝트 관리</a>
-          <a className="bouquet-login-link" href="?mode=auth">꽃다발 로그인</a>
+          <strong>로그인은 각 프로젝트에서 시작합니다</strong>
+          <p>필요한 프로젝트만 꽃다발 공통 인증을 사용합니다.</p>
         </div>
       </section>
 
@@ -191,12 +187,12 @@ export default function BouquetShowcaseApp() {
               <div className="bouquet-meta">
                 <span>{stars(submission?.overallStars ?? null)}</span>
                 <span>{submission ? `v${submission.version}` : '버전 없음'}</span>
-                {submission?.requiresAuth && <span className="bouquet-auth-chip">꽃다발 로그인</span>}
+                {submission?.requiresAuth && <span className="bouquet-auth-chip">꽃다발 인증</span>}
               </div>
 
               <div className="bouquet-card-actions">
                 {submission?.demoUrl && (
-                  <a href={submission.demoUrl} target="_blank" rel="noreferrer">프로젝트 열기 ↗</a>
+                  <a href={submission.demoUrl}>프로젝트 열기 →</a>
                 )}
                 {submission?.evaluationRunId && (
                   <button type="button" disabled={reportLoading} onClick={() => openReport(submission.evaluationRunId!)}>
