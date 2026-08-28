@@ -1,4 +1,4 @@
-name: Evidence Vault ACME Diagnose
+name: Evidence Vault Proxy Boundary Diagnose
 
 on:
   push:
@@ -19,12 +19,12 @@ jobs:
         shell: bash
         run: |
           if [[ -z "$SSH_PASSWORD" ]]; then
-            echo "ACME_DIAG_SSH=unavailable"
+            echo "PROXY_DIAG_SSH=unavailable"
             exit 1
           fi
-          echo "ACME_DIAG_SSH=available"
+          echo "PROXY_DIAG_SSH=available"
 
-      - name: Diagnose ACME routing read-only
+      - name: Diagnose server/public boundary read-only
         uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262
         with:
           host: ssh.gsmsv.site
@@ -36,32 +36,44 @@ jobs:
             set -eu
             DOMAIN="evidence-vault.https.gsmsv.site"
 
-            echo "ACME_DIAG_HOST_REACHED=yes"
-            echo "ACME_DIAG_DNS_V4=$(getent ahostsv4 "$DOMAIN" | awk 'NR==1 {print $1}')"
+            DNS_V4="$(getent ahostsv4 "$DOMAIN" | awk 'NR==1 {print $1}')"
+            SSH_DNS_V4="$(getent ahostsv4 ssh.gsmsv.site | awk 'NR==1 {print $1}')"
+            PUBLIC_V4="$(curl -4fsS --max-time 7 https://api.ipify.org 2>/dev/null || true)"
+            echo "PROXY_DIAG_DOMAIN_DNS_V4=$DNS_V4"
+            echo "PROXY_DIAG_SSH_DNS_V4=$SSH_DNS_V4"
+            echo "PROXY_DIAG_SERVER_PUBLIC_V4=${PUBLIC_V4:-unknown}"
 
-            LOCAL_STATUS="$(curl -sS -o /dev/null -w '%{http_code}' --resolve "$DOMAIN:80:127.0.0.1" "http://$DOMAIN/.well-known/acme-challenge/probe")"
-            echo "ACME_DIAG_LOCAL_HTTP_STATUS=$LOCAL_STATUS"
+            if test -n "$PUBLIC_V4" && test "$DNS_V4" = "$PUBLIC_V4"; then
+              echo "PROXY_DIAG_DOMAIN_POINTS_DIRECTLY=yes"
+            else
+              echo "PROXY_DIAG_DOMAIN_POINTS_DIRECTLY=no"
+            fi
 
-            EXTERNAL_STATUS="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 7 "http://$DOMAIN/.well-known/acme-challenge/probe" || true)"
-            echo "ACME_DIAG_EXTERNAL_HTTP_STATUS=${EXTERNAL_STATUS:-000}"
+            echo "PROXY_DIAG_LISTEN_80=$(ss -ltn 2>/dev/null | awk '$4 ~ /:80$/ {count++} END {print count+0}')"
+            echo "PROXY_DIAG_LISTEN_443=$(ss -ltn 2>/dev/null | awk '$4 ~ /:443$/ {count++} END {print count+0}')"
 
-            REDIRECT_TARGET="$(curl -sSI --max-time 7 "http://$DOMAIN/.well-known/acme-challenge/probe" 2>/dev/null | awk 'BEGIN{IGNORECASE=1} /^location:/ {sub(/\r$/, ""); print $2; exit}' || true)"
-            case "$REDIRECT_TARGET" in
-              https://$DOMAIN/*) echo "ACME_DIAG_EXTERNAL_REDIRECT=https-same-host" ;;
-              "") echo "ACME_DIAG_EXTERNAL_REDIRECT=none" ;;
-              *) echo "ACME_DIAG_EXTERNAL_REDIRECT=other" ;;
-            esac
+            if sudo -n nginx -T >/tmp/evidence-vault-proxy-diag.txt 2>/dev/null; then
+              if grep -Eq 'return[[:space:]]+30[178]' /tmp/evidence-vault-proxy-diag.txt; then
+                echo "PROXY_DIAG_LOCAL_NGINX_HAS_REDIRECT=yes"
+              else
+                echo "PROXY_DIAG_LOCAL_NGINX_HAS_REDIRECT=no"
+              fi
+              grep -Fq 'server_name evidence-vault.https.gsmsv.site' /tmp/evidence-vault-proxy-diag.txt \
+                && echo "PROXY_DIAG_LOCAL_SITE_PRESENT=yes" \
+                || echo "PROXY_DIAG_LOCAL_SITE_PRESENT=no"
+              rm -f /tmp/evidence-vault-proxy-diag.txt
+            fi
 
-            echo "ACME_DIAG_CERTBOT_ERRORS_BEGIN"
-            sudo grep -E 'unauthorized|Invalid response|Detail:|Type:|Domain:|challenge|Connection refused|Timeout' /var/log/letsencrypt/letsencrypt.log 2>/dev/null | tail -n 40 || true
-            echo "ACME_DIAG_CERTBOT_ERRORS_END"
-
-      - name: Diagnose public routing from runner
+      - name: Diagnose public certificate from runner
         shell: bash
         run: |
           set -euo pipefail
           DOMAIN="evidence-vault.https.gsmsv.site"
-          HTTP_STATUS="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "http://$DOMAIN/.well-known/acme-challenge/probe" || true)"
-          HTTPS_STATUS="$(curl -ksS -o /dev/null -w '%{http_code}' --max-time 10 "https://$DOMAIN/.well-known/acme-challenge/probe" || true)"
-          echo "ACME_DIAG_RUNNER_HTTP_STATUS=${HTTP_STATUS:-000}"
-          echo "ACME_DIAG_RUNNER_HTTPS_STATUS=${HTTPS_STATUS:-000}"
+          CERT_SUMMARY="$(echo | openssl s_client -connect "$DOMAIN:443" -servername "$DOMAIN" 2>/dev/null | openssl x509 -noout -subject -issuer 2>/dev/null || true)"
+          if [[ -n "$CERT_SUMMARY" ]]; then
+            echo "PROXY_DIAG_PUBLIC_TLS_CERT=present"
+          else
+            echo "PROXY_DIAG_PUBLIC_TLS_CERT=missing"
+          fi
+          HTTPS_STATUS="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "https://$DOMAIN/" || true)"
+          echo "PROXY_DIAG_PUBLIC_HTTPS_STATUS=${HTTPS_STATUS:-000}"
