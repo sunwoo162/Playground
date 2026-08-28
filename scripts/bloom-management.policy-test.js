@@ -47,6 +47,8 @@ test('Luna handoff renders a one-click owner confirmation instead of the three-s
   assert.match(luna, /BloomBouquet에 등록하고 평가 시작/);
   assert.match(luna, /직접 수정해서 등록/);
   assert.match(luna, /credentials:\s*['"]include['"]/);
+  assert.match(luna, /evaluationRunId\s*==\s*null\s*\|\|\s*!body\.submission\.evaluationStatus/);
+  assert.doesNotMatch(luna, /evaluationStatus\s*!==\s*['"]QUEUED['"]/);
   assert.match(parser, /schemaVersion\s*!==\s*1/);
   assert.doesNotMatch(luna, /\/internal\/builder\/worker\//);
   assert.doesNotMatch(luna, /\blocalStorage\b|\bsessionStorage\b/);
