@@ -72,6 +72,17 @@ public class BuilderWorkerRunService {
             String repositoryFullName,
             String previewUrl
     ) {
+        return complete(runId, workerId, repositoryFullName, previewUrl, null);
+    }
+
+    @Transactional
+    public BuilderWorkerDto.RunStateResponse complete(
+            Long runId,
+            String workerId,
+            String repositoryFullName,
+            String previewUrl,
+            String bloomBouquetRegistrationUrl
+    ) {
         BuilderProjectRun run = requireLockedRun(runId);
         String worker = requireWorkerId(workerId);
 
@@ -83,11 +94,19 @@ public class BuilderWorkerRunService {
         BuilderProject project = run.getProject();
         String repository = normalizeOptional(repositoryFullName, 120, "저장소 식별자");
         String preview = normalizeOptional(previewUrl, 500, "미리보기 URL");
+        String registrationUrl = normalizeOptional(
+                bloomBouquetRegistrationUrl,
+                6000,
+                "BloomBouquet 등록 URL"
+        );
         if (repository != null) {
             project.setRepositoryFullName(repository);
         }
         if (preview != null) {
             project.setPreviewUrl(preview);
+        }
+        if (registrationUrl != null) {
+            project.setBloomBouquetRegistrationUrl(registrationUrl);
         }
 
         LocalDateTime now = LocalDateTime.now();
