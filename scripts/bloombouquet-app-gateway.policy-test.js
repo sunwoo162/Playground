@@ -43,7 +43,8 @@ test('Beriday deployment is manual-only and targets the fixed production process
   assert.doesNotMatch(workflow, /pull_request:/);
   assert.match(workflow, /\/home\/ubuntu\/bloombouquet\/apps\/beriday/);
   assert.match(workflow, /git reset --hard origin\/main/);
-  assert.match(workflow, /npm ci/);
+  assert.match(workflow, /npm install/);
+  assert.doesNotMatch(workflow, /npm ci/);
   assert.match(workflow, /npm run build/);
   assert.match(workflow, /pm2 serve dist 3012 --spa --name beriday/);
   assert.match(workflow, /http:\/\/127\.0\.0\.1:3012\//);

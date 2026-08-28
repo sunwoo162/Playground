@@ -67,7 +67,7 @@ jobs:
             git clean -fdx
             DEPLOY_SHA="$(git rev-parse HEAD)"
 
-            npm ci
+            npm install
             npm run verify:production-data
             npm run build:runtime-data
             npm run verify:runtime-data
