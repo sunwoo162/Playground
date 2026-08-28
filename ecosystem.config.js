@@ -3,7 +3,6 @@ const path = require('path');
 
 function readEnvFile(filePath) {
   if (!fs.existsSync(filePath)) return {};
-
   return fs.readFileSync(filePath, 'utf8')
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -42,6 +41,7 @@ module.exports = {
         ...backendEnv,
         JWT_SECRET: sharedEnv.JWT_SECRET || backendEnv.JWT_SECRET || '',
         BUILDER_WORKER_TOKEN: workerToken,
+        APP_CORS_ALLOWED_ORIGINS: 'https://bloombouquet.https.gsmsv.site',
         HIBERNATE_DDL_AUTO: 'validate',
         FLYWAY_ENABLED: 'true',
       },
