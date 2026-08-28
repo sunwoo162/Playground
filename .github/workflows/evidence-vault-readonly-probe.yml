@@ -1,4 +1,4 @@
-name: Evidence Vault Route Gate Probe
+name: BloomBouquet Domain Probe
 
 on:
   push:
@@ -13,71 +13,28 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Require authorized SSH secret
-        env:
-          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
-        shell: bash
-        run: |
-          if [[ -z "$SSH_PASSWORD" ]]; then
-            echo "ROUTE_GATE_SSH=unavailable"
-            exit 1
-          fi
-          echo "ROUTE_GATE_SSH=available"
-
-      - name: Verify inner preview read-only
-        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262
-        with:
-          host: ssh.gsmsv.site
-          port: 24136
-          username: ubuntu
-          password: ${{ secrets.SSH_PASSWORD }}
-          script_stop: false
-          script: |
-            set -eu
-            APP_DIR="/home/ubuntu/evidence-vault"
-            DOMAIN="evidence-vault.https.gsmsv.site"
-
-            test "$(git -C "$APP_DIR" rev-parse HEAD)" = "0ddff8f5734928b5b275ff27aeda41fe8aea5430"
-            echo "ROUTE_GATE_SHA=verified"
-
-            test "$(stat -c '%a' "$APP_DIR/.env.production")" = "600"
-            echo "ROUTE_GATE_ENV_MODE=600"
-
-            systemctl is-active --quiet postgresql
-            echo "ROUTE_GATE_POSTGRES=active"
-
-            PM2_PID="$(pm2 pid evidence-vault-preview 2>/dev/null | awk 'NF && $1 != 0 { print $1; exit }')"
-            test -n "$PM2_PID"
-            echo "ROUTE_GATE_PM2=online"
-
-            BODY="$(curl -fsS --max-time 5 http://127.0.0.1:3011/api/health)"
-            printf '%s' "$BODY" | grep -q '"ok":true'
-            printf '%s' "$BODY" | grep -q '"service":"evidence-vault"'
-            echo "ROUTE_GATE_LOOPBACK_3011=ok"
-
-            HOST_BODY="$(curl -fsS --max-time 5 --resolve "$DOMAIN:80:127.0.0.1" "http://$DOMAIN/api/health")"
-            printf '%s' "$HOST_BODY" | grep -q '"ok":true'
-            printf '%s' "$HOST_BODY" | grep -q '"service":"evidence-vault"'
-            echo "ROUTE_GATE_INNER_NGINX_80=ok"
-
-            sudo nginx -t >/dev/null
-            echo "ROUTE_GATE_NGINX_CONFIG=valid"
-
-      - name: Report public gateway route state
+      - name: Verify replacement domain from runner
         shell: bash
         run: |
           set -euo pipefail
-          DOMAIN="evidence-vault.https.gsmsv.site"
+          NEW_DOMAIN="bloombouquet.https.gsmsv.site"
+          OLD_DOMAIN="playground.https.gsmsv.site"
 
-          STATUS="$(curl -sS -o /tmp/ev-public-health -w '%{http_code}' --max-time 10 "https://$DOMAIN/api/health" || true)"
-          if [[ "$STATUS" == "200" ]] && grep -q '"ok":true' /tmp/ev-public-health && grep -q '"service":"evidence-vault"' /tmp/ev-public-health; then
-            echo "ROUTE_GATE_PUBLIC_ROUTE=ready"
-          else
-            echo "ROUTE_GATE_PUBLIC_ROUTE=not-registered"
-            echo "ROUTE_GATE_PUBLIC_STATUS=${STATUS:-000}"
-          fi
-          rm -f /tmp/ev-public-health
+          NEW_ROOT_STATUS="$(curl -sS -o /tmp/new-root -w '%{http_code}' --max-time 10 "https://$NEW_DOMAIN/" || true)"
+          NEW_AUTH_STATUS="$(curl -sS -o /tmp/new-auth -w '%{http_code}' --max-time 10 "https://$NEW_DOMAIN/api/bouquet/auth/me" || true)"
+          OLD_ROOT_STATUS="$(curl -sS -o /tmp/old-root -w '%{http_code}' --max-time 10 "https://$OLD_DOMAIN/" || true)"
 
-          echo "ROUTE_GATE_EXPECTED_SUBDOMAIN=evidence-vault"
-          echo "ROUTE_GATE_EXPECTED_INTERNAL_PORT=80"
-          echo "ROUTE_GATE_MANUAL_OWNER_ACTION=required"
+          echo "DOMAIN_PROBE_NEW_ROOT_STATUS=${NEW_ROOT_STATUS:-000}"
+          echo "DOMAIN_PROBE_NEW_AUTH_STATUS=${NEW_AUTH_STATUS:-000}"
+          echo "DOMAIN_PROBE_OLD_ROOT_STATUS=${OLD_ROOT_STATUS:-000}"
+
+          test "$NEW_ROOT_STATUS" = "200"
+          grep -q '<title>BloomBouquet</title>' /tmp/new-root
+          test "$NEW_AUTH_STATUS" = "200"
+          grep -q '"authenticated":false' /tmp/new-auth
+          test "$OLD_ROOT_STATUS" = "200"
+          grep -q '<title>BloomBouquet</title>' /tmp/old-root
+
+          echo "DOMAIN_PROBE_NEW_DOMAIN=ready"
+          echo "DOMAIN_PROBE_OLD_DOMAIN=still-ready"
+          rm -f /tmp/new-root /tmp/new-auth /tmp/old-root
