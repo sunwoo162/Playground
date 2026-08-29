@@ -39,6 +39,10 @@ test('BloomBouquet shares one thin-border editorial visual system', () => {
   assert.match(css, /--bouquet-line:\s*#dfe0e2/i);
   assert.match(css, /--bouquet-accent:\s*#2d5a3d/i);
   assert.match(css, /--bouquet-content:\s*1280px/i);
+  assert.match(css, /bouquet-kicker\s*\{[^}]*font-size:\s*11px/s);
+  assert.match(css, /bouquet-metric span\s*\{[^}]*font-size:\s*10px/s);
+  assert.match(css, /bouquet-status-badge\s*\{[^}]*font-size:\s*10px/s);
+  assert.match(css, /bouquet-score-badge span\s*\{[^}]*font-size:\s*10px/s);
   assert.match(showcase, /ProjectVisual/);
   assert.match(auth, /BouquetWordmark/);
   assert.match(luna, /Surface/);
