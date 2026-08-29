@@ -5,7 +5,7 @@
   background: #fff;
 }
 
-.bouquet-showcase-shell { padding: 0 24px 96px; }
+.bouquet-showcase-shell { padding: 0 32px 88px; }
 .bouquet-showcase-header {
   width: min(var(--bouquet-content), 100%);
   margin: 0 auto;
@@ -21,23 +21,23 @@
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 48px;
   align-items: end;
-  padding: clamp(54px, 8vw, 108px) 0 44px;
+  padding: clamp(64px, 7vw, 84px) 0 38px;
   border-bottom: 1px solid var(--bouquet-line);
 }
 .bouquet-showcase-intro h1 {
   max-width: 920px;
   margin: 12px 0 0;
-  font-size: clamp(46px, 6.4vw, 86px);
-  line-height: .96;
-  letter-spacing: -.068em;
+  font-size: clamp(44px, 5.4vw, 72px);
+  line-height: 1.02;
+  letter-spacing: -.04em;
   font-weight: 650;
 }
 .bouquet-showcase-copy {
-  max-width: 680px;
+  max-width: 620px;
   margin: 22px 0 0;
   color: var(--bouquet-muted);
-  font-size: 14px;
-  line-height: 1.8;
+  font-size: 16px;
+  line-height: 1.7;
 }
 .bouquet-showcase-metrics {
   display: grid;
@@ -68,7 +68,7 @@
   border-bottom: 2px solid transparent;
   background: transparent;
   color: var(--bouquet-subtle);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 750;
   letter-spacing: .08em;
   cursor: pointer;
@@ -82,7 +82,7 @@
   margin: 0 auto;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 34px 20px;
+  gap: 36px 28px;
 }
 .bouquet-project-gallery > .bouquet-skeleton { aspect-ratio: 16 / 13; min-height: 0; }
 .bouquet-project-card {
@@ -121,16 +121,16 @@
 .bouquet-project-heading p {
   margin: 8px 0 0;
   color: var(--bouquet-muted);
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.65;
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.bouquet-project-card .bouquet-score-badge strong { font-size: 30px; }
+.bouquet-project-card .bouquet-score-badge strong { font-size: 28px; }
 .bouquet-project-meta { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 18px; }
-.bouquet-project-meta span { color: var(--bouquet-subtle); font-size: 10px; font-weight: 650; }
+.bouquet-project-meta span { color: var(--bouquet-subtle); font-size: 11px; font-weight: 650; }
 .bouquet-project-live-link {
   min-height: 40px;
   display: flex;
@@ -256,7 +256,7 @@
   .bouquet-showcase-shell { padding: 0 14px 64px; }
   .bouquet-showcase-nav { height: 56px; }
   .bouquet-showcase-hero { padding: 52px 0 30px; }
-  .bouquet-showcase-intro h1 { font-size: clamp(42px, 13vw, 64px); }
+  .bouquet-showcase-intro h1 { font-size: clamp(38px, 11vw, 48px); }
   .bouquet-showcase-controls { align-items: stretch; flex-direction: column; padding: 10px 0; }
   .bouquet-project-gallery { grid-template-columns: 1fr; gap: 28px; }
   .bouquet-project-heading { grid-template-columns: 1fr; }
