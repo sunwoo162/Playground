@@ -6,6 +6,9 @@ const paths = {
   ui: 'bloom-web/src/app/BouquetUI.tsx',
   css: 'bloom-web/src/app/bouquet-system.css',
   showcaseCss: 'bloom-web/src/app/bouquet-showcase.css',
+  authCss: 'bloom-web/src/app/bouquet-auth.css',
+  lunaCss: 'bloom-web/src/app/luna-bouquet-register.css',
+  manageCss: 'bloom-web/src/app/bouquet-manage.css',
   showcase: 'bloom-web/src/app/BouquetShowcaseApp.tsx',
   detail: 'bloom-web/src/app/BouquetProjectDetailApp.tsx',
   report: 'bloom-web/src/app/BouquetEvaluationReportApp.tsx',
@@ -66,14 +69,21 @@ test('public showcase is a real project gallery with dedicated detail and agent 
 test('Bouquet auth and Luna handoff use the transplanted editorial surfaces', () => {
   const auth = source(paths.auth);
   const luna = source(paths.luna);
+  const authCss = source(paths.authCss);
+  const lunaCss = source(paths.lunaCss);
+
   assert.match(auth, /bouquet-auth-editorial/);
   assert.match(auth, /Field/);
   assert.match(luna, /bouquet-luna-editorial/);
   assert.match(luna, /BloomBouquet에 등록하고 평가 시작/);
+  assert.doesNotMatch(authCss, /radial-gradient|border-radius:\s*999px/i);
+  assert.doesNotMatch(lunaCss, /rgba\(23,\s*21,\s*24,\s*\.045\)|box-shadow:/i);
 });
 
 test('owner management is a dense editorial console while retaining manual fallback flows', () => {
   const manage = source(paths.manage);
+  const manageCss = source(paths.manageCss);
+
   assert.match(manage, /bouquet-console-editorial/);
   assert.match(manage, /bouquet-console-project-row/);
   assert.match(manage, /activePanel/);
@@ -82,6 +92,8 @@ test('owner management is a dense editorial console while retaining manual fallb
   assert.match(manage, /publishSubmission/);
   assert.match(manage, /StatusBadge/);
   assert.doesNotMatch(manage, /aria-label="Project registration stages"/);
+  assert.doesNotMatch(manageCss, /radial-gradient|box-shadow:\s*var\(--bouquet-shadow\)/i);
+  assert.match(manageCss, /bouquet-console-project-row/);
 });
 
 test('shared UI keeps accessibility and reduced-motion contracts', () => {
