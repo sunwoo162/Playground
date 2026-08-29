@@ -38,11 +38,30 @@ test('BloomBouquet shares one thin-border editorial visual system', () => {
   assert.match(css, /--bouquet-bg:\s*#fff/i);
   assert.match(css, /--bouquet-line:\s*#dfe0e2/i);
   assert.match(css, /--bouquet-accent:\s*#2d5a3d/i);
-  assert.match(css, /--bouquet-content:\s*1320px/i);
+  assert.match(css, /--bouquet-content:\s*1280px/i);
+  assert.match(css, /bouquet-kicker\s*\{[^}]*font-size:\s*11px/s);
+  assert.match(css, /bouquet-metric span\s*\{[^}]*font-size:\s*10px/s);
+  assert.match(css, /bouquet-status-badge\s*\{[^}]*font-size:\s*10px/s);
+  assert.match(css, /bouquet-score-badge span\s*\{[^}]*font-size:\s*10px/s);
   assert.match(showcase, /ProjectVisual/);
   assert.match(auth, /BouquetWordmark/);
   assert.match(luna, /Surface/);
   assert.match(manage, /StatusBadge/);
+});
+
+test('public showcase uses a balanced product-site typography and layout scale', () => {
+  const css = source(paths.showcaseCss);
+
+  assert.match(css, /bouquet-showcase-shell\s*\{[^}]*padding:\s*0 32px 88px/s);
+  assert.match(css, /bouquet-showcase-hero\s*\{[^}]*padding:\s*clamp\(64px,\s*7vw,\s*84px\) 0 38px/s);
+  assert.match(css, /bouquet-showcase-intro h1\s*\{[^}]*font-size:\s*clamp\(44px,\s*5\.4vw,\s*72px\)[^}]*line-height:\s*1\.02[^}]*letter-spacing:\s*-\.04em/s);
+  assert.match(css, /bouquet-showcase-copy\s*\{[^}]*max-width:\s*620px[^}]*font-size:\s*16px[^}]*line-height:\s*1\.7/s);
+  assert.match(css, /bouquet-team-filter button,[\s\S]*?font-size:\s*11px/s);
+  assert.match(css, /bouquet-project-gallery\s*\{[^}]*gap:\s*36px 28px/s);
+  assert.match(css, /bouquet-project-heading p\s*\{[^}]*font-size:\s*14px[^}]*line-height:\s*1\.65/s);
+  assert.match(css, /bouquet-project-meta span\s*\{[^}]*font-size:\s*11px/s);
+  assert.match(css, /bouquet-project-card \.bouquet-score-badge strong\s*\{\s*font-size:\s*28px/s);
+  assert.match(css, /@media \(max-width:\s*700px\)[\s\S]*?bouquet-showcase-intro h1\s*\{\s*font-size:\s*clamp\(38px,\s*11vw,\s*48px\)/s);
 });
 
 test('public showcase is a real project gallery with dedicated detail and agent report views', () => {

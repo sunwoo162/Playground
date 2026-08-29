@@ -20,7 +20,7 @@
   --bouquet-radius-sm: 2px;
   --bouquet-radius-md: 4px;
   --bouquet-radius-lg: 6px;
-  --bouquet-content: 1320px;
+  --bouquet-content: 1280px;
 }
 
 * { box-sizing: border-box; }
@@ -68,7 +68,7 @@ button, a, input, textarea, select { -webkit-tap-highlight-color: transparent; }
 .bouquet-kicker {
   margin: 0;
   color: var(--bouquet-accent);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 750;
   letter-spacing: .15em;
   text-transform: uppercase;
@@ -76,7 +76,7 @@ button, a, input, textarea, select { -webkit-tap-highlight-color: transparent; }
 
 .bouquet-metric { display: grid; gap: 3px; min-width: 68px; }
 .bouquet-metric strong { font-size: 23px; line-height: 1; font-weight: 650; letter-spacing: -.04em; }
-.bouquet-metric span { color: var(--bouquet-subtle); font-size: 9px; font-weight: 700; letter-spacing: .11em; text-transform: uppercase; }
+.bouquet-metric span { color: var(--bouquet-subtle); font-size: 10px; font-weight: 700; letter-spacing: .11em; text-transform: uppercase; }
 
 .bouquet-status-badge {
   min-height: 24px;
@@ -87,7 +87,7 @@ button, a, input, textarea, select { -webkit-tap-highlight-color: transparent; }
   border-radius: 1px;
   background: var(--bouquet-surface-soft);
   color: var(--bouquet-muted);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 750;
   letter-spacing: .09em;
   text-transform: uppercase;
@@ -99,7 +99,7 @@ button, a, input, textarea, select { -webkit-tap-highlight-color: transparent; }
 
 .bouquet-score-badge { display: grid; gap: 2px; justify-items: end; }
 .bouquet-score-badge strong { font-size: clamp(30px, 4vw, 48px); font-weight: 650; line-height: .9; letter-spacing: -.06em; }
-.bouquet-score-badge span { color: var(--bouquet-subtle); font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.bouquet-score-badge span { color: var(--bouquet-subtle); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 
 .bouquet-action {
   min-height: 40px;
