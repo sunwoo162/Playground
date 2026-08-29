@@ -83,15 +83,23 @@ async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 function errorMessage(reason: unknown) {
-  if (reason instanceof ApiError && reason.message === 'login_required') {
-    return '꽃다발 로그인이 필요합니다.'
-  }
+  if (reason instanceof ApiError && reason.message === 'login_required') return '꽃다발 로그인이 필요합니다.'
   if (reason instanceof Error && reason.message.trim()) return reason.message
   return '요청을 처리하지 못했습니다. 다시 시도해주세요.'
 }
 
+function statusLabel(status: string | null) {
+  switch (status) {
+    case 'COMPLETED': return '평가 완료'
+    case 'RUNNING': return '평가 진행 중'
+    case 'QUEUED': return '평가 대기'
+    case 'FAILED': return '평가 실패'
+    default: return '미등록'
+  }
+}
+
 const PANEL_LABELS: Array<{ id: ManagePanel; number: string; label: string; description: string }> = [
-  { id: 'overview', number: '00', label: 'Overview', description: '현재 등록 상태' },
+  { id: 'overview', number: '00', label: 'Overview', description: '프로젝트 현황' },
   { id: 'team', number: '01', label: 'Team', description: '팀 선택·생성' },
   { id: 'project', number: '02', label: 'Project', description: '프로젝트 선택·생성' },
   { id: 'submission', number: '03', label: 'Submission', description: '배포·평가 등록' },
@@ -126,9 +134,7 @@ export default function BouquetManageApp() {
 
     async function load() {
       try {
-        const sessionResponse = await fetch('/api/bouquet/auth/me', {
-          credentials: 'include',
-        })
+        const sessionResponse = await fetch('/api/bouquet/auth/me', { credentials: 'include' })
         if (!sessionResponse.ok) throw new Error('로그인 상태를 확인하지 못했습니다.')
         const session = await sessionResponse.json() as SessionResponse
         if (cancelled) return
@@ -144,9 +150,7 @@ export default function BouquetManageApp() {
         setProjects(projectList)
         const initialTeamId = teamList[0]?.id ?? null
         setSelectedTeamId(initialTeamId)
-        setSelectedProjectId(
-          projectList.find((project) => project.teamId === initialTeamId)?.id ?? null,
-        )
+        setSelectedProjectId(projectList.find((project) => project.teamId === initialTeamId)?.id ?? null)
       } catch (reason) {
         if (!cancelled) {
           if (reason instanceof ApiError && reason.message === 'login_required') setUser(null)
@@ -165,17 +169,27 @@ export default function BouquetManageApp() {
     () => projects.filter((project) => project.teamId === selectedTeamId),
     [projects, selectedTeamId],
   )
-
   const selectedTeam = teams.find((team) => team.id === selectedTeamId) ?? null
   const selectedProject = projects.find((project) => project.id === selectedProjectId) ?? null
   const latestSubmission = selectedProject?.latestSubmission ?? null
   const reviewedProjects = projects.filter((project) => project.latestSubmission?.evaluationStatus === 'COMPLETED').length
 
   function handleLoginRequired(reason: unknown) {
-    if (reason instanceof ApiError && reason.message === 'login_required') {
-      setUser(null)
-    }
+    if (reason instanceof ApiError && reason.message === 'login_required') setUser(null)
     setError(errorMessage(reason))
+  }
+
+  function selectTeam(teamId: number | null) {
+    setSelectedTeamId(teamId)
+    const nextProject = projects.find((project) => project.teamId === teamId)
+    setSelectedProjectId(nextProject?.id ?? null)
+    setSuccess(null)
+  }
+
+  function selectProject(project: Project) {
+    setSelectedTeamId(project.teamId)
+    setSelectedProjectId(project.id)
+    setSuccess(null)
   }
 
   async function createTeam(event: FormEvent<HTMLFormElement>) {
@@ -186,10 +200,7 @@ export default function BouquetManageApp() {
     try {
       const created = await api<Team>('/api/bloom-bouquet/teams', {
         method: 'POST',
-        body: JSON.stringify({
-          name: teamName.trim(),
-          slug: teamSlug.trim() || null,
-        }),
+        body: JSON.stringify({ name: teamName.trim(), slug: teamSlug.trim() || null }),
       })
       setTeams((current) => [created, ...current])
       setSelectedTeamId(created.id)
@@ -286,16 +297,9 @@ export default function BouquetManageApp() {
     }
   }
 
-  function selectTeam(teamId: number | null) {
-    setSelectedTeamId(teamId)
-    const nextProject = projects.find((project) => project.teamId === teamId)
-    setSelectedProjectId(nextProject?.id ?? null)
-    setSuccess(null)
-  }
-
   if (loading) {
     return (
-      <main className="bouquet-manage-shell">
+      <main className="bouquet-manage-shell bouquet-console-editorial">
         <div className="bouquet-manage-topbar"><BouquetWordmark /></div>
         <div className="bouquet-manage-loading"><span className="bouquet-skeleton" /><p>프로젝트 관리 정보를 불러오는 중...</p></div>
       </main>
@@ -304,7 +308,7 @@ export default function BouquetManageApp() {
 
   if (!user) {
     return (
-      <main className="bouquet-manage-shell">
+      <main className="bouquet-manage-shell bouquet-console-editorial">
         <div className="bouquet-manage-topbar"><BouquetWordmark /></div>
         <Surface className="bouquet-manage-auth-required">
           <p className="bouquet-kicker">PROJECT OWNER ACCESS</p>
@@ -318,20 +322,17 @@ export default function BouquetManageApp() {
   }
 
   return (
-    <main className="bouquet-manage-shell">
+    <main className="bouquet-manage-shell bouquet-console-editorial">
       <div className="bouquet-manage-topbar">
         <BouquetWordmark />
-        <div className="bouquet-manage-account">
-          <span>{user.displayName}</span>
-          <small>{user.email}</small>
-        </div>
+        <div className="bouquet-manage-account"><span>{user.displayName}</span><small>{user.email}</small></div>
       </div>
 
       <header className="bouquet-manage-header">
         <div>
           <p className="bouquet-kicker">PROJECT OWNER CONSOLE</p>
           <h1>프로젝트 관리</h1>
-          <p>Team → Project → Submission 순서의 수동 등록은 필요할 때만 열고, 현재 작업에 집중하세요.</p>
+          <p>Luna 자동 등록을 기본으로 사용하고, Team → Project → Submission 수동 흐름은 필요할 때만 사용합니다.</p>
         </div>
         <div className="bouquet-manage-header-metrics">
           <Metric value={teams.length} label="Teams" />
@@ -394,36 +395,50 @@ export default function BouquetManageApp() {
 
           {activePanel === 'overview' && (
             <div className="bouquet-manage-panel bouquet-manage-overview">
-              <div className="bouquet-manage-panel-heading"><div><p className="bouquet-kicker">OVERVIEW</p><h2>지금 필요한 다음 작업</h2></div><StatusBadge status={latestSubmission?.evaluationStatus ?? null}>{latestSubmission?.evaluationStatus ?? '미등록'}</StatusBadge></div>
+              <div className="bouquet-manage-panel-heading">
+                <div><p className="bouquet-kicker">OVERVIEW</p><h2>프로젝트 현황</h2></div>
+                <StatusBadge status={latestSubmission?.evaluationStatus ?? null}>{statusLabel(latestSubmission?.evaluationStatus ?? null)}</StatusBadge>
+              </div>
+
+              <div className="bouquet-console-project-list" aria-label="프로젝트 목록">
+                <div className="bouquet-console-project-head" aria-hidden="true">
+                  <span>Project</span><span>Visibility</span><span>Version</span><span>Evaluation</span><span>Score</span>
+                </div>
+                {projects.length === 0 && <div className="bouquet-console-project-empty">아직 등록된 프로젝트가 없습니다.</div>}
+                {projects.map((project) => {
+                  const submission = project.latestSubmission
+                  return (
+                    <button
+                      type="button"
+                      className={`bouquet-console-project-row ${project.id === selectedProjectId ? 'is-selected' : ''}`}
+                      key={project.id}
+                      onClick={() => selectProject(project)}
+                    >
+                      <div><span>TEAM {project.teamName}</span><strong>{project.name}</strong></div>
+                      <span>{project.published ? '공개' : '미공개'}</span>
+                      <span>{submission ? `v${submission.version}` : '—'}</span>
+                      <StatusBadge status={submission?.evaluationStatus ?? null}>{statusLabel(submission?.evaluationStatus ?? null)}</StatusBadge>
+                      <strong>{submission?.overallScore ?? '—'}</strong>
+                    </button>
+                  )
+                })}
+              </div>
 
               <div className="bouquet-manage-overview-grid">
                 <Surface className="bouquet-manage-overview-primary">
                   <span>Selected project</span>
                   <h3>{selectedProject?.name ?? '프로젝트를 선택하세요'}</h3>
-                  <p>{selectedProject?.description ?? 'Team과 Project를 선택하면 최신 배포와 평가 상태를 한 번에 볼 수 있습니다.'}</p>
+                  <p>{selectedProject?.description ?? 'Team과 Project를 선택하면 최신 배포와 평가 상태를 확인할 수 있습니다.'}</p>
                   {latestSubmission ? (
-                    <div className="bouquet-manage-overview-meta">
-                      <span>v{latestSubmission.version}</span>
-                      <span>{latestSubmission.demoUrl}</span>
-                    </div>
+                    <div className="bouquet-manage-overview-meta"><span>v{latestSubmission.version}</span><span>{latestSubmission.demoUrl}</span></div>
                   ) : (
                     <PrimaryButton onClick={() => setActivePanel(selectedProject ? 'submission' : selectedTeam ? 'project' : 'team')}>
                       {selectedProject ? 'Submission 등록' : selectedTeam ? 'Project 만들기' : 'Team 만들기'}
                     </PrimaryButton>
                   )}
                 </Surface>
-
-                <Surface className="bouquet-manage-overview-side">
-                  <span>Evaluation</span>
-                  <strong>{latestSubmission?.overallScore ?? '—'}</strong>
-                  <small>{latestSubmission?.evaluationRunId ? `Run #${latestSubmission.evaluationRunId}` : '평가 Run 없음'}</small>
-                </Surface>
-
-                <Surface className="bouquet-manage-overview-side">
-                  <span>Auth</span>
-                  <strong>{latestSubmission?.requiresAuth ? 'Bouquet' : 'None'}</strong>
-                  <small>{latestSubmission?.bouquetClientId ? 'OAuth client issued' : '공통 로그인 미사용'}</small>
-                </Surface>
+                <Surface className="bouquet-manage-overview-side"><span>Evaluation</span><strong>{latestSubmission?.overallScore ?? '—'}</strong><small>{latestSubmission?.evaluationRunId ? `Run #${latestSubmission.evaluationRunId}` : '평가 Run 없음'}</small></Surface>
+                <Surface className="bouquet-manage-overview-side"><span>Auth</span><strong>{latestSubmission?.requiresAuth ? 'Bouquet' : 'None'}</strong><small>{latestSubmission?.bouquetClientId ? 'OAuth client issued' : '공통 로그인 미사용'}</small></Surface>
               </div>
             </div>
           )}
@@ -478,16 +493,13 @@ export default function BouquetManageApp() {
                   <Field label="Demo URL"><input type="url" value={demoUrl} onChange={(event) => setDemoUrl(event.target.value)} disabled={selectedProjectId == null} required placeholder="https://example.com" /></Field>
                   <Field label="Frontend GitHub" hint="선택"><input type="url" value={frontendRepositoryUrl} onChange={(event) => setFrontendRepositoryUrl(event.target.value)} disabled={selectedProjectId == null} placeholder="https://github.com/org/frontend" /></Field>
                   <Field label="Backend GitHub" hint="선택"><input type="url" value={backendRepositoryUrl} onChange={(event) => setBackendRepositoryUrl(event.target.value)} disabled={selectedProjectId == null} placeholder="https://github.com/org/backend" /></Field>
-
                   <label className="bouquet-manage-check bouquet-manage-full">
                     <input type="checkbox" checked={requiresAuth} onChange={(event) => setRequiresAuth(event.target.checked)} disabled={selectedProjectId == null} />
                     <span><strong>꽃다발 공통 로그인 사용</strong><small>활성화하면 HTTPS Demo URL과 동일 origin의 callback URL이 필요합니다.</small></span>
                   </label>
-
                   {requiresAuth && (
                     <Field label="Auth Callback URL" className="bouquet-manage-full"><input type="url" value={authRedirectUri} onChange={(event) => setAuthRedirectUri(event.target.value)} disabled={selectedProjectId == null} required placeholder="https://example.com/auth/bouquet/callback" /></Field>
                   )}
-
                   <div className="bouquet-manage-full bouquet-manage-submit-row">
                     <PrimaryButton type="submit" disabled={busy !== null || selectedProjectId == null}>{busy === 'submission' ? '등록 중...' : 'Submission 등록 · 평가 시작'}</PrimaryButton>
                   </div>
