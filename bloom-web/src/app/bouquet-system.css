@@ -75,7 +75,7 @@ button, a, input, textarea, select { -webkit-tap-highlight-color: transparent; }
 }
 
 .bouquet-metric { display: grid; gap: 3px; min-width: 68px; }
-.bouquet-metric strong { font-size: 23px; line-height: 1; font-weight: 650; letter-spacing: -.04em; }
+.bouquet-metric strong { font-size: 21px; line-height: 1; font-weight: 650; letter-spacing: -.04em; }
 .bouquet-metric span { color: var(--bouquet-subtle); font-size: 10px; font-weight: 700; letter-spacing: .11em; text-transform: uppercase; }
 
 .bouquet-status-badge {
@@ -184,7 +184,7 @@ button, a, input, textarea, select { -webkit-tap-highlight-color: transparent; }
 }
 .bouquet-project-visual-copy { position: absolute; z-index: 2; inset: auto 20px 18px; display: grid; gap: 5px; }
 .bouquet-project-visual-copy small { color: var(--bouquet-accent); font-size: 9px; font-weight: 800; letter-spacing: .13em; }
-.bouquet-project-visual-copy strong { max-width: 88%; font-size: clamp(24px, 3.2vw, 42px); font-weight: 650; line-height: .96; letter-spacing: -.055em; }
+.bouquet-project-visual-copy strong { max-width: 88%; font-size: clamp(22px, 2.8vw, 36px); font-weight: 650; line-height: .98; letter-spacing: -.045em; }
 .bouquet-project-visual-mark { position: absolute; right: 16px; top: 14px; color: rgba(45, 90, 61, .55); font-size: 18px; }
 
 .bouquet-skeleton {
