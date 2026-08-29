@@ -1,130 +1,134 @@
 .bouquet-auth-shell {
   min-height: 100vh;
-  padding: 28px clamp(18px, 4vw, 56px);
-  background:
-    radial-gradient(circle at 12% 16%, rgba(118, 88, 111, .10), transparent 28%),
-    radial-gradient(circle at 88% 84%, rgba(57, 112, 82, .08), transparent 24%),
-    var(--bouquet-bg);
+  padding: 24px;
+  background: #fff;
 }
 
 .bouquet-auth-editorial {
-  width: min(1320px, 100%);
-  min-height: calc(100vh - 56px);
+  width: min(1180px, 100%);
+  min-height: calc(100vh - 48px);
   margin: 0 auto;
   display: grid;
-  grid-template-columns: minmax(0, 5fr) minmax(420px, 4fr);
-  gap: clamp(40px, 7vw, 104px);
-  align-items: center;
+  grid-template-columns: minmax(0, 1.15fr) minmax(400px, .85fr);
+  border: 1px solid var(--bouquet-line);
+  background: #fff;
 }
 
 .bouquet-auth-story {
-  min-height: 640px;
+  min-height: 660px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 8px 0 18px;
+  padding: 28px clamp(28px, 5vw, 64px) 38px;
+  border-right: 1px solid var(--bouquet-line);
+  background: var(--bouquet-surface-soft);
 }
 
 .bouquet-auth-story-copy {
-  max-width: 720px;
+  max-width: 700px;
   margin: auto 0;
-  padding: 64px 0;
+  padding: 72px 0;
 }
 .bouquet-auth-story-copy h1 {
   margin: 14px 0 0;
-  font-size: clamp(54px, 7vw, 96px);
-  line-height: .91;
-  letter-spacing: -.075em;
+  font-size: clamp(50px, 6vw, 82px);
+  line-height: .93;
+  letter-spacing: -.068em;
+  font-weight: 650;
 }
 .bouquet-auth-story-copy > p:last-child {
-  max-width: 640px;
-  margin: 28px 0 0;
+  max-width: 610px;
+  margin: 24px 0 0;
   color: var(--bouquet-muted);
-  font-size: clamp(15px, 1.5vw, 18px);
-  line-height: 1.72;
+  font-size: 15px;
+  line-height: 1.75;
 }
 
 .bouquet-auth-project-context {
   max-width: 620px;
-  padding-top: 20px;
+  padding-top: 18px;
   border-top: 1px solid var(--bouquet-line);
 }
 .bouquet-auth-project-context > span:not(.bouquet-status-badge),
 .bouquet-auth-project-context small {
   display: block;
-  margin-top: 12px;
-  color: var(--bouquet-muted);
-  font-size: 11px;
+  margin-top: 10px;
+  color: var(--bouquet-subtle);
+  font-size: 10px;
 }
 .bouquet-auth-project-context strong {
   display: block;
   margin-top: 5px;
-  font-size: clamp(20px, 2vw, 30px);
+  font-size: clamp(19px, 2vw, 28px);
+  font-weight: 650;
   letter-spacing: -.04em;
   overflow-wrap: anywhere;
 }
-.bouquet-auth-project-context small { margin-top: 6px; }
 
 .bouquet-auth-panel {
   width: 100%;
-  padding: clamp(26px, 4vw, 44px);
-  box-shadow: 0 26px 80px rgba(32, 26, 30, .09);
+  align-self: center;
+  padding: clamp(28px, 5vw, 54px);
+  border: 0;
+  background: #fff;
 }
 .bouquet-auth-panel-heading h2 {
   margin: 9px 0 0;
-  font-size: clamp(30px, 4vw, 48px);
+  font-size: clamp(30px, 4vw, 46px);
   line-height: 1;
-  letter-spacing: -.06em;
+  letter-spacing: -.055em;
+  font-weight: 650;
 }
 .bouquet-auth-panel-heading > p:last-child {
   margin: 12px 0 0;
   color: var(--bouquet-muted);
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: 12px;
+  line-height: 1.7;
 }
 
 .bouquet-auth-tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 4px;
-  margin-top: 30px;
-  padding: 4px;
-  border-radius: 999px;
-  background: rgba(23, 21, 24, .055);
+  margin-top: 28px;
+  border: 1px solid var(--bouquet-line);
+  border-bottom: 0;
 }
 .bouquet-auth-tabs button {
-  min-height: 44px;
+  min-height: 43px;
   border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--bouquet-muted);
-  font-weight: 850;
+  border-right: 1px solid var(--bouquet-line);
+  border-bottom: 1px solid var(--bouquet-line);
+  background: #fff;
+  color: var(--bouquet-subtle);
+  font-size: 11px;
+  font-weight: 750;
   cursor: pointer;
-  transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease;
+  transition: background 150ms ease, color 150ms ease;
 }
+.bouquet-auth-tabs button:last-child { border-right: 0; }
 .bouquet-auth-tabs button.active {
-  background: var(--bouquet-surface);
-  color: var(--bouquet-ink);
-  box-shadow: 0 5px 16px rgba(32, 26, 30, .08);
+  border-bottom-color: var(--bouquet-ink);
+  background: var(--bouquet-ink);
+  color: #fff;
 }
 
 .bouquet-auth-form {
   display: grid;
-  gap: 17px;
-  margin-top: 24px;
+  gap: 16px;
+  margin-top: 22px;
 }
-.bouquet-auth-form .bouquet-action { width: 100%; margin-top: 3px; }
+.bouquet-auth-form .bouquet-action { width: 100%; margin-top: 4px; }
 
 .bouquet-auth-alert {
-  margin-top: 18px;
-  padding: 13px 14px;
-  border-radius: var(--bouquet-radius-sm);
-  font-size: 12px;
+  margin-top: 17px;
+  padding: 12px 13px;
+  border: 1px solid var(--bouquet-line);
+  font-size: 11px;
   line-height: 1.55;
 }
 .bouquet-auth-alert-error {
-  border: 1px solid rgba(165, 72, 72, .18);
-  background: rgba(165, 72, 72, .07);
+  border-color: #e5caca;
+  background: #fbf0f0;
   color: var(--bouquet-danger);
 }
 
@@ -136,74 +140,67 @@
   color: var(--bouquet-muted);
   font-size: 12px;
 }
-.bouquet-auth-loading .bouquet-skeleton {
-  width: 100%;
-  min-height: 150px;
-}
+.bouquet-auth-loading .bouquet-skeleton { width: 100%; min-height: 150px; }
 
-.bouquet-auth-session { margin-top: 32px; }
+.bouquet-auth-session { margin-top: 30px; }
 .bouquet-auth-session-identity {
   display: flex;
-  gap: 16px;
+  gap: 15px;
   align-items: center;
-  padding: 20px;
+  padding: 18px;
   border: 1px solid var(--bouquet-line);
-  border-radius: var(--bouquet-radius-md);
-  background: rgba(255,255,255,.46);
+  background: var(--bouquet-surface-soft);
 }
 .bouquet-auth-avatar {
-  width: 58px;
-  height: 58px;
-  flex: 0 0 58px;
+  width: 52px;
+  height: 52px;
+  flex: 0 0 52px;
   display: grid;
   place-items: center;
-  border-radius: 50%;
+  border: 1px solid #c9d9cf;
   background: var(--bouquet-accent-soft);
-  color: #5f4559;
-  font-size: 22px;
-  font-weight: 900;
+  color: var(--bouquet-accent);
+  font-size: 18px;
+  font-weight: 800;
 }
 .bouquet-auth-session-identity p {
   margin: 0;
   color: var(--bouquet-accent);
-  font-size: 10px;
-  font-weight: 850;
-  letter-spacing: .08em;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .1em;
   text-transform: uppercase;
 }
 .bouquet-auth-session-identity h3 {
-  margin: 5px 0 2px;
-  font-size: 24px;
-  letter-spacing: -.04em;
+  margin: 4px 0 2px;
+  font-size: 21px;
+  font-weight: 650;
+  letter-spacing: -.035em;
 }
 .bouquet-auth-session-identity span {
   color: var(--bouquet-muted);
-  font-size: 12px;
+  font-size: 11px;
   overflow-wrap: anywhere;
 }
-.bouquet-auth-session-actions {
-  display: grid;
-  gap: 9px;
-  margin-top: 18px;
-}
+.bouquet-auth-session-actions { display: grid; gap: 8px; margin-top: 16px; }
 .bouquet-auth-session-actions .bouquet-action { width: 100%; }
 
 .bouquet-auth-footnote {
-  margin: 18px 0 0;
-  color: var(--bouquet-muted);
-  font-size: 11px;
+  margin: 17px 0 0;
+  color: var(--bouquet-subtle);
+  font-size: 10px;
   line-height: 1.6;
   text-align: center;
 }
 
 @media (max-width: 900px) {
-  .bouquet-auth-shell { padding: 20px 14px 38px; }
-  .bouquet-auth-editorial { min-height: auto; grid-template-columns: 1fr; gap: 24px; }
-  .bouquet-auth-story { min-height: auto; padding: 0; }
-  .bouquet-auth-story-copy { padding: 70px 0 28px; }
-  .bouquet-auth-story-copy h1 { font-size: clamp(48px, 13vw, 76px); }
-  .bouquet-auth-project-context { margin-top: 20px; }
-  .bouquet-auth-panel { padding: 24px 18px; }
+  .bouquet-auth-shell { padding: 14px; }
+  .bouquet-auth-editorial { min-height: auto; grid-template-columns: 1fr; }
+  .bouquet-auth-story { min-height: auto; padding: 24px; border-right: 0; border-bottom: 1px solid var(--bouquet-line); }
+  .bouquet-auth-story-copy { padding: 54px 0 26px; }
+  .bouquet-auth-story-copy h1 { font-size: clamp(44px, 12vw, 68px); }
+  .bouquet-auth-project-context { margin-top: 18px; }
+  .bouquet-auth-panel { padding: 28px 20px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
