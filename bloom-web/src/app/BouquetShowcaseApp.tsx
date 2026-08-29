@@ -190,7 +190,7 @@ export default function BouquetShowcaseApp() {
                   </div>
                 </a>
                 {submission?.demoUrl && (
-                  <a className="bouquet-project-live-link" href={submission.demoUrl} target="_blank" rel="noreferrer">LIVE DEMO <span aria-hidden="true">↗</span></a>
+                  <a className="bouquet-project-live-link" href={submission.demoUrl}>LIVE DEMO <span aria-hidden="true">↗</span></a>
                 )}
               </article>
             )
