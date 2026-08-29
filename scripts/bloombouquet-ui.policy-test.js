@@ -5,7 +5,13 @@ const fs = require('node:fs');
 const paths = {
   ui: 'bloom-web/src/app/BouquetUI.tsx',
   css: 'bloom-web/src/app/bouquet-system.css',
+  showcaseCss: 'bloom-web/src/app/bouquet-showcase.css',
+  authCss: 'bloom-web/src/app/bouquet-auth.css',
+  lunaCss: 'bloom-web/src/app/luna-bouquet-register.css',
+  manageCss: 'bloom-web/src/app/bouquet-manage.css',
   showcase: 'bloom-web/src/app/BouquetShowcaseApp.tsx',
+  detail: 'bloom-web/src/app/BouquetProjectDetailApp.tsx',
+  report: 'bloom-web/src/app/BouquetEvaluationReportApp.tsx',
   auth: 'bloom-web/src/app/BouquetAuthApp.tsx',
   luna: 'bloom-web/src/app/LunaBouquetRegisterApp.tsx',
   manage: 'bloom-web/src/app/BouquetManageApp.tsx',
@@ -15,7 +21,7 @@ function source(path) {
   return fs.existsSync(path) ? fs.readFileSync(path, 'utf8') : '';
 }
 
-test('BloomBouquet shares one premium visual system', () => {
+test('BloomBouquet shares one thin-border editorial visual system', () => {
   assert.equal(fs.existsSync(paths.ui), true, 'BouquetUI.tsx must exist');
   assert.equal(fs.existsSync(paths.css), true, 'bouquet-system.css must exist');
 
@@ -29,46 +35,65 @@ test('BloomBouquet shares one premium visual system', () => {
   for (const name of ['BouquetWordmark', 'Surface', 'Metric', 'StatusBadge', 'ScoreBadge', 'PrimaryButton', 'SecondaryButton', 'Field', 'EmptyState', 'ProjectVisual']) {
     assert.match(ui, new RegExp(`export function ${name}`));
   }
-  assert.match(css, /--bouquet-bg:/);
-  assert.match(css, /--bouquet-ink:/);
-  assert.match(css, /--bouquet-accent:/);
-  assert.match(css, /:focus-visible/);
+  assert.match(css, /--bouquet-bg:\s*#fff/i);
+  assert.match(css, /--bouquet-line:\s*#dfe0e2/i);
+  assert.match(css, /--bouquet-accent:\s*#2d5a3d/i);
+  assert.match(css, /--bouquet-content:\s*1320px/i);
   assert.match(showcase, /ProjectVisual/);
   assert.match(auth, /BouquetWordmark/);
   assert.match(luna, /Surface/);
   assert.match(manage, /StatusBadge/);
 });
 
-test('public showcase uses editorial bento hierarchy and premium review sheet', () => {
+test('public showcase is a real project gallery with dedicated detail and agent report views', () => {
   const showcase = source(paths.showcase);
-  assert.match(showcase, /bouquet-showcase-header/);
-  assert.match(showcase, /bouquet-bento-grid/);
-  assert.match(showcase, /bouquet-project-featured/);
-  assert.match(showcase, /프로젝트 보기/);
-  assert.match(showcase, /평가 보기/);
-  assert.match(showcase, /bouquet-report-sheet/);
-  assert.match(showcase, /bouquet-report-sticky/);
-  assert.match(showcase, /bouquet-key-findings/);
-  assert.match(showcase, /aria-modal="true"/);
-  assert.match(showcase, /aria-label="Close report"/);
+  const detail = source(paths.detail);
+  const report = source(paths.report);
+  const css = source(paths.showcaseCss);
+
+  assert.match(showcase, /bouquet-project-gallery/);
+  assert.match(showcase, /teamFilter/);
+  assert.match(showcase, /sortMode/);
+  assert.match(showcase, /\/?\?project=\$\{project\.id\}/);
+  assert.doesNotMatch(showcase, /bouquet-bento-grid|bouquet-report-sheet|aria-modal="true"/);
+  assert.match(detail, /Version History/);
+  assert.match(detail, /Agent 평가 리포트 보기/);
+  assert.match(detail, /\/api\/bloom-bouquet\/public\/projects\/\$\{projectId\}/);
+  assert.match(report, /Senior Agent Review/);
+  assert.match(report, /Assessment/);
+  assert.match(report, /Recommendation/);
+  assert.match(report, /\/api\/bloom-bouquet\/public\/evaluations\/\$\{runId\}/);
+  assert.match(css, /grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/);
 });
 
-test('Bouquet auth and Luna handoff use shared editorial surfaces', () => {
+test('Bouquet auth and Luna handoff use the transplanted editorial surfaces', () => {
   const auth = source(paths.auth);
   const luna = source(paths.luna);
+  const authCss = source(paths.authCss);
+  const lunaCss = source(paths.lunaCss);
+
   assert.match(auth, /bouquet-auth-editorial/);
   assert.match(auth, /Field/);
-  assert.match(luna, /luna-register-summary-grid/);
+  assert.match(luna, /bouquet-luna-editorial/);
   assert.match(luna, /BloomBouquet에 등록하고 평가 시작/);
+  assert.doesNotMatch(authCss, /radial-gradient|border-radius:\s*999px/i);
+  assert.doesNotMatch(lunaCss, /rgba\(23,\s*21,\s*24,\s*\.045\)|box-shadow:/i);
 });
 
-test('owner management uses a focused rail workspace', () => {
+test('owner management is a dense editorial console while retaining manual fallback flows', () => {
   const manage = source(paths.manage);
-  assert.match(manage, /bouquet-manage-rail/);
-  assert.match(manage, /bouquet-manage-workspace/);
+  const manageCss = source(paths.manageCss);
+
+  assert.match(manage, /bouquet-console-editorial/);
+  assert.match(manage, /bouquet-console-project-row/);
   assert.match(manage, /activePanel/);
+  assert.match(manage, /createTeam/);
+  assert.match(manage, /createProject/);
+  assert.match(manage, /publishSubmission/);
   assert.match(manage, /StatusBadge/);
   assert.doesNotMatch(manage, /aria-label="Project registration stages"/);
+  assert.doesNotMatch(manageCss, /radial-gradient|box-shadow:\s*var\(--bouquet-shadow\)/i);
+  assert.match(manageCss, /bouquet-console-project-row/);
 });
 
 test('shared UI keeps accessibility and reduced-motion contracts', () => {
@@ -80,7 +105,8 @@ test('shared UI keeps accessibility and reduced-motion contracts', () => {
   assert.match(css, /:focus-visible/);
 });
 
-test('public showcase stays free of management entry points', () => {
+test('public showcase stays free of management entry points and fake imagery', () => {
   const showcase = source(paths.showcase);
   assert.doesNotMatch(showcase, /\?mode=manage|\?mode=auth/);
+  assert.doesNotMatch(showcase, /unsplash|picsum/i);
 });

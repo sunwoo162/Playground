@@ -9,6 +9,10 @@ const lunaParserPath = 'bloom-web/src/app/luna-registration.ts';
 const appPath = 'bloom-web/src/app/BloomApp.tsx';
 const authPath = 'bloom-web/src/app/BouquetAuthApp.tsx';
 const showcasePath = 'bloom-web/src/app/BouquetShowcaseApp.tsx';
+const detailPath = 'bloom-web/src/app/BouquetProjectDetailApp.tsx';
+const reportPath = 'bloom-web/src/app/BouquetEvaluationReportApp.tsx';
+const systemCssPath = 'bloom-web/src/app/bouquet-system.css';
+const showcaseCssPath = 'bloom-web/src/app/bouquet-showcase.css';
 
 function source(path) {
   return fs.readFileSync(path, 'utf8');
@@ -31,7 +35,43 @@ test('Bloom management surface uses bouquet cookie APIs only and stays off the p
   assert.match(manage, /evaluationStatus\s*!==\s*['"]QUEUED['"]/);
   assert.doesNotMatch(manage, /\/internal\/builder\/worker\//);
   assert.doesNotMatch(manage, /\blocalStorage\b|\bsessionStorage\b/);
-  assert.doesNotMatch(showcase, /\?mode=manage/);
+  assert.doesNotMatch(showcase, /\?mode=manage|\?mode=auth/);
+});
+
+test('public BloomBouquet routes use real detail and report views without mock showcase data', () => {
+  const app = source(appPath);
+  const showcase = source(showcasePath);
+
+  assert.equal(fs.existsSync(detailPath), true, 'BouquetProjectDetailApp.tsx must exist');
+  assert.equal(fs.existsSync(reportPath), true, 'BouquetEvaluationReportApp.tsx must exist');
+
+  const detail = source(detailPath);
+  const report = source(reportPath);
+
+  assert.match(app, /searchParams\.get\(['"]project['"]\)/);
+  assert.match(app, /searchParams\.get\(['"]report['"]\)/);
+  assert.match(app, /<BouquetProjectDetailApp/);
+  assert.match(app, /<BouquetEvaluationReportApp/);
+  assert.match(showcase, /teamFilter/);
+  assert.match(showcase, /sortMode/);
+  assert.match(detail, /\/api\/bloom-bouquet\/public\/projects\/\$\{projectId\}/);
+  assert.match(report, /\/api\/bloom-bouquet\/public\/evaluations\/\$\{runId\}/);
+  assert.doesNotMatch(showcase, /unsplash|images\.unsplash|picsum/i);
+  assert.doesNotMatch(showcase, /cardSize\(/);
+  assert.doesNotMatch(showcase, /bouquet-bento-grid/);
+});
+
+test('BloomBouquet shared visual system uses the editorial neutral and green contract', () => {
+  const css = source(systemCssPath);
+  const showcaseCss = source(showcaseCssPath);
+
+  assert.match(css, /--bouquet-bg:\s*#fff/i);
+  assert.match(css, /--bouquet-accent:\s*#2d5a3d/i);
+  assert.match(css, /--bouquet-line:\s*#dfe0e2/i);
+  assert.match(css, /:focus-visible/);
+  assert.match(css, /prefers-reduced-motion/);
+  assert.doesNotMatch(css, /--bouquet-radius-xl:\s*40px/);
+  assert.match(showcaseCss, /grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/);
 });
 
 test('Luna handoff renders a one-click owner confirmation instead of the three-stage form', () => {

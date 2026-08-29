@@ -1,162 +1,203 @@
 .luna-register-shell {
-  width: min(1180px, calc(100% - 36px));
   min-height: 100vh;
+  padding: 0 24px 88px;
+  background: #fff;
+  color: var(--bouquet-ink);
+}
+
+.luna-register-topbar {
+  width: min(var(--bouquet-content), 100%);
+  height: 64px;
   margin: 0 auto;
-  padding: 28px 0 72px;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--bouquet-line);
 }
 
-.luna-register-topbar { margin-bottom: clamp(54px, 8vw, 100px); }
-
-.luna-register-header {
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(260px, .6fr);
-  gap: 36px;
-  align-items: end;
-  margin-bottom: 30px;
-}
-.luna-register-header h1 {
-  margin: 12px 0 0;
-  font-size: clamp(48px, 7vw, 86px);
-  line-height: .92;
-  letter-spacing: -.075em;
-}
-.luna-register-header > p {
-  margin: 0 0 7px;
-  color: var(--bouquet-muted);
-  line-height: 1.7;
-}
-
-.luna-register-card,
+.luna-register-loading,
+.luna-register-state-wrap,
 .luna-register-signin,
 .luna-register-complete {
-  padding: clamp(26px, 5vw, 54px);
+  width: min(760px, 100%);
+  margin: 72px auto 0;
+}
+
+.luna-register-loading {
+  display: grid;
+  gap: 14px;
+  color: var(--bouquet-muted);
+  font-size: 12px;
+}
+.luna-register-loading .bouquet-skeleton { min-height: 180px; }
+
+.luna-register-header {
+  width: min(900px, 100%);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, .55fr);
+  gap: 48px;
+  align-items: end;
+  padding: 64px 0 34px;
+  border-bottom: 1px solid var(--bouquet-line);
+}
+
+.luna-register-header h1,
+.luna-register-signin h1,
+.luna-register-complete h1 {
+  margin: 10px 0 0;
+  font-size: clamp(38px, 5vw, 62px);
+  line-height: .98;
+  letter-spacing: -.058em;
+  font-weight: 650;
+}
+
+.luna-register-header > p,
+.luna-register-signin > div > p:last-child,
+.luna-register-complete > p {
+  margin: 0;
+  color: var(--bouquet-muted);
+  font-size: 13px;
+  line-height: 1.75;
+}
+
+.luna-register-error {
+  width: min(900px, 100%);
+  margin: 18px auto 0;
+  padding: 11px 13px;
+  border: 1px solid #e5caca;
+  background: #fbf0f0;
+  color: var(--bouquet-danger);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.luna-register-card {
+  width: min(900px, 100%);
+  margin: 24px auto 0;
+  overflow: hidden;
 }
 
 .luna-register-project-identity {
   display: flex;
-  justify-content: space-between;
-  gap: 26px;
   align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 28px;
+  border-bottom: 1px solid var(--bouquet-line);
 }
-.luna-register-project-identity h2,
-.luna-register-signin h1,
-.luna-register-complete h1 {
-  margin: 10px 0 0;
-  font-size: clamp(36px, 5vw, 62px);
-  line-height: .95;
-  letter-spacing: -.065em;
+
+.luna-register-project-identity h2 {
+  margin: 8px 0 9px;
+  font-size: clamp(27px, 4vw, 42px);
+  line-height: 1;
+  letter-spacing: -.045em;
+  font-weight: 650;
 }
-.luna-register-project-identity > div > p:last-child,
-.luna-register-signin > div > p:last-child,
-.luna-register-complete > p {
-  max-width: 720px;
-  margin: 15px 0 0;
+
+.luna-register-project-identity p:last-child {
+  max-width: 620px;
+  margin: 0;
   color: var(--bouquet-muted);
+  font-size: 12px;
   line-height: 1.7;
 }
 
 .luna-register-summary-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  margin-top: 36px;
-  border-top: 1px solid var(--bouquet-line);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   border-bottom: 1px solid var(--bouquet-line);
 }
+
 .luna-register-summary-grid > div {
   min-width: 0;
-  padding: 21px 18px;
+  display: grid;
+  gap: 6px;
+  padding: 18px 20px;
   border-right: 1px solid var(--bouquet-line);
 }
-.luna-register-summary-grid > div:first-child { padding-left: 0; }
 .luna-register-summary-grid > div:last-child { border-right: 0; }
+
 .luna-register-summary-grid span,
 .luna-register-detail-row > span,
 .luna-register-account > span {
-  display: block;
-  color: var(--bouquet-muted);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: .09em;
+  color: var(--bouquet-subtle);
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: .1em;
   text-transform: uppercase;
 }
-.luna-register-summary-grid strong { display: block; margin-top: 6px; font-size: 18px; letter-spacing: -.03em; overflow-wrap: anywhere; }
+.luna-register-summary-grid strong { font-size: 14px; font-weight: 650; }
 
-.luna-register-detail-list { display: grid; margin-top: 28px; }
+.luna-register-detail-list { border-bottom: 1px solid var(--bouquet-line); }
 .luna-register-detail-row {
+  min-height: 52px;
   display: grid;
-  grid-template-columns: 170px minmax(0, 1fr);
-  gap: 20px;
-  padding: 17px 0;
-  border-bottom: 1px solid var(--bouquet-line);
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 18px;
+  align-items: center;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--bouquet-line-soft);
 }
+.luna-register-detail-list .luna-register-detail-row:last-child { border-bottom: 0; }
 .luna-register-detail-row strong,
 .luna-register-detail-row code {
-  color: var(--bouquet-ink);
-  font-size: 13px;
-  font-weight: 700;
+  min-width: 0;
   overflow-wrap: anywhere;
-  word-break: break-word;
+  color: #333;
+  font-size: 11px;
+  font-weight: 600;
 }
+.luna-register-detail-row code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 
 .luna-register-account {
   display: flex;
-  justify-content: space-between;
-  gap: 24px;
   align-items: center;
-  margin-top: 28px;
-  padding: 18px 20px;
-  border-radius: var(--bouquet-radius-md);
-  background: rgba(23, 21, 24, .045);
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--bouquet-line);
+  background: var(--bouquet-accent-soft);
 }
-.luna-register-account > div { text-align: right; }
-.luna-register-account strong { display: block; font-size: 15px; }
-.luna-register-account small { display: block; margin-top: 3px; color: var(--bouquet-muted); overflow-wrap: anywhere; }
+.luna-register-account > div { display: grid; justify-items: end; gap: 2px; }
+.luna-register-account strong { font-size: 12px; }
+.luna-register-account small { color: var(--bouquet-muted); font-size: 10px; }
 
 .luna-register-actions {
   display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(0, .7fr);
-  gap: 10px;
-  margin-top: 28px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, .7fr);
+  gap: 8px;
+  padding: 20px;
 }
 .luna-register-actions .bouquet-action { width: 100%; }
 
-.luna-register-error {
-  margin-bottom: 16px;
-  padding: 14px 16px;
-  border: 1px solid rgba(165, 72, 72, .18);
-  border-radius: var(--bouquet-radius-sm);
-  background: rgba(165, 72, 72, .07);
-  color: var(--bouquet-danger);
-  font-size: 12px;
-  line-height: 1.55;
-}
-
 .luna-register-signin,
-.luna-register-complete { max-width: 860px; margin: 0 auto; }
-.luna-register-signin .luna-register-actions { margin-top: 30px; }
-.luna-register-complete > .bouquet-status-badge { margin-bottom: 18px; }
-.luna-register-complete .bouquet-action { width: 100%; margin-top: 28px; }
-.luna-register-complete .luna-register-summary-grid { margin-top: 30px; }
-.luna-register-complete .luna-register-detail-row { margin-top: 22px; }
+.luna-register-complete { padding: 30px; }
+.luna-register-signin > div:first-child,
+.luna-register-complete { display: grid; gap: 12px; }
+.luna-register-signin .luna-register-actions { padding: 12px 0 0; }
+.luna-register-signin .luna-register-error { width: 100%; margin: 4px 0 0; }
+.luna-register-complete .luna-register-summary-grid {
+  margin: 10px 0 0;
+  border: 1px solid var(--bouquet-line);
+}
+.luna-register-complete > .luna-register-detail-row {
+  border: 1px solid var(--bouquet-line);
+  border-top: 0;
+}
+.luna-register-complete > .bouquet-action { margin-top: 12px; width: 100%; }
 
-.luna-register-loading { max-width: 760px; margin: 0 auto; text-align: center; }
-.luna-register-loading .bouquet-skeleton { display: block; min-height: 320px; }
-.luna-register-loading p { margin: 16px 0 0; color: var(--bouquet-muted); font-size: 12px; }
-
-@media (max-width: 760px) {
-  .luna-register-shell { width: min(100% - 28px, 1180px); padding-top: 20px; }
-  .luna-register-topbar { margin-bottom: 58px; }
-  .luna-register-header { grid-template-columns: 1fr; gap: 18px; }
-  .luna-register-header h1 { font-size: clamp(46px, 13vw, 72px); }
-  .luna-register-card,
-  .luna-register-signin,
-  .luna-register-complete { padding: 24px 18px; }
-  .luna-register-project-identity { flex-direction: column; }
+@media (max-width: 720px) {
+  .luna-register-shell { padding: 0 14px 64px; }
+  .luna-register-topbar { height: 56px; }
+  .luna-register-header { grid-template-columns: 1fr; gap: 18px; padding: 48px 0 26px; }
+  .luna-register-project-identity { flex-direction: column; padding: 20px; }
   .luna-register-summary-grid { grid-template-columns: 1fr; }
-  .luna-register-summary-grid > div { padding: 16px 0; border-right: 0; border-bottom: 1px solid var(--bouquet-line); }
+  .luna-register-summary-grid > div { border-right: 0; border-bottom: 1px solid var(--bouquet-line); }
   .luna-register-summary-grid > div:last-child { border-bottom: 0; }
-  .luna-register-detail-row { grid-template-columns: 1fr; gap: 6px; }
+  .luna-register-detail-row { grid-template-columns: 1fr; gap: 5px; }
   .luna-register-account { align-items: flex-start; flex-direction: column; }
-  .luna-register-account > div { text-align: left; }
-  .luna-register-actions { grid-template-columns: 1fr; }
+  .luna-register-account > div { justify-items: start; }
+  .luna-register-actions { grid-template-columns: 1fr; padding: 16px; }
+  .luna-register-signin,
+  .luna-register-complete { margin-top: 46px; padding: 22px; }
 }

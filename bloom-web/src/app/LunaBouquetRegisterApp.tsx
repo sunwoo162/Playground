@@ -89,7 +89,7 @@ export default function LunaBouquetRegisterApp({ handoff }: Props) {
 
   if (loading) {
     return (
-      <main className="luna-register-shell">
+      <main className="luna-register-shell bouquet-luna-editorial">
         <div className="luna-register-topbar"><BouquetWordmark /></div>
         <div className="luna-register-loading"><span className="bouquet-skeleton" /><p>Luna 프로젝트 정보를 확인하는 중...</p></div>
       </main>
@@ -98,14 +98,16 @@ export default function LunaBouquetRegisterApp({ handoff }: Props) {
 
   if (!payload) {
     return (
-      <main className="luna-register-shell">
+      <main className="luna-register-shell bouquet-luna-editorial">
         <div className="luna-register-topbar"><BouquetWordmark /></div>
-        <EmptyState
-          eyebrow="LUNA HANDOFF"
-          title="Luna 등록 정보를 읽지 못했습니다."
-          description="링크가 손상되었거나 지원하지 않는 등록 형식입니다."
-          action={<SecondaryButton href="?mode=manage">직접 수정해서 등록</SecondaryButton>}
-        />
+        <div className="luna-register-state-wrap">
+          <EmptyState
+            eyebrow="LUNA HANDOFF"
+            title="Luna 등록 정보를 읽지 못했습니다."
+            description="링크가 손상되었거나 지원하지 않는 등록 형식입니다."
+            action={<SecondaryButton href="?mode=manage">직접 수정해서 등록</SecondaryButton>}
+          />
+        </div>
       </main>
     )
   }
@@ -113,7 +115,7 @@ export default function LunaBouquetRegisterApp({ handoff }: Props) {
   if (!user) {
     const loginHref = `?mode=auth&return_to=manage&luna=${encodeURIComponent(handoff)}`
     return (
-      <main className="luna-register-shell">
+      <main className="luna-register-shell bouquet-luna-editorial">
         <div className="luna-register-topbar"><BouquetWordmark /></div>
         <Surface className="luna-register-signin">
           <div>
@@ -133,7 +135,7 @@ export default function LunaBouquetRegisterApp({ handoff }: Props) {
 
   if (result) {
     return (
-      <main className="luna-register-shell">
+      <main className="luna-register-shell bouquet-luna-editorial">
         <div className="luna-register-topbar"><BouquetWordmark /></div>
         <Surface className="luna-register-complete">
           <StatusBadge status={result.submission.evaluationStatus}>REGISTRATION COMPLETE</StatusBadge>
@@ -157,7 +159,7 @@ export default function LunaBouquetRegisterApp({ handoff }: Props) {
   }
 
   return (
-    <main className="luna-register-shell">
+    <main className="luna-register-shell bouquet-luna-editorial">
       <div className="luna-register-topbar"><BouquetWordmark /></div>
 
       <header className="luna-register-header">
