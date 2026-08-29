@@ -55,6 +55,7 @@
     "ts/builderWorkerAdapter.policy-test.ts",
     "ts/headlessBuilderExecutor.ts",
     "ts/headlessBuilderExecutor.policy-test.ts",
-    "ts/headlessCrashRecovery.policy-test.ts"
+    "ts/headlessCrashRecovery.policy-test.ts",
+    "ts/lunaVisualStyleInjection.policy-test.ts"
   ]
 }

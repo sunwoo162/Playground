@@ -13,6 +13,10 @@ import {
   summarizeTaskRuns,
 } from "./orchestrationCore";
 import { seniorAgentContext } from "./seniorAgent";
+import {
+  lunaVisualStylePlanningContext,
+  lunaVisualStyleTaskContext,
+} from "./lunaVisualStyle";
 import type {
   AgentTaskVerification,
   ExecutableAgentRole,
@@ -325,6 +329,7 @@ function buildTaskInput(
       pullRequestUrl: dependencyRun.pullRequestUrl,
     };
   });
+  const visualContext = lunaVisualStyleTaskContext(task.role);
 
   return {
     organization: options.organization,
@@ -336,7 +341,9 @@ function buildTaskInput(
     taskId: task.id,
     taskSlug: task.taskSlug,
     title: task.title,
-    summary: [seniorAgentContext(task.role), task.summary].join("\n\n"),
+    summary: [seniorAgentContext(task.role), visualContext, task.summary]
+      .filter(Boolean)
+      .join("\n\n"),
     acceptanceCriteria: task.acceptanceCriteria,
     userRequest: payload.request,
     productSummary: plan.productSummary,
@@ -457,13 +464,19 @@ export function createHeadlessBuilderExecutor(
     }
 
     if (!payload.plan) {
+      const visualPlanningContext = lunaVisualStylePlanningContext(
+        payload.intake?.analysis.userFacing ?? false,
+      );
+      const planningRequest = visualPlanningContext
+        ? [payload.request, visualPlanningContext].join("\n\n")
+        : payload.request;
       const pm = await options.runtime.planProject({
         organization,
         workspaceRoot,
         projectId: payload.runtimeProjectId,
         teamId: options.teamId,
         teamName,
-        request: payload.request,
+        request: planningRequest,
       });
       const rawPlan = claim.authRequired && !pm.plan.needsAuth
         ? { ...pm.plan, needsAuth: true }
