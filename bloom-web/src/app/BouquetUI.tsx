@@ -19,7 +19,7 @@ export function BouquetWordmark({ compact = false }: { compact?: boolean }) {
       <span className="bouquet-wordmark-mark" aria-hidden="true">✦</span>
       <span>
         <strong>BloomBouquet</strong>
-        {!compact && <small>Curated projects · Senior Agent review</small>}
+        {!compact && <small>Luna builds · Senior Agent review</small>}
       </span>
     </a>
   )
@@ -105,17 +105,16 @@ export function EmptyState({ eyebrow, title, description, action }: { eyebrow?: 
   )
 }
 
-export function ProjectVisual({ name, teamName, status, featured = false }: { name: string; teamName: string; status: string | null; featured?: boolean }) {
+export function ProjectVisual({ name, teamName, status }: { name: string; teamName: string; status: string | null; featured?: boolean }) {
   return (
-    <div className={cx('bouquet-project-visual', featured && 'is-featured')} aria-hidden="true">
-      <span className="bouquet-project-orb bouquet-project-orb-a" />
-      <span className="bouquet-project-orb bouquet-project-orb-b" />
-      <span className="bouquet-project-line" />
+    <div className="bouquet-project-visual" aria-hidden="true">
+      <div className="bouquet-project-visual-grid" />
+      <div className="bouquet-project-visual-index">BLOOM / {teamName}</div>
       <div className="bouquet-project-visual-copy">
-        <small>TEAM {teamName}</small>
+        <small>{status ? status.replace(/_/g, ' ') : 'CURATED BUILD'}</small>
         <strong>{name}</strong>
-        <span>{status ? status.replace(/_/g, ' ') : 'CURATED BUILD'}</span>
       </div>
+      <span className="bouquet-project-visual-mark">✦</span>
     </div>
   )
 }
