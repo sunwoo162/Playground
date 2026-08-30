@@ -137,6 +137,9 @@ function fakeRuntime() {
   let repositoryCreateEffects = 0;
   let mergeCalls = 0;
   let mergeEffects = 0;
+  let releaseCalls = 0;
+  let releaseEffects = 0;
+  let released = false;
 
   const makeResult = (
     input: Parameters<HeadlessBuilderRuntime["dispatchTask"]>[0],
@@ -260,6 +263,11 @@ function fakeRuntime() {
       };
     },
     async promoteRelease(input) {
+      releaseCalls += 1;
+      if (!released) {
+        released = true;
+        releaseEffects += 1;
+      }
       return {
         repositoryFullName: input.repositoryFullName,
         releaseSha: "89abcdef0123456789abcdef0123456789abcdef",
@@ -280,6 +288,8 @@ function fakeRuntime() {
     get repositoryCreateEffects() { return repositoryCreateEffects; },
     get mergeCalls() { return mergeCalls; },
     get mergeEffects() { return mergeEffects; },
+    get releaseCalls() { return releaseCalls; },
+    get releaseEffects() { return releaseEffects; },
   };
 }
 
@@ -367,9 +377,13 @@ async function testIntegrationRecovery() {
   const mergedBeforeRestart = runtime.mergedPullRequests.size;
   check(mergedBeforeRestart > 0, "merge side effects must exist before completed snapshot crash");
   checkEqual(runtime.mergeCalls, 1, "first execution must invoke integration once");
+  checkEqual(runtime.releaseCalls, 1, "first execution must invoke release promotion once");
+  checkEqual(runtime.releaseEffects, 1, "first release promotion must create one durable side effect");
   await resume(executor, storage.client);
-  checkEqual(runtime.mergeCalls, 2, "restart may re-enter the idempotent integration command");
+  checkEqual(runtime.mergeCalls, 1, "restart must not re-enter integration after the release snapshot is durable");
   checkEqual(runtime.mergeEffects, mergedBeforeRestart, "no PR may be merged twice");
+  checkEqual(runtime.releaseCalls, 2, "restart may re-enter idempotent release promotion after a completed-snapshot crash");
+  checkEqual(runtime.releaseEffects, 1, "release promotion side effect must stay unique across recovery");
   checkEqual(runtime.mergedPullRequests.size, mergedBeforeRestart, "merged PR set must remain stable");
 }
 
