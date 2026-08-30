@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+import static com.playground.domain.lunadelivery.dto.LunaDeliveryDto.RuntimeUpsertRequest;
 import static com.playground.domain.lunadelivery.dto.LunaDeliveryDto.TransitionRequest;
 import static com.playground.domain.lunadelivery.dto.LunaDeliveryDto.UpsertProjectRequest;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -31,6 +32,54 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class LunaDeliveryRegistryServiceTest {
     @Autowired
     LunaDeliveryRegistryService registry;
+
+    @Test
+    void allocates_stable_non_overlapping_server_port_pairs_when_omitted() {
+        registry.upsertProject(new UpsertProjectRequest(
+                "sample-app", "BloomBouquet/sample-app", "abc123",
+                "https://bloombouquet.https.gsmsv.site/apps/sample-app/"
+        ));
+        registry.upsertProject(new UpsertProjectRequest(
+                "other-app", "BloomBouquet/other-app", "def456",
+                "https://bloombouquet.https.gsmsv.site/apps/other-app/"
+        ));
+
+        var first = registry.upsertRuntime(
+                "sample-app", "web", new RuntimeUpsertRequest("server", null, null, null, null)
+        );
+        var repeated = registry.upsertRuntime(
+                "sample-app", "web", new RuntimeUpsertRequest("server", null, null, null, null)
+        );
+        var other = registry.upsertRuntime(
+                "other-app", "web", new RuntimeUpsertRequest("server", null, null, null, null)
+        );
+
+        assertThat(first.slotAPort()).isBetween(20000, 39999);
+        assertThat(first.slotBPort()).isBetween(20000, 39999);
+        assertThat(first.slotAPort()).isNotEqualTo(first.slotBPort());
+        assertThat(repeated.slotAPort()).isEqualTo(first.slotAPort());
+        assertThat(repeated.slotBPort()).isEqualTo(first.slotBPort());
+        assertThat(List.of(other.slotAPort(), other.slotBPort()))
+                .doesNotContain(first.slotAPort(), first.slotBPort());
+    }
+
+    @Test
+    void candidate_install_failure_can_be_recorded_from_building() {
+        registry.upsertProject(new UpsertProjectRequest(
+                "sample-app", "BloomBouquet/sample-app", "abc123",
+                "https://bloombouquet.https.gsmsv.site/apps/sample-app/"
+        ));
+        registry.transition("sample-app", new TransitionRequest("MERGED", null, null));
+        registry.transition("sample-app", new TransitionRequest("DELIVERY_PLANNING", null, null));
+        registry.transition("sample-app", new TransitionRequest("BUILDING", null, null));
+
+        registry.transition("sample-app", new TransitionRequest(
+                "DEPLOY_FAILED", "DEPLOY_FAILED", "candidate install failed"
+        ));
+
+        assertThat(registry.get("sample-app").deliveryState()).isEqualTo("DEPLOY_FAILED");
+        assertThat(registry.get("sample-app").lastFailureCode()).isEqualTo("DEPLOY_FAILED");
+    }
 
     @Test
     void refuses_completed_before_evaluation_queue() {

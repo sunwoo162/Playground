@@ -1,6 +1,7 @@
 import {
   decorateSchedulerObservability,
   resolveDeploymentPreviewUrl,
+  resolveIntegratedMainSha,
 } from "./observedHeadlessBuilderExecutor";
 import {
   completeSchedulerWaveTelemetry,
@@ -210,7 +211,7 @@ function testSnapshotDecorationAndRecovery() {
   const recoveredRuns = [
     taskRun("FE-001", "frontend", "done", "rose:frontend", "2026-08-27T01:00:00.000Z", "2026-08-27T01:00:10.000Z"),
     taskRun("BE-001", "backend", "done", "rose:backend", "2026-08-27T01:00:00.000Z", "2026-08-27T01:00:09.000Z"),
-    taskRun("DOC-001", "documentation", "done", "rose:documentation", "2026-08-27T01:00:00.000Z", "2026-08-27T01:00:08.000Z"),
+    taskRun("DOC-001", "documentation", "done", "rose:documentation", "2026-08-27T01:00:00.000Z", "2026-08-27T01:00:10.000Z"),
     taskRun("QA-001", "qa", "ready", "rose:qa"),
   ];
   const recovered = decorateSchedulerObservability(
@@ -286,12 +287,38 @@ function testDeploymentPreviewEvidenceResolution() {
   assert(ambiguousRejected, "conflicting verified deployment URLs must block completion instead of picking one");
 }
 
+function testIntegratedMainShaResolution() {
+  const first = "1111111111111111111111111111111111111111";
+  const final = "2222222222222222222222222222222222222222";
+  assert(resolveIntegratedMainSha({
+    repositoryFullName: "BloomBouquet/sample",
+    mergedPullRequests: [
+      { number: 1, url: "https://github.com/BloomBouquet/sample/pull/1", headBranch: "sample/frontend", mergeCommitSha: first },
+      { number: 2, url: "https://github.com/BloomBouquet/sample/pull/2", headBranch: "sample/backend", mergeCommitSha: final },
+    ],
+  }) === final, "automatic delivery must deploy the final integrated main commit");
+
+  let rejected = false;
+  try {
+    resolveIntegratedMainSha({
+      repositoryFullName: "BloomBouquet/sample",
+      mergedPullRequests: [
+        { number: 1, url: "https://github.com/BloomBouquet/sample/pull/1", headBranch: "sample/frontend", mergeCommitSha: null },
+      ],
+    });
+  } catch {
+    rejected = true;
+  }
+  assert(rejected, "automatic delivery must fail closed when final merge SHA evidence is missing");
+}
+
 function run() {
   testWaveDecisionTelemetry();
   testWaveCompletionAndAggregateMetrics();
   testSnapshotDecorationAndRecovery();
   testTelemetryRetentionBound();
   testDeploymentPreviewEvidenceResolution();
+  testIntegratedMainShaResolution();
   console.log("schedulerObservability policy tests passed");
 }
 

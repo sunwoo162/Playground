@@ -66,6 +66,7 @@
     "ts/lunaServerRuntime.policy-test.ts",
     "ts/lunaGateway.policy-test.ts",
     "ts/lunaReleaseIdentity.policy-test.ts",
-    "ts/lunaDeliveryController.policy-test.ts"
+    "ts/lunaDeliveryController.policy-test.ts",
+    "ts/lunaDeliveryAutomation.policy-test.ts"
   ]
 }
