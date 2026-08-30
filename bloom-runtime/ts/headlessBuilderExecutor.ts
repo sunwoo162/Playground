@@ -126,6 +126,12 @@ type MergeProjectPullRequestsResult = {
   }>;
 };
 
+export type ReleasePromotionResult = {
+  repositoryFullName: string;
+  releaseSha: string;
+  releasePullRequestNumber: number | null;
+};
+
 export type HeadlessBuilderRuntime = {
   analyzeIntake(input: {
     organization: string;
@@ -161,6 +167,11 @@ export type HeadlessBuilderRuntime = {
     repositoryFullName: string;
     pullRequestNumbers: number[];
   }): Promise<MergeProjectPullRequestsResult>;
+  promoteRelease?(input: {
+    repositoryFullName: string;
+    integrationBranch: string;
+    releaseBranch: string;
+  }): Promise<ReleasePromotionResult>;
 };
 
 type PersistedPmEvidence = {
@@ -183,6 +194,7 @@ export type HeadlessBuilderSnapshotPayload = {
   taskRuns: ProjectTaskRun[];
   integrationPullRequestNumbers: number[];
   integration: MergeProjectPullRequestsResult | null;
+  release?: ReleasePromotionResult | null;
   blockedReason: string | null;
 };
 
@@ -226,6 +238,7 @@ function freshPayload(claim: BuilderWorkerClaim): HeadlessBuilderSnapshotPayload
     taskRuns: [],
     integrationPullRequestNumbers: [],
     integration: null,
+    release: null,
     blockedReason: null,
   };
 }
@@ -261,6 +274,7 @@ function parseSnapshot(
     throw new Error("Builder orchestration snapshot identity 또는 필수 필드가 손상되었습니다.");
   }
 
+  payload.release ??= null;
   return payload as HeadlessBuilderSnapshotPayload;
 }
 
@@ -608,12 +622,29 @@ export function createHeadlessBuilderExecutor(
         pullRequestNumbers: payload.integrationPullRequestNumbers,
       });
       payload.blockedReason = null;
+      await persist("release");
+    }
+
+    if (!payload.release) {
+      const promoteRelease = options.runtime.promoteRelease;
+      if (!promoteRelease) {
+        await failBlocked("Release promotion Runtime이 연결되지 않았습니다.");
+        throw new Error("Release promotion Runtime is unreachable after failBlocked.");
+      }
+      payload.release = await promoteRelease({
+        repositoryFullName: payload.repository.repository,
+        integrationBranch: payload.repository.integrationBranch,
+        releaseBranch: payload.repository.releaseBranch,
+      });
+      payload.blockedReason = null;
       await persist("completed");
     }
 
     return {
       repositoryFullName: payload.repository.repository,
       previewUrl: claim.previewUrl,
+      releaseSha: payload.release.releaseSha,
+      workspacePath: payload.repository.workspacePath,
     };
   };
 }

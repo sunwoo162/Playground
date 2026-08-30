@@ -260,6 +260,14 @@ function fakeRuntime(events: string[]) {
         })),
       };
     },
+    async promoteRelease(input) {
+      events.push("promote-release");
+      return {
+        repositoryFullName: input.repositoryFullName,
+        releaseSha: "0123456789abcdef0123456789abcdef01234567",
+        releasePullRequestNumber: 202,
+      };
+    },
   };
 
   return {
