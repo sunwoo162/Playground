@@ -1,6 +1,5 @@
 import {
   parseLunaDeliveryManifest,
-  type LunaDeliveryManifest,
 } from "./lunaDeliveryManifest";
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -18,7 +17,7 @@ function assertThrows(run: () => unknown, pattern: RegExp, message: string) {
   assert(pattern.test(error.message), `${message}: ${error.message}`);
 }
 
-const base = (): LunaDeliveryManifest => ({
+const base = () => ({
   schemaVersion: 1,
   slug: "sample-app",
   platform: "web",
@@ -40,6 +39,43 @@ const parsed = parseLunaDeliveryManifest(base());
 assert(parsed.slug === "sample-app", "valid manifest keeps the slug");
 assert(parsed.runtimes[0]?.type === "static", "valid static runtime parses");
 assert(parsed.runtimes[0]?.workingDirectory === ".", "root workingDirectory normalizes to dot");
+assert(parsed.runtimes[0]?.routingMode === "static-files", "static runtime defaults to static-files routing");
+
+const spa = parseLunaDeliveryManifest({
+  ...base(),
+  runtimes: [{
+    ...base().runtimes[0],
+    routingMode: "spa",
+  }],
+});
+assert(spa.runtimes[0]?.routingMode === "spa", "static runtime accepts spa routing");
+
+const serverDefault = parseLunaDeliveryManifest({
+  ...base(),
+  runtimes: [{
+    id: "api",
+    type: "server",
+    workingDirectory: ".",
+    buildCommand: "pnpm build",
+    startCommand: "pnpm start",
+    healthPath: "/health",
+  }],
+});
+assert(serverDefault.runtimes[0]?.routingMode === "strip-prefix", "server runtime defaults to strip-prefix routing");
+
+const preservePrefix = parseLunaDeliveryManifest({
+  ...base(),
+  runtimes: [{
+    id: "api",
+    type: "server",
+    routingMode: "preserve-prefix",
+    workingDirectory: ".",
+    buildCommand: "pnpm build",
+    startCommand: "pnpm start",
+    healthPath: "/health",
+  }],
+});
+assert(preservePrefix.runtimes[0]?.routingMode === "preserve-prefix", "server runtime accepts preserve-prefix routing");
 
 assertThrows(
   () => parseLunaDeliveryManifest({ ...base(), slug: "Bad Slug" }),
@@ -117,6 +153,30 @@ assertThrows(
   () => parseLunaDeliveryManifest({ ...base(), runtimes: [] }),
   /runtime/i,
   "manifest must declare at least one runtime",
+);
+assertThrows(
+  () => parseLunaDeliveryManifest({
+    ...base(),
+    runtimes: [{ ...base().runtimes[0], routingMode: "strip-prefix" }],
+  }),
+  /routingMode/i,
+  "static runtime rejects server routing modes",
+);
+assertThrows(
+  () => parseLunaDeliveryManifest({
+    ...base(),
+    runtimes: [{
+      id: "api",
+      type: "server",
+      routingMode: "spa",
+      workingDirectory: ".",
+      buildCommand: "pnpm build",
+      startCommand: "pnpm start",
+      healthPath: "/health",
+    }],
+  }),
+  /routingMode/i,
+  "server runtime rejects static routing modes",
 );
 
 console.log("PASS  Luna delivery manifest validation scenarios passed.");
