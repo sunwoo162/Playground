@@ -28,6 +28,8 @@ public class LunaDeliveryRegistryService {
     private static final Pattern SLUG_PATTERN = Pattern.compile("[a-z0-9]+(?:-[a-z0-9]+)*");
     private static final Pattern RUNTIME_ID_PATTERN = Pattern.compile("[a-z0-9]+(?:-[a-z0-9]+)*");
     private static final Set<String> RUNTIME_TYPES = Set.of("static", "server");
+    private static final int AUTO_PORT_MIN = 20000;
+    private static final int AUTO_PORT_MAX = 39999;
     private static final List<String> HAPPY_PATH = List.of(
             "CODE_COMPLETE", "MERGED", "DELIVERY_PLANNING", "BUILDING",
             "CANDIDATE_READY", "LOCAL_VERIFYING", "GATEWAY_SWITCHING",
@@ -115,11 +117,6 @@ public class LunaDeliveryRegistryService {
             throw new IllegalArgumentException("runtimeType must be static or server.");
         }
 
-        Integer slotAPort = normalizePort(request.slotAPort(), runtimeType, "slotAPort");
-        Integer slotBPort = normalizePort(request.slotBPort(), runtimeType, "slotBPort");
-        if (slotAPort != null && slotAPort.equals(slotBPort)) {
-            throw new IllegalArgumentException("A/B runtime ports must be different.");
-        }
         String activeSlot = normalizeSlot(request.activeSlot(), "activeSlot");
         String candidateSlot = normalizeSlot(request.candidateSlot(), "candidateSlot");
         if (activeSlot != null && activeSlot.equals(candidateSlot)) {
@@ -133,11 +130,48 @@ public class LunaDeliveryRegistryService {
                         .runtimeId(normalizedRuntimeId)
                         .build());
         runtime.setRuntimeType(runtimeType);
-        runtime.setSlotAPort(slotAPort);
-        runtime.setSlotBPort(slotBPort);
+
+        if ("static".equals(runtimeType)) {
+            normalizePort(request.slotAPort(), runtimeType, "slotAPort");
+            normalizePort(request.slotBPort(), runtimeType, "slotBPort");
+            runtime.setSlotAPort(null);
+            runtime.setSlotBPort(null);
+        } else {
+            assignServerPorts(runtime, request.slotAPort(), request.slotBPort());
+        }
+
         runtime.setActiveSlot(activeSlot);
         runtime.setCandidateSlot(candidateSlot);
         return toRuntimeResponse(runtimeRepository.save(runtime));
+    }
+
+    private void assignServerPorts(LunaDeliveryRuntime runtime, Integer requestedA, Integer requestedB) {
+        if ((requestedA == null) != (requestedB == null)) {
+            throw new IllegalArgumentException("Server runtimes must provide both A/B ports or omit both for automatic allocation.");
+        }
+        if (requestedA != null) {
+            int slotAPort = normalizePort(requestedA, "server", "slotAPort");
+            int slotBPort = normalizePort(requestedB, "server", "slotBPort");
+            if (slotAPort == slotBPort) {
+                throw new IllegalArgumentException("A/B runtime ports must be different.");
+            }
+            runtime.setSlotAPort(slotAPort);
+            runtime.setSlotBPort(slotBPort);
+            return;
+        }
+        if (runtime.getSlotAPort() != null && runtime.getSlotBPort() != null) {
+            return;
+        }
+
+        LunaDeliveryRuntime persisted = runtimeRepository.save(runtime);
+        long offset = (persisted.getId() - 1L) * 2L;
+        long slotA = AUTO_PORT_MIN + offset;
+        long slotB = slotA + 1L;
+        if (slotA < AUTO_PORT_MIN || slotB > AUTO_PORT_MAX) {
+            throw new IllegalStateException("Luna automatic server port range is exhausted.");
+        }
+        runtime.setSlotAPort((int) slotA);
+        runtime.setSlotBPort((int) slotB);
     }
 
     @Transactional
