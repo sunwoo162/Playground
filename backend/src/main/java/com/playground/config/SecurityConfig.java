@@ -26,6 +26,7 @@ import java.util.List;
 public class SecurityConfig {
 
     private final BuilderWorkerTokenFilter builderWorkerTokenFilter;
+    private final LunaDeliveryTokenFilter lunaDeliveryTokenFilter;
     private final BouquetSessionAuthFilter bouquetSessionAuthFilter;
     private final JwtAuthFilter jwtAuthFilter;
 
@@ -51,6 +52,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/bloom-bouquet/public/**").permitAll()
                 .requestMatchers("/api/bouquet/**").permitAll()
                 .requestMatchers("/internal/builder/worker/**").permitAll()
+                .requestMatchers("/internal/luna/delivery/**").permitAll()
                 .requestMatchers("/api/bloom-bouquet/**").hasRole("BOUQUET_USER")
                 .requestMatchers("/api/**").authenticated()
                 .anyRequest().permitAll()
@@ -58,6 +60,7 @@ public class SecurityConfig {
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(bouquetSessionAuthFilter, JwtAuthFilter.class)
             .addFilterBefore(builderWorkerTokenFilter, JwtAuthFilter.class)
+            .addFilterBefore(lunaDeliveryTokenFilter, JwtAuthFilter.class)
             .exceptionHandling(ex -> ex
                 .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
             );

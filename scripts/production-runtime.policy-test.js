@@ -111,6 +111,22 @@ test('production backend validates schema and uses Flyway instead of Hibernate m
   }
 });
 
+test('Luna delivery registry production schema is managed by Flyway', () => {
+  const migrationPath = path.join(
+    ROOT,
+    'backend/src/main/resources/db/migration/V4__luna_delivery_registry.sql',
+  );
+  assert.equal(fs.existsSync(migrationPath), true, 'Luna delivery registry requires a Flyway migration');
+
+  const migration = fs.readFileSync(migrationPath, 'utf8');
+  assert.match(migration, /CREATE TABLE luna_delivery_projects/i);
+  assert.match(migration, /CREATE TABLE luna_delivery_runtimes/i);
+  assert.match(migration, /UNIQUE[^\n]*slug|UNIQUE KEY[^\n]*slug/i);
+  assert.match(migration, /FOREIGN KEY\s*\(project_id\)\s*REFERENCES\s+luna_delivery_projects\s*\(id\)/i);
+  assert.match(migration, /idx_luna_delivery_project_state/i);
+  assert.match(migration, /idx_luna_delivery_project_adoption/i);
+});
+
 test('production secret files stay untracked, private, and deploy diagnostics never dump them', () => {
   const gitignore = fs.readFileSync(path.join(ROOT, '.gitignore'), 'utf8');
   assert.match(gitignore, /^\.env\.\*$/m);

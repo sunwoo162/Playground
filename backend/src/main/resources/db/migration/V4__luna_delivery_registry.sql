@@ -1,0 +1,47 @@
+CREATE TABLE luna_delivery_projects (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    slug VARCHAR(160) NOT NULL,
+    repository_full_name VARCHAR(200) NOT NULL,
+    main_sha VARCHAR(64) NOT NULL,
+    manifest_digest VARCHAR(128) NULL,
+    adoption_state VARCHAR(40) NOT NULL,
+    delivery_state VARCHAR(40) NOT NULL,
+    public_url VARCHAR(500) NULL,
+    active_release_sha VARCHAR(64) NULL,
+    previous_healthy_release_sha VARCHAR(64) NULL,
+    last_local_health VARCHAR(4000) NULL,
+    last_public_health VARCHAR(4000) NULL,
+    bloom_team_id BIGINT NULL,
+    bloom_project_id BIGINT NULL,
+    bloom_submission_id BIGINT NULL,
+    bloom_evaluation_run_id BIGINT NULL,
+    last_failure_code VARCHAR(80) NULL,
+    last_failure_reason VARCHAR(2000) NULL,
+    retry_count INT NOT NULL DEFAULT 0,
+    last_attempt_at DATETIME(6) NULL,
+    next_retry_at DATETIME(6) NULL,
+    created_at DATETIME(6) NOT NULL,
+    updated_at DATETIME(6) NOT NULL,
+    PRIMARY KEY (id),
+    CONSTRAINT uk_luna_delivery_project_slug UNIQUE (slug),
+    INDEX idx_luna_delivery_project_state (delivery_state),
+    INDEX idx_luna_delivery_project_adoption (adoption_state)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE luna_delivery_runtimes (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    project_id BIGINT NOT NULL,
+    runtime_id VARCHAR(80) NOT NULL,
+    runtime_type VARCHAR(20) NOT NULL,
+    slot_a_port INT NULL,
+    slot_b_port INT NULL,
+    active_slot VARCHAR(1) NULL,
+    candidate_slot VARCHAR(1) NULL,
+    created_at DATETIME(6) NOT NULL,
+    updated_at DATETIME(6) NOT NULL,
+    PRIMARY KEY (id),
+    CONSTRAINT uk_luna_delivery_runtime_project_runtime UNIQUE (project_id, runtime_id),
+    INDEX idx_luna_delivery_runtime_project (project_id),
+    CONSTRAINT fk_luna_delivery_runtime_project
+        FOREIGN KEY (project_id) REFERENCES luna_delivery_projects(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
