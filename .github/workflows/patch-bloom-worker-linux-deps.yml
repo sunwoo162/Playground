@@ -1,0 +1,44 @@
+name: Patch Bloom Worker Linux dependencies
+
+on:
+  push:
+    branches:
+      - fix/luna-bloom-worker-linux-deps
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/luna-bloom-worker-linux-deps
+          fetch-depth: 0
+      - name: Add native build dependencies
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('.github/workflows/deploy-bloom-worker.yml')
+          text = path.read_text(encoding='utf-8')
+          old = '      - name: Setup Rust\n        uses: dtolnay/rust-toolchain@stable\n\n      - name: Build headless runtime binary\n'
+          new = '      - name: Setup Rust\n        uses: dtolnay/rust-toolchain@stable\n\n      - name: Install Tauri Linux dependencies\n        run: |\n          sudo apt-get update\n          sudo apt-get install -y \\\n            libwebkit2gtk-4.1-dev \\\n            libayatana-appindicator3-dev \\\n            librsvg2-dev \\\n            patchelf\n\n      - name: Build headless runtime binary\n'
+          if old not in text:
+              raise SystemExit('expected Setup Rust/build boundary not found')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+      - name: Remove one-shot workflow
+        shell: bash
+        run: rm .github/workflows/patch-bloom-worker-linux-deps.yml
+      - name: Commit production fix
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/deploy-bloom-worker.yml .github/workflows/patch-bloom-worker-linux-deps.yml
+          git diff --cached --check
+          git commit -m "fix: install native deps for Bloom worker build"
+          git push origin HEAD:fix/luna-bloom-worker-linux-deps
