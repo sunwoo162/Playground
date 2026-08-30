@@ -20,6 +20,14 @@ const root = __dirname;
 const sharedEnv = readEnvFile(path.join(root, '.env'));
 const backendEnv = readEnvFile(path.join(root, '.env.backend'));
 const workerToken = backendEnv.BUILDER_WORKER_TOKEN || sharedEnv.BUILDER_WORKER_TOKEN || '';
+const commonWorkerEnv = {
+  ...sharedEnv,
+  NODE_ENV: 'production',
+  BUILDER_WORKER_TOKEN: workerToken,
+  BLOOM_API_BASE_URL: sharedEnv.BLOOM_API_BASE_URL || 'http://localhost:8080',
+  BLOOM_WORKER_POLL_INTERVAL_MS: sharedEnv.BLOOM_WORKER_POLL_INTERVAL_MS || '5000',
+  BLOOM_WORKER_HEARTBEAT_INTERVAL_MS: sharedEnv.BLOOM_WORKER_HEARTBEAT_INTERVAL_MS || '30000',
+};
 
 module.exports = {
   apps: [
@@ -47,21 +55,32 @@ module.exports = {
       },
     },
     {
-      name: 'bloom-worker',
+      name: 'bloom-evaluator-worker',
       script: './bloom-worker/run.js',
       cwd: '/home/ubuntu/bloombouquet',
       autorestart: true,
       restart_delay: 5000,
       max_restarts: 20,
       env: {
-        ...sharedEnv,
-        NODE_ENV: 'production',
-        BUILDER_WORKER_TOKEN: workerToken,
+        ...commonWorkerEnv,
         BLOOM_WORKER_MODE: sharedEnv.BLOOM_WORKER_MODE || 'evaluator',
-        BLOOM_API_BASE_URL: sharedEnv.BLOOM_API_BASE_URL || 'http://localhost:8080',
+        BLOOM_EVALUATOR_RUNTIME: sharedEnv.BLOOM_EVALUATOR_RUNTIME || 'local',
+        BLOOM_WORKER_ID: sharedEnv.BLOOM_EVALUATOR_WORKER_ID || 'bloom-evaluator-production',
+      },
+    },
+    {
+      name: 'bloom-builder-worker',
+      script: './bloom-worker/run.js',
+      cwd: '/home/ubuntu/bloombouquet',
+      autorestart: true,
+      restart_delay: 5000,
+      max_restarts: 20,
+      env: {
+        ...commonWorkerEnv,
+        BLOOM_WORKER_MODE: 'builder',
         BLOOM_GITHUB_ORGANIZATION: sharedEnv.BLOOM_GITHUB_ORGANIZATION || 'sunwoo162',
         BLOOM_WORKSPACE_ROOT: sharedEnv.BLOOM_WORKSPACE_ROOT || '/home/ubuntu/bloom-workspaces',
-        BLOOM_WORKER_ID: sharedEnv.BLOOM_WORKER_ID || 'bloom-worker-production',
+        BLOOM_WORKER_ID: sharedEnv.BLOOM_BUILDER_WORKER_ID || 'bloom-builder-production',
         BLOOM_TEAM_ID: sharedEnv.BLOOM_TEAM_ID || 'rose',
         BLOOM_TEAM_NAME: sharedEnv.BLOOM_TEAM_NAME || 'Rose',
       },
