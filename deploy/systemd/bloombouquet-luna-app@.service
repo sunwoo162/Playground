@@ -1,0 +1,18 @@
+[Unit]
+Description=BloomBouquet Luna managed application %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=bloombouquet
+Group=bloombouquet
+EnvironmentFile=/run/bloombouquet/luna/%i.env
+ExecStart=/bin/sh -lc 'cd -- "$LUNA_RELEASE_PATH" && exec /bin/sh -lc "$LUNA_START_COMMAND"'
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
