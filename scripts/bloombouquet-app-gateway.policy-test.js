@@ -10,9 +10,10 @@ test('public showcase is a launcher, not a login surface', () => {
   assert.doesNotMatch(source, /target="_blank"/);
 });
 
-test('gateway uses only fixed BloomBouquet project mappings and preserves proxy protocol', () => {
+test('gateway preserves legacy routes and includes the machine-owned Luna app registry', () => {
   const nginx = fs.readFileSync('deploy/nginx/bloombouquet.conf', 'utf8');
   assert.match(nginx, /server_name playground\.https\.gsmsv\.site bloombouquet\.https\.gsmsv\.site;/);
+  assert.match(nginx, /include \/etc\/nginx\/bloombouquet-apps\.generated\.conf;/);
   assert.match(nginx, /location = \/apps\/evidence-vault/);
   assert.match(nginx, /return 308 \/apps\/evidence-vault\//);
   assert.match(nginx, /location \^~ \/apps\/evidence-vault\//);
@@ -26,7 +27,7 @@ test('gateway uses only fixed BloomBouquet project mappings and preserves proxy 
   assert.equal((nginx.match(/proxy_set_header X-Forwarded-Proto https;/g) ?? []).length, 3);
 });
 
-test('gateway deployment is manual-only', () => {
+test('stable parent gateway deployment stays manual while Luna owns only the generated include', () => {
   const workflow = fs.readFileSync('.github/workflows/deploy-bloombouquet-app-gateway.yml', 'utf8');
   assert.match(workflow, /workflow_dispatch:/);
   assert.doesNotMatch(workflow, /push:/);
