@@ -1,0 +1,51 @@
+name: Patch release crash semantics
+
+on:
+  push:
+    branches:
+      - feat/luna-automatic-delivery
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/luna-automatic-delivery
+          fetch-depth: 0
+      - name: Strengthen release crash recovery contract
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('bloom-runtime/ts/headlessCrashRecovery.policy-test.ts')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace('  let mergeCalls = 0;\n  let mergeEffects = 0;\n', '  let mergeCalls = 0;\n  let mergeEffects = 0;\n  let releaseCalls = 0;\n  let releaseEffects = 0;\n  let released = false;\n', 1)
+          old = '    async promoteRelease(input) {\n      return {\n        repositoryFullName: input.repositoryFullName,\n        releaseSha: "89abcdef0123456789abcdef0123456789abcdef",\n        releasePullRequestNumber: 900,\n      };\n    },\n'
+          new = '    async promoteRelease(input) {\n      releaseCalls += 1;\n      if (!released) {\n        released = true;\n        releaseEffects += 1;\n      }\n      return {\n        repositoryFullName: input.repositoryFullName,\n        releaseSha: "89abcdef0123456789abcdef0123456789abcdef",\n        releasePullRequestNumber: 900,\n      };\n    },\n'
+          if old not in text:
+              raise SystemExit('promoteRelease fixture block not found')
+          text = text.replace(old, new, 1)
+          text = text.replace('    get mergeCalls() { return mergeCalls; },\n    get mergeEffects() { return mergeEffects; },\n', '    get mergeCalls() { return mergeCalls; },\n    get mergeEffects() { return mergeEffects; },\n    get releaseCalls() { return releaseCalls; },\n    get releaseEffects() { return releaseEffects; },\n', 1)
+          old_assertions = '  checkEqual(runtime.mergeCalls, 1, "first execution must invoke integration once");\n  await resume(executor, storage.client);\n  checkEqual(runtime.mergeCalls, 2, "restart may re-enter the idempotent integration command");\n  checkEqual(runtime.mergeEffects, mergedBeforeRestart, "no PR may be merged twice");\n  checkEqual(runtime.mergedPullRequests.size, mergedBeforeRestart, "merged PR set must remain stable");\n'
+          new_assertions = '  checkEqual(runtime.mergeCalls, 1, "first execution must invoke integration once");\n  checkEqual(runtime.releaseCalls, 1, "first execution must invoke release promotion once");\n  checkEqual(runtime.releaseEffects, 1, "first release promotion must create one durable side effect");\n  await resume(executor, storage.client);\n  checkEqual(runtime.mergeCalls, 1, "restart must not re-enter integration after the release snapshot is durable");\n  checkEqual(runtime.mergeEffects, mergedBeforeRestart, "no PR may be merged twice");\n  checkEqual(runtime.releaseCalls, 2, "restart may re-enter idempotent release promotion after a completed-snapshot crash");\n  checkEqual(runtime.releaseEffects, 1, "release promotion side effect must stay unique across recovery");\n  checkEqual(runtime.mergedPullRequests.size, mergedBeforeRestart, "merged PR set must remain stable");\n'
+          if old_assertions not in text:
+              raise SystemExit('integration recovery assertions not found')
+          path.write_text(text.replace(old_assertions, new_assertions, 1), encoding='utf-8')
+          PY
+      - name: Remove one-shot workflow
+        shell: bash
+        run: rm .github/workflows/patch-release-crash-semantics.yml
+      - name: Commit crash recovery contract
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add bloom-runtime/ts/headlessCrashRecovery.policy-test.ts .github/workflows/patch-release-crash-semantics.yml
+          git diff --cached --check
+          git commit -m "test: enforce release crash recovery semantics"
+          git push origin HEAD:feat/luna-automatic-delivery
