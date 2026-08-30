@@ -35,6 +35,19 @@ test('worker deployment provisions the builder runtime bridge and verifies both 
   assert.match(workflow, /started mode=builder workerId=/);
 });
 
+test('worker deployment installs native Linux dependencies before the release runtime build', () => {
+  const workflow = readWorkerDeployWorkflow();
+  const dependencyStep = workflow.indexOf('- name: Install Tauri Linux dependencies');
+  const buildStep = workflow.indexOf('- name: Build headless runtime binary');
+
+  assert.ok(dependencyStep >= 0, 'worker deployment must install the native GTK/WebKit build dependencies');
+  assert.ok(buildStep >= 0, 'worker deployment must build the release runtime bridge');
+  assert.ok(dependencyStep < buildStep, 'native Linux dependencies must be installed before cargo release build');
+  assert.match(workflow, /libwebkit2gtk-4\.1-dev/);
+  assert.match(workflow, /libayatana-appindicator3-dev/);
+  assert.match(workflow, /librsvg2-dev/);
+});
+
 test('production builder bridge exposes authoritative release promotion', () => {
   const entrypoint = readWorkerEntrypoint();
 
