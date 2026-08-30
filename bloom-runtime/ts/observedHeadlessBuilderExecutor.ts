@@ -175,6 +175,20 @@ export function resolveIntegratedMainSha(integration: LunaIntegratedMergeResult)
   return mainSha;
 }
 
+export function resolveAutomaticDeliveryMainSha(input: {
+  releaseSha: string | null | undefined;
+  integration: LunaIntegratedMergeResult;
+}): string {
+  if (!input.integration.mergedPullRequests.length) {
+    throw new Error("자동 배포 전에 develop integration merge evidence가 필요합니다.");
+  }
+  const releaseSha = input.releaseSha?.trim() ?? "";
+  if (!EXACT_GIT_SHA_PATTERN.test(releaseSha)) {
+    throw new Error("자동 배포에는 promotion이 반환한 정확한 40자리 lowercase main release SHA가 필요합니다.");
+  }
+  return releaseSha;
+}
+
 export function decorateSchedulerObservability(
   previousPayloadJson: string | null,
   currentPayloadJson: string,
@@ -291,7 +305,10 @@ export function createObservedHeadlessBuilderExecutor(
       if (!plan || !repository || !completedPayload?.integration) {
         throw new Error("자동 Luna delivery 전에 plan, repository, integration evidence가 모두 필요합니다.");
       }
-      const mainSha = resolveIntegratedMainSha(completedPayload.integration);
+      const mainSha = resolveAutomaticDeliveryMainSha({
+        releaseSha: result.releaseSha,
+        integration: completedPayload.integration,
+      });
       const delivered = await options.deliverIntegratedProject({
         slug: plan.repositoryName,
         projectName: plan.projectName,
