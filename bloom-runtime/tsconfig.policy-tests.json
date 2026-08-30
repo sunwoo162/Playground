@@ -59,6 +59,7 @@
     "ts/lunaVisualStyleInjection.policy-test.ts",
     "ts/lunaDeliveryManifest.policy-test.ts",
     "ts/lunaDeliveryHttpClient.policy-test.ts",
-    "ts/lunaDeliveryBuild.policy-test.ts"
+    "ts/lunaDeliveryBuild.policy-test.ts",
+    "ts/lunaStaticRelease.policy-test.ts"
   ]
 }
