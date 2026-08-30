@@ -74,6 +74,10 @@ enum HeadlessRuntimeRequest {
     MergePullRequests {
         input: integration_runtime::MergeProjectPullRequestsInput,
     },
+    #[serde(rename = "promoteRelease")]
+    PromoteRelease {
+        input: integration_runtime::PromoteProjectReleaseInput,
+    },
 }
 
 #[derive(Debug, Serialize)]
@@ -235,6 +239,12 @@ async fn execute(request: HeadlessRuntimeRequest) -> HeadlessRuntimeResponse {
         }
         HeadlessRuntimeRequest::MergePullRequests { input } => {
             match integration_runtime::merge_project_pull_requests(input) {
+                Ok(result) => success(result),
+                Err(error) => failure(error),
+            }
+        }
+        HeadlessRuntimeRequest::PromoteRelease { input } => {
+            match integration_runtime::promote_project_release(input) {
                 Ok(result) => success(result),
                 Err(error) => failure(error),
             }
