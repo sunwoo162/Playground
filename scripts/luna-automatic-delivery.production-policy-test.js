@@ -53,3 +53,14 @@ test('production builder bridge exposes authoritative release promotion', () => 
 
   assert.match(entrypoint, /promoteRelease:\s*\(input\)\s*=>\s*call\(\{\s*command:\s*["']promoteRelease["']/);
 });
+
+test('production builder injects the integrated project delivery hook', () => {
+  const entrypoint = readWorkerEntrypoint();
+  const builderExecutor = entrypoint.match(/const execute = createObservedHeadlessBuilderExecutor\(\{[\s\S]*?\n\s*\}\);/)?.[0] ?? '';
+
+  assert.match(
+    builderExecutor,
+    /deliverIntegratedProject\s*:/,
+    'production builder must provide the machine-owned Luna delivery hook',
+  );
+});
