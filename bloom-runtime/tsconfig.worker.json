@@ -28,6 +28,7 @@
     "ts/lunaServerRuntime.ts",
     "ts/lunaGateway.ts",
     "ts/lunaDeliveryHealth.ts",
+    "ts/lunaReleaseIdentity.ts",
     "ts/lunaDeliveryController.ts"
   ]
 }
