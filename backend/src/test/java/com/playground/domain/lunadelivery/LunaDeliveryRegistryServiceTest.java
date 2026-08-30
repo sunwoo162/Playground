@@ -64,6 +64,24 @@ class LunaDeliveryRegistryServiceTest {
     }
 
     @Test
+    void candidate_install_failure_can_be_recorded_from_building() {
+        registry.upsertProject(new UpsertProjectRequest(
+                "sample-app", "BloomBouquet/sample-app", "abc123",
+                "https://bloombouquet.https.gsmsv.site/apps/sample-app/"
+        ));
+        registry.transition("sample-app", new TransitionRequest("MERGED", null, null));
+        registry.transition("sample-app", new TransitionRequest("DELIVERY_PLANNING", null, null));
+        registry.transition("sample-app", new TransitionRequest("BUILDING", null, null));
+
+        registry.transition("sample-app", new TransitionRequest(
+                "DEPLOY_FAILED", "DEPLOY_FAILED", "candidate install failed"
+        ));
+
+        assertThat(registry.get("sample-app").deliveryState()).isEqualTo("DEPLOY_FAILED");
+        assertThat(registry.get("sample-app").lastFailureCode()).isEqualTo("DEPLOY_FAILED");
+    }
+
+    @Test
     void refuses_completed_before_evaluation_queue() {
         registry.upsertProject(new UpsertProjectRequest(
                 "sample-app",
