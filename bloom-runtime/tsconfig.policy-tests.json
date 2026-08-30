@@ -58,11 +58,13 @@
     "ts/headlessCrashRecovery.policy-test.ts",
     "ts/lunaVisualStyleInjection.policy-test.ts",
     "ts/lunaDeliveryManifest.policy-test.ts",
+    "ts/lunaManifestProposal.policy-test.ts",
     "ts/lunaDeliveryHttpClient.policy-test.ts",
     "ts/lunaDeliveryBuild.policy-test.ts",
     "ts/lunaStaticRelease.policy-test.ts",
     "ts/lunaServerRuntime.policy-test.ts",
     "ts/lunaGateway.policy-test.ts",
+    "ts/lunaReleaseIdentity.policy-test.ts",
     "ts/lunaDeliveryController.policy-test.ts"
   ]
 }

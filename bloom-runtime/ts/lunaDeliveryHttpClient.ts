@@ -38,6 +38,30 @@ export type LunaDeliveryRuntimeUpsertRequest = {
   candidateSlot?: string | null;
 };
 
+export type LunaDeliveryRegistrationRequest = {
+  schemaVersion: 1;
+  teamId: string;
+  teamName: string;
+  projectName: string;
+  projectSlug: string;
+  description: string;
+  version: string;
+  demoUrl: string;
+  repositoryUrl: string;
+  requiresAuth: boolean;
+  authRedirectUri?: string | null;
+};
+
+export type LunaDeliveryEvaluationStatus = "QUEUED" | "RUNNING" | "COMPLETED";
+
+export type LunaDeliveryRegistrationResponse = {
+  teamId: number;
+  projectId: number;
+  submissionId: number;
+  evaluationRunId: number;
+  evaluationStatus: LunaDeliveryEvaluationStatus;
+};
+
 export type LunaDeliveryRuntimeState = {
   id: number | null;
   runtimeId: string;
@@ -86,6 +110,7 @@ export type LunaDeliveryHttpClient = {
     runtimeId: string,
     request: LunaDeliveryRuntimeUpsertRequest,
   ): Promise<LunaDeliveryRuntimeState>;
+  registerSubmission(request: LunaDeliveryRegistrationRequest): Promise<LunaDeliveryRegistrationResponse>;
 };
 
 export type LunaDeliveryHttpClientOptions = {
@@ -103,6 +128,28 @@ export class LunaDeliveryHttpError extends Error {
     this.name = "LunaDeliveryHttpError";
   }
 }
+
+export class LunaDeliveryEvaluationPendingError extends Error {
+  readonly code = "EVALUATION_PENDING" as const;
+
+  constructor(
+    public readonly evaluationStatus: string | null,
+    public readonly evaluationRunId: number | null,
+  ) {
+    super(
+      evaluationRunId === null
+        ? "BloomBouquet registration has no evaluation run evidence yet."
+        : `BloomBouquet evaluation is not in a completion-linkable state: ${evaluationStatus ?? "missing"}.`,
+    );
+    this.name = "LunaDeliveryEvaluationPendingError";
+  }
+}
+
+const LINKABLE_EVALUATION_STATES = new Set<LunaDeliveryEvaluationStatus>([
+  "QUEUED",
+  "RUNNING",
+  "COMPLETED",
+]);
 
 function normalizeBaseUrl(value: string) {
   const input = value.trim();
@@ -152,6 +199,51 @@ async function errorDetail(response: LunaDeliveryFetchResponse) {
   } catch {
     return "";
   }
+}
+
+function requireRecord(value: unknown, label: string): Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new LunaDeliveryHttpError(`${label} is not an object.`, 200);
+  }
+  return value as Record<string, unknown>;
+}
+
+function requirePositiveId(value: unknown, label: string): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
+    throw new LunaDeliveryHttpError(`${label} is missing or invalid.`, 200);
+  }
+  return value;
+}
+
+function parseRegistrationResponse(value: unknown): LunaDeliveryRegistrationResponse {
+  const response = requireRecord(value, "Luna machine registration response");
+  const teamId = requirePositiveId(response.teamId, "teamId");
+  const projectId = requirePositiveId(response.projectId, "projectId");
+  const submissionId = requirePositiveId(response.submissionId, "submissionId");
+  const evaluationRunId = typeof response.evaluationRunId === "number"
+    && Number.isInteger(response.evaluationRunId)
+    && response.evaluationRunId > 0
+    ? response.evaluationRunId
+    : null;
+  const evaluationStatus = typeof response.evaluationStatus === "string"
+    ? response.evaluationStatus.trim().toUpperCase()
+    : null;
+
+  if (
+    evaluationRunId === null
+    || evaluationStatus === null
+    || !LINKABLE_EVALUATION_STATES.has(evaluationStatus as LunaDeliveryEvaluationStatus)
+  ) {
+    throw new LunaDeliveryEvaluationPendingError(evaluationStatus, evaluationRunId);
+  }
+
+  return {
+    teamId,
+    projectId,
+    submissionId,
+    evaluationRunId,
+    evaluationStatus: evaluationStatus as LunaDeliveryEvaluationStatus,
+  };
 }
 
 export function createLunaDeliveryHttpClient(
@@ -228,6 +320,14 @@ export function createLunaDeliveryHttpClient(
         `/internal/luna/delivery/projects/${projectSlug}/runtimes/${runtime}`,
         payload,
       );
+    },
+    async registerSubmission(payload) {
+      const response = await request<unknown>(
+        "POST",
+        "/internal/luna/delivery/register",
+        payload,
+      );
+      return parseRegistrationResponse(response);
     },
   };
 }

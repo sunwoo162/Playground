@@ -37,6 +37,30 @@ public final class LunaDeliveryDto {
     ) {
     }
 
+    public record RegistrationRequest(
+            Integer schemaVersion,
+            String teamId,
+            String teamName,
+            String projectName,
+            String projectSlug,
+            String description,
+            String version,
+            String demoUrl,
+            String repositoryUrl,
+            boolean requiresAuth,
+            String authRedirectUri
+    ) {
+    }
+
+    public record RegistrationResponse(
+            Long teamId,
+            Long projectId,
+            Long submissionId,
+            Long evaluationRunId,
+            String evaluationStatus
+    ) {
+    }
+
     public record RuntimeResponse(
             Long id,
             String runtimeId,

@@ -1,3 +1,8 @@
+import {
+  deriveLunaReleaseVersion,
+  readLunaPackageVersion,
+} from "./lunaReleaseIdentity";
+
 export type LunaDeliveryFailureCode =
   | "BLOCKED_MISSING_SECRET"
   | "BUILD_FAILED"
@@ -72,6 +77,7 @@ export type LunaDeliveryControllerDependencies<
 export type DeliverProjectInput<BuildEvidence, CandidateEvidence, GatewayEvidence> = {
   slug: string;
   gitSha: string;
+  workspacePath?: string;
   dependencies: LunaDeliveryControllerDependencies<
     BuildEvidence,
     CandidateEvidence,
@@ -82,6 +88,7 @@ export type DeliverProjectInput<BuildEvidence, CandidateEvidence, GatewayEvidenc
 export type LunaDeliveryResult<BuildEvidence, CandidateEvidence, GatewayEvidence> = {
   publicUrl: string;
   releaseSha: string;
+  releaseVersion: string;
   evidence: {
     build: BuildEvidence;
     candidate: CandidateEvidence;
@@ -136,6 +143,25 @@ export async function deliverProject<BuildEvidence, CandidateEvidence, GatewayEv
   input: DeliverProjectInput<BuildEvidence, CandidateEvidence, GatewayEvidence>,
 ): Promise<LunaDeliveryResult<BuildEvidence, CandidateEvidence, GatewayEvidence>> {
   validateIdentity(input.slug, input.gitSha);
+
+  let packageVersion: string | undefined;
+  if (input.workspacePath) {
+    try {
+      packageVersion = await readLunaPackageVersion(input.workspacePath);
+    } catch (error) {
+      throw new LunaDeliveryError(
+        "BUILD_FAILED",
+        "build",
+        errorMessage(error, "Luna release package metadata could not be read."),
+        NO_ROLLBACK,
+        error,
+      );
+    }
+  }
+  const releaseVersion = deriveLunaReleaseVersion({
+    gitSha: input.gitSha,
+    packageVersion,
+  });
   const deps = input.dependencies;
 
   let buildEvidence: BuildEvidence;
@@ -239,6 +265,7 @@ export async function deliverProject<BuildEvidence, CandidateEvidence, GatewayEv
   return {
     publicUrl: `https://bloombouquet.https.gsmsv.site/apps/${input.slug}/`,
     releaseSha: input.gitSha,
+    releaseVersion,
     evidence: {
       build: buildEvidence,
       candidate: candidateEvidence,

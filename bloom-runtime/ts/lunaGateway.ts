@@ -2,6 +2,11 @@ import { spawn } from "node:child_process";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 
+import type {
+  LunaServerRoutingMode,
+  LunaStaticRoutingMode,
+} from "./lunaDeliveryManifest";
+
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const RUNTIME_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const DEFAULT_GENERATED_CONFIG = "/etc/nginx/bloombouquet-apps.generated.conf";
@@ -11,6 +16,7 @@ export type LunaStaticGatewayRoute = {
   slug: string;
   runtimeId: string;
   type: "static";
+  routingMode: LunaStaticRoutingMode;
   releaseRoot: string;
 };
 
@@ -18,6 +24,7 @@ export type LunaServerGatewayRoute = {
   slug: string;
   runtimeId: string;
   type: "server";
+  routingMode: LunaServerRoutingMode;
   activePort: number;
 };
 
@@ -63,8 +70,24 @@ function assertGeneratedConfigPath(configPath: string) {
   }
 }
 
+function assertStaticRoutingMode(value: unknown): asserts value is LunaStaticRoutingMode {
+  if (value !== "static-files" && value !== "spa") {
+    throw new Error("Luna static gateway routingMode is invalid.");
+  }
+}
+
+function assertServerRoutingMode(value: unknown): asserts value is LunaServerRoutingMode {
+  if (value !== "strip-prefix" && value !== "preserve-prefix") {
+    throw new Error("Luna server gateway routingMode is invalid.");
+  }
+}
+
 function renderStaticRoute(route: LunaStaticGatewayRoute) {
   const releaseRoot = normalizeReleaseRoot(route.releaseRoot);
+  assertStaticRoutingMode(route.routingMode);
+  const tryFiles = route.routingMode === "spa"
+    ? `    try_files $uri $uri/ /apps/${route.slug}/index.html;`
+    : "    try_files $uri $uri/ =404;";
   return [
     `location = /apps/${route.slug} {`,
     `    return 308 /apps/${route.slug}/;`,
@@ -72,20 +95,24 @@ function renderStaticRoute(route: LunaStaticGatewayRoute) {
     "",
     `location ^~ /apps/${route.slug}/ {`,
     `    alias ${releaseRoot}/current/;`,
-    "    try_files $uri $uri/ =404;",
+    tryFiles,
     "}",
   ].join("\n");
 }
 
 function renderServerRoute(route: LunaServerGatewayRoute) {
   assertPort(route.activePort);
+  assertServerRoutingMode(route.routingMode);
+  const proxyPass = route.routingMode === "preserve-prefix"
+    ? `    proxy_pass http://127.0.0.1:${route.activePort};`
+    : `    proxy_pass http://127.0.0.1:${route.activePort}/;`;
   return [
     `location = /apps/${route.slug} {`,
     `    return 308 /apps/${route.slug}/;`,
     "}",
     "",
     `location ^~ /apps/${route.slug}/ {`,
-    `    proxy_pass http://127.0.0.1:${route.activePort}/;`,
+    proxyPass,
     "    proxy_http_version 1.1;",
     "    proxy_set_header Upgrade $http_upgrade;",
     "    proxy_set_header Connection 'upgrade';",

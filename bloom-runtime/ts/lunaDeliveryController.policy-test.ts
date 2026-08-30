@@ -1,5 +1,6 @@
 import {
   verifyLocalHealth,
+  verifyPublicDocument,
   verifyPublicHealth,
   type LunaHealthFetch,
 } from "./lunaDeliveryHealth";
@@ -27,6 +28,22 @@ async function assertRejectsCode(
   assert(error instanceof LunaDeliveryError, message);
   assert(error.code === code, `${message}: expected ${code}, got ${error.code}`);
   return error;
+}
+
+function richHealthResponse(
+  status: number,
+  contentType = "text/plain",
+  body = "",
+) {
+  return {
+    status,
+    headers: {
+      get(name: string) {
+        return name.toLowerCase() === "content-type" ? contentType : null;
+      },
+    },
+    text: async () => body,
+  } as unknown as Awaited<ReturnType<LunaHealthFetch>>;
 }
 
 type BuildEvidence = { artifact: string };
@@ -57,6 +74,68 @@ async function run() {
   });
   assert(publicHealth.url === "https://bloombouquet.https.gsmsv.site/apps/sample-app/health", "public health must use the canonical BloomBouquet app URL");
   assert(seenHealthUrls.length === 2, "local and public health must each execute one bounded HTTP probe");
+
+  const publicBase = "https://bloombouquet.https.gsmsv.site/apps/sample-app/";
+  const assetRequests: string[] = [];
+  const assetFetch: LunaHealthFetch = async (url) => {
+    assetRequests.push(url);
+    if (url === publicBase) {
+      return richHealthResponse(
+        200,
+        "text/html; charset=utf-8",
+        '<!doctype html><script src="/apps/sample-app/assets/app.js"></script><link rel="stylesheet" href="/apps/sample-app/assets/app.css"><script src="https://cdn.example.invalid/vendor.js"></script>',
+      );
+    }
+    if (url === `${publicBase}assets/app.js`) return richHealthResponse(200, "text/javascript");
+    if (url === `${publicBase}assets/app.css`) return richHealthResponse(200, "text/css");
+    return richHealthResponse(404);
+  };
+  await verifyPublicDocument({
+    publicUrl: publicBase,
+    healthPath: "/",
+    timeoutMs: 500,
+    fetchImpl: assetFetch,
+  });
+  assert(assetRequests.length === 3, "public document verification must fetch the HTML plus required same-origin JS/CSS assets only");
+  assert(assetRequests.includes(`${publicBase}assets/app.js`) && assetRequests.includes(`${publicBase}assets/app.css`), "public document verification must resolve assets under the canonical app base path");
+
+  let brokenAssetRejected = false;
+  try {
+    await verifyPublicDocument({
+      publicUrl: publicBase,
+      healthPath: "/",
+      timeoutMs: 500,
+      fetchImpl: async (url) => {
+        if (url === publicBase) {
+          return richHealthResponse(
+            200,
+            "text/html",
+            '<script src="/apps/sample-app/assets/app.js"></script><link rel="stylesheet" href="/apps/sample-app/assets/app.css">',
+          );
+        }
+        if (url.endsWith("app.css")) return richHealthResponse(404, "text/css");
+        return richHealthResponse(200, "text/javascript");
+      },
+    });
+  } catch (error) {
+    brokenAssetRejected = error instanceof Error && /404|asset|css/i.test(error.message);
+  }
+  assert(brokenAssetRejected, "HTML 200 must not pass public verification when a required same-origin asset returns 404");
+
+  let escapedAssetRejected = false;
+  try {
+    await verifyPublicDocument({
+      publicUrl: publicBase,
+      healthPath: "/",
+      timeoutMs: 500,
+      fetchImpl: async (url) => url === publicBase
+        ? richHealthResponse(200, "text/html", '<script src="/assets/root.js"></script>')
+        : richHealthResponse(200, "text/javascript"),
+    });
+  } catch (error) {
+    escapedAssetRejected = error instanceof Error && /base|prefix|outside|apps\/sample-app/i.test(error.message);
+  }
+  assert(escapedAssetRejected, "same-origin static assets outside the canonical /apps/<slug>/ prefix must fail closed");
 
   let unhealthyRejected = false;
   try {
@@ -106,6 +185,7 @@ async function run() {
   assert(successOrder.join(",") === "build,candidate,local-health,gateway-switch,public-health", "successful delivery must never switch the gateway before candidate health succeeds");
   assert(delivered.publicUrl === "https://bloombouquet.https.gsmsv.site/apps/sample-app/", "successful delivery returns the canonical public URL");
   assert(delivered.releaseSha === "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "successful delivery preserves the exact release SHA");
+  assert(delivered.releaseVersion === "git-aaaaaaaaaaaa", "successful delivery must expose a deterministic BloomBouquet release version derived from Git evidence");
   assert(delivered.rollbackResult.gateway === "not-needed" && delivered.rollbackResult.candidate === "not-needed", "successful delivery must report that rollback was not needed");
 
   const localFailureOrder: string[] = [];
