@@ -19,6 +19,7 @@
     "ts/bloomBouquetLocalSeniorEvaluator.ts",
     "ts/headlessBuilderExecutor.ts",
     "ts/schedulerObservability.ts",
-    "ts/observedHeadlessBuilderExecutor.ts"
+    "ts/observedHeadlessBuilderExecutor.ts",
+    "ts/lunaDeliveryManifest.ts"
   ]
 }
