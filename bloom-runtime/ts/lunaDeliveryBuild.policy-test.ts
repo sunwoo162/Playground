@@ -29,6 +29,7 @@ const staticManifest = (): LunaDeliveryManifest => ({
   runtimes: [{
     id: "web",
     type: "static",
+    routingMode: "static-files",
     workingDirectory: ".",
     installCommand: "pnpm install --frozen-lockfile",
     buildCommand: "pnpm build",
