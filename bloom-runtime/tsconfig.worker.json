@@ -19,6 +19,14 @@
     "ts/bloomBouquetLocalSeniorEvaluator.ts",
     "ts/headlessBuilderExecutor.ts",
     "ts/schedulerObservability.ts",
-    "ts/observedHeadlessBuilderExecutor.ts"
+    "ts/observedHeadlessBuilderExecutor.ts",
+    "ts/lunaDeliveryManifest.ts",
+    "ts/lunaDeliveryHttpClient.ts",
+    "ts/lunaDeliveryBuild.ts",
+    "ts/lunaStaticRelease.ts",
+    "ts/lunaServerRuntime.ts",
+    "ts/lunaGateway.ts",
+    "ts/lunaDeliveryHealth.ts",
+    "ts/lunaDeliveryController.ts"
   ]
 }
