@@ -57,6 +57,7 @@
     "ts/headlessBuilderExecutor.policy-test.ts",
     "ts/headlessCrashRecovery.policy-test.ts",
     "ts/lunaVisualStyleInjection.policy-test.ts",
-    "ts/lunaDeliveryManifest.policy-test.ts"
+    "ts/lunaDeliveryManifest.policy-test.ts",
+    "ts/lunaDeliveryHttpClient.policy-test.ts"
   ]
 }
