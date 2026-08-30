@@ -136,6 +136,7 @@ function createRuntimeBridge(binaryPath) {
     dispatchTask: (input) => call({ command: "dispatchAgentTask", input }),
     reconcileTask: (input) => call({ command: "reconcileInterruptedAgentTask", input }),
     mergePullRequests: (input) => call({ command: "mergePullRequests", input }),
+    promoteRelease: (input) => call({ command: "promoteRelease", input }),
   };
 }
 
