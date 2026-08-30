@@ -11,7 +11,20 @@ import org.springframework.transaction.annotation.Transactional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest
+@SpringBootTest(properties = {
+        "spring.datasource.url=jdbc:h2:mem:luna-delivery-registry;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE",
+        "spring.datasource.driver-class-name=org.h2.Driver",
+        "spring.datasource.username=sa",
+        "spring.datasource.password=",
+        "spring.jpa.hibernate.ddl-auto=create-drop",
+        "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.H2Dialect",
+        "spring.jpa.show-sql=false",
+        "spring.flyway.enabled=false",
+        "GITHUB_CLIENT_ID=test-client",
+        "GITHUB_CLIENT_SECRET=test-secret",
+        "app.jwt.secret=test-jwt-secret-for-luna-delivery-registry-0123456789abcdef",
+        "app.builder.worker-token=test-worker-token-for-luna-delivery-registry-0123456789abcdef"
+})
 @Transactional
 class LunaDeliveryRegistryPersistenceTest {
     @Autowired
