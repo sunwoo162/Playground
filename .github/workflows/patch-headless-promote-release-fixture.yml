@@ -1,0 +1,66 @@
+name: Patch headless promote release fixture
+
+on:
+  push:
+    branches:
+      - feat/luna-automatic-delivery
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/luna-automatic-delivery
+          fetch-depth: 0
+      - name: Patch promoteRelease fixture
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('bloom-runtime/ts/headlessBuilderExecutor.policy-test.ts')
+          text = path.read_text(encoding='utf-8')
+          marker = '''    async mergePullRequests(input) {
+      events.push("merge");
+      return {
+        repositoryFullName: input.repositoryFullName,
+        mergedPullRequests: input.pullRequestNumbers.map((number) => ({
+          number,
+          url: `https://github.com/example/repo/pull/${number}`,
+          headBranch: `agent/branch-${number}`,
+          mergeCommitSha: `merge-${number}`,
+        })),
+      };
+    },
+'''
+          replacement = marker + '''    async promoteRelease(input) {
+      events.push("promote-release");
+      return {
+        repositoryFullName: input.repositoryFullName,
+        releaseSha: "0123456789abcdef0123456789abcdef01234567",
+        releasePullRequestNumber: 202,
+      };
+    },
+'''
+          if marker not in text:
+              raise SystemExit('expected mergePullRequests fixture block not found')
+          if 'async promoteRelease(input)' in text:
+              raise SystemExit('promoteRelease fixture already exists')
+          path.write_text(text.replace(marker, replacement, 1), encoding='utf-8')
+          PY
+      - name: Remove one-shot workflow
+        shell: bash
+        run: rm .github/workflows/patch-headless-promote-release-fixture.yml
+      - name: Commit fixture patch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add bloom-runtime/ts/headlessBuilderExecutor.policy-test.ts .github/workflows/patch-headless-promote-release-fixture.yml
+          git diff --cached --check
+          git commit -m "test: add release promotion runtime fixture"
+          git push origin HEAD:feat/luna-automatic-delivery
