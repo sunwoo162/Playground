@@ -18,31 +18,35 @@ jobs:
           ref: feat/luna-automatic-delivery
           fetch-depth: 0
       - name: Patch exact TypeScript narrowing site
-        shell: python
+        shell: bash
         run: |
+          python3 - <<'PY'
           from pathlib import Path
-          path = Path('bloom-runtime/ts/headlessBuilderExecutor.ts')
-          text = path.read_text(encoding='utf-8')
+          path = Path("bloom-runtime/ts/headlessBuilderExecutor.ts")
+          text = path.read_text(encoding="utf-8")
           old = '''    if (!payload.release) {
-      if (!options.runtime.promoteRelease) {
-        await failBlocked("Release promotion Runtime이 연결되지 않았습니다.");
-      }
-      payload.release = await options.runtime.promoteRelease({
-'''
+            if (!options.runtime.promoteRelease) {
+              await failBlocked("Release promotion Runtime이 연결되지 않았습니다.");
+            }
+            payload.release = await options.runtime.promoteRelease({
+          '''
           new = '''    if (!payload.release) {
-      const promoteRelease = options.runtime.promoteRelease;
-      if (!promoteRelease) {
-        await failBlocked("Release promotion Runtime이 연결되지 않았습니다.");
-        throw new Error("Release promotion Runtime is unreachable after failBlocked.");
-      }
-      payload.release = await promoteRelease({
-'''
+            const promoteRelease = options.runtime.promoteRelease;
+            if (!promoteRelease) {
+              await failBlocked("Release promotion Runtime이 연결되지 않았습니다.");
+              throw new Error("Release promotion Runtime is unreachable after failBlocked.");
+            }
+            payload.release = await promoteRelease({
+          '''
           if old not in text:
-              raise SystemExit('expected release promotion block not found')
-          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+              raise SystemExit("expected release promotion block not found")
+          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          PY
       - name: Remove one-shot patch workflow
+        shell: bash
         run: rm .github/workflows/patch-luna-release-narrowing.yml
       - name: Commit patch
+        shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
