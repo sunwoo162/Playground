@@ -29,21 +29,45 @@ async function run() {
       slug: "zeta-api",
       runtimeId: "web",
       type: "server",
+      routingMode: "strip-prefix",
       activePort: 3210,
     },
     {
       slug: "alpha-web",
       runtimeId: "web",
       type: "static",
+      routingMode: "static-files",
       releaseRoot: "/srv/bloombouquet/apps/alpha-web",
+    },
+    {
+      slug: "spa-web",
+      runtimeId: "web",
+      type: "static",
+      routingMode: "spa",
+      releaseRoot: "/srv/bloombouquet/apps/spa-web",
+    },
+    {
+      slug: "prefix-api",
+      runtimeId: "api",
+      type: "server",
+      routingMode: "preserve-prefix",
+      activePort: 3211,
     },
   ];
 
   const rendered = renderLunaGatewayConfig(routes);
   assert(rendered.includes("# MACHINE-OWNED: Luna generated app routes"), "generated gateway must identify the file as machine-owned");
-  assert(rendered.indexOf("/apps/alpha-web/") < rendered.indexOf("/apps/zeta-api/"), "generated routes must be deterministic and sorted by slug/runtime");
+  assert(rendered.indexOf("/apps/alpha-web/") < rendered.indexOf("/apps/prefix-api/"), "generated routes must be deterministic and sorted by slug/runtime");
+  assert(rendered.indexOf("/apps/prefix-api/") < rendered.indexOf("/apps/spa-web/"), "generated route ordering remains deterministic across routing modes");
+  assert(rendered.indexOf("/apps/spa-web/") < rendered.indexOf("/apps/zeta-api/"), "generated routes remain sorted through the final slug");
+
   assert(rendered.includes("alias /srv/bloombouquet/apps/alpha-web/current/;"), "static routes must point at the active current release");
-  assert(rendered.includes("proxy_pass http://127.0.0.1:3210/;"), "server routes must proxy to the Registry-selected active port and strip the public prefix");
+  assert(rendered.includes("try_files $uri $uri/ =404;"), "static-files mode must not fall back to index.html");
+  assert(rendered.includes("alias /srv/bloombouquet/apps/spa-web/current/;"), "SPA route must use the active release root");
+  assert(rendered.includes("try_files $uri $uri/ /apps/spa-web/index.html;"), "SPA mode must fall back to the canonical app index document");
+
+  assert(rendered.includes("proxy_pass http://127.0.0.1:3210/;"), "strip-prefix server mode must proxy with a trailing slash so the public prefix is removed");
+  assert(rendered.includes("proxy_pass http://127.0.0.1:3211;"), "preserve-prefix server mode must proxy without a trailing slash so the canonical prefix remains intact");
   assert(rendered.includes("return 308 /apps/alpha-web/;"), "managed routes must canonicalize missing trailing slashes");
 
   assertThrows(
@@ -53,6 +77,18 @@ async function run() {
     ]),
     /duplicate|slug/i,
     "one public slug must not render two competing managed routes",
+  );
+
+  assertThrows(
+    () => renderLunaGatewayConfig([{
+      slug: "unsafe-app",
+      runtimeId: "web",
+      type: "static",
+      routingMode: "spa;\nreturn 200;" as never,
+      releaseRoot: "/srv/bloombouquet/apps/unsafe-app",
+    }]),
+    /routingMode|routing mode/i,
+    "renderer must reject routing values outside the validated enum instead of inserting raw Nginx text",
   );
 
   const temp = await fs.mkdtemp(path.join(os.tmpdir(), "luna-gateway-"));
