@@ -83,6 +83,12 @@ public class LunaDeliveryProject {
     @Column(name = "retry_count", nullable = false, columnDefinition = "int default 0")
     private int retryCount = 0;
 
+    @Column(name = "last_attempt_at")
+    private LocalDateTime lastAttemptAt;
+
+    @Column(name = "next_retry_at")
+    private LocalDateTime nextRetryAt;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
