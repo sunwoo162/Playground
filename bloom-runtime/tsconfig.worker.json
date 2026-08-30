@@ -22,6 +22,7 @@
     "ts/observedHeadlessBuilderExecutor.ts",
     "ts/lunaDeliveryManifest.ts",
     "ts/lunaDeliveryHttpClient.ts",
-    "ts/lunaDeliveryBuild.ts"
+    "ts/lunaDeliveryBuild.ts",
+    "ts/lunaStaticRelease.ts"
   ]
 }
