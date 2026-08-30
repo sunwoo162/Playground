@@ -167,7 +167,8 @@ export function resolveIntegratedMainSha(integration: LunaIntegratedMergeResult)
   if (!integration.mergedPullRequests.length) {
     throw new Error("자동 배포에 사용할 merged PR evidence가 없습니다.");
   }
-  const mainSha = integration.mergedPullRequests.at(-1)?.mergeCommitSha ?? "";
+  const lastMerge = integration.mergedPullRequests[integration.mergedPullRequests.length - 1];
+  const mainSha = lastMerge?.mergeCommitSha ?? "";
   if (!EXACT_GIT_SHA_PATTERN.test(mainSha)) {
     throw new Error("자동 배포에는 마지막 integration PR의 정확한 40자리 merge commit SHA가 필요합니다.");
   }
