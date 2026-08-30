@@ -44,7 +44,7 @@ function optionalNonEmptyString(value: unknown, label: string): string | undefin
 }
 
 function normalizeRelativePath(value: unknown, label: string): string {
-  const raw = requireNonEmptyString(value, label).replaceAll("\\", "/");
+  const raw = requireNonEmptyString(value, label).split("\\").join("/");
   if (path.posix.isAbsolute(raw)) {
     throw new Error(`${label} must be relative.`);
   }
