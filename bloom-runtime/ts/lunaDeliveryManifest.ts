@@ -1,9 +1,14 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 
+export type LunaStaticRoutingMode = "static-files" | "spa";
+export type LunaServerRoutingMode = "strip-prefix" | "preserve-prefix";
+export type LunaDeliveryRoutingMode = LunaStaticRoutingMode | LunaServerRoutingMode;
+
 export type LunaDeliveryRuntimeManifest = {
   id: string;
   type: "static" | "server";
+  routingMode: LunaDeliveryRoutingMode;
   workingDirectory: string;
   installCommand?: string;
   buildCommand: string;
@@ -56,6 +61,27 @@ function normalizeRelativePath(value: unknown, label: string): string {
   return normalized === "" ? "." : normalized;
 }
 
+function parseRoutingMode(
+  raw: unknown,
+  type: "static" | "server",
+  index: number,
+): LunaDeliveryRoutingMode {
+  const value = optionalNonEmptyString(raw, `runtimes[${index}].routingMode`);
+  if (type === "static") {
+    if (value === undefined) return "static-files";
+    if (value === "static-files" || value === "spa") return value;
+    throw new Error(
+      `runtimes[${index}].routingMode must be static-files or spa for a static runtime.`,
+    );
+  }
+
+  if (value === undefined) return "strip-prefix";
+  if (value === "strip-prefix" || value === "preserve-prefix") return value;
+  throw new Error(
+    `runtimes[${index}].routingMode must be strip-prefix or preserve-prefix for a server runtime.`,
+  );
+}
+
 function parseRuntime(raw: unknown, index: number): LunaDeliveryRuntimeManifest {
   const value = requireRecord(raw, `runtimes[${index}]`);
   const id = requireNonEmptyString(value.id, `runtimes[${index}].id`);
@@ -86,10 +112,12 @@ function parseRuntime(raw: unknown, index: number): LunaDeliveryRuntimeManifest 
   if (!healthPath.startsWith("/") || healthPath.startsWith("//")) {
     throw new Error(`runtimes[${index}].healthPath must be an absolute URL path.`);
   }
+  const routingMode = parseRoutingMode(value.routingMode, value.type, index);
 
   const runtime: LunaDeliveryRuntimeManifest = {
     id,
     type: value.type,
+    routingMode,
     workingDirectory,
     ...(installCommand ? { installCommand } : {}),
     buildCommand,
