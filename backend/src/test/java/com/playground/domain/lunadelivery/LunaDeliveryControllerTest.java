@@ -28,7 +28,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "GITHUB_CLIENT_SECRET=test-secret",
         "app.jwt.secret=test-jwt-secret-for-luna-delivery-controller-0123456789abcdef",
         "app.builder.worker-token=test-worker-token-for-luna-delivery-controller-0123456789abcdef",
-        "LUNA_DELIVERY_TOKEN=luna-delivery-controller-token-0123456789abcdef"
+        "app.luna.delivery-token=luna-delivery-controller-token-0123456789abcdef"
 })
 @AutoConfigureMockMvc
 @Transactional
