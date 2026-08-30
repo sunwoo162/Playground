@@ -259,6 +259,13 @@ function fakeRuntime() {
         })),
       };
     },
+    async promoteRelease(input) {
+      return {
+        repositoryFullName: input.repositoryFullName,
+        releaseSha: "89abcdef0123456789abcdef0123456789abcdef",
+        releasePullRequestNumber: 900,
+      };
+    },
   };
 
   return {
