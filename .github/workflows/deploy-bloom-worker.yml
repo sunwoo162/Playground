@@ -40,7 +40,24 @@ jobs:
       - name: Build Bloom worker
         run: pnpm run build:bloom-worker
 
-      - name: Provision and start Bloom evaluator worker
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build headless runtime binary
+        run: pnpm run build:bloom-runtime-bridge
+
+      - name: Transfer headless runtime binary
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          source: "bloom-runtime/target/release/bloom-runtime-bridge"
+          target: "/home/ubuntu/bloombouquet/bloom-runtime/target/release/"
+          strip_components: 3
+
+      - name: Provision and start Bloom workers
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ssh.gsmsv.site
@@ -57,11 +74,16 @@ jobs:
             git reset --hard origin/main
 
             command -v pnpm >/dev/null 2>&1 || npm install --prefix "$HOME/.local" pnpm@10.33.0
+            command -v gh >/dev/null 2>&1 || { echo "GitHub CLI is required for Bloom builder mode"; exit 1; }
+            gh api user >/dev/null 2>&1 || { echo "GitHub CLI authentication is required for Bloom builder mode"; exit 1; }
             pnpm install --frozen-lockfile
             pnpm run build:bloom-worker
+            chmod 755 bloom-runtime/target/release/bloom-runtime-bridge
+            test -x bloom-runtime/target/release/bloom-runtime-bridge || { echo "Bloom runtime bridge is missing"; exit 1; }
 
             ENV_FILE=/home/ubuntu/bloombouquet/.env
             touch "$ENV_FILE"
+            chmod 600 "$ENV_FILE"
 
             TOKEN_CREATED=false
             if ! grep -Eq '^BUILDER_WORKER_TOKEN=.+$' "$ENV_FILE"; then
@@ -95,6 +117,12 @@ jobs:
             append_default_env BLOOM_LOCAL_EVALUATOR_MODEL qwen2.5-coder-1.5b-instruct
             append_default_env BLOOM_API_BASE_URL http://localhost:8080
             append_default_env BLOOM_WORKER_ID bloom-evaluator-production
+            append_default_env BLOOM_EVALUATOR_WORKER_ID bloom-evaluator-production
+            append_default_env BLOOM_BUILDER_WORKER_ID bloom-builder-production
+            append_default_env BLOOM_GITHUB_ORGANIZATION sunwoo162
+            append_default_env BLOOM_WORKSPACE_ROOT /home/ubuntu/bloom-workspaces
+            append_default_env BLOOM_TEAM_ID rose
+            append_default_env BLOOM_TEAM_NAME Rose
             append_default_env BLOOM_WORKER_POLL_INTERVAL_MS 5000
             append_default_env BLOOM_WORKER_HEARTBEAT_INTERVAL_MS 30000
 
@@ -147,18 +175,30 @@ jobs:
             NODE
 
             pm2 delete bloom-worker 2>/dev/null || true
-            rm -f "$HOME/.pm2/logs/bloom-worker-out.log" "$HOME/.pm2/logs/bloom-worker-error.log"
-            pm2 start ecosystem.config.js --only bloom-worker --update-env
+            pm2 delete bloom-evaluator-worker 2>/dev/null || true
+            pm2 delete bloom-builder-worker 2>/dev/null || true
+            rm -f "$HOME/.pm2/logs/bloom-evaluator-worker-out.log" "$HOME/.pm2/logs/bloom-evaluator-worker-error.log"
+            rm -f "$HOME/.pm2/logs/bloom-builder-worker-out.log" "$HOME/.pm2/logs/bloom-builder-worker-error.log"
+            pm2 start ecosystem.config.js --only bloom-evaluator-worker --update-env
+            pm2 start ecosystem.config.js --only bloom-builder-worker --update-env
             sleep 3
 
-            WORKER_PID="$(pm2 pid bloom-worker)"
-            test -n "$WORKER_PID" && [ "$WORKER_PID" != "0" ] || { echo "Bloom evaluator worker did not stay online"; exit 1; }
+            EVALUATOR_PID="$(pm2 pid bloom-evaluator-worker)"
+            BUILDER_PID="$(pm2 pid bloom-builder-worker)"
+            test -n "$EVALUATOR_PID" && [ "$EVALUATOR_PID" != "0" ] || { echo "Bloom evaluator worker did not stay online"; exit 1; }
+            test -n "$BUILDER_PID" && [ "$BUILDER_PID" != "0" ] || { echo "Bloom builder worker did not stay online"; exit 1; }
 
-            if ! pm2 logs bloom-worker --lines 30 --nostream 2>/dev/null | grep -Fq 'started mode=evaluator runtime=local workerId='; then
+            if ! pm2 logs bloom-evaluator-worker --lines 30 --nostream 2>/dev/null | grep -Fq 'started mode=evaluator runtime=local workerId='; then
               echo "Bloom evaluator worker did not report mode=evaluator runtime=local"
-              pm2 status bloom-worker || true
+              pm2 status bloom-evaluator-worker || true
+              exit 1
+            fi
+            if ! pm2 logs bloom-builder-worker --lines 30 --nostream 2>/dev/null | grep -Fq 'started mode=builder workerId='; then
+              echo "Bloom builder worker did not report mode=builder"
+              pm2 status bloom-builder-worker || true
               exit 1
             fi
 
             pm2 save
-            echo "Bloom evaluator worker online runtime=local with PID $WORKER_PID"
+            echo "Bloom evaluator worker online runtime=local with PID $EVALUATOR_PID"
+            echo "Bloom builder worker online with PID $BUILDER_PID"
