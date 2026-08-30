@@ -1,6 +1,7 @@
 package com.playground.domain.lunadelivery.dto;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 public final class LunaDeliveryDto {
     private LunaDeliveryDto() {
@@ -17,7 +18,33 @@ public final class LunaDeliveryDto {
     public record TransitionRequest(
             String state,
             String failureCode,
-            String failureReason
+            String failureReason,
+            String localHealth,
+            String publicHealth,
+            LocalDateTime nextRetryAt
+    ) {
+        public TransitionRequest(String state, String failureCode, String failureReason) {
+            this(state, failureCode, failureReason, null, null, null);
+        }
+    }
+
+    public record RuntimeUpsertRequest(
+            String runtimeType,
+            Integer slotAPort,
+            Integer slotBPort,
+            String activeSlot,
+            String candidateSlot
+    ) {
+    }
+
+    public record RuntimeResponse(
+            Long id,
+            String runtimeId,
+            String runtimeType,
+            Integer slotAPort,
+            Integer slotBPort,
+            String activeSlot,
+            String candidateSlot
     ) {
     }
 
@@ -43,6 +70,12 @@ public final class LunaDeliveryDto {
             int retryCount,
             LocalDateTime lastAttemptAt,
             LocalDateTime nextRetryAt
+    ) {
+    }
+
+    public record ProjectDetailResponse(
+            ProjectStateResponse project,
+            List<RuntimeResponse> runtimes
     ) {
     }
 }
