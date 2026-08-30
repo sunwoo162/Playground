@@ -626,10 +626,12 @@ export function createHeadlessBuilderExecutor(
     }
 
     if (!payload.release) {
-      if (!options.runtime.promoteRelease) {
+      const promoteRelease = options.runtime.promoteRelease;
+      if (!promoteRelease) {
         await failBlocked("Release promotion Runtime이 연결되지 않았습니다.");
+        throw new Error("Release promotion Runtime is unreachable after failBlocked.");
       }
-      payload.release = await options.runtime.promoteRelease({
+      payload.release = await promoteRelease({
         repositoryFullName: payload.repository.repository,
         integrationBranch: payload.repository.integrationBranch,
         releaseBranch: payload.repository.releaseBranch,
