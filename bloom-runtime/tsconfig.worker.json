@@ -20,6 +20,7 @@
     "ts/headlessBuilderExecutor.ts",
     "ts/schedulerObservability.ts",
     "ts/observedHeadlessBuilderExecutor.ts",
-    "ts/lunaDeliveryManifest.ts"
+    "ts/lunaDeliveryManifest.ts",
+    "ts/lunaDeliveryHttpClient.ts"
   ]
 }
