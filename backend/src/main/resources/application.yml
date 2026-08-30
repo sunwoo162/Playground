@@ -45,6 +45,8 @@ app:
     secret: ${JWT_SECRET:playground-jwt-secret-2024-secure-key}
   builder:
     worker-token: ${BUILDER_WORKER_TOKEN:}
+  luna:
+    delivery-token: ${LUNA_DELIVERY_TOKEN:}
   node-url: http://localhost:3000
 
 twelve-data:

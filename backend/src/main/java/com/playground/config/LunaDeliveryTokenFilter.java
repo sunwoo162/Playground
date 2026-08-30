@@ -19,7 +19,7 @@ public class LunaDeliveryTokenFilter extends OncePerRequestFilter {
 
     private final String configuredToken;
 
-    public LunaDeliveryTokenFilter(@Value("${LUNA_DELIVERY_TOKEN:}") String configuredToken) {
+    public LunaDeliveryTokenFilter(@Value("${app.luna.delivery-token:}") String configuredToken) {
         this.configuredToken = configuredToken == null ? "" : configuredToken.trim();
     }
 
