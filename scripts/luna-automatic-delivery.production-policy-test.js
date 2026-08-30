@@ -9,6 +9,10 @@ function readWorkerDeployWorkflow() {
   return fs.readFileSync(path.join(ROOT, '.github/workflows/deploy-bloom-worker.yml'), 'utf8');
 }
 
+function readWorkerEntrypoint() {
+  return fs.readFileSync(path.join(ROOT, 'bloom-worker/run.js'), 'utf8');
+}
+
 test('production provisions independent evaluator and builder workers', () => {
   const config = require(path.join(ROOT, 'ecosystem.config.js'));
   const evaluator = config.apps.find((app) => app.name === 'bloom-evaluator-worker');
@@ -29,4 +33,10 @@ test('worker deployment provisions the builder runtime bridge and verifies both 
   assert.match(workflow, /bloom-builder-worker/);
   assert.match(workflow, /started mode=evaluator runtime=local workerId=/);
   assert.match(workflow, /started mode=builder workerId=/);
+});
+
+test('production builder bridge exposes authoritative release promotion', () => {
+  const entrypoint = readWorkerEntrypoint();
+
+  assert.match(entrypoint, /promoteRelease:\s*\(input\)\s*=>\s*call\(\{\s*command:\s*["']promoteRelease["']/);
 });
