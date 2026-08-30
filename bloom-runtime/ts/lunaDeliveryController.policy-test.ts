@@ -106,6 +106,7 @@ async function run() {
   assert(successOrder.join(",") === "build,candidate,local-health,gateway-switch,public-health", "successful delivery must never switch the gateway before candidate health succeeds");
   assert(delivered.publicUrl === "https://bloombouquet.https.gsmsv.site/apps/sample-app/", "successful delivery returns the canonical public URL");
   assert(delivered.releaseSha === "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "successful delivery preserves the exact release SHA");
+  assert(delivered.releaseVersion === "git-aaaaaaaaaaaa", "successful delivery must expose a deterministic BloomBouquet release version derived from Git evidence");
   assert(delivered.rollbackResult.gateway === "not-needed" && delivered.rollbackResult.candidate === "not-needed", "successful delivery must report that rollback was not needed");
 
   const localFailureOrder: string[] = [];
