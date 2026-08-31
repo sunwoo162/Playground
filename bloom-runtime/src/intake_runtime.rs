@@ -36,7 +36,6 @@ const INTAKE_SCHEMA: &str = r#"{
       "type": "array",
       "minItems": 1,
       "maxItems": 22,
-      "uniqueItems": true,
       "items": {
         "type": "string",
         "enum": [
@@ -68,7 +67,6 @@ const INTAKE_SCHEMA: &str = r#"{
     "criticalRoles": {
       "type": "array",
       "maxItems": 10,
-      "uniqueItems": true,
       "items": {
         "type": "string",
         "enum": [
@@ -107,7 +105,6 @@ const INTAKE_SCHEMA: &str = r#"{
     "riskFlags": {
       "type": "array",
       "maxItems": 10,
-      "uniqueItems": true,
       "items": {
         "type": "string",
         "enum": [

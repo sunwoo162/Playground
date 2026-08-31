@@ -24,6 +24,7 @@
     "ts/planTopology.ts",
     "ts/e2eSmoke.ts",
     "ts/e2eSmoke.policy-test.ts",
+    "ts/codexSchemaCompat.policy-test.ts",
     "ts/executionControl.ts",
     "ts/executionControl.policy-test.ts",
     "ts/orchestrationHistoryPolicy.ts",
