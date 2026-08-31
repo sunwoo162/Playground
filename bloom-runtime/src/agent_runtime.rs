@@ -406,7 +406,7 @@ fn agent_prompt(input: &AgentTaskRuntimeInput, branch: Option<&str>) -> String {
     let dependencies = dependency_context(&input.dependencies);
     let mode = if is_repository_writer(&input.role) {
         format!(
-            "You are a repository-changing worker. Your dedicated branch is `{}`. Inspect the actual repository first, implement the task in this worktree, run applicable verification, make small logical English commits, push your branch, and open or update your own PR targeting `develop`. Do not merge the PR yourself and never push directly to `main` or `develop`.",
+            "You are a repository-changing worker. Your dedicated branch is `{}`. Inspect the actual repository first, implement the task in this worktree, and run applicable verification. Git metadata is protected inside the Codex sandbox, so do not run Git write commands such as add, commit, checkout, switch, reset, rebase, merge, or push, do not create or update a PR, and do not create temporary Git metadata to work around the sandbox. Read-only Git inspection is allowed. Luna Runtime will publish your completed work after this turn. Never push directly to `main` or `develop`.",
             branch.unwrap_or("unknown")
         )
     } else if is_review_role(&input.role) {
@@ -684,6 +684,83 @@ fn run_app_server_agent(
     ))
 }
 
+fn publish_repository_writer_result(
+    input: &AgentTaskRuntimeInput,
+    worktree: &Path,
+    branch: &str,
+    report: &mut AgentTaskReport,
+) -> Result<(), String> {
+    if report.status != "completed" {
+        return Ok(());
+    }
+
+    let current_branch = run_checked("git", &git_args(worktree, &["branch", "--show-current"]))?;
+    let current_branch = String::from_utf8_lossy(&current_branch.stdout).trim().to_string();
+    if current_branch != branch {
+        return Err(format!("Agent가 예상 브랜치를 벗어났습니다: {current_branch}"));
+    }
+
+    let status = run_checked("git", &git_args(worktree, &["status", "--porcelain"]))?;
+    if !String::from_utf8_lossy(&status.stdout).trim().is_empty() {
+        run_checked("git", &git_args(worktree, &["add", "-A"]))?;
+        let commit_message = format!("task: {} {}", input.task_id, input.title);
+        run_checked(
+            "git",
+            &git_args(worktree, &["commit", "-m", commit_message.as_str()]),
+        )?;
+    }
+
+    run_checked("git", &git_args(worktree, &["push", "-u", "origin", branch]))?;
+
+    let pr_output = run_checked(
+        "gh",
+        &[
+            "pr".to_string(),
+            "list".to_string(),
+            "--repo".to_string(),
+            input.repository_full_name.clone(),
+            "--head".to_string(),
+            branch.to_string(),
+            "--base".to_string(),
+            "develop".to_string(),
+            "--state".to_string(),
+            "open".to_string(),
+            "--limit".to_string(),
+            "1".to_string(),
+            "--json".to_string(),
+            "number".to_string(),
+        ],
+    )?;
+    let prs: Vec<Value> = serde_json::from_slice(&pr_output.stdout)
+        .map_err(|error| format!("Agent PR publish 확인 결과 파싱 실패: {error}"))?;
+    if prs.is_empty() {
+        let pr_title = format!("{}: {}", input.task_id, input.title);
+        let pr_body = format!(
+            "Luna Agent `{}` completed `{}`.\n\n{}",
+            input.agent_id, input.task_id, report.summary
+        );
+        run_checked(
+            "gh",
+            &[
+                "pr".to_string(),
+                "create".to_string(),
+                "--repo".to_string(),
+                input.repository_full_name.clone(),
+                "--head".to_string(),
+                branch.to_string(),
+                "--base".to_string(),
+                "develop".to_string(),
+                "--title".to_string(),
+                pr_title,
+                "--body".to_string(),
+                pr_body,
+            ],
+        )?;
+    }
+
+    verify_repository_writer_result(input, worktree, branch, report)
+}
+
 fn verify_repository_writer_result(
     input: &AgentTaskRuntimeInput,
     worktree: &Path,
@@ -809,7 +886,7 @@ fn dispatch_agent_task_blocking(input: AgentTaskRuntimeInput) -> Result<AgentTas
         run_app_server_agent(&input, &worktree, branch.as_deref())?;
 
     if let Some(branch_name) = branch.as_deref() {
-        verify_repository_writer_result(&input, &worktree, branch_name, &mut report)?;
+        publish_repository_writer_result(&input, &worktree, branch_name, &mut report)?;
     }
 
     Ok(AgentTaskRunResult {
