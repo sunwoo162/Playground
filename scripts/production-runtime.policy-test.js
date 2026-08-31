@@ -177,3 +177,13 @@ test('production deploy proves the local evaluator can complete a real JSON infe
   assert.match(workflow, /Bloom local evaluator inference smoke OK/);
   assert.match(workflow, /value\.ok !== true/);
 });
+
+test('production Bloom builder provisions GitHub CLI authentication from a protected deploy secret', () => {
+  const workflow = readBloomWorkerDeployWorkflow();
+
+  assert.match(workflow, /BLOOM_GITHUB_TOKEN:\s*\$\{\{\s*secrets\.BLOOM_GITHUB_TOKEN\s*\}\}/);
+  assert.match(workflow, /envs:\s*BLOOM_GITHUB_TOKEN/);
+  assert.match(workflow, /gh auth login --hostname github\.com --git-protocol https --with-token/);
+  assert.match(workflow, /gh auth setup-git/);
+  assert.match(workflow, /GitHub CLI authentication is required for Bloom builder mode/);
+});

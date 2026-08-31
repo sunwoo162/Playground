@@ -68,11 +68,14 @@ jobs:
 
       - name: Provision and start Bloom workers
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          BLOOM_GITHUB_TOKEN: ${{ secrets.BLOOM_GITHUB_TOKEN }}
         with:
           host: ssh.gsmsv.site
           port: 24136
           username: ubuntu
           password: ${{ secrets.SSH_PASSWORD }}
+          envs: BLOOM_GITHUB_TOKEN
           command_timeout: 20m
           script: |
             set -eu
@@ -84,6 +87,10 @@ jobs:
 
             command -v pnpm >/dev/null 2>&1 || npm install --prefix "$HOME/.local" pnpm@10.33.0
             command -v gh >/dev/null 2>&1 || { echo "GitHub CLI is required for Bloom builder mode"; exit 1; }
+            test -n "${BLOOM_GITHUB_TOKEN:-}" || { echo "BLOOM_GITHUB_TOKEN is required for Bloom builder mode"; exit 1; }
+            printf '%s\n' "$BLOOM_GITHUB_TOKEN" | gh auth login --hostname github.com --git-protocol https --with-token
+            unset BLOOM_GITHUB_TOKEN
+            gh auth setup-git
             gh api user >/dev/null 2>&1 || { echo "GitHub CLI authentication is required for Bloom builder mode"; exit 1; }
             pnpm install --frozen-lockfile
             pnpm run build:bloom-worker
