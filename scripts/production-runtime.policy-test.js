@@ -198,3 +198,12 @@ test('production Bloom builder provisions a shared Luna delivery token before st
   assert.match(workflow, /grep -Eq '\^LUNA_DELIVERY_TOKEN=\.\+\$'/);
   assert.match(workflow, /pm2 reload ecosystem\.config\.js --only backend --update-env/);
 });
+
+
+test('production Bloom runtime bridge is built for the Ubuntu 22.04 server ABI and executed before worker startup', () => {
+  const workflow = readBloomWorkerDeployWorkflow();
+
+  assert.match(workflow, /runs-on:\s*ubuntu-22\.04/);
+  assert.match(workflow, /Bloom Runtime bridge execution smoke OK/);
+  assert.match(workflow, /bloom-runtime-bridge/);
+});
