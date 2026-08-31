@@ -475,7 +475,7 @@ pub fn project_runtime_preflight(organization: String) -> ProjectRuntimePrefligh
     let organization_accessible = if gh_authenticated && !organization.is_empty() {
         run_command(
             "gh",
-            &["api".to_string(), format!("orgs/{organization}"), "--silent".to_string()],
+            &["api".to_string(), format!("users/{organization}"), "--silent".to_string()],
         )
         .map(|output| output.status.success())
         .unwrap_or(false)
@@ -490,7 +490,7 @@ pub fn project_runtime_preflight(organization: String) -> ProjectRuntimePrefligh
     } else if !codex_chatgpt_auth {
         "Codex가 API key/access token 모드입니다. Luna Runtime은 ChatGPT 로그인만 허용합니다.".to_string()
     } else if git_available && gh_available && gh_authenticated && organization_accessible {
-        "Git, GitHub CLI, ChatGPT Codex 로그인과 Organization 접근이 준비되었습니다.".to_string()
+        "Git, GitHub CLI, ChatGPT Codex 로그인과 GitHub owner 접근이 준비되었습니다.".to_string()
     } else {
         "누락된 로컬 Runtime 조건을 확인해 주세요. ChatGPT GitHub Connector와 로컬 CLI 인증은 별도입니다.".to_string()
     };
@@ -535,7 +535,7 @@ fn bootstrap_project_repository_inner(
         return Err("GitHub CLI 인증이 필요합니다. `gh auth login`을 실행해 주세요.".to_string());
     }
     if !preflight.organization_accessible {
-        return Err(format!("GitHub CLI로 {organization} Organization에 접근할 수 없습니다."));
+        return Err(format!("GitHub CLI로 {organization} GitHub owner에 접근할 수 없습니다."));
     }
 
     let root = PathBuf::from(&workspace_root);
