@@ -563,7 +563,6 @@ fn bootstrap_project_repository_inner(
                 "create".to_string(),
                 full_name.clone(),
                 "--private".to_string(),
-                "--add-readme".to_string(),
                 "--description".to_string(),
                 "Created by Luna Project Teams".to_string(),
             ],
@@ -597,26 +596,13 @@ fn bootstrap_project_repository_inner(
     }
 
     if !remote_branch_exists(&workspace, "main") {
-        let default_branch_output = run_checked(
-            "gh",
-            &[
-                "repo".to_string(),
-                "view".to_string(),
-                full_name.clone(),
-                "--json".to_string(),
-                "defaultBranchRef".to_string(),
-                "--jq".to_string(),
-                ".defaultBranchRef.name".to_string(),
-            ],
-        )?;
-        let default_branch = String::from_utf8_lossy(&default_branch_output.stdout).trim().to_string();
-        if default_branch.is_empty() {
-            return Err("Repository 기본 브랜치를 확인하지 못했습니다.".to_string());
-        }
-        let source = format!("origin/{default_branch}");
+        run_checked("git", &git_args(&workspace, &["checkout", "--orphan", "main"]))?;
         run_checked(
             "git",
-            &git_args(&workspace, &["checkout", "-B", "main", source.as_str()]),
+            &git_args(
+                &workspace,
+                &["commit", "--allow-empty", "-m", "chore : initialize repository"],
+            ),
         )?;
         run_checked("git", &git_args(&workspace, &["push", "-u", "origin", "main"]))?;
         run_checked("git", &git_args(&workspace, &["fetch", "origin"]))?;
