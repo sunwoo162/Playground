@@ -358,6 +358,7 @@ export function createLunaProductionDeliveryHook(
           slot: candidateSlot,
           port,
           releasePath: release.releasePath,
+          dataDirectory: path.join(appsRoot, input.slug, "data"),
           startCommand,
           env: runtimeEnvironment,
           environmentRoot: runtimeEnvironmentRoot,

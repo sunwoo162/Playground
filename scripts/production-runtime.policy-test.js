@@ -207,3 +207,12 @@ test('production Bloom runtime bridge is built for the Ubuntu 22.04 server ABI a
   assert.match(workflow, /Bloom Runtime bridge execution smoke OK/);
   assert.match(workflow, /bloom-runtime-bridge/);
 });
+
+
+test('production provisions the Luna apps root for shared durable runtime data', () => {
+  const workflow = readBloomWorkerDeployWorkflow();
+
+  assert.match(workflow, /\/srv\/bloombouquet\/apps/);
+  assert.match(workflow, /bloombouquet/);
+  assert.match(workflow, /2775/);
+});
