@@ -9,6 +9,7 @@ const DEFAULT_ENVIRONMENT_ROOT = "/run/bloombouquet/luna";
 const RESERVED_ENVIRONMENT = new Set([
   "PORT",
   "LUNA_PUBLIC_BASE_PATH",
+  "LUNA_DATA_DIR",
   "LUNA_RELEASE_PATH",
   "LUNA_START_COMMAND",
 ]);
@@ -24,6 +25,7 @@ export type RenderServerRuntimeEnvironmentInput = {
   slug: string;
   port: number;
   releasePath: string;
+  dataDirectory: string;
   startCommand: string;
   env: Record<string, string | undefined>;
 };
@@ -129,6 +131,10 @@ export function renderServerRuntimeEnvironment(
     throw new Error("Luna server releasePath must be absolute.");
   }
   assertRuntimeValue(input.releasePath, "Luna server releasePath");
+  if (!path.isAbsolute(input.dataDirectory)) {
+    throw new Error("Luna server dataDirectory must be absolute.");
+  }
+  assertRuntimeValue(input.dataDirectory, "Luna server dataDirectory");
   assertRuntimeValue(input.startCommand, "Luna server startCommand");
 
   const values = new Map<string, string>();
@@ -146,6 +152,7 @@ export function renderServerRuntimeEnvironment(
 
   values.set("PORT", String(input.port));
   values.set("LUNA_PUBLIC_BASE_PATH", `/apps/${input.slug}/`);
+  values.set("LUNA_DATA_DIR", input.dataDirectory);
   values.set("LUNA_RELEASE_PATH", input.releasePath);
   values.set("LUNA_START_COMMAND", input.startCommand);
 
@@ -197,6 +204,7 @@ export async function startServerCandidate(
   const writeFileImpl = input.writeFileImpl ?? fs.writeFile;
   const spawnImpl = input.spawnImpl ?? defaultSpawn;
 
+  await mkdirImpl(input.dataDirectory, { recursive: true, mode: 0o770 });
   await mkdirImpl(environmentRoot, { recursive: true, mode: 0o700 });
   await writeFileImpl(environmentFile, environment, {
     encoding: "utf8",

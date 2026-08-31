@@ -85,6 +85,8 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
+            sudo install -d -o ubuntu -g bloombouquet -m 2775 /srv/bloombouquet/apps
+
             command -v pnpm >/dev/null 2>&1 || npm install --prefix "$HOME/.local" pnpm@10.33.0
             command -v gh >/dev/null 2>&1 || { echo "GitHub CLI is required for Bloom builder mode"; exit 1; }
             test -n "${BLOOM_GITHUB_TOKEN:-}" || { echo "BLOOM_GITHUB_TOKEN is required for Bloom builder mode"; exit 1; }

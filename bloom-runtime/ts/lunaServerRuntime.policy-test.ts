@@ -36,6 +36,7 @@ const environment = renderServerRuntimeEnvironment({
   slug: "sample-app",
   port: 3210,
   releasePath: "/srv/bloombouquet/apps/sample-app/releases/abc1234",
+  dataDirectory: "/srv/bloombouquet/apps/sample-app/data",
   startCommand: "pnpm start",
   env: {
     DATABASE_URL: "postgres://runtime-secret",
@@ -43,6 +44,7 @@ const environment = renderServerRuntimeEnvironment({
 });
 assert(environment.includes("PORT=\"3210\""), "runtime environment must include the Registry-assigned port");
 assert(environment.includes("LUNA_PUBLIC_BASE_PATH=\"/apps/sample-app/\""), "runtime environment must include the canonical public base path");
+assert(environment.includes("LUNA_DATA_DIR=\"/srv/bloombouquet/apps/sample-app/data\""), "runtime environment must include the durable app data directory");
 assert(environment.includes("DATABASE_URL=\"postgres://runtime-secret\""), "runtime environment must include approved central environment values");
 
 const unitTemplate = fs.readFileSync(
@@ -62,6 +64,7 @@ async function run() {
 
   const calls: Array<{ command: string; args: string[] }> = [];
   const writes: Array<{ filePath: string; content: string; mode?: number }> = [];
+  const directories: Array<{ path: string; mode?: number }> = [];
   const spawnImpl: LunaServerRuntimeSpawn = async (command, args) => {
     calls.push({ command, args: [...args] });
   };
@@ -72,10 +75,14 @@ async function run() {
     slot: "B",
     port: 3210,
     releasePath: "/srv/bloombouquet/apps/sample-app/releases/abc1234",
+    dataDirectory: "/srv/bloombouquet/apps/sample-app/data",
     startCommand: "pnpm start",
     env: { DATABASE_URL: "postgres://runtime-secret" },
     portProbe: async () => true,
-    mkdirImpl: async () => undefined,
+    mkdirImpl: async (directory, options) => {
+      directories.push({ path: directory, mode: options?.mode });
+      return undefined;
+    },
     writeFileImpl: async (filePath, content, options) => {
       writes.push({ filePath, content, mode: options?.mode });
     },
@@ -85,6 +92,7 @@ async function run() {
   assert(result.instanceKey === "sample-app-web-B", "systemd instance key must be slug-runtime-slot");
   assert(result.serviceName === "bloombouquet-luna-app@sample-app-web-B.service", "candidate must use the Luna systemd template instance");
   assert(result.environmentFile === "/run/bloombouquet/luna/sample-app-web-B.env", "candidate must use an instance-scoped runtime environment file");
+  assert(directories.some((entry) => entry.path === "/srv/bloombouquet/apps/sample-app/data" && entry.mode === 0o770), "candidate start must create the shared durable data directory with group-write access");
   assert(writes.length === 1, "candidate start must write one protected runtime environment file");
   assert(writes[0]?.mode === 0o600, "runtime environment file must be owner-readable only");
   assert(writes[0]?.content.includes("DATABASE_URL=\"postgres://runtime-secret\""), "runtime secret must be written only to the protected environment file");
