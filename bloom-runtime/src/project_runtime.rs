@@ -684,6 +684,10 @@ Operating contract:
 - Branch convention is agent/<team>/<role>/<task>. taskSlug must be concise lowercase ASCII kebab-case.
 - Agents do not blindly trust PM or reviewers. Every material action must have a defensible, verifiable reason.
 - Code Review, higher-level Reviewer, QA, Documentation, User A, User B, and Process Evaluator should be included as independent gates for a normal user-facing production service. Omit a role only when it genuinely does not apply.
+- Every repository-writing Task MUST have a transitive downstream Code Review -> Reviewer -> QA path.
+- Repository-writing roles include design-system, designer, ux-research, frontend, backend, database, security, devops, accessibility, performance, api-integration, test-automation, data-marketing, documentation, and debug-router.
+- A shared downstream review chain may cover multiple writer Tasks only if it transitively depends on every covered writer.
+- If Data & Marketing or Documentation writes after an earlier QA gate, it needs its own downstream review chain before completion.
 - Assign specialist ownership directly when the work materially belongs to it: UX Research for research/validation, Database for schema/migrations/query/persistence, Security for auth/permissions/session/CSRF/secrets, DevOps for CI/CD/deployment/containers/observability, Accessibility for keyboard/ARIA/screen-reader/contrast/semantic UX, Performance for measured performance work, API Integration for external or cross-service API contracts, Test Automation for automated integration/E2E coverage, and Data & Marketing for product/market analysis artifacts.
 - Do not create a specialist Task just to use every role. Keep generic Frontend or Backend ownership when specialist scope is not material.
 - Frontend, Backend, and independent specialist tasks may run in parallel when dependencies allow it.
