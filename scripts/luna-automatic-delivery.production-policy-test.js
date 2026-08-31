@@ -59,8 +59,13 @@ test('production builder injects the integrated project delivery hook', () => {
   const builderExecutor = entrypoint.match(/const execute = createObservedHeadlessBuilderExecutor\(\{[\s\S]*?\n\s*\}\);/)?.[0] ?? '';
 
   assert.match(
+    entrypoint,
+    /const deliverIntegratedProject = createLunaProductionDeliveryHook\(\{/,
+    'production builder must construct the machine-owned Luna delivery hook',
+  );
+  assert.match(
     builderExecutor,
-    /deliverIntegratedProject\s*:/,
+    /\bdeliverIntegratedProject\b\s*(?:,|:)/,
     'production builder must provide the machine-owned Luna delivery hook',
   );
 });
