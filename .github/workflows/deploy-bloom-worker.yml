@@ -94,12 +94,22 @@ jobs:
             sudo install -d -o ubuntu -g bloombouquet -m 2775 /srv/bloombouquet/apps
 
             command -v pnpm >/dev/null 2>&1 || npm install --prefix "$HOME/.local" pnpm@10.33.0
+            sudo install -d -m 755 /etc/apt/keyrings
+            curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg >/dev/null
+            sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list >/dev/null
+            sudo apt-get update
+            sudo apt-get install -y gh
             command -v gh >/dev/null 2>&1 || { echo "GitHub CLI is required for Bloom builder mode"; exit 1; }
             test -n "${BLOOM_GITHUB_TOKEN:-}" || { echo "BLOOM_GITHUB_TOKEN is required for Bloom builder mode"; exit 1; }
             printf '%s\n' "$BLOOM_GITHUB_TOKEN" | gh auth login --hostname github.com --with-token
             unset BLOOM_GITHUB_TOKEN
             gh auth setup-git
             gh api user >/dev/null 2>&1 || { echo "GitHub CLI authentication is required for Bloom builder mode"; exit 1; }
+            GITHUB_CREDENTIAL_SMOKE="$(printf 'protocol=https\nhost=github.com\n\n' | gh auth git-credential get 2>/dev/null || true)"
+            printf '%s\n' "$GITHUB_CREDENTIAL_SMOKE" | grep -q '^username=' || { echo "GitHub credential helper smoke failed: username missing"; exit 1; }
+            printf '%s\n' "$GITHUB_CREDENTIAL_SMOKE" | grep -q '^password=' || { echo "GitHub credential helper smoke failed: password missing"; exit 1; }
+            unset GITHUB_CREDENTIAL_SMOKE
             pnpm install --frozen-lockfile
             pnpm run build:bloom-worker
             chmod 755 bloom-runtime/target/release/bloom-runtime-bridge
