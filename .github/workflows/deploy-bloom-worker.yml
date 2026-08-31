@@ -108,6 +108,12 @@ jobs:
               TOKEN_CREATED=true
               echo "Generated a server-local BUILDER_WORKER_TOKEN"
             fi
+            if ! grep -Eq '^LUNA_DELIVERY_TOKEN=.+$' "$ENV_FILE"; then
+              DELIVERY_TOKEN="$(openssl rand -hex 32)"
+              printf 'LUNA_DELIVERY_TOKEN=%s\n' "$DELIVERY_TOKEN" >> "$ENV_FILE"
+              TOKEN_CREATED=true
+              echo "Generated a server-local LUNA_DELIVERY_TOKEN"
+            fi
 
             append_default_env() {
               KEY="$1"
@@ -143,6 +149,7 @@ jobs:
             append_default_env BLOOM_WORKER_HEARTBEAT_INTERVAL_MS 30000
 
             grep -Eq '^BUILDER_WORKER_TOKEN=.+$' "$ENV_FILE" || { echo "BUILDER_WORKER_TOKEN is missing"; exit 1; }
+            grep -Eq '^LUNA_DELIVERY_TOKEN=.+$' "$ENV_FILE" || { echo "LUNA_DELIVERY_TOKEN is missing"; exit 1; }
             grep -Eq '^BLOOM_WORKER_MODE=evaluator$' "$ENV_FILE" || { echo "BLOOM_WORKER_MODE must be evaluator"; exit 1; }
             grep -Eq '^BLOOM_EVALUATOR_RUNTIME=local$' "$ENV_FILE" || { echo "BLOOM_EVALUATOR_RUNTIME must be local"; exit 1; }
 

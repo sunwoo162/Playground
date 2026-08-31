@@ -188,3 +188,13 @@ test('production Bloom builder provisions GitHub CLI authentication from a prote
   assert.match(workflow, /gh auth setup-git/);
   assert.match(workflow, /GitHub CLI authentication is required for Bloom builder mode/);
 });
+
+
+test('production Bloom builder provisions a shared Luna delivery token before startup', () => {
+  const workflow = readBloomWorkerDeployWorkflow();
+
+  assert.match(workflow, /LUNA_DELIVERY_TOKEN/);
+  assert.match(workflow, /openssl rand -hex 32/);
+  assert.match(workflow, /grep -Eq '\^LUNA_DELIVERY_TOKEN=\.\+\$'/);
+  assert.match(workflow, /pm2 reload ecosystem\.config\.js --only backend --update-env/);
+});
