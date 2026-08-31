@@ -595,6 +595,15 @@ fn bootstrap_project_repository_inner(
         cloned_repository = true;
     }
 
+    run_checked("git", &git_args(&workspace, &["config", "user.name", "Luna Bloom"]))?;
+    run_checked(
+        "git",
+        &git_args(
+            &workspace,
+            &["config", "user.email", "luna-bloom@users.noreply.github.com"],
+        ),
+    )?;
+
     if !remote_branch_exists(&workspace, "main") {
         run_checked("git", &git_args(&workspace, &["checkout", "--orphan", "main"]))?;
         run_checked(
