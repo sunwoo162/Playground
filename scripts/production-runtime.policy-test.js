@@ -183,7 +183,8 @@ test('production Bloom builder provisions GitHub CLI authentication from a prote
 
   assert.match(workflow, /BLOOM_GITHUB_TOKEN:\s*\$\{\{\s*secrets\.BLOOM_GITHUB_TOKEN\s*\}\}/);
   assert.match(workflow, /envs:\s*BLOOM_GITHUB_TOKEN/);
-  assert.match(workflow, /gh auth login --hostname github\.com --git-protocol https --with-token/);
+  assert.match(workflow, /gh auth login --hostname github\.com --with-token/);
+  assert.doesNotMatch(workflow, /--git-protocol/);
   assert.match(workflow, /gh auth setup-git/);
   assert.match(workflow, /GitHub CLI authentication is required for Bloom builder mode/);
 });
