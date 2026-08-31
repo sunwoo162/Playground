@@ -12,6 +12,8 @@ const source = fs.readFileSync(
 
 assert(!source.includes('"--add-readme".to_string()'), "bootstrap must not depend on gh --add-readme");
 assert(source.includes('git_args(&workspace, &["checkout", "--orphan", "main"])'), "empty repositories must create an unborn main branch");
+assert(source.includes('&["config", "user.name", "Luna Bloom"]'), "bootstrap must configure a repository-local Git author name before committing");
+assert(source.includes('&["config", "user.email", "luna-bloom@users.noreply.github.com"]'), "bootstrap must configure a repository-local Git author email before committing");
 assert(source.includes('&["commit", "--allow-empty", "-m", "chore : initialize repository"]'), "empty repositories must receive a deterministic bootstrap commit");
 assert(source.includes('git_args(&workspace, &["push", "-u", "origin", "main"])'), "bootstrap main must be pushed to origin");
 
