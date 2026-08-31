@@ -216,3 +216,12 @@ test('production provisions the Luna apps root for shared durable runtime data',
   assert.match(workflow, /bloombouquet/);
   assert.match(workflow, /2775/);
 });
+
+test('production provisions the Luna system service account before using shared runtime storage', () => {
+  const workflow = readBloomWorkerDeployWorkflow();
+
+  assert.match(workflow, /getent group bloombouquet/);
+  assert.match(workflow, /groupadd --system bloombouquet/);
+  assert.match(workflow, /id -u bloombouquet/);
+  assert.match(workflow, /useradd --system --gid bloombouquet/);
+});
