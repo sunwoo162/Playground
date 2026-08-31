@@ -9,6 +9,10 @@ function readWorkerDeployWorkflow() {
   return fs.readFileSync(path.join(ROOT, '.github/workflows/deploy-bloom-worker.yml'), 'utf8');
 }
 
+function readWorkerEntrypoint() {
+  return fs.readFileSync(path.join(ROOT, 'bloom-worker/run.js'), 'utf8');
+}
+
 test('production provisions independent evaluator and builder workers', () => {
   const config = require(path.join(ROOT, 'ecosystem.config.js'));
   const evaluator = config.apps.find((app) => app.name === 'bloom-evaluator-worker');
@@ -42,4 +46,26 @@ test('worker deployment installs native Linux dependencies before the release ru
   assert.match(workflow, /libwebkit2gtk-4\.1-dev/);
   assert.match(workflow, /libayatana-appindicator3-dev/);
   assert.match(workflow, /librsvg2-dev/);
+});
+
+test('production builder bridge exposes authoritative release promotion', () => {
+  const entrypoint = readWorkerEntrypoint();
+
+  assert.match(entrypoint, /promoteRelease:\s*\(input\)\s*=>\s*call\(\{\s*command:\s*["']promoteRelease["']/);
+});
+
+test('production builder injects the integrated project delivery hook', () => {
+  const entrypoint = readWorkerEntrypoint();
+  const builderExecutor = entrypoint.match(/const execute = createObservedHeadlessBuilderExecutor\(\{[\s\S]*?\n\s*\}\);/)?.[0] ?? '';
+
+  assert.match(
+    entrypoint,
+    /const deliverIntegratedProject = createLunaProductionDeliveryHook\(\{/,
+    'production builder must construct the machine-owned Luna delivery hook',
+  );
+  assert.match(
+    builderExecutor,
+    /\bdeliverIntegratedProject\b\s*(?:,|:)/,
+    'production builder must provide the machine-owned Luna delivery hook',
+  );
 });

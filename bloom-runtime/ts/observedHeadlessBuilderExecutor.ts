@@ -28,7 +28,36 @@ type ObservedHeadlessBuilderSnapshotPayload = HeadlessBuilderSnapshotPayload & {
   schedulerObservability?: SchedulerObservabilitySnapshot;
 };
 
+export type LunaIntegratedMergeResult = {
+  repositoryFullName: string;
+  mergedPullRequests: Array<{
+    number: number;
+    url: string;
+    headBranch: string;
+    mergeCommitSha: string | null;
+  }>;
+};
+
+export type LunaIntegratedDeliveryInput = {
+  slug: string;
+  projectName: string;
+  description: string;
+  repositoryFullName: string;
+  workspacePath: string;
+  mainSha: string;
+  requiresAuth: boolean;
+};
+
+export type LunaIntegratedDeliveryHook = (
+  input: LunaIntegratedDeliveryInput,
+) => Promise<{ publicUrl: string }>;
+
+export type ObservedHeadlessBuilderExecutorOptions = HeadlessBuilderExecutorOptions & {
+  deliverIntegratedProject?: LunaIntegratedDeliveryHook;
+};
+
 const DEPLOYMENT_EVIDENCE_PREFIX = "deployment-url:";
+const EXACT_GIT_SHA_PATTERN = /^[0-9a-f]{40}$/;
 
 function parsePayload(payloadJson: string): ObservedHeadlessBuilderSnapshotPayload | null {
   try {
@@ -134,6 +163,32 @@ export function resolveDeploymentPreviewUrl(
   return deploymentUrls.values().next().value ?? null;
 }
 
+export function resolveIntegratedMainSha(integration: LunaIntegratedMergeResult): string {
+  if (!integration.mergedPullRequests.length) {
+    throw new Error("자동 배포에 사용할 merged PR evidence가 없습니다.");
+  }
+  const lastMerge = integration.mergedPullRequests[integration.mergedPullRequests.length - 1];
+  const mainSha = lastMerge?.mergeCommitSha ?? "";
+  if (!EXACT_GIT_SHA_PATTERN.test(mainSha)) {
+    throw new Error("자동 배포에는 마지막 integration PR의 정확한 40자리 merge commit SHA가 필요합니다.");
+  }
+  return mainSha;
+}
+
+export function resolveAutomaticDeliveryMainSha(input: {
+  releaseSha: string | null | undefined;
+  integration: LunaIntegratedMergeResult;
+}): string {
+  if (!input.integration.mergedPullRequests.length) {
+    throw new Error("자동 배포 전에 develop integration merge evidence가 필요합니다.");
+  }
+  const releaseSha = input.releaseSha?.trim() ?? "";
+  if (!EXACT_GIT_SHA_PATTERN.test(releaseSha)) {
+    throw new Error("자동 배포에는 promotion이 반환한 정확한 40자리 lowercase main release SHA가 필요합니다.");
+  }
+  return releaseSha;
+}
+
 export function decorateSchedulerObservability(
   previousPayloadJson: string | null,
   currentPayloadJson: string,
@@ -191,7 +246,7 @@ function initialPayloadJson(snapshot: BuilderOrchestrationSnapshot | null | unde
 }
 
 export function createObservedHeadlessBuilderExecutor(
-  options: HeadlessBuilderExecutorOptions,
+  options: ObservedHeadlessBuilderExecutorOptions,
 ): BuilderWorkerExecutor {
   const runtime = {
     ...options.runtime,
@@ -240,11 +295,34 @@ export function createObservedHeadlessBuilderExecutor(
     const completedPayload = previousPayloadJson ? parsePayload(previousPayloadJson) : null;
     const plan = completedPayload?.plan;
     const repository = completedPayload?.repository;
-    const previewUrl = resolveDeploymentPreviewUrl(
+    let previewUrl = resolveDeploymentPreviewUrl(
       result.previewUrl,
       completedPayload?.taskRuns ?? [],
     );
-    const bloomBouquetRegistrationUrl = plan && repository
+    let autoDelivered = false;
+
+    if (options.deliverIntegratedProject) {
+      if (!plan || !repository || !completedPayload?.integration) {
+        throw new Error("자동 Luna delivery 전에 plan, repository, integration evidence가 모두 필요합니다.");
+      }
+      const mainSha = resolveAutomaticDeliveryMainSha({
+        releaseSha: result.releaseSha,
+        integration: completedPayload.integration,
+      });
+      const delivered = await options.deliverIntegratedProject({
+        slug: plan.repositoryName,
+        projectName: plan.projectName,
+        description: plan.productSummary,
+        repositoryFullName: result.repositoryFullName ?? repository.repository,
+        workspacePath: repository.workspacePath,
+        mainSha,
+        requiresAuth: plan.needsAuth || claim.authRequired,
+      });
+      previewUrl = normalizedPreviewUrl(delivered.publicUrl, true);
+      autoDelivered = true;
+    }
+
+    const bloomBouquetRegistrationUrl = !autoDelivered && plan && repository
       ? buildBloomBouquetRegistrationUrl({
           teamId: options.teamId,
           teamName: options.teamName,

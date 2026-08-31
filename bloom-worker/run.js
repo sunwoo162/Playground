@@ -11,9 +11,16 @@ const { createBloomBouquetEvaluatorHttpClient } = require("../.tmp/bloom-worker/
 const { runBloomBouquetEvaluatorOnce } = require("../.tmp/bloom-worker/bloomBouquetEvaluatorWorker.js");
 const { createCodexSeniorEvaluatorRunner } = require("../.tmp/bloom-worker/bloomBouquetSeniorEvaluator.js");
 const { createLocalSeniorEvaluatorRunner } = require("../.tmp/bloom-worker/bloomBouquetLocalSeniorEvaluator.js");
+const { createLunaProductionDeliveryHook } = require("../.tmp/bloom-worker/lunaProductionDelivery.js");
 
 const MAX_BRIDGE_OUTPUT_BYTES = 16 * 1024 * 1024;
-const TEAM_IDS = new Set(["rose", "lily", "tulip", "sunflower", "cherry-blossom"]);
+const TEAM_NAMES = new Map([
+  ["rose", "장미"],
+  ["lily", "백합"],
+  ["tulip", "튤립"],
+  ["sunflower", "해바라기"],
+  ["cherry-blossom", "벚꽃"],
+]);
 const EVALUATOR_RUNTIMES = new Set(["codex", "local"]);
 
 function configValue(primary, legacy) {
@@ -136,6 +143,7 @@ function createRuntimeBridge(binaryPath) {
     dispatchTask: (input) => call({ command: "dispatchAgentTask", input }),
     reconcileTask: (input) => call({ command: "reconcileInterruptedAgentTask", input }),
     mergePullRequests: (input) => call({ command: "mergePullRequests", input }),
+    promoteRelease: (input) => call({ command: "promoteRelease", input }),
   };
 }
 
@@ -189,10 +197,11 @@ async function runBuilderMode({ baseUrl, token, pollIntervalMs, isStopping }) {
   const organization = requiredConfig("BLOOM_GITHUB_ORGANIZATION", "BUILDER_GITHUB_ORGANIZATION");
   const workspaceRoot = requiredConfig("BLOOM_WORKSPACE_ROOT", "BUILDER_WORKSPACE_ROOT");
   const teamId = configValue("BLOOM_TEAM_ID", "BUILDER_TEAM_ID") || "rose";
-  if (!TEAM_IDS.has(teamId)) {
+  const canonicalTeamName = TEAM_NAMES.get(teamId);
+  if (!canonicalTeamName) {
     throw new Error(`BLOOM_TEAM_ID가 허용된 Team ID가 아닙니다: ${teamId}`);
   }
-  const teamName = configValue("BLOOM_TEAM_NAME", "BUILDER_TEAM_NAME") || teamId;
+  const teamName = canonicalTeamName;
   const workerId = configValue("BLOOM_WORKER_ID", "BUILDER_WORKER_ID")
     || `bloom-${os.hostname()}-${process.pid}`;
   const heartbeatIntervalMs = integerConfig(
@@ -210,12 +219,20 @@ async function runBuilderMode({ baseUrl, token, pollIntervalMs, isStopping }) {
   );
   const runtime = createRuntimeBridge(binaryPath);
   const client = createBuilderWorkerHttpClient({ baseUrl, token });
+  const deliverIntegratedProject = createLunaProductionDeliveryHook({
+    baseUrl,
+    token: requiredConfig("LUNA_DELIVERY_TOKEN"),
+    teamId,
+    teamName,
+    env: process.env,
+  });
   const execute = createObservedHeadlessBuilderExecutor({
     organization,
     workspaceRoot,
     teamId,
     teamName,
     runtime,
+    deliverIntegratedProject,
   });
 
   console.log(`[bloom-worker] started mode=builder workerId=${workerId} team=${teamId} api=${baseUrl}`);

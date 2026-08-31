@@ -1,0 +1,22 @@
+name: Export PR136 Source
+
+on:
+  push:
+    branches:
+      - feat/luna-end-to-end-delivery-automation
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Upload source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: playground-pr136-source
+          path: .
+          include-hidden-files: true
+          retention-days: 1
