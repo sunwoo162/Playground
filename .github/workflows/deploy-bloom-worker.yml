@@ -85,6 +85,12 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
+            if ! getent group bloombouquet >/dev/null 2>&1; then
+              sudo groupadd --system bloombouquet
+            fi
+            if ! id -u bloombouquet >/dev/null 2>&1; then
+              sudo useradd --system --gid bloombouquet --home-dir /nonexistent --shell /usr/sbin/nologin bloombouquet
+            fi
             sudo install -d -o ubuntu -g bloombouquet -m 2775 /srv/bloombouquet/apps
 
             command -v pnpm >/dev/null 2>&1 || npm install --prefix "$HOME/.local" pnpm@10.33.0
