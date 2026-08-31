@@ -1,0 +1,180 @@
+name: Patch Agent Runtime Publishing
+
+on:
+  push:
+    branches:
+      - fix/agent-linked-worktree-gitdir
+    paths:
+      - .github/workflows/patch-agent-runtime-publishing.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/agent-linked-worktree-gitdir
+          fetch-depth: 0
+      - name: Patch agent runtime
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('bloom-runtime/src/agent_runtime.rs')
+          text = path.read_text()
+
+          old_prompt = '''        format!(
+            "You are a repository-changing worker. Your dedicated branch is `{}`. Inspect the actual repository first, implement the task in this worktree, run applicable verification, make small logical English commits, push your branch, and open or update your own PR targeting `develop`. Do not merge the PR yourself and never push directly to `main` or `develop`.",
+            branch.unwrap_or("unknown")
+        )'''
+          new_prompt = '''        format!(
+            "You are a repository-changing worker. Your dedicated branch is `{}`. Inspect the actual repository first, implement the task in this worktree, and run applicable verification. Git metadata is protected inside the Codex sandbox, so do not run Git write commands such as add, commit, checkout, switch, reset, rebase, merge, or push, do not create or update a PR, and do not create temporary Git metadata to work around the sandbox. Read-only Git inspection is allowed. Luna Runtime will publish your completed work after this turn. Never push directly to `main` or `develop`.",
+            branch.unwrap_or("unknown")
+        )'''
+          if old_prompt not in text:
+              raise SystemExit('writer prompt anchor not found')
+          text = text.replace(old_prompt, new_prompt, 1)
+
+          anchor = 'fn verify_repository_writer_result(\n'
+          if anchor not in text:
+              raise SystemExit('verify function anchor not found')
+
+          publish = r'''fn publish_repository_writer_result(
+    input: &AgentTaskRuntimeInput,
+    worktree: &Path,
+    branch: &str,
+    report: &mut AgentTaskReport,
+) -> Result<(), String> {
+    if report.status != "completed" {
+        return Ok(());
+    }
+
+    let current_branch = run_checked("git", &git_args(worktree, &["branch", "--show-current"]))?;
+    let current_branch = String::from_utf8_lossy(&current_branch.stdout).trim().to_string();
+    if current_branch != branch {
+        return Err(format!("Agent가 예상 브랜치를 벗어났습니다: {current_branch}"));
+    }
+
+    let status = run_checked("git", &git_args(worktree, &["status", "--porcelain"]))?;
+    if !String::from_utf8_lossy(&status.stdout).trim().is_empty() {
+        run_checked("git", &git_args(worktree, &["add", "-A"]))?;
+
+        let staged = run_command("git", &git_args(worktree, &["diff", "--cached", "--quiet"]))?;
+        match staged.status.code() {
+            Some(1) => {}
+            Some(0) => {
+                return Err(
+                    "Agent가 completed를 반환했지만 publish할 staged 변경이 없습니다.".to_string(),
+                );
+            }
+            _ => {
+                let detail = output_detail(&staged);
+                return Err(if detail.is_empty() {
+                    "git staged diff 확인에 실패했습니다.".to_string()
+                } else {
+                    format!("git staged diff 확인 실패: {detail}")
+                });
+            }
+        }
+
+        let commit_message = format!("task: {} {}", input.task_id, input.title);
+        run_checked(
+            "git",
+            &git_args(worktree, &["commit", "-m", commit_message.as_str()]),
+        )?;
+    }
+
+    let ahead = run_checked(
+        "git",
+        &git_args(worktree, &["rev-list", "--count", "origin/develop..HEAD"]),
+    )?;
+    let ahead_count = String::from_utf8_lossy(&ahead.stdout)
+        .trim()
+        .parse::<u64>()
+        .map_err(|error| format!("Agent branch commit 수 파싱 실패: {error}"))?;
+    if ahead_count == 0 {
+        return Err(
+            "Agent가 completed를 반환했지만 origin/develop 대비 publish할 commit이 없습니다."
+                .to_string(),
+        );
+    }
+
+    run_checked("git", &git_args(worktree, &["push", "-u", "origin", branch]))?;
+
+    let pr_output = run_checked(
+        "gh",
+        &[
+            "pr".to_string(),
+            "list".to_string(),
+            "--repo".to_string(),
+            input.repository_full_name.clone(),
+            "--head".to_string(),
+            branch.to_string(),
+            "--base".to_string(),
+            "develop".to_string(),
+            "--state".to_string(),
+            "open".to_string(),
+            "--limit".to_string(),
+            "1".to_string(),
+            "--json".to_string(),
+            "number".to_string(),
+        ],
+    )?;
+    let prs: Vec<Value> = serde_json::from_slice(&pr_output.stdout)
+        .map_err(|error| format!("Agent PR publish 확인 결과 파싱 실패: {error}"))?;
+    if prs.is_empty() {
+        let pr_title = format!("{}: {}", input.task_id, input.title);
+        let pr_body = format!(
+            "Luna Agent `{}` completed `{}`.\n\n{}",
+            input.agent_id, input.task_id, report.summary
+        );
+        run_checked(
+            "gh",
+            &[
+                "pr".to_string(),
+                "create".to_string(),
+                "--repo".to_string(),
+                input.repository_full_name.clone(),
+                "--head".to_string(),
+                branch.to_string(),
+                "--base".to_string(),
+                "develop".to_string(),
+                "--title".to_string(),
+                pr_title,
+                "--body".to_string(),
+                pr_body,
+            ],
+        )?;
+    }
+
+    verify_repository_writer_result(input, worktree, branch, report)
+}
+
+'''
+          text = text.replace(anchor, publish + anchor, 1)
+
+          old_dispatch = '''    if let Some(branch_name) = branch.as_deref() {
+        verify_repository_writer_result(&input, &worktree, branch_name, &mut report)?;
+    }'''
+          new_dispatch = '''    if let Some(branch_name) = branch.as_deref() {
+        publish_repository_writer_result(&input, &worktree, branch_name, &mut report)?;
+    }'''
+          if old_dispatch not in text:
+              raise SystemExit('dispatch anchor not found')
+          text = text.replace(old_dispatch, new_dispatch, 1)
+
+          path.write_text(text)
+          PY
+          git diff --check
+      - name: Commit patch
+        shell: bash
+        run: |
+          git config user.name "Luna Runtime Patch"
+          git config user.email "luna-runtime@users.noreply.github.com"
+          git add bloom-runtime/src/agent_runtime.rs
+          git commit -m "fix : publish agent git results outside sandbox"
+          git push origin HEAD:fix/agent-linked-worktree-gitdir
