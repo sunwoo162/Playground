@@ -363,7 +363,8 @@ Analyze:
 - external dependencies that appear necessary
 - meaningful production risk flags
 - conservative assumptions you had to make
-- missing user/environment inputs that can block production
+- missingInputs MUST contain only Product Owner or environment information without which execution would be unsafe or impossible. Examples: a required credential/secret for a mandatory external service, legal/ownership authorization, an irreversible destructive target, or a required external endpoint/dataset that the platform cannot provision.
+- Non-blocking uncertainty belongs in assumptions, not missingInputs. Examples include unspecified visual branding, traffic estimates, performance/SLA targets, test coverage percentages, seed data, optional backup/retention/moderation policy, or other preferences that a PM can choose conservatively.
 - a concise rationale summary grounded in the request
 
 Role guidance:
@@ -371,7 +372,9 @@ Role guidance:
 - Use specialist roles when the request materially needs them: ux-research, database, security, devops, accessibility, performance, api-integration, data-marketing, or test-automation. Prefer generic frontend/backend when the specialist scope is not meaningful.
 - Do not mark Code Review, Reviewer, QA, Documentation, User A/B, or Process Evaluator as critical merely because they are normal governance gates. Mark them critical only if the request makes that role unusually central.
 - criticalRoles must be a subset of requiredRoles.
-- If the request is ambiguous, keep the analysis conservative and expose the ambiguity in assumptions or missingInputs rather than inventing requirements.
+- If the request is ambiguous but a safe reversible default exists, record that default in assumptions and continue. Use missingInputs only when no safe execution path exists.
+- Do not block on internal Bloom/Luna orchestration details such as repository bootstrap commands, delivery handoff APIs, worker commands, or verification plumbing. Those are system-owned capabilities, not Product Owner inputs.
+- Do not re-ask for an assumption or limitation the Product Owner explicitly accepted. Preserve it and let PM/QA document the tradeoff.
 - The final response must match the supplied JSON schema exactly. No Markdown outside the JSON result.
 "#
     )
