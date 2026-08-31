@@ -15,7 +15,7 @@ concurrency:
 jobs:
   provision-worker:
     if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout main
@@ -96,6 +96,9 @@ jobs:
             pnpm run build:bloom-worker
             chmod 755 bloom-runtime/target/release/bloom-runtime-bridge
             test -x bloom-runtime/target/release/bloom-runtime-bridge || { echo "Bloom runtime bridge is missing"; exit 1; }
+            BRIDGE_SMOKE_OUTPUT="$(printf '%s' '{}' | bloom-runtime/target/release/bloom-runtime-bridge 2>/dev/null || true)"
+            printf '%s' "$BRIDGE_SMOKE_OUTPUT" | grep -Fq '"ok":false' || { echo "Bloom Runtime bridge execution smoke failed"; exit 1; }
+            echo "Bloom Runtime bridge execution smoke OK"
 
             ENV_FILE=/home/ubuntu/bloombouquet/.env
             touch "$ENV_FILE"
