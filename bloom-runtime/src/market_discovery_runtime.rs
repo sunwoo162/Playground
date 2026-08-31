@@ -53,7 +53,6 @@ const MARKET_SCHEMA: &str = r#"{
             "type": "array",
             "minItems": 1,
             "maxItems": 10,
-            "uniqueItems": true,
             "items": { "type": "string", "pattern": "^SRC-[0-9]{3}$" }
           }
         }
@@ -77,7 +76,6 @@ const MARKET_SCHEMA: &str = r#"{
             "type": "array",
             "minItems": 1,
             "maxItems": 12,
-            "uniqueItems": true,
             "items": { "type": "string", "pattern": "^SRC-[0-9]{3}$" }
           },
           "competitionSummary": { "type": "string", "minLength": 1, "maxLength": 900 },
@@ -140,7 +138,6 @@ const IDEA_SCHEMA: &str = r#"{
             "type": "array",
             "minItems": 1,
             "maxItems": 12,
-            "uniqueItems": true,
             "items": { "type": "string", "pattern": "^SRC-[0-9]{3}$" }
           },
           "goToMarketAngle": { "type": "string", "minLength": 1, "maxLength": 800 },
