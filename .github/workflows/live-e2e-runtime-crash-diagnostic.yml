@@ -1,0 +1,51 @@
+name: Live E2E Runtime Crash Diagnostic
+
+on:
+  push:
+    branches:
+      - test/luna-live-e2e-diagnostic-current
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-crash:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect production runtime crash evidence
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          timeout: 60s
+          command_timeout: 5m
+          script: |
+            set +e
+            cd /home/ubuntu/bloombouquet
+            export PATH="$HOME/.local/bin:$HOME/.llama/bin:$HOME/.local/node_modules/.bin:$PATH"
+            echo '=== TIME / MEMORY ==='
+            date -Is
+            free -h
+            echo '=== PM2 STATUS ==='
+            pm2 status
+            echo '=== BUILDER WORKER LOGS ==='
+            pm2 logs bloom-builder-worker --lines 350 --nostream 2>&1 | tail -350
+            echo '=== PB-003 STDERR ==='
+            tail -160 /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-17/agents/rose:accessibility/PB-003/app-server.stderr.log 2>&1
+            echo '=== PB-003 EVENTS TAIL ==='
+            tail -80 /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-17/agents/rose:accessibility/PB-003/app-server-events.jsonl 2>&1
+            echo '=== PB-006 STDERR ==='
+            tail -160 /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-17/agents/rose:security/PB-006/app-server.stderr.log 2>&1
+            echo '=== PB-006 EVENTS TAIL ==='
+            tail -80 /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-17/agents/rose:security/PB-006/app-server-events.jsonl 2>&1
+            echo '=== TOP RSS ==='
+            ps -eo pid,ppid,stat,%mem,%cpu,rss,etime,cmd --sort=-rss | head -35
+            echo '=== KERNEL OOM EVIDENCE ==='
+            sudo journalctl -k --since '2026-09-01 05:40:00' --no-pager 2>/dev/null | grep -Ei 'oom|out of memory|killed process|memory cgroup' | tail -120
+            echo '=== DMESG OOM EVIDENCE ==='
+            sudo dmesg --ctime 2>/dev/null | grep -Ei 'oom|out of memory|killed process|memory cgroup' | tail -120
+            echo '=== BRIDGE BINARY ==='
+            ls -lh bloom-runtime/target/release/bloom-runtime-bridge
+            sha256sum bloom-runtime/target/release/bloom-runtime-bridge
