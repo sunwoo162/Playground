@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   patch-and-verify:
-    if: ${{ github.event.head_commit.message == 'chore : run interrupted retry patch' }}
+    if: github.event.head_commit.message == 'bootstrap-interrupted-retry-patch'
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
