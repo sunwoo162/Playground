@@ -1,0 +1,21 @@
+name: Ready PR 161
+
+on:
+  push:
+    branches:
+      - test/luna-live-e2e-diagnostic-current
+    paths:
+      - .github/workflows/ready-pr-161.yml
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  ready:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark PR ready
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr ready 161 --repo sunwoo162/Playground
