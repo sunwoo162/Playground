@@ -374,6 +374,7 @@ function applyTaskResult(
   completedAt: string,
 ): ProjectTaskRun {
   const completed = result.report.status === "completed";
+  const hasRepositoryPublication = Boolean(result.branchName?.trim());
   return {
     ...run,
     status: completed ? "done" : "blocked",
@@ -384,9 +385,9 @@ function applyTaskResult(
     turnId: result.turnId,
     eventsPath: result.eventsPath,
     stderrPath: result.stderrPath,
-    commitSha: result.report.commitSha,
-    pullRequestNumber: result.report.pullRequestNumber,
-    pullRequestUrl: result.report.pullRequestUrl,
+    commitSha: hasRepositoryPublication ? result.report.commitSha : null,
+    pullRequestNumber: hasRepositoryPublication ? result.report.pullRequestNumber : null,
+    pullRequestUrl: hasRepositoryPublication ? result.report.pullRequestUrl : null,
     reviewedPullRequests: result.report.reviewedPullRequests,
     summary: result.report.summary,
     rationaleSummary: result.report.rationaleSummary,
