@@ -1,0 +1,32 @@
+name: E2E 70 PM Repair Diagnostic
+
+on:
+  push:
+    branches:
+      - test/luna-live-e2e-diagnostic-current
+    paths:
+      - .github/workflows/e2e70-pm-repair-diagnostic.yml
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect PM repair evidence
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          timeout: 60s
+          command_timeout: 5m
+          script: |
+            set -eu
+            export PATH="$HOME/.local/node_modules/.bin:$PATH"
+            echo '=== PM REPAIR / TOPOLOGY EVIDENCE ==='
+            pm2 logs bloom-builder-worker --lines 1200 --nostream 2>&1 \
+              | grep -E -C 6 'PM plan semantic validation failed|PB-017|PM Task DAG|builder run 20|run 20' \
+              || true
