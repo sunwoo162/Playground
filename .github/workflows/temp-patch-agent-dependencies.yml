@@ -20,6 +20,7 @@ jobs:
         run: |
           python3 <<'PY'
           from pathlib import Path
+          import textwrap
 
           path = Path('bloom-runtime/src/agent_runtime.rs')
           source = path.read_text()
@@ -27,61 +28,61 @@ jobs:
           if 'fn materialize_dependency_commits(' not in source:
               marker = '\nfn dependency_context(dependencies: &[DependencyArtifact]) -> String {'
               assert marker in source
-              implementation = r'''
-fn materialize_dependency_commits(
-    input: &AgentTaskRuntimeInput,
-    worktree: &Path,
-) -> Result<(), String> {
-    if !is_repository_writer(&input.role) {
-        return Ok(());
-    }
+              implementation = textwrap.dedent(r'''
+              fn materialize_dependency_commits(
+                  input: &AgentTaskRuntimeInput,
+                  worktree: &Path,
+              ) -> Result<(), String> {
+                  if !is_repository_writer(&input.role) {
+                      return Ok(());
+                  }
 
-    for dependency in &input.dependencies {
-        let Some(commit_sha) = dependency.commit_sha.as_deref() else {
-            continue;
-        };
-        if commit_sha.len() != 40 || !commit_sha.chars().all(|character| character.is_ascii_hexdigit()) {
-            return Err(format!(
-                "Dependency {} commit SHA 형식이 잘못되었습니다: {}",
-                dependency.task_id, commit_sha
-            ));
-        }
+                  for dependency in &input.dependencies {
+                      let Some(commit_sha) = dependency.commit_sha.as_deref() else {
+                          continue;
+                      };
+                      if commit_sha.len() != 40 || !commit_sha.chars().all(|character| character.is_ascii_hexdigit()) {
+                          return Err(format!(
+                              "Dependency {} commit SHA 형식이 잘못되었습니다: {}",
+                              dependency.task_id, commit_sha
+                          ));
+                      }
 
-        let merge = run_command(
-            "git",
-            &git_args(worktree, &["merge", "--no-edit", commit_sha]),
-        )?;
-        if merge.status.success() {
-            continue;
-        }
+                      let merge = run_command(
+                          "git",
+                          &git_args(worktree, &["merge", "--no-edit", commit_sha]),
+                      )?;
+                      if merge.status.success() {
+                          continue;
+                      }
 
-        let unmerged = run_checked(
-            "git",
-            &git_args(worktree, &["diff", "--name-only", "--diff-filter=U"]),
-        )?;
-        if String::from_utf8_lossy(&unmerged.stdout).trim().is_empty() {
-            return Err(format!(
-                "Dependency {} commit {} merge 실패: {}",
-                dependency.task_id,
-                commit_sha,
-                output_detail(&merge)
-            ));
-        }
+                      let unmerged = run_checked(
+                          "git",
+                          &git_args(worktree, &["diff", "--name-only", "--diff-filter=U"]),
+                      )?;
+                      if String::from_utf8_lossy(&unmerged.stdout).trim().is_empty() {
+                          return Err(format!(
+                              "Dependency {} commit {} merge 실패: {}",
+                              dependency.task_id,
+                              commit_sha,
+                              output_detail(&merge)
+                          ));
+                      }
 
-        run_checked("git", &git_args(worktree, &["add", "-A"]))?;
-        let commit_message = format!("chore : materialize dependency {}", dependency.task_id);
-        run_checked(
-            "git",
-            &git_args(
-                worktree,
-                &["commit", "--no-verify", "-m", commit_message.as_str()],
-            ),
-        )?;
-    }
+                      run_checked("git", &git_args(worktree, &["add", "-A"]))?;
+                      let commit_message = format!("chore : materialize dependency {}", dependency.task_id);
+                      run_checked(
+                          "git",
+                          &git_args(
+                              worktree,
+                              &["commit", "--no-verify", "-m", commit_message.as_str()],
+                          ),
+                      )?;
+                  }
 
-    Ok(())
-}
-'''
+                  Ok(())
+              }
+              ''')
               source = source.replace(marker, '\n' + implementation + marker, 1)
 
           dispatch_marker = '    let (worktree, branch) = prepare_agent_worktree(&input)?;\n    let (thread_id'
