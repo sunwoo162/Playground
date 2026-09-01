@@ -14,6 +14,8 @@ const { createLocalSeniorEvaluatorRunner } = require("../.tmp/bloom-worker/bloom
 const { createLunaProductionDeliveryHook } = require("../.tmp/bloom-worker/lunaProductionDelivery.js");
 
 const MAX_BRIDGE_OUTPUT_BYTES = 16 * 1024 * 1024;
+const MAX_PM_PLAN_ATTEMPTS = 2;
+const PM_PLAN_UNIQUENESS_CONTRACT = "Task IDs and taskSlug values must each be unique across the plan.";
 const TEAM_NAMES = new Map([
   ["rose", "장미"],
   ["lily", "백합"],
@@ -73,6 +75,39 @@ function parseBridgeResponse(stdout, stderr, exitCode) {
     throw new Error(response?.error || stderr.trim() || `Bloom Runtime bridge 실패 (exit ${exitCode})`);
   }
   return response.result;
+}
+
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isSemanticPmPlanError(error) {
+  const message = errorMessage(error);
+  return [
+    "PM repository",
+    "PM 계획",
+    "Task ID",
+    "taskSlug",
+    "허용되지 않은 Agent role",
+    "acceptance criteria",
+    "dependency",
+    "자기 자신",
+  ].some((marker) => message.includes(marker));
+}
+
+function buildPmPlanningRequest(request, validationError = "") {
+  const sections = [
+    request,
+    `Bloom PM planning invariant:\n- ${PM_PLAN_UNIQUENESS_CONTRACT}`,
+  ];
+  if (validationError) {
+    sections.push(
+      "The previous PM plan failed Bloom semantic validation:\n"
+      + `${validationError}\n`
+      + "Return a corrected complete project plan. Preserve the original product requirements and review topology, fix the reported semantic violation, and return only schema-valid planning JSON.",
+    );
+  }
+  return sections.join("\n\n");
 }
 
 function createRuntimeBridge(binaryPath) {
@@ -136,9 +171,29 @@ function createRuntimeBridge(binaryPath) {
     child.stdin.end(JSON.stringify(request));
   });
 
+  const planProjectWithRepair = async (input) => {
+    let validationError = "";
+    for (let attempt = 1; attempt <= MAX_PM_PLAN_ATTEMPTS; attempt += 1) {
+      try {
+        return await call({
+          command: "planProject",
+          ...input,
+          request: buildPmPlanningRequest(input.request, validationError),
+        });
+      } catch (error) {
+        if (attempt >= MAX_PM_PLAN_ATTEMPTS || !isSemanticPmPlanError(error)) {
+          throw error;
+        }
+        validationError = errorMessage(error);
+        console.warn(`[bloom-worker] PM plan semantic validation failed; repairing once: ${validationError}`);
+      }
+    }
+    throw new Error("PM planning repair exhausted unexpectedly.");
+  };
+
   return {
     analyzeIntake: (input) => call({ command: "analyzeIntake", ...input }),
-    planProject: (input) => call({ command: "planProject", ...input }),
+    planProject: planProjectWithRepair,
     bootstrapRepository: (input) => call({ command: "bootstrapProjectRepository", ...input }),
     dispatchTask: (input) => call({ command: "dispatchAgentTask", input }),
     reconcileTask: (input) => call({ command: "reconcileInterruptedAgentTask", input }),
