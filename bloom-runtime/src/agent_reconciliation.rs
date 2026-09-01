@@ -11,8 +11,16 @@ const MAX_JSONL_LINE_BYTES: usize = 10 * 1024 * 1024;
 const WRITER_ROLES: &[&str] = &[
     "design-system",
     "designer",
+    "ux-research",
     "frontend",
     "backend",
+    "database",
+    "security",
+    "devops",
+    "accessibility",
+    "performance",
+    "api-integration",
+    "test-automation",
     "data-marketing",
     "documentation",
     "debug-router",
@@ -424,32 +432,63 @@ fn unrecoverable(reason: impl Into<String>) -> ReconcileInterruptedAgentTaskResu
     }
 }
 
+fn retryable(reason: impl Into<String>) -> ReconcileInterruptedAgentTaskResult {
+    ReconcileInterruptedAgentTaskResult {
+        outcome: "retryable".to_string(),
+        reason: reason.into(),
+        result: None,
+    }
+}
+
+fn retryable_or_blocked_before_terminal(
+    input: &ReconcileInterruptedAgentTaskInput,
+    reason: impl Into<String>,
+) -> ReconcileInterruptedAgentTaskResult {
+    let reason = reason.into();
+    if writer_role(input.role.trim()) {
+        unrecoverable(reason)
+    } else {
+        retryable(reason)
+    }
+}
+
 fn reconcile_interrupted_agent_task_blocking(
     input: ReconcileInterruptedAgentTaskInput,
 ) -> Result<ReconcileInterruptedAgentTaskResult, String> {
     validate_input(&input)?;
     let (events_path, stderr_path, worktree) = runtime_paths(&input)?;
     if !events_path.exists() {
-        return Ok(unrecoverable(
-            "중단된 Agent의 App Server event log가 없어 완료 여부를 증명할 수 없습니다.",
+        return Ok(retryable_or_blocked_before_terminal(
+            &input,
+            "Interrupted Agent has no App Server event log, so no terminal result can be proven.",
         ));
     }
 
     let evidence = read_event_evidence(&events_path)?;
     let Some(thread_id) = evidence.thread_id else {
-        return Ok(unrecoverable(
-            "중단된 Agent의 thread/start 완료 증거가 없습니다.",
+        return Ok(retryable_or_blocked_before_terminal(
+            &input,
+            "Interrupted Agent has no completed thread/start evidence.",
         ));
     };
     let Some(turn_id) = evidence.turn_id else {
-        return Ok(unrecoverable(
-            "중단된 Agent의 turn/start 완료 증거가 없습니다.",
+        return Ok(retryable_or_blocked_before_terminal(
+            &input,
+            "Interrupted Agent has no completed turn/start evidence.",
         ));
     };
     if evidence.turn_status.as_deref() != Some("completed") {
-        let detail = evidence.turn_error.unwrap_or_else(|| "turn/completed 증거 없음".to_string());
+        let detail = evidence
+            .turn_error
+            .clone()
+            .unwrap_or_else(|| "turn/completed evidence missing".to_string());
+        if evidence.turn_status.is_none() && !writer_role(input.role.trim()) {
+            return Ok(retryable(format!(
+                "Interrupted non-writer Agent turn has no terminal evidence and may be retried: {detail}"
+            )));
+        }
         return Ok(unrecoverable(format!(
-            "중단된 Agent turn의 완료를 확인할 수 없습니다: {detail}"
+            "Interrupted Agent turn did not complete successfully: {detail}"
         )));
     }
     let Some(final_message) = evidence.final_message else {

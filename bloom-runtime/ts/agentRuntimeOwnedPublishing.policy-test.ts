@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { REPOSITORY_WRITER_ROLES } from "./planTopology";
 
 function assert(condition: boolean, message: string) {
   if (!condition) throw new Error(message);
@@ -7,6 +8,10 @@ function assert(condition: boolean, message: string) {
 
 const source = fs.readFileSync(
   path.resolve(__dirname, "../../bloom-runtime/src/agent_runtime.rs"),
+  "utf8",
+);
+const reconciliationSource = fs.readFileSync(
+  path.resolve(__dirname, "../../bloom-runtime/src/agent_reconciliation.rs"),
   "utf8",
 );
 
@@ -107,6 +112,28 @@ assert(
 assert(
   !source.includes('git_args(worktree, &["push", "-u", "origin", branch])'),
   "parallel agent publication must not use push -u because it writes shared repository config",
+);
+
+const rustWriterRoleBlock = reconciliationSource.match(
+  /const WRITER_ROLES: &\[&str\] = &\[([\s\S]*?)\];/,
+)?.[1] ?? "";
+const rustWriterRoles = new Set(
+  [...rustWriterRoleBlock.matchAll(/"([^"]+)"/g)].map((match) => match[1]),
+);
+for (const role of REPOSITORY_WRITER_ROLES) {
+  assert(
+    rustWriterRoles.has(role),
+    `interrupted-task reconciliation must fail closed for repository writer role: ${role}`,
+  );
+}
+
+assert(
+  source.includes("reuse or update your existing prefixed top-level comment instead of creating a duplicate"),
+  "review retries must make GitHub comment publication idempotent",
+);
+assert(
+  source.includes("Do not merge, close, label, retarget, or otherwise mutate pull requests"),
+  "review agents must not perform non-idempotent GitHub mutations outside their review comment",
 );
 
 console.log("PASS  Luna Runtime owns publishing and cleans task-scoped tool state.");
