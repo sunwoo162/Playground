@@ -87,7 +87,7 @@ type CrashPredicate = (
   phase: string,
 ) => boolean;
 
-function persistentClient(crashPredicate: CrashPredicate) {
+function persistentClient(crashPredicate: CrashPredicate, crashAfterCommit = false) {
   let stored: BuilderOrchestrationSnapshot | null = null;
   let crashArmed = true;
   let crashCount = 0;
@@ -103,7 +103,8 @@ function persistentClient(crashPredicate: CrashPredicate) {
       }
       const next = JSON.parse(write.payloadJson) as HeadlessBuilderSnapshotPayload;
       const previous = parsePayload(stored);
-      if (crashArmed && crashPredicate(next, previous, write.phase)) {
+      const shouldCrash = crashArmed && crashPredicate(next, previous, write.phase);
+      if (shouldCrash && !crashAfterCommit) {
         crashArmed = false;
         crashCount += 1;
         throw new Error("[FAILURE-INJECTION] simulated worker crash before snapshot commit");
@@ -116,6 +117,11 @@ function persistentClient(crashPredicate: CrashPredicate) {
         updatedByWorkerId: workerId,
         updatedAt: "2026-08-27T07:00:30Z",
       };
+      if (shouldCrash && crashAfterCommit) {
+        crashArmed = false;
+        crashCount += 1;
+        throw new Error("[FAILURE-INJECTION] simulated worker crash after snapshot commit");
+      }
       return stored;
     },
     async complete() { return runState("completed"); },
@@ -239,9 +245,12 @@ function fakeRuntime() {
     async reconcileTask(input) {
       reconcileCount.set(input.taskId, (reconcileCount.get(input.taskId) ?? 0) + 1);
       const result = evidenceByTask.get(input.taskId) ?? null;
-      return result
-        ? { outcome: "recovered" as const, reason: "durable repository/session evidence found", result }
-        : { outcome: "blocked" as const, reason: "durable evidence missing", result: null };
+      if (result) {
+        return { outcome: "recovered" as const, reason: "durable repository/session evidence found", result };
+      }
+      return REPOSITORY_WRITER_ROLES.includes(input.role)
+        ? { outcome: "blocked" as const, reason: "durable evidence missing", result: null }
+        : { outcome: "retryable" as const, reason: "terminal evidence missing for interrupted non-writer", result: null };
     },
     async mergePullRequests(input) {
       mergeCalls += 1;
@@ -369,6 +378,33 @@ async function testReviewEvidenceRecovery() {
   checkEqual(runtime.reconcileCount.get(evidence.taskId), 1, "review must recover through reconciliation");
 }
 
+
+async function testInterruptedNonWriterTaskRedispatchesWhenNoTerminalEvidenceExists() {
+  const runtime = fakeRuntime();
+  const storage = persistentClient((next, previous, phase) => {
+    if (phase !== "building" || !previous) return false;
+    const nextReview = next.taskRuns.find((run) => run.role === "code-review");
+    const previousReview = previous.taskRuns.find((run) => run.role === "code-review");
+    return previousReview?.status !== "running" && nextReview?.status === "running";
+  }, true);
+  const executor = makeExecutor(runtime.runtime);
+  await expectCrash(executor, storage.client);
+  check(
+    ![...runtime.evidenceByTask.values()].some((result) => result.role === "code-review"),
+    "dispatch must not happen before injected process loss",
+  );
+  await resume(executor, storage.client);
+  const reconciledTaskIds = [...runtime.reconcileCount.entries()]
+    .filter(([, count]) => count === 1)
+    .map(([taskId]) => taskId);
+  checkEqual(reconciledTaskIds.length, 1, "restart must reconcile exactly one interrupted task");
+  const interruptedTaskId = reconciledTaskIds[0];
+  const reviewEvidence = runtime.evidenceByTask.get(interruptedTaskId);
+  check(reviewEvidence?.role === "code-review", "the reconciled interrupted task must be the code-review task");
+  checkEqual(runtime.reconcileCount.get(interruptedTaskId), 1, "restart must first attempt evidence reconciliation");
+  checkEqual(runtime.dispatchCount.get(interruptedTaskId), 1, "in-flight task without terminal evidence must be safely redispatched once");
+}
+
 async function testIntegrationRecovery() {
   const runtime = fakeRuntime();
   const storage = persistentClient((_next, _previous, phase) => phase === "completed");
@@ -391,6 +427,7 @@ async function run() {
   await testRepositoryBootstrapRecovery();
   await testWriterEvidenceRecovery();
   await testReviewEvidenceRecovery();
+  await testInterruptedNonWriterTaskRedispatchesWhenNoTerminalEvidenceExists();
   await testIntegrationRecovery();
   console.log("headless crash recovery policy tests passed");
 }

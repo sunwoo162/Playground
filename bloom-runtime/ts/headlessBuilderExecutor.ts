@@ -111,7 +111,7 @@ export type HeadlessAgentTaskRunResult = {
 };
 
 export type ReconcileInterruptedAgentTaskResult = {
-  outcome: "recovered" | "blocked";
+  outcome: "recovered" | "retryable" | "blocked";
   reason: string;
   result: HeadlessAgentTaskRunResult | null;
 };
@@ -409,6 +409,32 @@ function blockedTask(run: ProjectTaskRun, reason: string, completedAt: string): 
   };
 }
 
+function retryInterruptedTask(run: ProjectTaskRun, reason: string): ProjectTaskRun {
+  return {
+    ...run,
+    status: "pending",
+    branchName: null,
+    worktreePath: null,
+    threadId: null,
+    sessionId: null,
+    turnId: null,
+    eventsPath: null,
+    stderrPath: null,
+    commitSha: null,
+    pullRequestNumber: null,
+    pullRequestUrl: null,
+    reviewedPullRequests: [],
+    summary: null,
+    rationaleSummary: null,
+    evidence: [],
+    verification: [],
+    blockers: [],
+    lastError: reason,
+    startedAt: null,
+    completedAt: null,
+  };
+}
+
 function ensureTaskRunsMatchPlan(payload: HeadlessBuilderSnapshotPayload, teamId: TeamId) {
   if (!payload.plan) return;
   if (payload.taskRuns.length === 0) {
@@ -539,6 +565,11 @@ export function createHeadlessBuilderExecutor(
         const index = payload.taskRuns.findIndex((run) => run.taskId === interrupted.taskId);
         if (reconciliation.outcome === "recovered" && reconciliation.result) {
           payload.taskRuns[index] = applyTaskResult(interrupted, reconciliation.result, now());
+        } else if (reconciliation.outcome === "retryable") {
+          payload.taskRuns[index] = retryInterruptedTask(
+            interrupted,
+            `Interrupted task is safe to retry without terminal evidence: ${reconciliation.reason}`,
+          );
         } else {
           payload.taskRuns[index] = blockedTask(
             interrupted,

@@ -109,4 +109,13 @@ assert(
   "parallel agent publication must not use push -u because it writes shared repository config",
 );
 
+assert(
+  source.includes("reuse or update your existing prefixed top-level comment instead of creating a duplicate"),
+  "review retries must make GitHub comment publication idempotent",
+);
+assert(
+  source.includes("Do not merge, close, label, retarget, or otherwise mutate pull requests"),
+  "review agents must not perform non-idempotent GitHub mutations outside their review comment",
+);
+
 console.log("PASS  Luna Runtime owns publishing and cleans task-scoped tool state.");
