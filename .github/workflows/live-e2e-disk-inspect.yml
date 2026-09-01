@@ -1,0 +1,40 @@
+name: Live E2E Disk Inspect
+
+on:
+  push:
+    branches:
+      - test/luna-live-e2e-monitor-20260901-night
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-disk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect production disk usage
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          command_timeout: 8m
+          script: |
+            set -eu
+            echo '=== ROOT ==='
+            df -hT /
+            echo '=== HOME TOP ==='
+            sudo du -xhd1 /home/ubuntu 2>/dev/null | sort -h | tail -20
+            echo '=== VAR TOP ==='
+            sudo du -xhd1 /var 2>/dev/null | sort -h | tail -20
+            echo '=== TMP TOP ==='
+            sudo du -xhd1 /tmp 2>/dev/null | sort -h | tail -20
+            echo '=== BLOOM TOP ==='
+            sudo du -xhd1 /home/ubuntu/bloombouquet 2>/dev/null | sort -h | tail -30
+            echo '=== DOCKER ==='
+            docker system df || true
+            echo '=== JOURNAL ==='
+            journalctl --disk-usage || true
+            echo '=== PNPM/NPM CACHE ==='
+            du -sh ~/.local/share/pnpm ~/.pnpm-store ~/.npm 2>/dev/null || true
