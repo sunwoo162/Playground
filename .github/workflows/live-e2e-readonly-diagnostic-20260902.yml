@@ -1,4 +1,4 @@
-name: Live E2E Readonly Diagnostic 20260902
+name: Luna Output Guard Regression Runner
 
 on:
   push:
@@ -11,153 +11,19 @@ permissions:
 jobs:
   inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
-      - name: Aggregate production PB-001 event stats without content
-        uses: appleboy/ssh-action@v1.0.3
+      - uses: actions/checkout@v4
         with:
-          host: ssh.gsmsv.site
-          port: 24136
-          username: ubuntu
-          password: ${{ secrets.SSH_PASSWORD }}
-          command_timeout: 8m
-          script: |
-            set -eu
-            cd /home/ubuntu/bloombouquet
-            export PATH="$HOME/.local/bin:$HOME/.llama/bin:$HOME/.local/node_modules/.bin:$PATH"
-            date -u
-
-            CURRENT='/home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-25/agents/rose:idea/PB-001/app-server-events.jsonl'
-            BASELINE='/home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-22/agents/rose:idea/PB-001/app-server-events.jsonl'
-
-            for events in "$BASELINE" "$CURRENT"; do
-              echo "=== STATS $events ==="
-              stat -c 'bytes=%s modified=%y' "$events"
-              EVENTS_FILE="$events" node <<'NODE'
-            const fs = require('fs');
-            const crypto = require('crypto');
-            const file = process.env.EVENTS_FILE;
-            const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/).filter(Boolean);
-            const methods = new Map();
-            const itemStartedTypes = new Map();
-            const itemCompletedTypes = new Map();
-            const agentItemIds = new Set();
-            const deltaHashes = new Map();
-            let parseErrors = 0;
-            let deltaCount = 0;
-            let deltaBytes = 0;
-            let maxDeltaBytes = 0;
-            let consecutiveDelta = 0;
-            let maxConsecutiveDelta = 0;
-            let completedAgentMessages = 0;
-            let completedAgentMessageBytes = 0;
-            let turnCompleted = 0;
-            let turnFailed = 0;
-            let lastNonDeltaIndex = -1;
-            let lastNonDeltaMethod = null;
-            let latestUsageNumbers = null;
-
-            function inc(map, key) { map.set(key, (map.get(key) || 0) + 1); }
-            function numericShape(value) {
-              if (typeof value === 'number' && Number.isFinite(value)) return value;
-              if (Array.isArray(value)) {
-                const out = value.map(numericShape).filter(v => v !== undefined);
-                return out.length ? out : undefined;
-              }
-              if (value && typeof value === 'object') {
-                const out = {};
-                for (const [k,v] of Object.entries(value)) {
-                  const n = numericShape(v);
-                  if (n !== undefined) out[k] = n;
-                }
-                return Object.keys(out).length ? out : undefined;
-              }
-              return undefined;
-            }
-
-            for (let i = 0; i < lines.length; i++) {
-              let v;
-              try { v = JSON.parse(lines[i]); } catch { parseErrors++; continue; }
-              const method = typeof v.method === 'string' ? v.method : '(response)';
-              inc(methods, method);
-              const params = v && typeof v.params === 'object' && v.params ? v.params : {};
-              const item = params && typeof params.item === 'object' && params.item ? params.item : {};
-              if (method === 'item/started') inc(itemStartedTypes, String(item.type || '(unknown)'));
-              if (method === 'item/completed') {
-                inc(itemCompletedTypes, String(item.type || '(unknown)'));
-                if (item.type === 'agentMessage' && typeof item.text === 'string') {
-                  completedAgentMessages++;
-                  completedAgentMessageBytes += Buffer.byteLength(item.text, 'utf8');
-                }
-              }
-              if (method === 'item/agentMessage/delta' && typeof params.delta === 'string') {
-                deltaCount++;
-                const bytes = Buffer.byteLength(params.delta, 'utf8');
-                deltaBytes += bytes;
-                maxDeltaBytes = Math.max(maxDeltaBytes, bytes);
-                const hash = crypto.createHash('sha256').update(params.delta).digest('hex').slice(0,16);
-                deltaHashes.set(hash, (deltaHashes.get(hash) || 0) + 1);
-                if (typeof params.itemId === 'string') agentItemIds.add(params.itemId);
-                consecutiveDelta++;
-                maxConsecutiveDelta = Math.max(maxConsecutiveDelta, consecutiveDelta);
-              } else {
-                consecutiveDelta = 0;
-                lastNonDeltaIndex = i;
-                lastNonDeltaMethod = method;
-              }
-              if (method === 'turn/completed') {
-                turnCompleted++;
-                if (params?.turn?.status && params.turn.status !== 'completed') turnFailed++;
-              }
-              if (method === 'thread/tokenUsage/updated') latestUsageNumbers = numericShape(params);
-            }
-
-            const topMethods = [...methods.entries()].sort((a,b)=>b[1]-a[1]).slice(0,20);
-            const repeatCounts = [...deltaHashes.values()].sort((a,b)=>b-a);
-            console.log(JSON.stringify({
-              eventCount: lines.length,
-              parseErrors,
-              topMethods,
-              itemStartedTypes: Object.fromEntries(itemStartedTypes),
-              itemCompletedTypes: Object.fromEntries(itemCompletedTypes),
-              agentMessageDelta: {
-                count: deltaCount,
-                bytes: deltaBytes,
-                avgBytes: deltaCount ? Math.round(deltaBytes / deltaCount) : 0,
-                maxBytes: maxDeltaBytes,
-                uniqueDeltaHashes: deltaHashes.size,
-                mostRepeatedIdenticalDelta: repeatCounts[0] || 0,
-                uniqueAgentItemIds: agentItemIds.size,
-                maxConsecutiveDelta,
-              },
-              completedAgentMessages,
-              completedAgentMessageBytes,
-              turnCompleted,
-              turnFailed,
-              lastNonDeltaIndex,
-              lastNonDeltaMethod,
-              latestUsageNumbers,
-            }, null, 2));
-            NODE
-            done
-
-            echo '=== LIVE SNAPSHOT ==='
-            node <<'NODE'
-            require('dotenv').config({ path: '.env' });
-            const jwt = require('jsonwebtoken');
-            const base = 'http://127.0.0.1:3000';
-            const token = jwt.sign({ id:'sunwoo162-live-e2e', login:'sunwoo162', name:'sunwoo162', avatar_url:'', type:'access' }, process.env.JWT_SECRET, { expiresIn:'5m' });
-            async function get(path) {
-              const r = await fetch(base + path, { headers:{ Cookie:`playground_token=${token}` } });
-              const text = await r.text();
-              if (!r.ok) throw new Error(`${path} -> ${r.status}: ${text.slice(0,300)}`);
-              return text ? JSON.parse(text) : null;
-            }
-            (async()=>{
-              const project = await get('/api/builder/projects/25');
-              const run = await get('/api/builder/projects/25/runs/25');
-              const snapshot = await get('/api/builder/projects/25/runs/25/snapshot');
-              const payload = snapshot?.payloadJson ? JSON.parse(snapshot.payloadJson) : null;
-              console.log(JSON.stringify({projectStatus:project.status,runStatus:run.status,heartbeatAt:run.heartbeatAt,failureReason:run.failureReason||project.failureReason||null,phase:snapshot?.phase,version:snapshot?.version,repository:project.repositoryFullName||null,tasks:(payload?.taskRuns||[]).map(t=>({taskId:t.taskId,role:t.role,status:t.status,attempts:t.attempts,pr:t.pullRequestNumber,commit:t.commitSha,lastError:t.lastError}))},null,2));
-            })().catch(e=>{console.error(e.stack||String(e));process.exit(1)});
-            NODE
+          ref: fix/luna-agent-output-guard
+          fetch-depth: 0
+      - name: Inspect agent runtime test surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== runtime command surface ==='
+          grep -nE 'Command::new\(|app-server|read_json_line|turn/completed|item/agentMessage/delta' bloom-runtime/src/agent_runtime.rs | head -120
+          echo '=== bridge surface ==='
+          grep -RniE 'agent-task|run_agent|AgentTaskRuntimeInput' bloom-runtime/src | head -120
+          echo '=== existing tests ==='
+          grep -RniE '#\[test\]|cfg\(test\)' bloom-runtime/src bloom-runtime/tests 2>/dev/null | head -160 || true
