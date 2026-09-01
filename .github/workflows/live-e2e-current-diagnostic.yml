@@ -12,7 +12,7 @@ jobs:
   inspect:
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect Luna temporary disk accumulation
+      - name: Recover Luna temporary disk safely
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ssh.gsmsv.site
@@ -20,24 +20,34 @@ jobs:
           username: ubuntu
           password: ${{ secrets.SSH_PASSWORD }}
           timeout: 60s
-          command_timeout: 12m
+          command_timeout: 8m
           script: |
-            set +e
-            echo '=== ROOT SPACE ==='
+            set -eu
+            echo '=== ACTIVE LUNA AGENT PROCESSES ==='
+            active="$(pgrep -af 'luna-agent-bridge|codex app-server' || true)"
+            if [ -n "$active" ]; then
+              printf '%s\n' "$active"
+              echo 'REFUSE_CLEANUP_ACTIVE_AGENT'
+              exit 2
+            fi
+            echo 'NO_ACTIVE_LUNA_AGENT'
+            echo '=== SPACE BEFORE ==='
             df -hT /
-            echo '=== TMP TOP LEVEL ==='
-            sudo du -xhd1 /tmp 2>/dev/null | sort -h | tail -60
-            echo '=== LUNA AGENT TOOLS ==='
-            sudo du -xhd3 /tmp/luna-agent-tools 2>/dev/null | sort -h | tail -100
-            echo '=== LUNA AGENT TOOLS PROJECTS ==='
-            sudo du -xsh /tmp/luna-agent-tools/* 2>/dev/null | sort -h | tail -80
-            echo '=== LARGEST TMP FILES >= 100M ==='
-            sudo find /tmp -xdev -type f -size +100M -printf '%s %TY-%Tm-%Td %TH:%TM:%TS %p\n' 2>/dev/null | sort -n | tail -80
-            echo '=== TMP DIRECTORIES BY MTIME ==='
-            sudo find /tmp -xdev -mindepth 1 -maxdepth 2 -type d -printf '%TY-%Tm-%Td %TH:%TM:%TS %p\n' 2>/dev/null | sort | tail -100
-            echo '=== LUNA TOOL STATE TASK BREAKDOWN ==='
-            for project in /tmp/luna-agent-tools/*; do
-              [ -d "$project" ] || continue
-              echo "-- $(basename "$project") --"
-              sudo du -xsh "$project"/* 2>/dev/null | sort -h | tail -40
-            done
+            sudo du -xsh /tmp/luna-agent-tools 2>/dev/null || true
+            echo '=== CLEAN LUNA-OWNED TOOL STATE ==='
+            sudo rm -rf /tmp/luna-agent-tools
+            sync
+            echo '=== SPACE AFTER ==='
+            df -hT /
+            echo '=== PM2 SAFE STATUS ==='
+            pm2 jlist | node -e '
+              let s=""; process.stdin.on("data",d=>s+=d); process.stdin.on("end",()=>{
+                const rows=JSON.parse(s);
+                for (const n of ["backend","bloom-builder-worker","bloom-evaluator-worker","bloom-evaluator-llm"]) {
+                  const p=rows.find(x=>x.name===n);
+                  console.log(JSON.stringify({name:n,pid:p?.pid,status:p?.pm2_env?.status,restarts:p?.pm2_env?.restart_time}));
+                }
+              });'
+            echo '=== LOCAL HTTP ==='
+            curl -sS -o /dev/null -w 'root_http=%{http_code}\n' --max-time 15 http://127.0.0.1:3000/ || true
+            curl -sS -o /dev/null -w 'api_http=%{http_code}\n' --max-time 15 http://127.0.0.1:3000/api/builder/projects || true
