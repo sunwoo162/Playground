@@ -40,6 +40,26 @@ assert(
   "agent tooling must redirect XDG data writes away from the read-only user home",
 );
 assert(
+  source.includes("struct AgentToolStateGuard"),
+  "agent tooling must guard task-scoped temporary state with lifecycle cleanup",
+);
+assert(
+  source.includes("impl Drop for AgentToolStateGuard"),
+  "agent tool state cleanup must run on success and every early-return failure path",
+);
+assert(
+  source.includes("fs::remove_dir_all(&self.root)"),
+  "agent tool state cleanup must recursively remove task-scoped caches such as Playwright downloads",
+);
+assert(
+  source.includes("AgentToolStateGuard::prepare(tool_state_root.clone())?"),
+  "agent runtime must activate tool-state cleanup before spawning Codex",
+);
+assert(
+  source.includes("if root.exists()"),
+  "agent runtime must clear stale task-scoped tool state left by an interrupted prior attempt",
+);
+assert(
   source.includes(
     "Formatting, lint, and test failures caused by your task changes are defects to fix before returning completed",
   ),
@@ -89,4 +109,4 @@ assert(
   "parallel agent publication must not use push -u because it writes shared repository config",
 );
 
-console.log("PASS  Luna Runtime owns publishing without shared Git config races.");
+console.log("PASS  Luna Runtime owns publishing and cleans task-scoped tool state.");

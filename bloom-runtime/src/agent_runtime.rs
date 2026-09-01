@@ -183,6 +183,28 @@ fn run_checked(program: &str, args: &[String]) -> Result<Output, String> {
     })
 }
 
+struct AgentToolStateGuard {
+    root: PathBuf,
+}
+
+impl AgentToolStateGuard {
+    fn prepare(root: PathBuf) -> Result<Self, String> {
+        if root.exists() {
+            fs::remove_dir_all(&root)
+                .map_err(|error| format!("stale Agent tool state 정리 실패: {error}"))?;
+        }
+        fs::create_dir_all(&root)
+            .map_err(|error| format!("Agent tool state root 생성 실패: {error}"))?;
+        Ok(Self { root })
+    }
+}
+
+impl Drop for AgentToolStateGuard {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.root);
+    }
+}
+
 fn git_args(workspace: &Path, tail: &[&str]) -> Vec<String> {
     let mut args = vec!["-C".to_string(), workspace.to_string_lossy().to_string()];
     args.extend(tail.iter().map(|value| value.to_string()));
@@ -577,6 +599,7 @@ fn run_app_server_agent(
         .join("luna-agent-tools")
         .join(&input.project_id)
         .join(&input.task_id);
+    let _tool_state_guard = AgentToolStateGuard::prepare(tool_state_root.clone())?;
     let pnpm_home = tool_state_root.join("pnpm-home");
     let xdg_data_home = tool_state_root.join("xdg-data");
     let xdg_cache_home = tool_state_root.join("xdg-cache");
