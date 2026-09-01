@@ -1,3 +1,4 @@
+# verify: temp cleanup 500115f
 name: Live E2E Current Diagnostic
 
 on:
