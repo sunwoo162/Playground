@@ -31,8 +31,20 @@ assert(
   "production Runtime bridge must route PM planning through the repair wrapper",
 );
 assert(
+  workerSource.includes("prepareOrchestrationPlan"),
+  "production PM repair wrapper must run the final orchestration-plan topology preparation before accepting a plan",
+);
+assert(
+  workerSource.includes("PM Task DAG"),
+  "review-topology validation failures must be classified as repairable PM semantic errors",
+);
+assert(
+  workerSource.includes("result.plan = prepareOrchestrationPlan(result.plan);"),
+  "PM repair wrapper must validate the prepared review topology inside its retry boundary",
+);
+assert(
   runtimeSource.includes("validate_project_plan(&plan)"),
   "repaired PM plans must still pass authoritative Rust runtime validation",
 );
 
-console.log("PASS  PM planning repairs one invalid structured plan before failing the run.");
+console.log("PASS  PM planning repairs structured and review-topology semantic failures before failing the run.");
