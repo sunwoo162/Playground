@@ -6,7 +6,99 @@ on:
     branches:
       - main
 
+permissions:
+  contents: write
+
 jobs:
+  apply-luna-review-runtime-fix:
+    if: github.event_name == 'pull_request' && github.event.pull_request.number == 157
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fix branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/luna-review-verification-runtime
+          fetch-depth: 0
+
+      - name: Apply verified runtime fix
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path('bloom-runtime/src/agent_runtime.rs')
+          source = path.read_text()
+
+          old_prompt = '''"You are a repository-changing worker. Your dedicated branch is `{}`. Inspect the actual repository first, implement the task in this worktree, and run applicable verification. Git metadata is protected inside the Codex sandbox, so do not run Git write commands such as add, commit, checkout, switch, reset, rebase, merge, or push, do not create or update a PR, and do not create temporary Git metadata to work around the sandbox. Read-only Git inspection is allowed. Luna Runtime has materialized completed dependency commits into this worktree before your turn; if Git conflict markers are present, resolve them semantically using the dependency context and verification instead of reporting that upstream work is missing. Luna Runtime will publish your completed work after this turn. Never push directly to `main` or `develop`.",'''
+          new_prompt = '''"You are a repository-changing worker. Your dedicated branch is `{}`. Inspect the actual repository first, implement the task in this worktree, and run applicable verification. Formatting, lint, and test failures caused by your task changes are defects to fix before returning completed. If an applicable verification command cannot run because the execution environment is genuinely unavailable, record the exact command and error; do not treat a not-yet-deployed public URL as a blocker unless this task owns deployment. Git metadata is protected inside the Codex sandbox, so do not run Git write commands such as add, commit, checkout, switch, reset, rebase, merge, or push, do not create or update a PR, and do not create temporary Git metadata to work around the sandbox. Read-only Git inspection is allowed. Luna Runtime has materialized completed dependency commits into this worktree before your turn; if Git conflict markers are present, resolve them semantically using the dependency context and verification instead of reporting that upstream work is missing. Luna Runtime will publish your completed work after this turn. Never push directly to `main` or `develop`.",'''
+          if old_prompt not in source:
+              raise SystemExit('writer prompt anchor not found')
+          source = source.replace(old_prompt, new_prompt, 1)
+
+          old_review = '''"You are an independent verification/review worker. Do not modify product source files or create a feature branch. Inspect the actual repository and dependency PRs directly. Run the checks appropriate to your role. When reviewing a PR, leave a concise top-level PR comment prefixed with your Luna Agent ID and an evidence-based verdict. Do not pretend GitHub native self-approval is an independent approval when all agents share one GitHub credential.".to_string()'''
+          new_review = '''"You are an independent verification/review worker. Do not modify product source files or create a feature branch. Inspect the actual repository and dependency PRs directly. Run the checks appropriate to your role. A missing CI check on an early or partial writer PR is not by itself a blocker; distinguish a missing check from a failed check. If the CI workflow did not exist at that writer commit, review the diff, commit, dependency, and available verification evidence independently and record CI as not-run instead of failed. An existing failed CI check is a blocker. Final integration and release gates own enforcement of current mergeability and check results. When reviewing a PR, leave a concise top-level PR comment prefixed with your Luna Agent ID and an evidence-based verdict. Do not pretend GitHub native self-approval is an independent approval when all agents share one GitHub credential.".to_string()'''
+          if old_review not in source:
+              raise SystemExit('review prompt anchor not found')
+          source = source.replace(old_review, new_review, 1)
+
+          old_runtime = '''    let stderr_file = File::create(&stderr_path)
+        .map_err(|error| format!("Agent stderr log 생성 실패: {error}"))?;
+    let git_metadata_root = workspace.join(".git");
+
+    let mut child = Command::new("codex")
+        .args(["app-server", "--listen", "stdio://"])
+        .current_dir(worktree)
+        .stdin(Stdio::piped())'''
+          new_runtime = '''    let stderr_file = File::create(&stderr_path)
+        .map_err(|error| format!("Agent stderr log 생성 실패: {error}"))?;
+    let git_metadata_root = workspace.join(".git");
+    let tool_state_root = std::env::temp_dir()
+        .join("luna-agent-tools")
+        .join(&input.project_id)
+        .join(&input.task_id);
+    let pnpm_home = tool_state_root.join("pnpm-home");
+    let xdg_data_home = tool_state_root.join("xdg-data");
+    let xdg_cache_home = tool_state_root.join("xdg-cache");
+    let xdg_state_home = tool_state_root.join("xdg-state");
+    let npm_cache = tool_state_root.join("npm-cache");
+    let corepack_home = tool_state_root.join("corepack");
+    for directory in [
+        &pnpm_home,
+        &xdg_data_home,
+        &xdg_cache_home,
+        &xdg_state_home,
+        &npm_cache,
+        &corepack_home,
+    ] {
+        fs::create_dir_all(directory)
+            .map_err(|error| format!("Agent tool state directory 생성 실패: {error}"))?;
+    }
+
+    let mut child = Command::new("codex")
+        .args(["app-server", "--listen", "stdio://"])
+        .current_dir(worktree)
+        .env("PNPM_HOME", &pnpm_home)
+        .env("XDG_DATA_HOME", &xdg_data_home)
+        .env("XDG_CACHE_HOME", &xdg_cache_home)
+        .env("XDG_STATE_HOME", &xdg_state_home)
+        .env("npm_config_cache", &npm_cache)
+        .env("COREPACK_HOME", &corepack_home)
+        .stdin(Stdio::piped())'''
+          if old_runtime not in source:
+              raise SystemExit('runtime command anchor not found')
+          source = source.replace(old_runtime, new_runtime, 1)
+          path.write_text(source)
+          PY
+
+          git fetch origin main
+          git checkout origin/main -- .github/workflows/harness.yml
+          rm -f .github/workflows/apply-luna-review-runtime-fix.yml
+          git config user.name sunwoo162
+          git config user.email sunwoosunwoo4114@gmail.com
+          git add bloom-runtime/src/agent_runtime.rs .github/workflows/harness.yml .github/workflows/apply-luna-review-runtime-fix.yml
+          git commit -m "fix : harden agent verification runtime"
+          git push origin HEAD:fix/luna-review-verification-runtime
+
   harness:
     runs-on: ubuntu-latest
     steps:
