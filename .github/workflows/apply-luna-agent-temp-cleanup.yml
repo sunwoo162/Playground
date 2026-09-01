@@ -1,0 +1,94 @@
+name: Apply Luna Agent Temp Cleanup
+
+on:
+  push:
+    branches:
+      - fix/luna-agent-temp-cleanup
+    paths:
+      - .github/workflows/apply-luna-agent-temp-cleanup.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/luna-agent-temp-cleanup
+          fetch-depth: 0
+      - name: Apply lifecycle guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path('bloom-runtime/src/agent_runtime.rs')
+          source = path.read_text()
+
+          marker = '''fn git_args(workspace: &Path, tail: &[&str]) -> Vec<String> {'''
+          guard = r'''struct AgentToolStateGuard {
+              root: PathBuf,
+          }
+
+          impl AgentToolStateGuard {
+              fn prepare(root: PathBuf) -> Result<Self, String> {
+                  if root.exists() {
+                      fs::remove_dir_all(&root)
+                          .map_err(|error| format!("stale Agent tool state 정리 실패: {error}"))?;
+                  }
+                  fs::create_dir_all(&root)
+                      .map_err(|error| format!("Agent tool state root 생성 실패: {error}"))?;
+                  Ok(Self { root })
+              }
+          }
+
+          impl Drop for AgentToolStateGuard {
+              fn drop(&mut self) {
+                  let _ = fs::remove_dir_all(&self.root);
+              }
+          }
+
+          '''
+          if 'struct AgentToolStateGuard' not in source:
+              if source.count(marker) != 1:
+                  raise SystemExit('git_args insertion marker mismatch')
+              source = source.replace(marker, guard + marker, 1)
+
+          old = '''    let tool_state_root = std::env::temp_dir()
+              .join("luna-agent-tools")
+              .join(&input.project_id)
+              .join(&input.task_id);
+              let pnpm_home = tool_state_root.join("pnpm-home");'''
+          new = '''    let tool_state_root = std::env::temp_dir()
+              .join("luna-agent-tools")
+              .join(&input.project_id)
+              .join(&input.task_id);
+              let _tool_state_guard = AgentToolStateGuard::prepare(tool_state_root.clone())?;
+              let pnpm_home = tool_state_root.join("pnpm-home");'''
+          if 'AgentToolStateGuard::prepare(tool_state_root.clone())?' not in source:
+              if source.count(old) != 1:
+                  raise SystemExit('tool_state_root insertion marker mismatch')
+              source = source.replace(old, new, 1)
+
+          path.write_text(source)
+          PY
+          cargo fmt --manifest-path bloom-runtime/Cargo.toml
+          git diff --check
+          grep -n 'AgentToolStateGuard\|tool_state_guard' bloom-runtime/src/agent_runtime.rs
+      - name: Commit implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo 'Implementation already present.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add bloom-runtime/src/agent_runtime.rs
+          git commit -m 'fix : clean Luna agent tool state'
+          git push origin HEAD:fix/luna-agent-temp-cleanup
