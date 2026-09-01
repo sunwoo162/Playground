@@ -22,122 +22,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          file='bloom-runtime/src/agent_runtime.rs'
-          if ! grep -q 'rejects_agent_message_delta_stream_over_safe_limit' "$file"; then
-            cat >> "$file" <<'RUST'
-
-#[cfg(all(test, unix))]
-mod tests {
-    use super::*;
-    use std::{
-        env,
-        fs as std_fs,
-        os::unix::fs::PermissionsExt,
-        sync::Mutex,
-        time::{SystemTime, UNIX_EPOCH},
-    };
-
-    static PATH_LOCK: Mutex<()> = Mutex::new(());
-
-    fn output_guard_test_input(workspace: &Path, project_id: String) -> AgentTaskRuntimeInput {
-        AgentTaskRuntimeInput {
-            organization: "sunwoo162".to_string(),
-            project_id,
-            team_id: "rose".to_string(),
-            team_name: "Rose".to_string(),
-            role: "idea".to_string(),
-            agent_id: "rose-idea".to_string(),
-            task_id: "PB-001".to_string(),
-            task_slug: "idea".to_string(),
-            title: "Output guard regression".to_string(),
-            summary: "Reject runaway agent output".to_string(),
-            acceptance_criteria: vec!["Reject oversized streamed agent output".to_string()],
-            user_request: "Test runaway output".to_string(),
-            product_summary: "Test product".to_string(),
-            architecture_summary: "Test architecture".to_string(),
-            repository_full_name: "sunwoo162/test-repository".to_string(),
-            workspace_path: workspace.to_string_lossy().to_string(),
-            dependencies: vec![],
-        }
-    }
-
-    #[test]
-    fn rejects_agent_message_delta_stream_over_safe_limit() {
-        let _path_lock = PATH_LOCK.lock().expect("PATH test lock");
-        let stamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock after epoch")
-            .as_nanos();
-        let project_id = format!("builder-output-guard-{stamp}");
-        let root = env::temp_dir().join(format!("luna-output-guard-{}-{stamp}", std::process::id()));
-        let workspace = root.join("workspace");
-        let worktree = root.join("worktree");
-        let bin = root.join("bin");
-        std_fs::create_dir_all(&workspace).expect("workspace");
-        std_fs::create_dir_all(&worktree).expect("worktree");
-        std_fs::create_dir_all(&bin).expect("bin");
-
-        let fake_codex = bin.join("codex");
-        std_fs::write(
-            &fake_codex,
-            r#"#!/usr/bin/env bash
-set -euo pipefail
-IFS= read -r _
-printf '%s\n' '{"id":0,"result":{}}'
-IFS= read -r _
-IFS= read -r _
-printf '%s\n' '{"id":1,"result":{"thread":{"id":"thread-test"}}}'
-IFS= read -r _
-printf '%s\n' '{"id":2,"result":{"turn":{"id":"turn-test"}}}'
-chunk="$(printf '%1024s' '' | tr ' ' x)"
-for _ in $(seq 1 600); do
-  printf '{"method":"item/agentMessage/delta","params":{"delta":"%s"}}\n' "$chunk"
-done
-printf '%s\n' '{"method":"item/completed","params":{"item":{"type":"agentMessage","text":"{\"status\":\"completed\",\"summary\":\"ok\",\"rationaleSummary\":\"ok\",\"evidence\":[],\"verification\":[],\"commitSha\":null,\"pullRequestNumber\":null,\"pullRequestUrl\":null,\"reviewedPullRequests\":[],\"blockers\":[]}"}}}'
-printf '%s\n' '{"method":"turn/completed","params":{"turn":{"id":"turn-test","status":"completed"}}}'
-"#,
-        )
-        .expect("fake codex script");
-        let mut permissions = std_fs::metadata(&fake_codex).expect("script metadata").permissions();
-        permissions.set_mode(0o755);
-        std_fs::set_permissions(&fake_codex, permissions).expect("script executable");
-
-        let original_path = env::var_os("PATH").unwrap_or_default();
-        let mut path_entries = vec![bin.clone()];
-        path_entries.extend(env::split_paths(&original_path));
-        env::set_var("PATH", env::join_paths(path_entries).expect("joined PATH"));
-
-        let input = output_guard_test_input(&workspace, project_id);
-        let result = run_app_server_agent(&input, &worktree, None);
-
-        env::set_var("PATH", original_path);
-        let _ = std_fs::remove_dir_all(&root);
-
-        match result {
-            Err(error) => assert!(
-                error.contains("누적 출력 안전 한도"),
-                "unexpected output guard error: {error}"
-            ),
-            Ok(_) => panic!("runaway agent message delta stream must be rejected"),
-        }
-    }
-}
-RUST
-          fi
+          python3 -c "import base64,pathlib; p=pathlib.Path('bloom-runtime/src/agent_runtime.rs'); s=p.read_text(); m='rejects_agent_message_delta_stream_over_safe_limit'; a=base64.b64decode('CiNbY2ZnKGFsbCh0ZXN0LCB1bml4KSldCm1vZCB0ZXN0cyB7CiAgICB1c2Ugc3VwZXI6Oio7CiAgICB1c2Ugc3RkOjp7CiAgICAgICAgZW52LAogICAgICAgIGZzIGFzIHN0ZF9mcywKICAgICAgICBvczo6dW5peDo6ZnM6OlBlcm1pc3Npb25zRXh0LAogICAgICAgIHN5bmM6Ok11dGV4LAogICAgICAgIHRpbWU6OntTeXN0ZW1UaW1lLCBVTklYX0VQT0NIfSwKICAgIH07CgogICAgc3RhdGljIFBBVEhfTE9DSzogTXV0ZXg8KCk+ID0gTXV0ZXg6Om5ldygoKSk7CgogICAgZm4gb3V0cHV0X2d1YXJkX3Rlc3RfaW5wdXQod29ya3NwYWNlOiAmUGF0aCwgcHJvamVjdF9pZDogU3RyaW5nKSAtPiBBZ2VudFRhc2tSdW50aW1lSW5wdXQgewogICAgICAgIEFnZW50VGFza1J1bnRpbWVJbnB1dCB7CiAgICAgICAgICAgIG9yZ2FuaXphdGlvbjogInN1bndvbzE2MiIudG9fc3RyaW5nKCksCiAgICAgICAgICAgIHByb2plY3RfaWQsCiAgICAgICAgICAgIHRlYW1faWQ6ICJyb3NlIi50b19zdHJpbmcoKSwKICAgICAgICAgICAgdGVhbV9uYW1lOiAiUm9zZSIudG9fc3RyaW5nKCksCiAgICAgICAgICAgIHJvbGU6ICJpZGVhIi50b19zdHJpbmcoKSwKICAgICAgICAgICAgYWdlbnRfaWQ6ICJyb3NlLWlkZWEiLnRvX3N0cmluZygpLAogICAgICAgICAgICB0YXNrX2lkOiAiUEItMDAxIi50b19zdHJpbmcoKSwKICAgICAgICAgICAgdGFza19zbHVnOiAiaWRlYSIudG9fc3RyaW5nKCksCiAgICAgICAgICAgIHRpdGxlOiAiT3V0cHV0IGd1YXJkIHJlZ3Jlc3Npb24iLnRvX3N0cmluZygpLAogICAgICAgICAgICBzdW1tYXJ5OiAiUmVqZWN0IHJ1bmF3YXkgYWdlbnQgb3V0cHV0Ii50b19zdHJpbmcoKSwKICAgICAgICAgICAgYWNjZXB0YW5jZV9jcml0ZXJpYTogdmVjIVsiUmVqZWN0IG92ZXJzaXplZCBzdHJlYW1lZCBhZ2VudCBvdXRwdXQiLnRvX3N0cmluZygpXSwKICAgICAgICAgICAgdXNlcl9yZXF1ZXN0OiAiVGVzdCBydW5hd2F5IG91dHB1dCIudG9fc3RyaW5nKCksCiAgICAgICAgICAgIHByb2R1Y3Rfc3VtbWFyeTogIlRlc3QgcHJvZHVjdCIudG9fc3RyaW5nKCksCiAgICAgICAgICAgIGFyY2hpdGVjdHVyZV9zdW1tYXJ5OiAiVGVzdCBhcmNoaXRlY3R1cmUiLnRvX3N0cmluZygpLAogICAgICAgICAgICByZXBvc2l0b3J5X2Z1bGxfbmFtZTogInN1bndvbzE2Mi90ZXN0LXJlcG9zaXRvcnkiLnRvX3N0cmluZygpLAogICAgICAgICAgICB3b3Jrc3BhY2VfcGF0aDogd29ya3NwYWNlLnRvX3N0cmluZ19sb3NzeSgpLnRvX3N0cmluZygpLAogICAgICAgICAgICBkZXBlbmRlbmNpZXM6IHZlYyFbXSwKICAgICAgICB9CiAgICB9CgogICAgI1t0ZXN0XQogICAgZm4gcmVqZWN0c19hZ2VudF9tZXNzYWdlX2RlbHRhX3N0cmVhbV9vdmVyX3NhZmVfbGltaXQoKSB7CiAgICAgICAgbGV0IF9wYXRoX2xvY2sgPSBQQVRIX0xPQ0subG9jaygpLmV4cGVjdCgiUEFUSCB0ZXN0IGxvY2siKTsKICAgICAgICBsZXQgc3RhbXAgPSBTeXN0ZW1UaW1lOjpub3coKQogICAgICAgICAgICAuZHVyYXRpb25fc2luY2UoVU5JWF9FUE9DSCkKICAgICAgICAgICAgLmV4cGVjdCgiY2xvY2sgYWZ0ZXIgZXBvY2giKQogICAgICAgICAgICAuYXNfbmFub3MoKTsKICAgICAgICBsZXQgcHJvamVjdF9pZCA9IGZvcm1hdCEoImJ1aWxkZXItb3V0cHV0LWd1YXJkLXtzdGFtcH0iKTsKICAgICAgICBsZXQgcm9vdCA9IGVudjo6dGVtcF9kaXIoKS5qb2luKGZvcm1hdCEoImx1bmEtb3V0cHV0LWd1YXJkLXt9LXtzdGFtcH0iLCBzdGQ6OnByb2Nlc3M6OmlkKCkpKTsKICAgICAgICBsZXQgd29ya3NwYWNlID0gcm9vdC5qb2luKCJ3b3Jrc3BhY2UiKTsKICAgICAgICBsZXQgd29ya3RyZWUgPSByb290LmpvaW4oIndvcmt0cmVlIik7CiAgICAgICAgbGV0IGJpbiA9IHJvb3Quam9pbigiYmluIik7CiAgICAgICAgc3RkX2ZzOjpjcmVhdGVfZGlyX2FsbCgmd29ya3NwYWNlKS5leHBlY3QoIndvcmtzcGFjZSIpOwogICAgICAgIHN0ZF9mczo6Y3JlYXRlX2Rpcl9hbGwoJndvcmt0cmVlKS5leHBlY3QoIndvcmt0cmVlIik7CiAgICAgICAgc3RkX2ZzOjpjcmVhdGVfZGlyX2FsbCgmYmluKS5leHBlY3QoImJpbiIpOwoKICAgICAgICBsZXQgZmFrZV9jb2RleCA9IGJpbi5qb2luKCJjb2RleCIpOwogICAgICAgIHN0ZF9mczo6d3JpdGUoCiAgICAgICAgICAgICZmYWtlX2NvZGV4LAogICAgICAgICAgICByIyIjIS91c3IvYmluL2VudiBiYXNoCnNldCAtZXVvIHBpcGVmYWlsCklGUz0gcmVhZCAtciBfCnByaW50ZiAnJXNcbicgJ3siaWQiOjAsInJlc3VsdCI6e319JwpJRlM9IHJlYWQgLXIgXwpJRlM9IHJlYWQgLXIgXwpwcmludGYgJyVzXG4nICd7ImlkIjoxLCJyZXN1bHQiOnsidGhyZWFkIjp7ImlkIjoidGhyZWFkLXRlc3QifX19JwpJRlM9IHJlYWQgLXIgXwpwcmludGYgJyVzXG4nICd7ImlkIjoyLCJyZXN1bHQiOnsidHVybiI6eyJpZCI6InR1cm4tdGVzdCJ9fX0nCmNodW5rPSIkKHByaW50ZiAnJTEwMjRzJyAnJyB8IHRyICcgJyB4KSIKZm9yIF8gaW4gJChzZXEgMSA2MDApOyBkbwogIHByaW50ZiAneyJtZXRob2QiOiJpdGVtL2FnZW50TWVzc2FnZS9kZWx0YSIsInBhcmFtcyI6eyJkZWx0YSI6IiVzIn19XG4nICIkY2h1bmsiCmRvbmUKcHJpbnRmICclc1xuJyAneyJtZXRob2QiOiJpdGVtL2NvbXBsZXRlZCIsInBhcmFtcyI6eyJpdGVtIjp7InR5cGUiOiJhZ2VudE1lc3NhZ2UiLCJ0ZXh0Ijoie1wic3RhdHVzXCI6XCJjb21wbGV0ZWRcIixcInN1bW1hcnlcIjpcIm9rXCIsXCJyYXRpb25hbGVTdW1tYXJ5XCI6XCJva1wiLFwiZXZpZGVuY2VcIjpbXSxcInZlcmlmaWNhdGlvblwiOltdLFwiY29tbWl0U2hhXCI6bnVsbCxcInB1bGxSZXF1ZXN0TnVtYmVyXCI6bnVsbCxcInB1bGxSZXF1ZXN0VXJsXCI6bnVsbCxcInJldmlld2VkUHVsbFJlcXVlc3RzXCI6W10sXCJibG9ja2Vyc1wiOltdfSJ9fX0nCnByaW50ZiAnJXNcbicgJ3sibWV0aG9kIjoidHVybi9jb21wbGV0ZWQiLCJwYXJhbXMiOnsidHVybiI6eyJpZCI6InR1cm4tdGVzdCIsInN0YXR1cyI6ImNvbXBsZXRlZCJ9fX0nCiIjLAogICAgICAgICkKICAgICAgICAuZXhwZWN0KCJmYWtlIGNvZGV4IHNjcmlwdCIpOwogICAgICAgIGxldCBtdXQgcGVybWlzc2lvbnMgPSBzdGRfZnM6Om1ldGFkYXRhKCZmYWtlX2NvZGV4KS5leHBlY3QoInNjcmlwdCBtZXRhZGF0YSIpLnBlcm1pc3Npb25zKCk7CiAgICAgICAgcGVybWlzc2lvbnMuc2V0X21vZGUoMG83NTUpOwogICAgICAgIHN0ZF9mczo6c2V0X3Blcm1pc3Npb25zKCZmYWtlX2NvZGV4LCBwZXJtaXNzaW9ucykuZXhwZWN0KCJzY3JpcHQgZXhlY3V0YWJsZSIpOwoKICAgICAgICBsZXQgb3JpZ2luYWxfcGF0aCA9IGVudjo6dmFyX29zKCJQQVRIIikudW53cmFwX29yX2RlZmF1bHQoKTsKICAgICAgICBsZXQgbXV0IHBhdGhfZW50cmllcyA9IHZlYyFbYmluLmNsb25lKCldOwogICAgICAgIHBhdGhfZW50cmllcy5leHRlbmQoZW52OjpzcGxpdF9wYXRocygmb3JpZ2luYWxfcGF0aCkpOwogICAgICAgIGVudjo6c2V0X3ZhcigiUEFUSCIsIGVudjo6am9pbl9wYXRocyhwYXRoX2VudHJpZXMpLmV4cGVjdCgiam9pbmVkIFBBVEgiKSk7CgogICAgICAgIGxldCBpbnB1dCA9IG91dHB1dF9ndWFyZF90ZXN0X2lucHV0KCZ3b3Jrc3BhY2UsIHByb2plY3RfaWQpOwogICAgICAgIGxldCByZXN1bHQgPSBydW5fYXBwX3NlcnZlcl9hZ2VudCgmaW5wdXQsICZ3b3JrdHJlZSwgTm9uZSk7CgogICAgICAgIGVudjo6c2V0X3ZhcigiUEFUSCIsIG9yaWdpbmFsX3BhdGgpOwogICAgICAgIGxldCBfID0gc3RkX2ZzOjpyZW1vdmVfZGlyX2FsbCgmcm9vdCk7CgogICAgICAgIG1hdGNoIHJlc3VsdCB7CiAgICAgICAgICAgIEVycihlcnJvcikgPT4gYXNzZXJ0ISgKICAgICAgICAgICAgICAgIGVycm9yLmNvbnRhaW5zKCLriITsoIEg7Lac66ClIOyViOyghCDtlZzrj4QiKSwKICAgICAgICAgICAgICAgICJ1bmV4cGVjdGVkIG91dHB1dCBndWFyZCBlcnJvcjoge2Vycm9yfSIKICAgICAgICAgICAgKSwKICAgICAgICAgICAgT2soXykgPT4gcGFuaWMhKCJydW5hd2F5IGFnZW50IG1lc3NhZ2UgZGVsdGEgc3RyZWFtIG11c3QgYmUgcmVqZWN0ZWQiKSwKICAgICAgICB9CiAgICB9Cn0K').decode(); p.write_text(s if m in s else s+a)"
           git diff --check
 
       - name: Verify RED
-        id: red
         shell: bash
         run: |
           set +e
-          cargo test --manifest-path bloom-runtime/Cargo.toml rejects_agent_message_delta_stream_over_safe_limit -- --nocapture
-          status=$?
+          cargo test --manifest-path bloom-runtime/Cargo.toml rejects_agent_message_delta_stream_over_safe_limit -- --nocapture 2>&1 | tee /tmp/luna-output-guard-red.log
+          status=${PIPESTATUS[0]}
           set -e
           if [ "$status" -eq 0 ]; then
             echo 'Regression unexpectedly passed before the guard implementation.' >&2
             exit 1
           fi
+          grep -F 'runaway agent message delta stream must be rejected' /tmp/luna-output-guard-red.log
           echo "RED_CONFIRMED exit=$status"
 
       - name: Commit RED regression
@@ -153,5 +52,3 @@ RUST
           fi
           git commit -m 'test : reproduce runaway agent output'
           git push origin HEAD:fix/luna-agent-output-guard
-
-# trigger: 2
