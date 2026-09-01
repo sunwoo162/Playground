@@ -73,4 +73,20 @@ assert(
   "dispatch must normalize safe publication-only blockers before Runtime publishes the writer result",
 );
 
-console.log("PASS  Luna Runtime owns publishing and safely recovers publication-only blockers.");
+const noTrackBranchCreations = source.match(
+  /"worktree", "add", "-b", branch_name\.as_str\(\), "--no-track"/g,
+) ?? [];
+assert(
+  noTrackBranchCreations.length >= 2,
+  "parallel agent worktree creation must not write shared upstream configuration",
+);
+assert(
+  source.includes('git_args(worktree, &["push", "origin", branch])'),
+  "parallel agent publication must push explicitly without writing shared upstream configuration",
+);
+assert(
+  !source.includes('git_args(worktree, &["push", "-u", "origin", branch])'),
+  "parallel agent publication must not use push -u because it writes shared repository config",
+);
+
+console.log("PASS  Luna Runtime owns publishing without shared Git config races.");
