@@ -27,4 +27,4 @@ jobs:
           grep -RniE 'agent-task|run_agent|AgentTaskRuntimeInput' bloom-runtime/src | head -120
           echo '=== existing tests ==='
           grep -RniE '#\[test\]|cfg\(test\)' bloom-runtime/src bloom-runtime/tests 2>/dev/null | head -160 || true
-          echo 'inspection-trigger=3'
+          echo 'inspection-trigger=4'
