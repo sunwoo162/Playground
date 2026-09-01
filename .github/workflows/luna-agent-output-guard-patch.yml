@@ -1,0 +1,222 @@
+name: Luna Agent Output Guard Patch
+
+on:
+  push:
+    branches:
+      - fix/luna-agent-output-guard
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-verify:
+    if: github.event.head_commit.message == 'test : bootstrap Luna output guard regression'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Tauri Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Configure git
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+
+      - name: Add regression tests
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          path = Path('bloom-runtime/src/agent_runtime.rs')
+          text = path.read_text()
+          marker = 'fn agent_message_delta_guard_rejects_oversized_stream()'
+          if marker in text:
+              raise SystemExit('regression test already exists')
+          text += r'''
+
+          #[cfg(test)]
+          mod tests {
+              use super::*;
+
+              #[test]
+              fn agent_message_delta_guard_rejects_oversized_stream() {
+                  let mut total_bytes = 0usize;
+                  let first = serde_json::json!({
+                      "method": "item/agentMessage/delta",
+                      "params": { "delta": "1234" }
+                  });
+                  let second = serde_json::json!({
+                      "method": "item/agentMessage/delta",
+                      "params": { "delta": "56" }
+                  });
+
+                  enforce_agent_message_output_limit(&first, &mut total_bytes, 5)
+                      .expect("first delta should remain below the limit");
+                  let error = enforce_agent_message_output_limit(&second, &mut total_bytes, 5)
+                      .expect_err("second delta must exceed the aggregate limit");
+
+                  assert_eq!(total_bytes, 6);
+                  assert!(error.contains("누적 출력"));
+              }
+
+              #[test]
+              fn agent_message_delta_guard_ignores_non_agent_events() {
+                  let mut total_bytes = 4usize;
+                  let event = serde_json::json!({
+                      "method": "thread/tokenUsage/updated",
+                      "params": { "tokenUsage": { "total": { "outputTokens": 999999 } } }
+                  });
+
+                  enforce_agent_message_output_limit(&event, &mut total_bytes, 5)
+                      .expect("non-agent event must not consume output budget");
+                  assert_eq!(total_bytes, 4);
+              }
+
+              #[test]
+              fn agent_message_delta_guard_rejects_oversized_completed_message() {
+                  let mut total_bytes = 0usize;
+                  let event = serde_json::json!({
+                      "method": "item/completed",
+                      "params": {
+                          "item": {
+                              "type": "agentMessage",
+                              "text": "123456"
+                          }
+                      }
+                  });
+
+                  let error = enforce_agent_message_output_limit(&event, &mut total_bytes, 5)
+                      .expect_err("oversized final message must be rejected even without deltas");
+                  assert!(error.contains("최종 출력"));
+              }
+          }
+          '''
+          path.write_text(text)
+          PY
+          cargo fmt --manifest-path bloom-runtime/Cargo.toml
+          git add bloom-runtime/src/agent_runtime.rs
+          git commit -m "test : cover Luna agent output stream limit"
+
+      - name: Confirm regression is RED
+        run: |
+          set +e
+          cargo test --manifest-path bloom-runtime/Cargo.toml agent_message_delta_guard -- --nocapture > /tmp/red.log 2>&1
+          status=$?
+          set -e
+          cat /tmp/red.log
+          if [ "$status" -eq 0 ]; then
+            echo 'Expected regression test to fail before implementation.' >&2
+            exit 1
+          fi
+          grep -q 'cannot find function `enforce_agent_message_output_limit`' /tmp/red.log
+
+      - name: Implement aggregate output guard
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          path = Path('bloom-runtime/src/agent_runtime.rs')
+          text = path.read_text()
+
+          const_anchor = 'const MAX_JSONL_LINE_BYTES: usize = 10 * 1024 * 1024;\n'
+          if text.count(const_anchor) != 1:
+              raise SystemExit('unexpected MAX_JSONL_LINE_BYTES anchor count')
+          text = text.replace(
+              const_anchor,
+              const_anchor + 'const MAX_AGENT_MESSAGE_BYTES: usize = 512 * 1024;\n',
+              1,
+          )
+
+          helper_anchor = 'fn read_json_line(\n'
+          if text.count(helper_anchor) != 1:
+              raise SystemExit('unexpected read_json_line anchor count')
+          helper = r'''fn enforce_agent_message_output_limit(
+              value: &Value,
+              total_delta_bytes: &mut usize,
+              limit_bytes: usize,
+          ) -> Result<(), String> {
+              let method = value.get("method").and_then(Value::as_str).unwrap_or_default();
+
+              if method == "item/agentMessage/delta" {
+                  let delta = value
+                      .get("params")
+                      .and_then(|params| params.get("delta"))
+                      .and_then(Value::as_str)
+                      .unwrap_or_default();
+                  *total_delta_bytes = total_delta_bytes.checked_add(delta.len()).ok_or_else(|| {
+                      "Codex Agent 메시지 누적 출력 크기 계산이 overflow 되었습니다.".to_string()
+                  })?;
+                  if *total_delta_bytes > limit_bytes {
+                      return Err(format!(
+                          "Codex Agent 메시지 누적 출력이 안전 한도를 초과했습니다. bytes={}, limit={limit_bytes}",
+                          *total_delta_bytes
+                      ));
+                  }
+              }
+
+              if method == "item/completed" {
+                  let item = value.get("params").and_then(|params| params.get("item"));
+                  let is_agent_message = item
+                      .and_then(|item| item.get("type"))
+                      .and_then(Value::as_str)
+                      == Some("agentMessage");
+                  let final_bytes = item
+                      .and_then(|item| item.get("text"))
+                      .and_then(Value::as_str)
+                      .map(str::len)
+                      .unwrap_or(0);
+                  if is_agent_message && final_bytes > limit_bytes {
+                      return Err(format!(
+                          "Codex Agent 메시지 최종 출력이 안전 한도를 초과했습니다. bytes={final_bytes}, limit={limit_bytes}"
+                      ));
+                  }
+              }
+
+              Ok(())
+          }
+
+          '''
+          text = text.replace(helper_anchor, helper + helper_anchor, 1)
+
+          loop_anchor = '''        let mut final_message: Option<String> = None;
+                  let mut turn_status: Option<String> = None;
+                  let mut turn_error: Option<String> = None;
+
+                  loop {
+                      let value = read_json_line(&mut reader, &mut events_log)?;
+          '''
+          if text.count(loop_anchor) != 1:
+              raise SystemExit(f'unexpected turn loop anchor count: {text.count(loop_anchor)}')
+          loop_replacement = '''        let mut final_message: Option<String> = None;
+                  let mut turn_status: Option<String> = None;
+                  let mut turn_error: Option<String> = None;
+                  let mut agent_message_delta_bytes = 0usize;
+
+                  loop {
+                      let value = read_json_line(&mut reader, &mut events_log)?;
+                      enforce_agent_message_output_limit(
+                          &value,
+                          &mut agent_message_delta_bytes,
+                          MAX_AGENT_MESSAGE_BYTES,
+                      )?;
+          '''
+          text = text.replace(loop_anchor, loop_replacement, 1)
+          path.write_text(text)
+          PY
+          cargo fmt --manifest-path bloom-runtime/Cargo.toml
+
+      - name: Verify GREEN
+        run: |
+          cargo test --manifest-path bloom-runtime/Cargo.toml agent_message_delta_guard -- --nocapture
+          cargo check --manifest-path bloom-runtime/Cargo.toml
+          git diff --check
+
+      - name: Commit and push implementation
+        run: |
+          git add bloom-runtime/src/agent_runtime.rs
+          git commit -m "fix : bound Luna agent message output"
+          git push origin HEAD:fix/luna-agent-output-guard
