@@ -153,3 +153,5 @@ RUST
           fi
           git commit -m 'test : reproduce runaway agent output'
           git push origin HEAD:fix/luna-agent-output-guard
+
+# trigger: 2
