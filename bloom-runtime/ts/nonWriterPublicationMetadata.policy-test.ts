@@ -143,7 +143,7 @@ async function run() {
           summary: "ready",
           primaryUser: "user",
           primaryJob: "use app",
-          complexity: "low",
+          complexity: "small",
           requiredRoles: ["idea", "frontend"],
           criticalRoles: ["frontend"],
           needsAuth: false,
@@ -186,11 +186,7 @@ async function run() {
           pullRequestNumber: null,
         });
       }
-      return completedResult(input, {
-        branchName: `agent/${input.teamId}/${input.role}/${input.taskSlug}`,
-        commitSha: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        pullRequestNumber: 101,
-      });
+      throw new Error("stop after dependency capture");
     },
     async reconcileTask() {
       throw new Error("reconcileTask must not run in this regression test");
@@ -224,7 +220,11 @@ async function run() {
     now: () => "2026-09-01T13:00:00Z",
   });
 
-  await execute(claim, client);
+  try {
+    await execute(claim, client);
+  } catch {
+    // The executor converts the deliberate dispatch stop into its wave-level blocked error.
+  }
 
   const frontendInput = taskInputs.find((input) => input.taskId === "PB-002");
   assert(frontendInput, "frontend task must be dispatched after idea dependency");
