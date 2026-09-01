@@ -12,7 +12,7 @@ jobs:
   inspect:
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect current production Live E2E
+      - name: Inspect production disk exhaustion
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ssh.gsmsv.site
@@ -20,72 +20,30 @@ jobs:
           username: ubuntu
           password: ${{ secrets.SSH_PASSWORD }}
           timeout: 60s
-          command_timeout: 5m
+          command_timeout: 8m
           script: |
-            set -eu
-            cd /home/ubuntu/bloombouquet
-            export PATH="$HOME/.local/bin:$HOME/.llama/bin:$HOME/.local/node_modules/.bin:$PATH"
-            node <<'NODE'
-            require('dotenv').config({ path: '.env' });
-            const jwt = require('jsonwebtoken');
-            const { execFileSync } = require('node:child_process');
-            const apps = JSON.parse(execFileSync('pm2', ['jlist'], { encoding: 'utf8' }));
-            for (const name of ['bloom-evaluator-worker', 'bloom-builder-worker', 'bloom-evaluator-llm']) {
-              const app = apps.find((value) => value.name === name);
-              if (!app) throw new Error(`${name} missing`);
-              console.log(JSON.stringify({ pm2: name, status: app.pm2_env?.status, pid: app.pid, kill_timeout: app.pm2_env?.kill_timeout }));
-            }
-            const base = 'http://127.0.0.1:3000';
-            const token = jwt.sign({ id: 'sunwoo162-live-e2e', login: 'sunwoo162', name: 'sunwoo162', avatar_url: '', type: 'access' }, process.env.JWT_SECRET, { expiresIn: '20m' });
-            const headers = { Cookie: `playground_token=${token}` };
-            async function get(path) {
-              const started = Date.now();
-              const res = await fetch(`${base}${path}`, { headers });
-              const text = await res.text();
-              console.log(JSON.stringify({ apiPath: path, status: res.status, elapsedMs: Date.now() - started }));
-              if (!res.ok) throw new Error(`${path} -> ${res.status}: ${text.slice(0, 500)}`);
-              return text ? JSON.parse(text) : null;
-            }
-            async function main() {
-              const raw = await get('/api/builder/projects');
-              const projects = (Array.isArray(raw) ? raw : (raw?.content || [])).slice().sort((a,b) => Number(b.id||0)-Number(a.id||0));
-              const project = projects[0];
-              const runsRaw = await get(`/api/builder/projects/${project.id}/runs`);
-              const runs = (Array.isArray(runsRaw) ? runsRaw : (runsRaw?.content || [])).slice().sort((a,b) => Number(b.id||0)-Number(a.id||0));
-              const run = runs[0];
-              const snapshot = await get(`/api/builder/projects/${project.id}/runs/${run.id}/snapshot`);
-              const payload = snapshot?.payloadJson ? JSON.parse(snapshot.payloadJson) : null;
-              console.log('=== LATEST LIVE E2E ===');
-              console.log(JSON.stringify({ projectId: project.id, runId: run.id, projectStatus: project.status, runStatus: run.status, failureReason: run.failureReason || project.failureReason || null, heartbeatAt: run.heartbeatAt, phase: snapshot?.phase, version: snapshot?.version, repository: project.repositoryFullName || payload?.repository?.repository || null }, null, 2));
-              console.log('=== TASKS ===');
-              for (const task of payload?.taskRuns || []) {
-                console.log(JSON.stringify({ taskId: task.taskId, role: task.role, status: task.status, attempts: task.attempts, pr: task.pullRequestNumber, commit: task.commitSha, lastError: task.lastError }));
-              }
-              console.log('LIVE_E2E_SNAPSHOT_PASS');
-            }
-            main().catch((error) => { console.error(error.stack || String(error)); process.exit(1); });
-            NODE
-            echo '=== ACTIVE AGENT ARTIFACTS ==='
-            find /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-19/agents -type f -printf '%T@ %TY-%Tm-%Td %TH:%TM:%TS %p\n' 2>/dev/null | sort -nr | head -40 || true
-            echo '=== PB-012 EVENT SUMMARY ==='
-            node <<'NODE'
-            const fs = require('node:fs');
-            const path = '/home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-19/agents/rose:documentation/PB-012/app-server-events.jsonl';
-            if (!fs.existsSync(path)) { console.log('PB-012 events missing'); process.exit(0); }
-            const lines = fs.readFileSync(path, 'utf8').trim().split(/\r?\n/).slice(-30);
-            for (const line of lines) {
-              try {
-                const e = JSON.parse(line);
-                const p = e.params || {};
-                console.log(JSON.stringify({ method: e.method || e.type || null, id: e.id ?? null, turnStatus: p.turn?.status || p.status || null, itemType: p.item?.type || null, error: p.error?.message || e.error?.message || null }));
-              } catch { console.log('unparsed-event-line'); }
-            }
-            NODE
-            echo '=== PB-012 STDERR TAIL ==='
-            tail -n 60 '/home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-19/agents/rose:documentation/PB-012/app-server.stderr.log' 2>/dev/null || true
-            echo '=== RUNTIME PROCESSES ==='
-            ps -eo pid,ppid,stat,etime,pcpu,pmem,cmd | grep -E 'bloom-builder-worker|luna-agent-bridge|codex app-server|codex.*app-server' | grep -v grep || true
-            echo '=== PB-012 WORKTREE CANDIDATES ==='
-            find /home/ubuntu/bloom-workspaces -maxdepth 6 -type d \( -name '*PB-012*' -o -name '*documentation*' \) -print 2>/dev/null | head -40 || true
-            echo '=== BUILDER LOG PB-012/ERROR TAIL ==='
-            pm2 logs bloom-builder-worker --lines 180 --nostream 2>&1 | grep -E 'PB-012|documentation|error|Error|failed|blocked|bridge|turn' | tail -120 || true
+            set +e
+            echo '=== NOW ==='
+            date -Is
+            echo '=== FILESYSTEM SPACE ==='
+            df -hT
+            echo '=== FILESYSTEM INODES ==='
+            df -i
+            echo '=== TOP /HOME/UBUNTU ==='
+            du -xhd1 /home/ubuntu 2>/dev/null | sort -h | tail -30
+            echo '=== TOP BLOOM WORKSPACES ==='
+            du -xhd2 /home/ubuntu/bloom-workspaces 2>/dev/null | sort -h | tail -50
+            echo '=== TOP BLOOMBOUQUET ==='
+            du -xhd2 /home/ubuntu/bloombouquet 2>/dev/null | sort -h | tail -40
+            echo '=== TOP PM2 ==='
+            du -xhd2 /home/ubuntu/.pm2 2>/dev/null | sort -h | tail -40
+            echo '=== TOP CACHE ==='
+            du -xhd2 /home/ubuntu/.cache 2>/dev/null | sort -h | tail -40
+            echo '=== LARGE FILES HOME >= 250M ==='
+            find /home/ubuntu -xdev -type f -size +250M -printf '%s %TY-%Tm-%Td %TH:%TM:%TS %p\n' 2>/dev/null | sort -n | tail -50
+            echo '=== WORKSPACE PROJECT SIZES ==='
+            du -xsh /home/ubuntu/bloom-workspaces/* 2>/dev/null | sort -h | tail -50
+            echo '=== LUNA RUNTIME PROJECT SIZES ==='
+            du -xsh /home/ubuntu/bloom-workspaces/.luna-runtime/projects/* 2>/dev/null | sort -h | tail -50
+            echo '=== DISK RELATED KERNEL/JOURNAL ==='
+            sudo journalctl --since '2026-09-01 08:15:00' --no-pager 2>/dev/null | grep -Ei 'ENOSPC|no space left|filesystem|ext4|I/O error' | tail -100
