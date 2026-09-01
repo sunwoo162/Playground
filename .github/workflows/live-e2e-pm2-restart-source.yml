@@ -1,0 +1,50 @@
+name: Live E2E PM2 Restart Source
+
+on:
+  push:
+    branches:
+      - test/luna-live-e2e-diagnostic-current
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-restart:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trace production Bloom worker restart source
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          timeout: 60s
+          command_timeout: 5m
+          script: |
+            set +e
+            echo '=== NOW ==='
+            date -Is
+            echo '=== PM2 DAEMON LOG AROUND 05:45 ==='
+            grep -nE '2026-09-01T05:4[34-6]|2026-09-01 05:4[34-6]' "$HOME/.pm2/pm2.log" | tail -300
+            echo '=== PM2 DAEMON LOG TAIL ==='
+            tail -500 "$HOME/.pm2/pm2.log"
+            echo '=== PM2 LOG STAT ==='
+            stat "$HOME/.pm2/pm2.log"
+            echo '=== USER CRONTAB ==='
+            crontab -l 2>&1
+            echo '=== ROOT CRONTAB ==='
+            sudo crontab -l 2>&1
+            echo '=== CRON FILES REFERENCING PM2/BLOOM ==='
+            sudo grep -RniE 'pm2|bloom-builder-worker|bloom-evaluator-worker|bloombouquet' /etc/cron.d /etc/cron.daily /etc/cron.hourly /etc/cron.weekly /etc/crontab 2>/dev/null | head -300
+            echo '=== SYSTEMD TIMERS ==='
+            systemctl list-timers --all --no-pager | head -200
+            echo '=== SYSTEMD UNITS REFERENCING PM2/BLOOM ==='
+            systemctl list-unit-files --no-pager | grep -Ei 'pm2|bloom|bouquet'
+            echo '=== USER SYSTEMD JOURNAL AROUND 05:45 ==='
+            journalctl --user --since '2026-09-01 05:43:00' --until '2026-09-01 05:47:00' --no-pager 2>&1 | tail -500
+            echo '=== SYSTEM JOURNAL AROUND 05:45 PM2/BLOOM ==='
+            sudo journalctl --since '2026-09-01 05:43:00' --until '2026-09-01 05:47:00' --no-pager 2>&1 | grep -Ei 'pm2|bloom-builder-worker|bloom-evaluator-worker|bloombouquet|node' | tail -500
+            echo '=== PM2 CURRENT DESCRIBE ==='
+            pm2 describe bloom-builder-worker
+            pm2 describe bloom-evaluator-worker
