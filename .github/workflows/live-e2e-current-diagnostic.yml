@@ -63,3 +63,5 @@ jobs:
             }
             main().catch((error) => { console.error(error.stack || String(error)); process.exit(1); });
             NODE
+            echo '=== ACTIVE AGENT ARTIFACTS ==='
+            find /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-18/agents -type f -printf '%T@ %TY-%Tm-%Td %TH:%TM:%TS %p\n' 2>/dev/null | sort -nr | head -40 || true
