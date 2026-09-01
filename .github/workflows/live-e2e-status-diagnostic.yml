@@ -65,9 +65,13 @@ jobs:
               const snapshot = JSON.parse(text);
               const payload = snapshot.payloadJson ? JSON.parse(snapshot.payloadJson) : null;
               console.log(`[diag] phase=${snapshot.phase || '-'} version=${snapshot.version || '-'} blocked=${payload?.blockedReason || '-'}`);
-              const tasks = Array.isArray(payload?.tasks) ? payload.tasks : [];
-              for (const task of tasks) {
-                console.log(`[diag-task] ${task.id || task.taskId || '-'} role=${task.role || '-'} status=${task.status || '-'} lastError=${task.lastError || '-'} blockers=${JSON.stringify(task.blockers || [])}`);
+              console.log(`[diag] runtimeRepo=${payload?.repository?.repository || '-'} workspace=${payload?.repository?.workspacePath || '-'}`);
+              const planTasks = Array.isArray(payload?.plan?.tasks) ? payload.plan.tasks : [];
+              const planById = new Map(planTasks.map((task) => [task.id, task]));
+              const taskRuns = Array.isArray(payload?.taskRuns) ? payload.taskRuns : [];
+              for (const run of taskRuns) {
+                const plan = planById.get(run.taskId) || {};
+                console.log(`[diag-task] ${run.taskId || '-'} role=${run.role || plan.role || '-'} status=${run.status || '-'} attempts=${run.attempts || 0} pr=${run.pullRequestNumber || '-'} lastError=${run.lastError || '-'} blockers=${JSON.stringify(run.blockers || [])}`);
               }
             }
 
