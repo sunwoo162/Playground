@@ -36,6 +36,14 @@ jobs:
           node .tmp/bloom-policy-tests/agentRuntimeOwnedPublishing.policy-test.js
       - name: Build Bloom worker
         run: pnpm run build:bloom-worker
+      - name: Install Tauri Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
       - name: Check Rust runtime bridge
         run: cargo check --manifest-path bloom-runtime/Cargo.toml --bin bloom-runtime-bridge
       - name: Verify diff and publish fix
