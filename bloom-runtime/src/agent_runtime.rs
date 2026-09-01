@@ -159,7 +159,11 @@ pub struct AgentTaskRunResult {
 fn output_detail(output: &Output) -> String {
     let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
     let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if !stderr.is_empty() { stderr } else { stdout }
+    if !stderr.is_empty() {
+        stderr
+    } else {
+        stdout
+    }
 }
 
 fn run_command(program: &str, args: &[String]) -> Result<Output, String> {
@@ -181,6 +185,28 @@ fn run_checked(program: &str, args: &[String]) -> Result<Output, String> {
     } else {
         format!("{program} 명령 실패: {detail}")
     })
+}
+
+struct AgentToolStateGuard {
+    root: PathBuf,
+}
+
+impl AgentToolStateGuard {
+    fn prepare(root: PathBuf) -> Result<Self, String> {
+        if root.exists() {
+            fs::remove_dir_all(&root)
+                .map_err(|error| format!("stale Agent tool state 정리 실패: {error}"))?;
+        }
+        fs::create_dir_all(&root)
+            .map_err(|error| format!("Agent tool state root 생성 실패: {error}"))?;
+        Ok(Self { root })
+    }
+}
+
+impl Drop for AgentToolStateGuard {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.root);
+    }
 }
 
 fn git_args(workspace: &Path, tail: &[&str]) -> Vec<String> {
@@ -207,7 +233,9 @@ fn is_kebab(value: &str) -> bool {
 
 fn validate_segment(value: &str, label: &str) -> Result<(), String> {
     if value.is_empty() || value.len() > 64 || !is_kebab(value) {
-        return Err(format!("{label}은 lowercase ASCII kebab-case여야 합니다: {value}"));
+        return Err(format!(
+            "{label}은 lowercase ASCII kebab-case여야 합니다: {value}"
+        ));
     }
     Ok(())
 }
@@ -229,7 +257,9 @@ fn validate_task_id(value: &str) -> Result<(), String> {
         return Err(format!("Task ID 형식이 잘못되었습니다: {value}"));
     };
     if prefix.is_empty()
-        || !prefix.chars().all(|character| character.is_ascii_uppercase())
+        || !prefix
+            .chars()
+            .all(|character| character.is_ascii_uppercase())
         || number.len() != 3
         || !number.chars().all(|character| character.is_ascii_digit())
     {
@@ -274,7 +304,10 @@ fn local_branch_exists(workspace: &Path, branch: &str) -> bool {
     let branch_ref = format!("refs/heads/{branch}");
     run_command(
         "git",
-        &git_args(workspace, &["show-ref", "--verify", "--quiet", branch_ref.as_str()]),
+        &git_args(
+            workspace,
+            &["show-ref", "--verify", "--quiet", branch_ref.as_str()],
+        ),
     )
     .map(|output| output.status.success())
     .unwrap_or(false)
@@ -284,19 +317,27 @@ fn remote_branch_exists(workspace: &Path, branch: &str) -> bool {
     let branch_ref = format!("refs/remotes/origin/{branch}");
     run_command(
         "git",
-        &git_args(workspace, &["show-ref", "--verify", "--quiet", branch_ref.as_str()]),
+        &git_args(
+            workspace,
+            &["show-ref", "--verify", "--quiet", branch_ref.as_str()],
+        ),
     )
     .map(|output| output.status.success())
     .unwrap_or(false)
 }
 
-fn prepare_agent_worktree(input: &AgentTaskRuntimeInput) -> Result<(PathBuf, Option<String>), String> {
+fn prepare_agent_worktree(
+    input: &AgentTaskRuntimeInput,
+) -> Result<(PathBuf, Option<String>), String> {
     let workspace = PathBuf::from(input.workspace_path.trim());
     if !workspace.join(".git").exists() {
         return Err("프로젝트 workspace가 Git 저장소가 아닙니다.".to_string());
     }
 
-    run_checked("git", &git_args(&workspace, &["fetch", "origin", "--prune"]))?;
+    run_checked(
+        "git",
+        &git_args(&workspace, &["fetch", "origin", "--prune"]),
+    )?;
     if !remote_branch_exists(&workspace, "develop") {
         return Err("origin/develop 브랜치를 찾을 수 없습니다.".to_string());
     }
@@ -340,7 +381,10 @@ fn prepare_agent_worktree(input: &AgentTaskRuntimeInput) -> Result<(PathBuf, Opt
         if local_branch_exists(&workspace, branch_name) {
             run_checked(
                 "git",
-                &git_args(&workspace, &["worktree", "add", path.as_str(), branch_name.as_str()]),
+                &git_args(
+                    &workspace,
+                    &["worktree", "add", path.as_str(), branch_name.as_str()],
+                ),
             )?;
         } else if remote_branch_exists(&workspace, branch_name) {
             let remote = format!("origin/{branch_name}");
@@ -348,7 +392,15 @@ fn prepare_agent_worktree(input: &AgentTaskRuntimeInput) -> Result<(PathBuf, Opt
                 "git",
                 &git_args(
                     &workspace,
-                    &["worktree", "add", "-b", branch_name.as_str(), "--no-track", path.as_str(), remote.as_str()],
+                    &[
+                        "worktree",
+                        "add",
+                        "-b",
+                        branch_name.as_str(),
+                        "--no-track",
+                        path.as_str(),
+                        remote.as_str(),
+                    ],
                 ),
             )?;
         } else {
@@ -356,20 +408,36 @@ fn prepare_agent_worktree(input: &AgentTaskRuntimeInput) -> Result<(PathBuf, Opt
                 "git",
                 &git_args(
                     &workspace,
-                    &["worktree", "add", "-b", branch_name.as_str(), "--no-track", path.as_str(), "origin/develop"],
+                    &[
+                        "worktree",
+                        "add",
+                        "-b",
+                        branch_name.as_str(),
+                        "--no-track",
+                        path.as_str(),
+                        "origin/develop",
+                    ],
                 ),
             )?;
         }
     } else {
         run_checked(
             "git",
-            &git_args(&workspace, &["worktree", "add", "--detach", path.as_str(), "origin/develop"]),
+            &git_args(
+                &workspace,
+                &[
+                    "worktree",
+                    "add",
+                    "--detach",
+                    path.as_str(),
+                    "origin/develop",
+                ],
+            ),
         )?;
     }
 
     Ok((worktree, branch))
 }
-
 
 fn materialize_dependency_commits(
     input: &AgentTaskRuntimeInput,
@@ -383,7 +451,11 @@ fn materialize_dependency_commits(
         let Some(commit_sha) = dependency.commit_sha.as_deref() else {
             continue;
         };
-        if commit_sha.len() != 40 || !commit_sha.chars().all(|character| character.is_ascii_hexdigit()) {
+        if commit_sha.len() != 40
+            || !commit_sha
+                .chars()
+                .all(|character| character.is_ascii_hexdigit())
+        {
             return Err(format!(
                 "Dependency {} commit SHA 형식이 잘못되었습니다: {}",
                 dependency.task_id, commit_sha
@@ -577,6 +649,7 @@ fn run_app_server_agent(
         .join("luna-agent-tools")
         .join(&input.project_id)
         .join(&input.task_id);
+    let _tool_state_guard = AgentToolStateGuard::prepare(tool_state_root.clone())?;
     let pnpm_home = tool_state_root.join("pnpm-home");
     let xdg_data_home = tool_state_root.join("xdg-data");
     let xdg_cache_home = tool_state_root.join("xdg-cache");
@@ -637,7 +710,10 @@ fn run_app_server_agent(
             }),
         )?;
         wait_for_response(&mut reader, &mut events_log, 0)?;
-        write_json_line(&mut stdin, &json!({ "method": "initialized", "params": {} }))?;
+        write_json_line(
+            &mut stdin,
+            &json!({ "method": "initialized", "params": {} }),
+        )?;
 
         write_json_line(
             &mut stdin,
@@ -705,7 +781,10 @@ fn run_app_server_agent(
 
         loop {
             let value = read_json_line(&mut reader, &mut events_log)?;
-            let method = value.get("method").and_then(Value::as_str).unwrap_or_default();
+            let method = value
+                .get("method")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
             if method == "item/completed" {
                 if let Some(item) = value.get("params").and_then(|params| params.get("item")) {
                     if item.get("type").and_then(Value::as_str) == Some("agentMessage") {
@@ -723,7 +802,10 @@ fn run_app_server_agent(
                 if turn.get("id").and_then(Value::as_str) != Some(turn_id.as_str()) {
                     continue;
                 }
-                turn_status = turn.get("status").and_then(Value::as_str).map(str::to_string);
+                turn_status = turn
+                    .get("status")
+                    .and_then(Value::as_str)
+                    .map(str::to_string);
                 turn_error = turn
                     .get("error")
                     .and_then(|error| error.get("message"))
@@ -746,7 +828,10 @@ fn run_app_server_agent(
         let report: AgentTaskReport = serde_json::from_str(&final_message)
             .map_err(|error| format!("Codex Agent 결과 JSON 파싱 실패: {error}"))?;
         if !matches!(report.status.as_str(), "completed" | "blocked") {
-            return Err(format!("Codex Agent 결과 status가 잘못되었습니다: {}", report.status));
+            return Err(format!(
+                "Codex Agent 결과 status가 잘못되었습니다: {}",
+                report.status
+            ));
         }
 
         Ok((thread_id, session_id, turn_id, report))
@@ -770,8 +855,7 @@ fn is_runtime_owned_publication_blocker(blocker: &String) -> bool {
     let normalized = blocker.to_ascii_lowercase();
     let names_publication = normalized.contains("commit")
         && (normalized.contains(" pr") || normalized.contains("pull request"));
-    let names_runtime_owner = normalized.contains("luna runtime")
-        && normalized.contains("publish");
+    let names_runtime_owner = normalized.contains("luna runtime") && normalized.contains("publish");
     let names_sandbox_limit = normalized.contains("git write")
         || normalized.contains("sandbox")
         || normalized.contains("prohibit");
@@ -790,12 +874,18 @@ fn recover_runtime_owned_publication_blocker(
         return Ok(());
     }
 
-    if report.verification.iter().any(|verification| {
-        verification.status == "failed" || verification.status == "blocked"
-    }) {
+    if report
+        .verification
+        .iter()
+        .any(|verification| verification.status == "failed" || verification.status == "blocked")
+    {
         return Ok(());
     }
-    if !report.blockers.iter().all(is_runtime_owned_publication_blocker) {
+    if !report
+        .blockers
+        .iter()
+        .all(is_runtime_owned_publication_blocker)
+    {
         return Ok(());
     }
 
@@ -824,9 +914,13 @@ fn publish_repository_writer_result(
     }
 
     let current_branch = run_checked("git", &git_args(worktree, &["branch", "--show-current"]))?;
-    let current_branch = String::from_utf8_lossy(&current_branch.stdout).trim().to_string();
+    let current_branch = String::from_utf8_lossy(&current_branch.stdout)
+        .trim()
+        .to_string();
     if current_branch != branch {
-        return Err(format!("Agent가 예상 브랜치를 벗어났습니다: {current_branch}"));
+        return Err(format!(
+            "Agent가 예상 브랜치를 벗어났습니다: {current_branch}"
+        ));
     }
 
     let status = run_checked("git", &git_args(worktree, &["status", "--porcelain"]))?;
@@ -901,20 +995,30 @@ fn verify_repository_writer_result(
     }
 
     let current_branch = run_checked("git", &git_args(worktree, &["branch", "--show-current"]))?;
-    let current_branch = String::from_utf8_lossy(&current_branch.stdout).trim().to_string();
+    let current_branch = String::from_utf8_lossy(&current_branch.stdout)
+        .trim()
+        .to_string();
     if current_branch != branch {
-        return Err(format!("Agent가 예상 브랜치를 벗어났습니다: {current_branch}"));
+        return Err(format!(
+            "Agent가 예상 브랜치를 벗어났습니다: {current_branch}"
+        ));
     }
 
     let status = run_checked("git", &git_args(worktree, &["status", "--porcelain"]))?;
     if !String::from_utf8_lossy(&status.stdout).trim().is_empty() {
-        return Err("Agent가 completed를 반환했지만 worktree에 커밋되지 않은 변경이 남아 있습니다.".to_string());
+        return Err(
+            "Agent가 completed를 반환했지만 worktree에 커밋되지 않은 변경이 남아 있습니다."
+                .to_string(),
+        );
     }
 
     let head = run_checked("git", &git_args(worktree, &["rev-parse", "HEAD"]))?;
     let head_sha = String::from_utf8_lossy(&head.stdout).trim().to_string();
 
-    let remote = run_checked("git", &git_args(worktree, &["ls-remote", "--heads", "origin", branch]))?;
+    let remote = run_checked(
+        "git",
+        &git_args(worktree, &["ls-remote", "--heads", "origin", branch]),
+    )?;
     let remote_line = String::from_utf8_lossy(&remote.stdout).trim().to_string();
     if remote_line.is_empty() {
         return Err("Agent가 completed를 반환했지만 원격 branch가 존재하지 않습니다.".to_string());
@@ -1008,7 +1112,9 @@ fn validate_input(input: &AgentTaskRuntimeInput) -> Result<(), String> {
     Ok(())
 }
 
-fn dispatch_agent_task_blocking(input: AgentTaskRuntimeInput) -> Result<AgentTaskRunResult, String> {
+fn dispatch_agent_task_blocking(
+    input: AgentTaskRuntimeInput,
+) -> Result<AgentTaskRunResult, String> {
     validate_input(&input)?;
     let (worktree, branch) = prepare_agent_worktree(&input)?;
     materialize_dependency_commits(&input, &worktree)?;
@@ -1038,7 +1144,9 @@ fn dispatch_agent_task_blocking(input: AgentTaskRuntimeInput) -> Result<AgentTas
     })
 }
 
-pub async fn dispatch_agent_task(input: AgentTaskRuntimeInput) -> Result<AgentTaskRunResult, String> {
+pub async fn dispatch_agent_task(
+    input: AgentTaskRuntimeInput,
+) -> Result<AgentTaskRunResult, String> {
     tauri::async_runtime::spawn_blocking(move || dispatch_agent_task_blocking(input))
         .await
         .map_err(|error| format!("Agent Runtime join 실패: {error}"))?
