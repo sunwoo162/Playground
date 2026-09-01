@@ -1,4 +1,4 @@
-name: Luna Output Guard Regression Runner
+name: Luna Output Guard TDD Runner
 
 on:
   push:
@@ -6,25 +6,150 @@ on:
       - test/luna-live-e2e-readonly-20260902
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
           ref: fix/luna-agent-output-guard
           fetch-depth: 0
-      - name: Inspect agent runtime test surface
+
+      - name: Add RED regression test
         shell: bash
         run: |
           set -euo pipefail
-          echo '=== runtime command surface ==='
-          grep -nE 'Command::new\(|app-server|read_json_line|turn/completed|item/agentMessage/delta' bloom-runtime/src/agent_runtime.rs | head -120
-          echo '=== bridge surface ==='
-          grep -RniE 'agent-task|run_agent|AgentTaskRuntimeInput' bloom-runtime/src | head -120
-          echo '=== existing tests ==='
-          grep -RniE '#\[test\]|cfg\(test\)' bloom-runtime/src bloom-runtime/tests 2>/dev/null | head -160 || true
-          echo 'inspection-trigger=5'
+          file='bloom-runtime/src/agent_runtime.rs'
+          if ! grep -q 'rejects_agent_message_delta_stream_over_safe_limit' "$file"; then
+            cat >> "$file" <<'RUST'
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use std::{
+        env,
+        fs as std_fs,
+        os::unix::fs::PermissionsExt,
+        sync::Mutex,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    static PATH_LOCK: Mutex<()> = Mutex::new(());
+
+    fn output_guard_test_input(workspace: &Path, project_id: String) -> AgentTaskRuntimeInput {
+        AgentTaskRuntimeInput {
+            organization: "sunwoo162".to_string(),
+            project_id,
+            team_id: "rose".to_string(),
+            team_name: "Rose".to_string(),
+            role: "idea".to_string(),
+            agent_id: "rose-idea".to_string(),
+            task_id: "PB-001".to_string(),
+            task_slug: "idea".to_string(),
+            title: "Output guard regression".to_string(),
+            summary: "Reject runaway agent output".to_string(),
+            acceptance_criteria: vec!["Reject oversized streamed agent output".to_string()],
+            user_request: "Test runaway output".to_string(),
+            product_summary: "Test product".to_string(),
+            architecture_summary: "Test architecture".to_string(),
+            repository_full_name: "sunwoo162/test-repository".to_string(),
+            workspace_path: workspace.to_string_lossy().to_string(),
+            dependencies: vec![],
+        }
+    }
+
+    #[test]
+    fn rejects_agent_message_delta_stream_over_safe_limit() {
+        let _path_lock = PATH_LOCK.lock().expect("PATH test lock");
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock after epoch")
+            .as_nanos();
+        let project_id = format!("builder-output-guard-{stamp}");
+        let root = env::temp_dir().join(format!("luna-output-guard-{}-{stamp}", std::process::id()));
+        let workspace = root.join("workspace");
+        let worktree = root.join("worktree");
+        let bin = root.join("bin");
+        std_fs::create_dir_all(&workspace).expect("workspace");
+        std_fs::create_dir_all(&worktree).expect("worktree");
+        std_fs::create_dir_all(&bin).expect("bin");
+
+        let fake_codex = bin.join("codex");
+        std_fs::write(
+            &fake_codex,
+            r#"#!/usr/bin/env bash
+set -euo pipefail
+IFS= read -r _
+printf '%s\n' '{"id":0,"result":{}}'
+IFS= read -r _
+IFS= read -r _
+printf '%s\n' '{"id":1,"result":{"thread":{"id":"thread-test"}}}'
+IFS= read -r _
+printf '%s\n' '{"id":2,"result":{"turn":{"id":"turn-test"}}}'
+chunk="$(printf '%1024s' '' | tr ' ' x)"
+for _ in $(seq 1 600); do
+  printf '{"method":"item/agentMessage/delta","params":{"delta":"%s"}}\n' "$chunk"
+done
+printf '%s\n' '{"method":"item/completed","params":{"item":{"type":"agentMessage","text":"{\"status\":\"completed\",\"summary\":\"ok\",\"rationaleSummary\":\"ok\",\"evidence\":[],\"verification\":[],\"commitSha\":null,\"pullRequestNumber\":null,\"pullRequestUrl\":null,\"reviewedPullRequests\":[],\"blockers\":[]}"}}}'
+printf '%s\n' '{"method":"turn/completed","params":{"turn":{"id":"turn-test","status":"completed"}}}'
+"#,
+        )
+        .expect("fake codex script");
+        let mut permissions = std_fs::metadata(&fake_codex).expect("script metadata").permissions();
+        permissions.set_mode(0o755);
+        std_fs::set_permissions(&fake_codex, permissions).expect("script executable");
+
+        let original_path = env::var_os("PATH").unwrap_or_default();
+        let mut path_entries = vec![bin.clone()];
+        path_entries.extend(env::split_paths(&original_path));
+        env::set_var("PATH", env::join_paths(path_entries).expect("joined PATH"));
+
+        let input = output_guard_test_input(&workspace, project_id);
+        let result = run_app_server_agent(&input, &worktree, None);
+
+        env::set_var("PATH", original_path);
+        let _ = std_fs::remove_dir_all(&root);
+
+        match result {
+            Err(error) => assert!(
+                error.contains("누적 출력 안전 한도"),
+                "unexpected output guard error: {error}"
+            ),
+            Ok(_) => panic!("runaway agent message delta stream must be rejected"),
+        }
+    }
+}
+RUST
+          fi
+          git diff --check
+
+      - name: Verify RED
+        id: red
+        shell: bash
+        run: |
+          set +e
+          cargo test --manifest-path bloom-runtime/Cargo.toml rejects_agent_message_delta_stream_over_safe_limit -- --nocapture
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
+            echo 'Regression unexpectedly passed before the guard implementation.' >&2
+            exit 1
+          fi
+          echo "RED_CONFIRMED exit=$status"
+
+      - name: Commit RED regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add bloom-runtime/src/agent_runtime.rs
+          if git diff --cached --quiet; then
+            echo 'RED test already committed.'
+            exit 0
+          fi
+          git commit -m 'test : reproduce runaway agent output'
+          git push origin HEAD:fix/luna-agent-output-guard
