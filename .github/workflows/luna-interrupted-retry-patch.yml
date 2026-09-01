@@ -1,0 +1,202 @@
+name: Luna interrupted recovery patch
+
+on:
+  push:
+    branches:
+      - fix/luna-interrupted-task-retry
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Enable pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.33.0 --activate
+      - name: Reset temporary bootstrap commit
+        run: |
+          git fetch origin main
+          git reset --hard origin/main
+      - name: Add failing recovery policies
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+
+          function replaceOnce(source, from, to, label) {
+            if (!source.includes(from)) throw new Error(`missing ${label}`);
+            return source.replace(from, to);
+          }
+
+          let path = 'bloom-runtime/ts/headlessCrashRecovery.policy-test.ts';
+          let source = fs.readFileSync(path, 'utf8');
+          source = replaceOnce(
+            source,
+            'function persistentClient(crashPredicate: CrashPredicate) {',
+            'function persistentClient(crashPredicate: CrashPredicate, crashAfterCommit = false) {',
+            'persistentClient signature',
+          );
+          source = replaceOnce(
+            source,
+            `      if (crashArmed && crashPredicate(next, previous, write.phase)) {\n        crashArmed = false;\n        crashCount += 1;\n        throw new Error("[FAILURE-INJECTION] simulated worker crash before snapshot commit");\n      }\n      stored = {`,
+            `      const shouldCrash = crashArmed && crashPredicate(next, previous, write.phase);\n      if (shouldCrash && !crashAfterCommit) {\n        crashArmed = false;\n        crashCount += 1;\n        throw new Error("[FAILURE-INJECTION] simulated worker crash before snapshot commit");\n      }\n      stored = {`,
+            'pre-commit crash block',
+          );
+          source = replaceOnce(
+            source,
+            `      };\n      return stored;\n    },`,
+            `      };\n      if (shouldCrash && crashAfterCommit) {\n        crashArmed = false;\n        crashCount += 1;\n        throw new Error("[FAILURE-INJECTION] simulated worker crash after snapshot commit");\n      }\n      return stored;\n    },`,
+            'post-commit crash block',
+          );
+          source = replaceOnce(
+            source,
+            `      const result = evidenceByTask.get(input.taskId) ?? null;\n      return result\n        ? { outcome: "recovered" as const, reason: "durable repository/session evidence found", result }\n        : { outcome: "blocked" as const, reason: "durable evidence missing", result: null };`,
+            `      const result = evidenceByTask.get(input.taskId) ?? null;\n      if (result) {\n        return { outcome: "recovered" as const, reason: "durable repository/session evidence found", result };\n      }\n      return (REPOSITORY_WRITER_ROLES.includes(input.role)\n        ? { outcome: "blocked" as const, reason: "durable evidence missing", result: null }\n        : { outcome: "retryable" as const, reason: "terminal evidence missing for interrupted non-writer", result: null })\n        as unknown as import("./headlessBuilderExecutor").ReconcileInterruptedAgentTaskResult;`,
+            'fake reconciliation behavior',
+          );
+          const recoveryTest = `\nasync function testInterruptedNonWriterTaskRedispatchesWhenNoTerminalEvidenceExists() {\n  const runtime = fakeRuntime();\n  const storage = persistentClient((next, previous, phase) => {\n    if (phase !== "building" || !previous) return false;\n    const nextReview = next.taskRuns.find((run) => run.role === "code-review");\n    const previousReview = previous.taskRuns.find((run) => run.role === "code-review");\n    return previousReview?.status !== "running" && nextReview?.status === "running";\n  }, true);\n  const executor = makeExecutor(runtime.runtime);\n  await expectCrash(executor, storage.client);\n  check(!runtime.dispatchCount.has("MKTCR-001"), "dispatch must not happen before injected process loss");\n  await resume(executor, storage.client);\n  checkEqual(runtime.reconcileCount.get("MKTCR-001"), 1, "restart must first attempt evidence reconciliation");\n  checkEqual(runtime.dispatchCount.get("MKTCR-001"), 1, "in-flight task without terminal evidence must be safely redispatched once");\n}\n\n`;
+          source = replaceOnce(source, 'async function testIntegrationRecovery() {', recoveryTest + 'async function testIntegrationRecovery() {', 'integration test marker');
+          source = replaceOnce(
+            source,
+            `  await testReviewEvidenceRecovery();\n  await testIntegrationRecovery();`,
+            `  await testReviewEvidenceRecovery();\n  await testInterruptedNonWriterTaskRedispatchesWhenNoTerminalEvidenceExists();\n  await testIntegrationRecovery();`,
+            'run test list',
+          );
+          fs.writeFileSync(path, source);
+
+          path = 'bloom-runtime/ts/agentRuntimeOwnedPublishing.policy-test.ts';
+          source = fs.readFileSync(path, 'utf8');
+          const policy = `assert(\n  source.includes("reuse or update your existing prefixed top-level comment instead of creating a duplicate"),\n  "review retries must make GitHub comment publication idempotent",\n);\nassert(\n  source.includes("Do not merge, close, label, retarget, or otherwise mutate pull requests"),\n  "review agents must not perform non-idempotent GitHub mutations outside their review comment",\n);\n`;
+          source = replaceOnce(
+            source,
+            'console.log("PASS  Luna Runtime owns publishing and cleans task-scoped tool state.");',
+            policy + 'console.log("PASS  Luna Runtime owns publishing and cleans task-scoped tool state.");',
+            'publishing policy log marker',
+          );
+          fs.writeFileSync(path, source);
+          NODE
+          git config user.name "Luna Recovery CI"
+          git config user.email "luna-recovery@users.noreply.github.com"
+          git add bloom-runtime/ts/headlessCrashRecovery.policy-test.ts bloom-runtime/ts/agentRuntimeOwnedPublishing.policy-test.ts
+          git commit -m "test : cover interrupted non-writer recovery"
+      - name: Apply safe recovery implementation
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+
+          function replaceOnce(source, from, to, label) {
+            if (!source.includes(from)) throw new Error(`missing ${label}`);
+            return source.replace(from, to);
+          }
+
+          let path = 'bloom-runtime/ts/headlessBuilderExecutor.ts';
+          let source = fs.readFileSync(path, 'utf8');
+          source = replaceOnce(source, '  outcome: "recovered" | "blocked";', '  outcome: "recovered" | "retryable" | "blocked";', 'headless outcome type');
+          const blocked = `function blockedTask(run: ProjectTaskRun, reason: string, completedAt: string): ProjectTaskRun {\n  return {\n    ...run,\n    status: "blocked",\n    blockers: Array.from(new Set([...run.blockers, reason])),\n    lastError: reason,\n    completedAt,\n  };\n}\n`;
+          const retry = blocked + `\nfunction retryInterruptedTask(run: ProjectTaskRun, reason: string): ProjectTaskRun {\n  return {\n    ...run,\n    status: "pending",\n    branchName: null,\n    worktreePath: null,\n    threadId: null,\n    sessionId: null,\n    turnId: null,\n    eventsPath: null,\n    stderrPath: null,\n    commitSha: null,\n    pullRequestNumber: null,\n    pullRequestUrl: null,\n    reviewedPullRequests: [],\n    summary: null,\n    rationaleSummary: null,\n    evidence: [],\n    verification: [],\n    blockers: [],\n    lastError: reason,\n    startedAt: null,\n    completedAt: null,\n  };\n}\n`;
+          source = replaceOnce(source, blocked, retry, 'blockedTask helper');
+          source = replaceOnce(
+            source,
+            `        if (reconciliation.outcome === "recovered" && reconciliation.result) {\n          payload.taskRuns[index] = applyTaskResult(interrupted, reconciliation.result, now());\n        } else {\n          payload.taskRuns[index] = blockedTask(\n            interrupted,\n            \`중단 Task evidence 복구 실패: \${reconciliation.reason}\`,\n            now(),\n          );\n        }`,
+            `        if (reconciliation.outcome === "recovered" && reconciliation.result) {\n          payload.taskRuns[index] = applyTaskResult(interrupted, reconciliation.result, now());\n        } else if (reconciliation.outcome === "retryable") {\n          payload.taskRuns[index] = retryInterruptedTask(\n            interrupted,\n            \`중단 Task terminal evidence 없음 · 안전 재실행: \${reconciliation.reason}\`,\n          );\n        } else {\n          payload.taskRuns[index] = blockedTask(\n            interrupted,\n            \`중단 Task evidence 복구 실패: \${reconciliation.reason}\`,\n            now(),\n          );\n        }`,
+            'headless reconciliation branch',
+          );
+          fs.writeFileSync(path, source);
+
+          path = 'bloom-runtime/ts/sessionReconciliation.ts';
+          source = fs.readFileSync(path, 'utf8');
+          source = replaceOnce(source, '  outcome: "recovered" | "blocked";', '  outcome: "recovered" | "retryable" | "blocked";', 'desktop result type');
+          fs.writeFileSync(path, source);
+
+          path = 'bloom-runtime/src/agent_reconciliation.rs';
+          source = fs.readFileSync(path, 'utf8');
+          const unrecoverable = `fn unrecoverable(reason: impl Into<String>) -> ReconcileInterruptedAgentTaskResult {\n    ReconcileInterruptedAgentTaskResult {\n        outcome: "blocked".to_string(),\n        reason: reason.into(),\n        result: None,\n    }\n}\n`;
+          const classifiers = unrecoverable + `\nfn retryable(reason: impl Into<String>) -> ReconcileInterruptedAgentTaskResult {\n    ReconcileInterruptedAgentTaskResult {\n        outcome: "retryable".to_string(),\n        reason: reason.into(),\n        result: None,\n    }\n}\n\nfn retryable_if_non_writer(\n    input: &ReconcileInterruptedAgentTaskInput,\n    reason: impl Into<String>,\n) -> ReconcileInterruptedAgentTaskResult {\n    let reason = reason.into();\n    if writer_role(input.role.trim()) {\n        unrecoverable(reason)\n    } else {\n        retryable(reason)\n    }\n}\n`;
+          source = replaceOnce(source, unrecoverable, classifiers, 'Rust reconciliation classifier');
+          source = replaceOnce(
+            source,
+            `        return Ok(unrecoverable(\n            "중단된 Agent의 App Server event log가 없어 완료 여부를 증명할 수 없습니다.",\n        ));`,
+            `        return Ok(retryable_if_non_writer(\n            &input,\n            "중단된 Agent의 App Server event log가 없어 완료 여부를 증명할 수 없습니다.",\n        ));`,
+            'missing event log handling',
+          );
+          source = replaceOnce(
+            source,
+            `        return Ok(unrecoverable(\n            "중단된 Agent의 thread/start 완료 증거가 없습니다.",\n        ));`,
+            `        return Ok(retryable_if_non_writer(\n            &input,\n            "중단된 Agent의 thread/start 완료 증거가 없습니다.",\n        ));`,
+            'missing thread handling',
+          );
+          source = replaceOnce(
+            source,
+            `        return Ok(unrecoverable(\n            "중단된 Agent의 turn/start 완료 증거가 없습니다.",\n        ));`,
+            `        return Ok(retryable_if_non_writer(\n            &input,\n            "중단된 Agent의 turn/start 완료 증거가 없습니다.",\n        ));`,
+            'missing turn handling',
+          );
+          source = replaceOnce(
+            source,
+            `        return Ok(unrecoverable(format!(\n            "중단된 Agent turn의 완료를 확인할 수 없습니다: {detail}"\n        )));`,
+            `        return Ok(retryable_if_non_writer(\n            &input,\n            format!("중단된 Agent turn의 완료를 확인할 수 없습니다: {detail}"),\n        ));`,
+            'incomplete turn handling',
+          );
+          fs.writeFileSync(path, source);
+
+          path = 'bloom-runtime/src/agent_runtime.rs';
+          source = fs.readFileSync(path, 'utf8');
+          source = replaceOnce(
+            source,
+            'When reviewing a PR, leave a concise top-level PR comment prefixed with your Luna Agent ID and an evidence-based verdict. Do not pretend GitHub native self-approval is an independent approval when all agents share one GitHub credential.',
+            'When reviewing a PR, leave a concise top-level PR comment prefixed with your Luna Agent ID and an evidence-based verdict. On retries, reuse or update your existing prefixed top-level comment instead of creating a duplicate. Do not merge, close, label, retarget, or otherwise mutate pull requests. Do not pretend GitHub native self-approval is an independent approval when all agents share one GitHub credential.',
+            'review idempotency prompt',
+          );
+          fs.writeFileSync(path, source);
+
+          path = 'bloom-runtime/docs/SESSION_RECONCILIATION.md';
+          source = fs.readFileSync(path, 'utf8');
+          source = replaceOnce(
+            source,
+            'If this evidence is absent, malformed, incomplete, or refers to a non-completed turn, Luna does not infer success. The Task is routed through the existing blocked/failure recovery path.',
+            'If this evidence proves a terminal result, Luna recovers it normally. In the headless Builder, an interrupted non-repository-writer Task with no terminal completion evidence is reset for a safe redispatch instead of being treated as completed; repository writers remain blocked unless durable publication evidence proves their result. Malformed terminal results and repository evidence mismatches remain blocked.',
+            'reconciliation docs evidence paragraph',
+          );
+          source = replaceOnce(
+            source,
+            '- resuming a partially executed turn from its exact in-flight point;',
+            '- resuming a partially executed turn from its exact in-flight point (headless non-writer recovery restarts the Task from a fresh turn instead);',
+            'reconciliation docs limitations',
+          );
+          fs.writeFileSync(path, source);
+          NODE
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify TypeScript recovery policies
+        run: |
+          pnpm --dir apps/desktop exec tsc -p ../../bloom-runtime/tsconfig.policy-tests.json
+          node .tmp/bloom-policy-tests/headlessCrashRecovery.policy-test.js
+          node .tmp/bloom-policy-tests/agentRuntimeOwnedPublishing.policy-test.js
+      - name: Verify Bloom runtime policies
+        run: pnpm run test:bloom-runtime
+      - name: Verify worker build
+        run: pnpm run build:bloom-worker
+      - name: Verify Rust runtime
+        run: cargo check --manifest-path bloom-runtime/Cargo.toml
+      - name: Verify diff hygiene
+        run: git diff --check
+      - name: Commit clean fix history
+        shell: bash
+        run: |
+          git add bloom-runtime/ts/headlessCrashRecovery.policy-test.ts bloom-runtime/ts/agentRuntimeOwnedPublishing.policy-test.ts
+          git commit -m "test : cover interrupted non-writer recovery"
+          git add bloom-runtime/ts/headlessBuilderExecutor.ts bloom-runtime/ts/sessionReconciliation.ts bloom-runtime/src/agent_reconciliation.rs bloom-runtime/src/agent_runtime.rs bloom-runtime/docs/SESSION_RECONCILIATION.md
+          git commit -m "fix : retry interrupted non-writer tasks"
+          git push --force-with-lease origin HEAD:fix/luna-interrupted-task-retry
