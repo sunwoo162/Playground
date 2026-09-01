@@ -27,6 +27,7 @@
     "ts/codexSchemaCompat.policy-test.ts",
     "ts/intakePrompt.policy-test.ts",
     "ts/pmReviewTopologyPrompt.policy-test.ts",
+    "ts/pmPlanningRepair.policy-test.ts",
     "ts/githubOwnerBootstrap.policy-test.ts",
     "ts/githubEmptyRepositoryBootstrap.policy-test.ts",
     "ts/productionGhCredentials.policy-test.ts",
