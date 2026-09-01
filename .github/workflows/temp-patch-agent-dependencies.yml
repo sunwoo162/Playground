@@ -1,0 +1,115 @@
+name: Temporary Agent Dependency Patch
+
+on:
+  push:
+    branches:
+      - fix/agent-dependency-materialization
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message != 'fix : materialize agent dependency commits'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/agent-dependency-materialization
+          fetch-depth: 0
+      - name: Patch dependency materialization
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path('bloom-runtime/src/agent_runtime.rs')
+          source = path.read_text()
+
+          if 'fn materialize_dependency_commits(' not in source:
+              marker = '\nfn dependency_context(dependencies: &[DependencyArtifact]) -> String {'
+              assert marker in source
+              implementation = r'''
+fn materialize_dependency_commits(
+    input: &AgentTaskRuntimeInput,
+    worktree: &Path,
+) -> Result<(), String> {
+    if !is_repository_writer(&input.role) {
+        return Ok(());
+    }
+
+    for dependency in &input.dependencies {
+        let Some(commit_sha) = dependency.commit_sha.as_deref() else {
+            continue;
+        };
+        if commit_sha.len() != 40 || !commit_sha.chars().all(|character| character.is_ascii_hexdigit()) {
+            return Err(format!(
+                "Dependency {} commit SHA 형식이 잘못되었습니다: {}",
+                dependency.task_id, commit_sha
+            ));
+        }
+
+        let merge = run_command(
+            "git",
+            &git_args(worktree, &["merge", "--no-edit", commit_sha]),
+        )?;
+        if merge.status.success() {
+            continue;
+        }
+
+        let unmerged = run_checked(
+            "git",
+            &git_args(worktree, &["diff", "--name-only", "--diff-filter=U"]),
+        )?;
+        if String::from_utf8_lossy(&unmerged.stdout).trim().is_empty() {
+            return Err(format!(
+                "Dependency {} commit {} merge 실패: {}",
+                dependency.task_id,
+                commit_sha,
+                output_detail(&merge)
+            ));
+        }
+
+        run_checked("git", &git_args(worktree, &["add", "-A"]))?;
+        let commit_message = format!("chore : materialize dependency {}", dependency.task_id);
+        run_checked(
+            "git",
+            &git_args(
+                worktree,
+                &["commit", "--no-verify", "-m", commit_message.as_str()],
+            ),
+        )?;
+    }
+
+    Ok(())
+}
+'''
+              source = source.replace(marker, '\n' + implementation + marker, 1)
+
+          dispatch_marker = '    let (worktree, branch) = prepare_agent_worktree(&input)?;\n    let (thread_id'
+          if 'materialize_dependency_commits(&input, &worktree)?;' not in source:
+              assert dispatch_marker in source
+              source = source.replace(
+                  dispatch_marker,
+                  '    let (worktree, branch) = prepare_agent_worktree(&input)?;\n    materialize_dependency_commits(&input, &worktree)?;\n    let (thread_id',
+                  1,
+              )
+
+          old_prompt = 'Read-only Git inspection is allowed. Luna Runtime will publish your completed work after this turn.'
+          new_prompt = 'Read-only Git inspection is allowed. Luna Runtime has materialized completed dependency commits into this worktree before your turn; if Git conflict markers are present, resolve them semantically using the dependency context and verification instead of reporting that upstream work is missing. Luna Runtime will publish your completed work after this turn.'
+          if new_prompt not in source:
+              assert old_prompt in source
+              source = source.replace(old_prompt, new_prompt, 1)
+
+          path.write_text(source)
+          PY
+      - name: Commit production fix
+        run: |
+          if git diff --quiet -- bloom-runtime/src/agent_runtime.rs; then
+            echo 'No patch required.'
+            exit 0
+          fi
+          git config user.name 'sunwoo162'
+          git config user.email 'sunwoosunwoo4114@gmail.com'
+          git add bloom-runtime/src/agent_runtime.rs
+          git commit -m 'fix : materialize agent dependency commits'
+          git push origin HEAD:fix/agent-dependency-materialization
