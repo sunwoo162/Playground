@@ -1,4 +1,4 @@
-# rerun: parallel git config race fix 5abf31f
+# rerun: post-interrupted-retry production verification 20260902
 name: Live E2E Operator Smoke
 
 on:
