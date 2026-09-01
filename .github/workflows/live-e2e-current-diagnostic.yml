@@ -1,4 +1,4 @@
-# verify: inspect active task disk growth
+# verify: inspect active task cache breakdown
 name: Live E2E Current Diagnostic
 
 on:
@@ -33,6 +33,8 @@ jobs:
             find /tmp/luna-agent-tools -mindepth 2 -maxdepth 2 -type d -exec du -xsh {} \; 2>/dev/null | sort -h | tail -30 || true
             echo '=== ACTIVE TASK DISK BREAKDOWN ==='
             du -xsh /tmp/luna-agent-tools/builder-21/T-010/.[!.]* /tmp/luna-agent-tools/builder-21/T-010/* 2>/dev/null | sort -h | tail -40 || true
+            echo '=== XDG CACHE BREAKDOWN ==='
+            du -xsh /tmp/luna-agent-tools/builder-21/T-010/xdg-cache/.[!.]* /tmp/luna-agent-tools/builder-21/T-010/xdg-cache/* 2>/dev/null | sort -h | tail -40 || true
             echo '=== PM2 SAFE STATUS ==='
             pm2 jlist | node -e '
               let s=""; process.stdin.on("data",d=>s+=d); process.stdin.on("end",()=>{
