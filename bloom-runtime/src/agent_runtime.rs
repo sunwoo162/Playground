@@ -461,7 +461,7 @@ fn agent_prompt(input: &AgentTaskRuntimeInput, branch: Option<&str>) -> String {
     let dependencies = dependency_context(&input.dependencies);
     let mode = if is_repository_writer(&input.role) {
         format!(
-            "You are a repository-changing worker. Your dedicated branch is `{}`. Inspect the actual repository first, implement the task in this worktree, and run applicable verification. Formatting, lint, and test failures caused by your task changes are defects to fix before returning completed. If an applicable verification command cannot run because the execution environment is genuinely unavailable, record the exact command and error; do not treat a not-yet-deployed public URL as a blocker unless this task owns deployment. Git metadata is protected inside the Codex sandbox, so do not run Git write commands such as add, commit, checkout, switch, reset, rebase, merge, or push, do not create or update a PR, and do not create temporary Git metadata to work around the sandbox. Read-only Git inspection is allowed. Luna Runtime has materialized completed dependency commits into this worktree before your turn; if Git conflict markers are present, resolve them semantically using the dependency context and verification instead of reporting that upstream work is missing. Luna Runtime will publish your completed work after this turn. Never push directly to `main` or `develop`.",
+            "You are a repository-changing worker. Your dedicated branch is `{}`. Inspect the actual repository first, implement the task in this worktree, and run applicable verification. Formatting, lint, and test failures caused by your task changes are defects to fix before returning completed. If an applicable verification command cannot run because the execution environment is genuinely unavailable, record the exact command and error; do not treat a not-yet-deployed public URL as a blocker unless this task owns deployment. Git metadata is protected inside the Codex sandbox, so do not run Git write commands such as add, commit, checkout, switch, reset, rebase, merge, or push, do not create or update a PR, and do not create temporary Git metadata to work around the sandbox. Read-only Git inspection is allowed. Luna Runtime has materialized completed dependency commits into this worktree before your turn; if Git conflict markers are present, resolve them semantically using the dependency context and verification instead of reporting that upstream work is missing. Luna Runtime will publish your completed work after this turn. Runtime-owned Git publication is not a task blocker: never return blocked solely because you cannot commit, push, or create a PR inside the sandbox. Never push directly to `main` or `develop`.",
             branch.unwrap_or("unknown")
         )
     } else if is_review_role(&input.role) {
@@ -766,6 +766,53 @@ fn run_app_server_agent(
     ))
 }
 
+fn is_runtime_owned_publication_blocker(blocker: &String) -> bool {
+    let normalized = blocker.to_ascii_lowercase();
+    let names_publication = normalized.contains("commit")
+        && (normalized.contains(" pr") || normalized.contains("pull request"));
+    let names_runtime_owner = normalized.contains("luna runtime")
+        && normalized.contains("publish");
+    let names_sandbox_limit = normalized.contains("git write")
+        || normalized.contains("sandbox")
+        || normalized.contains("prohibit");
+    names_publication && names_runtime_owner && names_sandbox_limit
+}
+
+fn recover_runtime_owned_publication_blocker(
+    input: &AgentTaskRuntimeInput,
+    worktree: &Path,
+    report: &mut AgentTaskReport,
+) -> Result<(), String> {
+    if !is_repository_writer(&input.role)
+        || report.status != "blocked"
+        || report.blockers.is_empty()
+    {
+        return Ok(());
+    }
+
+    if report.verification.iter().any(|verification| {
+        verification.status == "failed" || verification.status == "blocked"
+    }) {
+        return Ok(());
+    }
+    if !report.blockers.iter().all(is_runtime_owned_publication_blocker) {
+        return Ok(());
+    }
+
+    let status = run_checked("git", &git_args(worktree, &["status", "--porcelain"]))?;
+    if String::from_utf8_lossy(&status.stdout).trim().is_empty() {
+        return Ok(());
+    }
+
+    report.status = "completed".to_string();
+    report.evidence.push(
+        "Luna Runtime recovered a publication-only blocker after confirming repository changes remain in the writer worktree; Runtime owns commit and PR publication."
+            .to_string(),
+    );
+    report.blockers.clear();
+    Ok(())
+}
+
 fn publish_repository_writer_result(
     input: &AgentTaskRuntimeInput,
     worktree: &Path,
@@ -968,6 +1015,9 @@ fn dispatch_agent_task_blocking(input: AgentTaskRuntimeInput) -> Result<AgentTas
     let (thread_id, session_id, turn_id, mut report, events_path, stderr_path) =
         run_app_server_agent(&input, &worktree, branch.as_deref())?;
 
+    if branch.is_some() {
+        recover_runtime_owned_publication_blocker(&input, &worktree, &mut report)?;
+    }
     if let Some(branch_name) = branch.as_deref() {
         publish_repository_writer_result(&input, &worktree, branch_name, &mut report)?;
     }

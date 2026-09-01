@@ -52,4 +52,25 @@ assert(
   "code review must not require impossible CI evidence from writer PRs created before CI exists",
 );
 
-console.log("PASS  Luna Runtime owns publishing and supplies a verifiable agent environment.");
+assert(
+  source.includes("fn recover_runtime_owned_publication_blocker("),
+  "Runtime must recover writer reports blocked only by Luna-owned commit/PR publication",
+);
+assert(
+  source.includes("Runtime-owned Git publication is not a task blocker"),
+  "writer prompt must explicitly prohibit treating Luna-owned publication as a blocker",
+);
+assert(
+  source.includes("verification.status == \"failed\" || verification.status == \"blocked\""),
+  "publication recovery must not hide failed or blocked verification",
+);
+assert(
+  source.includes("report.blockers.iter().all(is_runtime_owned_publication_blocker)"),
+  "publication recovery must apply only when every blocker is publication-ownership noise",
+);
+assert(
+  source.includes("recover_runtime_owned_publication_blocker(&input, &worktree, &mut report)?;"),
+  "dispatch must normalize safe publication-only blockers before Runtime publishes the writer result",
+);
+
+console.log("PASS  Luna Runtime owns publishing and safely recovers publication-only blockers.");
