@@ -31,4 +31,25 @@ assert(
   "dispatch must publish and verify writer work after the sandboxed turn completes",
 );
 
-console.log("PASS  Luna Runtime owns repository-writer Git publishing.");
+assert(
+  source.includes('.env("PNPM_HOME", &pnpm_home)'),
+  "agent tooling must redirect pnpm state into a writable task-scoped directory",
+);
+assert(
+  source.includes('.env("XDG_DATA_HOME", &xdg_data_home)'),
+  "agent tooling must redirect XDG data writes away from the read-only user home",
+);
+assert(
+  source.includes(
+    "Formatting, lint, and test failures caused by your task changes are defects to fix before returning completed",
+  ),
+  "repository writers must remediate task-caused verification failures before completion",
+);
+assert(
+  source.includes(
+    "A missing CI check on an early or partial writer PR is not by itself a blocker",
+  ),
+  "code review must not require impossible CI evidence from writer PRs created before CI exists",
+);
+
+console.log("PASS  Luna Runtime owns publishing and supplies a verifiable agent environment.");
