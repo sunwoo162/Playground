@@ -76,7 +76,7 @@ jobs:
           username: ubuntu
           password: ${{ secrets.SSH_PASSWORD }}
           envs: BLOOM_GITHUB_TOKEN
-          command_timeout: 20m
+          command_timeout: 150m
           script: |
             set -eu
             cd /home/ubuntu/bloombouquet
