@@ -113,3 +113,5 @@ fn materialize_dependency_commits(
           git add bloom-runtime/src/agent_runtime.rs
           git commit -m 'fix : materialize agent dependency commits'
           git push origin HEAD:fix/agent-dependency-materialization
+
+# trigger after workflow registration
