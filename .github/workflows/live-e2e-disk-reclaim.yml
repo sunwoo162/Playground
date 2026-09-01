@@ -1,0 +1,40 @@
+name: Live E2E Disk Reclaim
+
+on:
+  push:
+    branches:
+      - test/luna-live-e2e-monitor-20260901-night
+
+permissions:
+  contents: read
+
+jobs:
+  reclaim:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reclaim safe production cache space
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          command_timeout: 8m
+          script: |
+            set -eu
+            echo '=== BEFORE ==='
+            df -hT /
+            echo '=== ACTIVE NPM/NPX ==='
+            active="$(ps -eo pid=,args= | grep -E '(^|[[:space:]])(npm|npx)([[:space:]]|$)' | grep -v grep || true)"
+            if [ -n "$active" ]; then
+              printf '%s\n' "$active"
+              echo 'npm cache cleanup skipped because npm/npx is active'
+            else
+              echo 'no active npm/npx process; cleaning npm cache'
+              npm cache clean --force
+            fi
+            echo '=== JOURNAL VACUUM ==='
+            sudo journalctl --vacuum-size=150M || true
+            echo '=== AFTER ==='
+            df -hT /
+            du -sh ~/.npm ~/.local/share/pnpm /tmp 2>/dev/null || true
