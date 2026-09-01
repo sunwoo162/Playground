@@ -12,7 +12,7 @@ jobs:
   inspect:
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect latest production Builder run
+      - name: Inspect production Bloom worker shutdown policy
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ssh.gsmsv.site
@@ -25,56 +25,20 @@ jobs:
             set -eu
             cd /home/ubuntu/bloombouquet
             export PATH="$HOME/.local/bin:$HOME/.llama/bin:$HOME/.local/node_modules/.bin:$PATH"
+            echo '=== DEPLOYED MAIN ==='
+            git rev-parse HEAD
+            echo '=== ECOSYSTEM CONTRACT ==='
+            grep -n "kill_timeout" ecosystem.config.js
+            echo '=== PM2 RUNTIME ==='
             node <<'NODE'
-            require('dotenv').config({ path: '.env' });
-            const jwt = require('jsonwebtoken');
-            const { execFileSync, execSync } = require('node:child_process');
-            const base = 'http://127.0.0.1:3000';
-            const token = jwt.sign({ id: 'sunwoo162-live-e2e', login: 'sunwoo162', name: 'sunwoo162', avatar_url: '', type: 'access' }, process.env.JWT_SECRET, { expiresIn: '20m' });
-            const headers = { Cookie: `playground_token=${token}` };
-            async function get(path) {
-              const res = await fetch(`${base}${path}`, { headers });
-              const text = await res.text();
-              if (!res.ok) throw new Error(`${path} -> ${res.status}: ${text.slice(0, 1000)}`);
-              return text ? JSON.parse(text) : null;
+            const { execFileSync } = require('node:child_process');
+            const apps = JSON.parse(execFileSync('pm2', ['jlist'], { encoding: 'utf8' }));
+            for (const name of ['bloom-evaluator-worker', 'bloom-builder-worker', 'bloom-evaluator-llm']) {
+              const app = apps.find((value) => value.name === name);
+              if (!app) throw new Error(`${name} is not online in PM2`);
+              const value = app.pm2_env?.kill_timeout;
+              console.log(JSON.stringify({ name, status: app.pm2_env?.status, pid: app.pid, kill_timeout: value }));
+              if (Number(value) !== 7200000) throw new Error(`${name} kill_timeout=${value}; expected 7200000`);
             }
-            async function main() {
-              const projectsRaw = await get('/api/builder/projects');
-              const projects = (Array.isArray(projectsRaw) ? projectsRaw : (projectsRaw?.content || []))
-                .slice()
-                .sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
-              console.log('=== LATEST PROJECTS ===');
-              for (const value of projects.slice(0, 8)) {
-                console.log(JSON.stringify({ id: value.id, status: value.status, repositoryFullName: value.repositoryFullName, failureReason: value.failureReason, createdAt: value.createdAt, updatedAt: value.updatedAt }));
-              }
-              const project = projects[0];
-              if (!project) throw new Error('No Builder project found');
-              const runsRaw = await get(`/api/builder/projects/${project.id}/runs`);
-              const runs = (Array.isArray(runsRaw) ? runsRaw : (runsRaw?.content || []))
-                .slice()
-                .sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
-              const run = runs[0];
-              if (!run) throw new Error(`No run found for project ${project.id}`);
-              let snapshot = null;
-              try { snapshot = await get(`/api/builder/projects/${project.id}/runs/${run.id}/snapshot`); } catch (error) { console.log(`snapshot lookup failed: ${error.message}`); }
-              const payload = snapshot?.payloadJson ? JSON.parse(snapshot.payloadJson) : null;
-              const repo = project.repositoryFullName || payload?.repository?.repository || payload?.repository?.fullName || null;
-              console.log('=== RUN SUMMARY ===');
-              console.log(JSON.stringify({ projectId: project.id, runId: run.id, status: run.status, failureReason: run.failureReason || project.failureReason || null, heartbeatAt: run.heartbeatAt, phase: snapshot?.phase, snapshotVersion: snapshot?.version, blockedReason: payload?.blockedReason || null, repository: repo }, null, 2));
-              console.log('=== TASKS ===');
-              for (const task of payload?.taskRuns || []) {
-                console.log(JSON.stringify({ taskId: task.taskId, role: task.role, status: task.status, attempts: task.attempts, branchName: task.branchName, commitSha: task.commitSha, pullRequestNumber: task.pullRequestNumber, lastError: task.lastError, blockers: task.blockers }));
-              }
-              if (repo) {
-                console.log('=== REPOSITORY PRS ===');
-                try {
-                  console.log(execFileSync('gh', ['pr', 'list', '--repo', repo, '--state', 'all', '--limit', '40', '--json', 'number,title,state,headRefName,baseRefName,url,mergeStateStatus'], { encoding: 'utf8' }));
-                } catch (error) { console.log(`gh pr list failed: ${error.message}`); }
-              }
-              console.log('=== ACTIVE RUNTIME ARTIFACTS ===');
-              try {
-                console.log(execSync(`find /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-${project.id} -type f -printf '%T@ %TY-%Tm-%Td %TH:%TM:%TS %p\\n' 2>/dev/null | sort -nr | head -60`, { encoding: 'utf8', shell: '/bin/bash' }));
-              } catch (error) { console.log(`artifact scan failed: ${error.message}`); }
-            }
-            main().catch((error) => { console.error(error.stack || error.message || String(error)); process.exit(1); });
+            console.log('PM2_GRACEFUL_TIMEOUT_PASS');
             NODE
