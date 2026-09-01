@@ -61,6 +61,7 @@ module.exports = {
       autorestart: true,
       restart_delay: 5000,
       max_restarts: 20,
+      kill_timeout: 7_200_000,
       env: {
         ...commonWorkerEnv,
         BLOOM_WORKER_MODE: sharedEnv.BLOOM_WORKER_MODE || 'evaluator',
@@ -75,6 +76,7 @@ module.exports = {
       autorestart: true,
       restart_delay: 5000,
       max_restarts: 20,
+      kill_timeout: 7_200_000,
       env: {
         ...commonWorkerEnv,
         BLOOM_WORKER_MODE: 'builder',
