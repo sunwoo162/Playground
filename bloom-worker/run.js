@@ -183,10 +183,8 @@ function createRuntimeBridge(binaryPath) {
           ...input,
           request: buildPmPlanningRequest(input.request, validationError),
         });
-        return {
-          ...result,
-          plan: prepareOrchestrationPlan(result.plan),
-        };
+        result.plan = prepareOrchestrationPlan(result.plan);
+        return result;
       } catch (error) {
         if (attempt >= MAX_PM_PLAN_ATTEMPTS || !isSemanticPmPlanError(error)) {
           throw error;
