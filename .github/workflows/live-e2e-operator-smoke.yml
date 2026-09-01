@@ -1,0 +1,136 @@
+name: Live E2E Operator Smoke
+
+on:
+  push:
+    branches:
+      - test/luna-live-e2e-20260831
+
+permissions:
+  contents: read
+
+jobs:
+  run-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Run production Bloom live E2E smoke
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          command_timeout: 115m
+          script: |
+            set -eu
+            cd /home/ubuntu/bloombouquet
+            export PATH="$HOME/.local/bin:$HOME/.llama/bin:$HOME/.local/node_modules/.bin:$PATH"
+            node <<'NODE'
+            require('dotenv').config({ path: '.env' });
+            const jwt = require('jsonwebtoken');
+
+            const base = 'http://127.0.0.1:3000';
+            const token = jwt.sign({
+              id: 'sunwoo162-live-e2e',
+              login: 'sunwoo162',
+              name: 'sunwoo162',
+              avatar_url: '',
+              type: 'access',
+            }, process.env.JWT_SECRET, { expiresIn: '3h' });
+            const headers = {
+              'Content-Type': 'application/json',
+              Cookie: `playground_token=${token}`,
+            };
+            const pad = (value) => String(value).padStart(2, '0');
+            const now = new Date();
+            const stamp = `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}-${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}`;
+            const repositoryName = `bloom-e2e-pulseboard-${stamp}`;
+            const brief = `[BLOOM-E2E-SMOKE] Build Pulseboard as a small production-quality full-stack web app in repository ${repositoryName}. Users create feedback with title, details, category; list and filter by category/status; and advance status open -> planned -> done only. Categories are exactly bug, feature, improvement. Validation: title 3-120 chars, details 1-2000 chars. Newest first, 20/page, no edit/delete. Use web frontend + API + SQLite, no auth/payments/realtime/paid services/external APIs. Monorepo must clearly separate frontend/API, include meaningful automated tests, responsive accessible WCAG 2.2 AA UI, loading/error/empty states, and support current Chrome/Edge/Safari/Firefox. Use Node 22 and pnpm 10.33.0. PM must assign real Frontend and Backend implementation work. Preserve mandatory Data & Marketing -> Documentation -> Code Review -> Reviewer -> QA. Data & Marketing writes docs/marketing/MARKETING_ANALYSIS.md from the built product; Documentation independently verifies it and writes docs/marketing/GO_TO_MARKET.md. Finish only after every repository-writing agent has commit+PR evidence, Code Review covers all writer PRs, Reviewer/QA pass, and integration PRs are merged. GitHub credentials available to Bloom can create repo, push, open/review/merge PRs. CI is GitHub Actions with stable job/check name ci; no existing branch protection is required and do not configure it. Production deployment is required through existing Luna/Bloom delivery. Slug equals repository name. Add root luna.project.json: schemaVersion 1, platform web, one runtime {id:web,type:server,routingMode:strip-prefix,workingDirectory:.,installCommand:pnpm install --frozen-lockfile,buildCommand:pnpm build,startCommand:pnpm start,healthPath:/health}, env.required:[]. Runtime provides PORT, LUNA_PUBLIC_BASE_PATH=/apps/<slug>/, LUNA_DATA_DIR=/srv/bloombouquet/apps/<slug>/data, LUNA_RELEASE_PATH, LUNA_START_COMMAND. Server binds supplied PORT, respects base path, stores SQLite at LUNA_DATA_DIR/pulseboard.sqlite. Data must survive releases/restarts. Backup/restore/retention automation is intentionally out of scope for this smoke and must be documented; use deterministic idempotent startup DB migrations. Public unauthenticated writes are intentional; no WAF/external rate limit is available or required, document this accepted limitation and do not block delivery. Canonical URL is https://bloombouquet.https.gsmsv.site/apps/${repositoryName}/ and health is https://bloombouquet.https.gsmsv.site/apps/${repositoryName}/health; successful delivery requires merged main SHA plus HTTP 2xx from both.`;
+
+            async function request(path, options = {}) {
+              const response = await fetch(`${base}${path}`, {
+                ...options,
+                headers: { ...headers, ...(options.headers || {}) },
+              });
+              const text = await response.text();
+              if (!response.ok) {
+                throw new Error(`${options.method || 'GET'} ${path} -> ${response.status}: ${text.slice(0, 1000)}`);
+              }
+              return text ? JSON.parse(text) : null;
+            }
+
+            async function main() {
+              console.log(`[live-e2e] fixture repository=${repositoryName}`);
+              const project = await request('/api/builder/projects', {
+                method: 'POST',
+                body: JSON.stringify({ brief, platform: 'web', features: [], templateId: 'live-e2e' }),
+              });
+              const run = await request(`/api/builder/projects/${project.id}/runs`, { method: 'POST' });
+              console.log(`[live-e2e] projectId=${project.id} runId=${run.id} status=${run.status}`);
+
+              let lastStatus = run.status;
+              const deadline = Date.now() + 105 * 60 * 1000;
+              while (Date.now() < deadline) {
+                await new Promise((resolve) => setTimeout(resolve, 15000));
+                const latest = await request(`/api/builder/projects/${project.id}/runs/${run.id}`);
+                if (latest.status !== lastStatus) {
+                  console.log(`[live-e2e] run status=${latest.status} workerId=${latest.workerId || '-'} claimCount=${latest.claimCount || 0}`);
+                  lastStatus = latest.status;
+                }
+                let snapshot = null;
+                try {
+                  snapshot = await request(`/api/builder/projects/${project.id}/runs/${run.id}/snapshot`);
+                } catch (error) {
+                  if (!String(error.message).includes('204')) throw error;
+                }
+                if (snapshot?.phase) {
+                  const payload = snapshot.payloadJson ? JSON.parse(snapshot.payloadJson) : null;
+                  const blocked = payload?.blockedReason || '-';
+                  console.log(`[live-e2e] snapshot phase=${snapshot.phase} version=${snapshot.version} blocked=${blocked}`);
+                }
+                if (latest.status === 'completed' || latest.status === 'failed') {
+                  const finalProject = await request(`/api/builder/projects/${project.id}`);
+                  console.log(`[live-e2e] terminal status=${latest.status}`);
+                  console.log(`[live-e2e] failureReason=${latest.failureReason || finalProject.failureReason || '-'}`);
+                  console.log(`[live-e2e] repository=${finalProject.repositoryFullName || '-'}`);
+                  console.log(`[live-e2e] preview=${finalProject.previewUrl || '-'}`);
+                  if (latest.status !== 'completed') process.exit(2);
+
+                  const finalRepositoryName = (finalProject.repositoryFullName || '').split('/').pop();
+                  if (!finalRepositoryName) throw new Error('completed project is missing repositoryFullName');
+                  const deliveryResponse = await fetch(`${base}/internal/luna/delivery/projects/${finalRepositoryName}`, {
+                    headers: { 'X-Luna-Delivery-Token': process.env.LUNA_DELIVERY_TOKEN },
+                  });
+                  const deliveryText = await deliveryResponse.text();
+                  if (!deliveryResponse.ok) throw new Error(`delivery lookup -> ${deliveryResponse.status}: ${deliveryText}`);
+                  const delivery = JSON.parse(deliveryText);
+                  console.log(`[live-e2e] deliveryState=${delivery.project?.deliveryState || delivery.deliveryState || '-'}`);
+                  console.log(`[live-e2e] publicUrl=${delivery.project?.publicUrl || delivery.publicUrl || '-'}`);
+                  const evaluationRunId = delivery.project?.bloomEvaluationRunId || delivery.bloomEvaluationRunId;
+                  console.log(`[live-e2e] bloomEvaluationRunId=${evaluationRunId || '-'}`);
+                  if (!evaluationRunId) throw new Error('delivery completed without Bloom evaluation run id');
+                  const evalDeadline = Date.now() + 20 * 60 * 1000;
+                  while (Date.now() < evalDeadline) {
+                    const evaluation = await fetch(`${base}/api/bloom-bouquet/public/evaluations/${evaluationRunId}`);
+                    const evaluationText = await evaluation.text();
+                    if (!evaluation.ok) throw new Error(`evaluation lookup -> ${evaluation.status}: ${evaluationText}`);
+                    const value = JSON.parse(evaluationText);
+                    console.log(`[live-e2e] evaluation status=${value.status || '-'} score=${value.finalScore ?? '-'} stars=${value.starRating ?? '-'}`);
+                    if (value.status === 'COMPLETED') {
+                      console.log('[live-e2e] ALL PASS production delivery + Bloom evaluation completed');
+                      return;
+                    }
+                    if (value.status === 'FAILED') throw new Error('Bloom evaluation failed');
+                    await new Promise((resolve) => setTimeout(resolve, 15000));
+                  }
+                  throw new Error('Timed out waiting for Bloom evaluation completion');
+                }
+              }
+              throw new Error('Timed out waiting for Builder run terminal state');
+            }
+
+            main().catch((error) => {
+              console.error(`[live-e2e] FAILED: ${error instanceof Error ? error.stack || error.message : String(error)}`);
+              process.exit(1);
+            });
+            NODE
