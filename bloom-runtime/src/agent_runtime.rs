@@ -370,6 +370,61 @@ fn prepare_agent_worktree(input: &AgentTaskRuntimeInput) -> Result<(PathBuf, Opt
     Ok((worktree, branch))
 }
 
+
+fn materialize_dependency_commits(
+    input: &AgentTaskRuntimeInput,
+    worktree: &Path,
+) -> Result<(), String> {
+    if !is_repository_writer(&input.role) {
+        return Ok(());
+    }
+
+    for dependency in &input.dependencies {
+        let Some(commit_sha) = dependency.commit_sha.as_deref() else {
+            continue;
+        };
+        if commit_sha.len() != 40 || !commit_sha.chars().all(|character| character.is_ascii_hexdigit()) {
+            return Err(format!(
+                "Dependency {} commit SHA 형식이 잘못되었습니다: {}",
+                dependency.task_id, commit_sha
+            ));
+        }
+
+        let merge = run_command(
+            "git",
+            &git_args(worktree, &["merge", "--no-edit", commit_sha]),
+        )?;
+        if merge.status.success() {
+            continue;
+        }
+
+        let unmerged = run_checked(
+            "git",
+            &git_args(worktree, &["diff", "--name-only", "--diff-filter=U"]),
+        )?;
+        if String::from_utf8_lossy(&unmerged.stdout).trim().is_empty() {
+            return Err(format!(
+                "Dependency {} commit {} merge 실패: {}",
+                dependency.task_id,
+                commit_sha,
+                output_detail(&merge)
+            ));
+        }
+
+        run_checked("git", &git_args(worktree, &["add", "-A"]))?;
+        let commit_message = format!("chore : materialize dependency {}", dependency.task_id);
+        run_checked(
+            "git",
+            &git_args(
+                worktree,
+                &["commit", "--no-verify", "-m", commit_message.as_str()],
+            ),
+        )?;
+    }
+
+    Ok(())
+}
+
 fn dependency_context(dependencies: &[DependencyArtifact]) -> String {
     if dependencies.is_empty() {
         return "- 없음".to_string();
@@ -406,7 +461,7 @@ fn agent_prompt(input: &AgentTaskRuntimeInput, branch: Option<&str>) -> String {
     let dependencies = dependency_context(&input.dependencies);
     let mode = if is_repository_writer(&input.role) {
         format!(
-            "You are a repository-changing worker. Your dedicated branch is `{}`. Inspect the actual repository first, implement the task in this worktree, and run applicable verification. Git metadata is protected inside the Codex sandbox, so do not run Git write commands such as add, commit, checkout, switch, reset, rebase, merge, or push, do not create or update a PR, and do not create temporary Git metadata to work around the sandbox. Read-only Git inspection is allowed. Luna Runtime will publish your completed work after this turn. Never push directly to `main` or `develop`.",
+            "You are a repository-changing worker. Your dedicated branch is `{}`. Inspect the actual repository first, implement the task in this worktree, and run applicable verification. Git metadata is protected inside the Codex sandbox, so do not run Git write commands such as add, commit, checkout, switch, reset, rebase, merge, or push, do not create or update a PR, and do not create temporary Git metadata to work around the sandbox. Read-only Git inspection is allowed. Luna Runtime has materialized completed dependency commits into this worktree before your turn; if Git conflict markers are present, resolve them semantically using the dependency context and verification instead of reporting that upstream work is missing. Luna Runtime will publish your completed work after this turn. Never push directly to `main` or `develop`.",
             branch.unwrap_or("unknown")
         )
     } else if is_review_role(&input.role) {
@@ -882,6 +937,7 @@ fn validate_input(input: &AgentTaskRuntimeInput) -> Result<(), String> {
 fn dispatch_agent_task_blocking(input: AgentTaskRuntimeInput) -> Result<AgentTaskRunResult, String> {
     validate_input(&input)?;
     let (worktree, branch) = prepare_agent_worktree(&input)?;
+    materialize_dependency_commits(&input, &worktree)?;
     let (thread_id, session_id, turn_id, mut report, events_path, stderr_path) =
         run_app_server_agent(&input, &worktree, branch.as_deref())?;
 
