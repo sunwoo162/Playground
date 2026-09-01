@@ -32,6 +32,7 @@
     "ts/productionGhCredentials.policy-test.ts",
     "ts/productionBrowserRuntime.policy-test.ts",
     "ts/agentRuntimeOwnedPublishing.policy-test.ts",
+    "ts/agentDependencyMaterialization.policy-test.ts",
     "ts/executionControl.ts",
     "ts/executionControl.policy-test.ts",
     "ts/orchestrationHistoryPolicy.ts",
