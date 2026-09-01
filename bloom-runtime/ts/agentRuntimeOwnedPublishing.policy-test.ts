@@ -19,7 +19,7 @@ assert(
   "Luna Runtime must stage the writer worktree itself",
 );
 assert(
-  source.includes('git_args(worktree, &["push", "-u", "origin", branch])'),
+  source.includes('git_args(worktree, &["push", "origin", branch])'),
   "Luna Runtime must push the dedicated agent branch itself",
 );
 assert(

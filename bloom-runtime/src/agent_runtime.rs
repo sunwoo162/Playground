@@ -348,7 +348,7 @@ fn prepare_agent_worktree(input: &AgentTaskRuntimeInput) -> Result<(PathBuf, Opt
                 "git",
                 &git_args(
                     &workspace,
-                    &["worktree", "add", "-b", branch_name.as_str(), path.as_str(), remote.as_str()],
+                    &["worktree", "add", "-b", branch_name.as_str(), "--no-track", path.as_str(), remote.as_str()],
                 ),
             )?;
         } else {
@@ -356,7 +356,7 @@ fn prepare_agent_worktree(input: &AgentTaskRuntimeInput) -> Result<(PathBuf, Opt
                 "git",
                 &git_args(
                     &workspace,
-                    &["worktree", "add", "-b", branch_name.as_str(), path.as_str(), "origin/develop"],
+                    &["worktree", "add", "-b", branch_name.as_str(), "--no-track", path.as_str(), "origin/develop"],
                 ),
             )?;
         }
@@ -839,7 +839,7 @@ fn publish_repository_writer_result(
         )?;
     }
 
-    run_checked("git", &git_args(worktree, &["push", "-u", "origin", branch]))?;
+    run_checked("git", &git_args(worktree, &["push", "origin", branch]))?;
 
     let pr_output = run_checked(
         "gh",
