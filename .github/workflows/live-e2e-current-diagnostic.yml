@@ -1,4 +1,4 @@
-# verify: temp cleanup 500115f
+# verify: inspect active task disk growth
 name: Live E2E Current Diagnostic
 
 on:
@@ -31,6 +31,8 @@ jobs:
             echo '=== LUNA TOOL STATE ==='
             du -xsh /tmp/luna-agent-tools 2>/dev/null || echo 'luna-agent-tools absent'
             find /tmp/luna-agent-tools -mindepth 2 -maxdepth 2 -type d -exec du -xsh {} \; 2>/dev/null | sort -h | tail -30 || true
+            echo '=== ACTIVE TASK DISK BREAKDOWN ==='
+            du -xsh /tmp/luna-agent-tools/builder-21/T-010/.[!.]* /tmp/luna-agent-tools/builder-21/T-010/* 2>/dev/null | sort -h | tail -40 || true
             echo '=== PM2 SAFE STATUS ==='
             pm2 jlist | node -e '
               let s=""; process.stdin.on("data",d=>s+=d); process.stdin.on("end",()=>{
