@@ -12,7 +12,7 @@ jobs:
   inspect-crash:
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect production runtime crash evidence
+      - name: Inspect active Builder Agent hang evidence
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ssh.gsmsv.site
@@ -31,21 +31,14 @@ jobs:
             echo '=== PM2 STATUS ==='
             pm2 status
             echo '=== BUILDER WORKER LOGS ==='
-            pm2 logs bloom-builder-worker --lines 350 --nostream 2>&1 | tail -350
-            echo '=== PB-003 STDERR ==='
-            tail -160 /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-17/agents/rose:accessibility/PB-003/app-server.stderr.log 2>&1
-            echo '=== PB-003 EVENTS TAIL ==='
-            tail -80 /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-17/agents/rose:accessibility/PB-003/app-server-events.jsonl 2>&1
-            echo '=== PB-006 STDERR ==='
-            tail -160 /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-17/agents/rose:security/PB-006/app-server.stderr.log 2>&1
-            echo '=== PB-006 EVENTS TAIL ==='
-            tail -80 /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-17/agents/rose:security/PB-006/app-server-events.jsonl 2>&1
-            echo '=== TOP RSS ==='
-            ps -eo pid,ppid,stat,%mem,%cpu,rss,etime,cmd --sort=-rss | head -35
+            pm2 logs bloom-builder-worker --lines 180 --nostream 2>&1 | tail -180
+            echo '=== T-002 STDERR ==='
+            tail -120 /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-18/agents/rose:accessibility/T-002/app-server.stderr.log 2>&1
+            echo '=== T-002 EVENTS TAIL ==='
+            tail -50 /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-18/agents/rose:accessibility/T-002/app-server-events.jsonl 2>&1
+            echo '=== T-003 ARTIFACTS ==='
+            find /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-18/agents -path '*T-003*' -type f -printf '%TY-%Tm-%Td %TH:%TM:%TS %p\n' 2>/dev/null | sort
+            echo '=== RUNTIME PROCESS SUMMARY ==='
+            ps -eo pid,ppid,stat,etime,%cpu,%mem,comm | grep -E 'bloom-runtime|codex|node|git|gh' | tail -80
             echo '=== KERNEL OOM EVIDENCE ==='
-            sudo journalctl -k --since '2026-09-01 05:40:00' --no-pager 2>/dev/null | grep -Ei 'oom|out of memory|killed process|memory cgroup' | tail -120
-            echo '=== DMESG OOM EVIDENCE ==='
-            sudo dmesg --ctime 2>/dev/null | grep -Ei 'oom|out of memory|killed process|memory cgroup' | tail -120
-            echo '=== BRIDGE BINARY ==='
-            ls -lh bloom-runtime/target/release/bloom-runtime-bridge
-            sha256sum bloom-runtime/target/release/bloom-runtime-bridge
+            sudo journalctl -k --since '2026-09-01 06:35:00' --no-pager 2>/dev/null | grep -Ei 'oom|out of memory|killed process|memory cgroup' | tail -80
