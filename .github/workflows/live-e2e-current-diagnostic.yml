@@ -39,8 +39,10 @@ jobs:
             const token = jwt.sign({ id: 'sunwoo162-live-e2e', login: 'sunwoo162', name: 'sunwoo162', avatar_url: '', type: 'access' }, process.env.JWT_SECRET, { expiresIn: '20m' });
             const headers = { Cookie: `playground_token=${token}` };
             async function get(path) {
+              const started = Date.now();
               const res = await fetch(`${base}${path}`, { headers });
               const text = await res.text();
+              console.log(JSON.stringify({ apiPath: path, status: res.status, elapsedMs: Date.now() - started }));
               if (!res.ok) throw new Error(`${path} -> ${res.status}: ${text.slice(0, 500)}`);
               return text ? JSON.parse(text) : null;
             }
@@ -65,3 +67,25 @@ jobs:
             NODE
             echo '=== ACTIVE AGENT ARTIFACTS ==='
             find /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-19/agents -type f -printf '%T@ %TY-%Tm-%Td %TH:%TM:%TS %p\n' 2>/dev/null | sort -nr | head -40 || true
+            echo '=== PB-012 EVENT SUMMARY ==='
+            node <<'NODE'
+            const fs = require('node:fs');
+            const path = '/home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-19/agents/rose:documentation/PB-012/app-server-events.jsonl';
+            if (!fs.existsSync(path)) { console.log('PB-012 events missing'); process.exit(0); }
+            const lines = fs.readFileSync(path, 'utf8').trim().split(/\r?\n/).slice(-30);
+            for (const line of lines) {
+              try {
+                const e = JSON.parse(line);
+                const p = e.params || {};
+                console.log(JSON.stringify({ method: e.method || e.type || null, id: e.id ?? null, turnStatus: p.turn?.status || p.status || null, itemType: p.item?.type || null, error: p.error?.message || e.error?.message || null }));
+              } catch { console.log('unparsed-event-line'); }
+            }
+            NODE
+            echo '=== PB-012 STDERR TAIL ==='
+            tail -n 60 '/home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-19/agents/rose:documentation/PB-012/app-server.stderr.log' 2>/dev/null || true
+            echo '=== RUNTIME PROCESSES ==='
+            ps -eo pid,ppid,stat,etime,pcpu,pmem,cmd | grep -E 'bloom-builder-worker|luna-agent-bridge|codex app-server|codex.*app-server' | grep -v grep || true
+            echo '=== PB-012 WORKTREE CANDIDATES ==='
+            find /home/ubuntu/bloom-workspaces -maxdepth 6 -type d \( -name '*PB-012*' -o -name '*documentation*' \) -print 2>/dev/null | head -40 || true
+            echo '=== BUILDER LOG PB-012/ERROR TAIL ==='
+            pm2 logs bloom-builder-worker --lines 180 --nostream 2>&1 | grep -E 'PB-012|documentation|error|Error|failed|blocked|bridge|turn' | tail -120 || true
