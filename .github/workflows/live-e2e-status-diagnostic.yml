@@ -1,0 +1,78 @@
+name: Live E2E Status Diagnostic
+
+on:
+  push:
+    branches:
+      - test/luna-live-e2e-diagnostic-20260901
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect production Builder live E2E state
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          command_timeout: 5m
+          script: |
+            set -eu
+            cd /home/ubuntu/bloombouquet
+            node <<'NODE'
+            require('dotenv').config({ path: '.env' });
+            const jwt = require('jsonwebtoken');
+            const base = 'http://127.0.0.1:3000';
+            const token = jwt.sign({
+              id: 'sunwoo162-live-e2e',
+              login: 'sunwoo162',
+              name: 'sunwoo162',
+              avatar_url: '',
+              type: 'access',
+            }, process.env.JWT_SECRET, { expiresIn: '15m' });
+            const headers = { Cookie: `playground_token=${token}` };
+
+            async function get(path) {
+              const response = await fetch(`${base}${path}`, { headers });
+              const text = await response.text();
+              if (!response.ok) throw new Error(`${path} -> ${response.status}: ${text.slice(0, 1000)}`);
+              return text ? JSON.parse(text) : null;
+            }
+
+            async function main() {
+              const projects = await get('/api/builder/projects');
+              const smokeProjects = projects
+                .filter((project) => String(project.brief || '').includes('[BLOOM-E2E-SMOKE]'))
+                .sort((a, b) => Number(b.id) - Number(a.id));
+              const project = smokeProjects[0];
+              if (!project) throw new Error('No BLOOM-E2E-SMOKE project found');
+              console.log(`[diag] projectId=${project.id} status=${project.status} repo=${project.repositoryFullName || '-'} createdAt=${project.createdAt}`);
+              const runs = await get(`/api/builder/projects/${project.id}/runs`);
+              const run = [...runs].sort((a, b) => Number(b.id) - Number(a.id))[0];
+              if (!run) throw new Error(`No run found for project ${project.id}`);
+              console.log(`[diag] runId=${run.id} status=${run.status} workerId=${run.workerId || '-'} claimCount=${run.claimCount || 0} failureReason=${run.failureReason || '-'}`);
+              const response = await fetch(`${base}/api/builder/projects/${project.id}/runs/${run.id}/snapshot`, { headers });
+              if (response.status === 204) {
+                console.log('[diag] snapshot=none');
+                return;
+              }
+              const text = await response.text();
+              if (!response.ok) throw new Error(`snapshot -> ${response.status}: ${text.slice(0, 1000)}`);
+              const snapshot = JSON.parse(text);
+              const payload = snapshot.payloadJson ? JSON.parse(snapshot.payloadJson) : null;
+              console.log(`[diag] phase=${snapshot.phase || '-'} version=${snapshot.version || '-'} blocked=${payload?.blockedReason || '-'}`);
+              const tasks = Array.isArray(payload?.tasks) ? payload.tasks : [];
+              for (const task of tasks) {
+                console.log(`[diag-task] ${task.id || task.taskId || '-'} role=${task.role || '-'} status=${task.status || '-'} lastError=${task.lastError || '-'} blockers=${JSON.stringify(task.blockers || [])}`);
+              }
+            }
+
+            main().catch((error) => {
+              console.error(error.stack || error.message || String(error));
+              process.exit(1);
+            });
+            NODE
