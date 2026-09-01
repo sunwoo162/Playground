@@ -26,40 +26,67 @@ jobs:
             cd /home/ubuntu/bloombouquet
             export PATH="$HOME/.local/bin:$HOME/.llama/bin:$HOME/.local/node_modules/.bin:$PATH"
 
-            echo '=== TIME ==='
+            echo '=== TIME / DISK ==='
             date -u
-            echo '=== DISK ==='
             df -hT /
 
-            echo '=== PM2 BUILDER ==='
-            pm2 jlist | node -e '
-              let s=""; process.stdin.on("data",d=>s+=d); process.stdin.on("end",()=>{
-                const p=JSON.parse(s).find(x=>x.name==="bloom-builder-worker");
-                console.log(JSON.stringify({pid:p?.pid,status:p?.pm2_env?.status,restarts:p?.pm2_env?.restart_time,uptime:p?.pm2_env?.pm_uptime}));
-              });'
-
-            echo '=== PROCESS TREE ==='
+            echo '=== BUILDER PROCESS TREE ==='
             builder_pid="$(pm2 pid bloom-builder-worker 2>/dev/null | tail -1 || true)"
             echo "builder_pid=${builder_pid:-unknown}"
             if [ -n "${builder_pid:-}" ] && [ "${builder_pid}" != "0" ]; then
               pstree -ap "$builder_pid" 2>/dev/null || true
             fi
+            ps -eo pid=,ppid=,etime=,stat=,%cpu=,%mem=,wchan:24=,args= | grep -E 'bloom-runtime-b|codex app-server|codex-code-mode' | grep -v 'grep -E' || true
 
-            echo '=== RELEVANT PROCESSES ==='
-            ps -eo pid=,ppid=,etime=,stat=,args= | grep -E 'luna-agent|builder-25|PB-001|codex|claude|gemini|node' | grep -v 'grep -E' | tail -120 || true
-
-            echo '=== ACTIVE TASK TOOL DIR ==='
+            echo '=== PB-001 TOOL STATE ==='
             task_root='/tmp/luna-agent-tools/builder-25/PB-001'
             if [ -d "$task_root" ]; then
               du -xsh "$task_root" 2>/dev/null || true
-              find "$task_root" -maxdepth 2 -mindepth 1 -printf '%TY-%Tm-%TdT%TH:%TM:%TSZ %y %p\n' 2>/dev/null | sort | tail -120 || true
-            else
-              echo "missing $task_root"
-              find /tmp/luna-agent-tools -maxdepth 2 -mindepth 1 -type d -path '*builder-25*' -print 2>/dev/null | head -80 || true
+              find "$task_root" -maxdepth 2 -mindepth 1 -printf '%TY-%Tm-%TdT%TH:%TM:%TSZ %y %p\n' 2>/dev/null | sort | tail -80 || true
             fi
 
-            echo '=== BUILDER LOG TAIL ==='
-            pm2 logs bloom-builder-worker --lines 180 --nostream 2>&1 | tail -220 || true
+            echo '=== PB-001 APP-SERVER EVENT FILES ==='
+            mapfile -t event_files < <(find /home/ubuntu /srv/bloombouquet /tmp -type f -path '*/.luna-runtime/projects/*/*/PB-001/app-server-events.jsonl' -print 2>/dev/null | head -10)
+            if [ "${#event_files[@]}" -eq 0 ]; then
+              echo 'PB-001 event file not found'
+            fi
+            for events in "${event_files[@]}"; do
+              echo "events=$events"
+              stat -c 'size=%s modified=%y' "$events" 2>/dev/null || true
+              EVENTS_FILE="$events" node <<'NODE'
+            const fs = require('fs');
+            const file = process.env.EVENTS_FILE;
+            const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/).filter(Boolean);
+            console.log(`eventCount=${lines.length}`);
+            for (const line of lines.slice(-60)) {
+              let v;
+              try { v = JSON.parse(line); } catch { console.log(JSON.stringify({parseError:true})); continue; }
+              const p = v && typeof v.params === 'object' && v.params ? v.params : {};
+              const item = p && typeof p.item === 'object' && p.item ? p.item : {};
+              const turn = p && typeof p.turn === 'object' && p.turn ? p.turn : {};
+              const error = v && typeof v.error === 'object' && v.error ? v.error : {};
+              const out = {
+                method: typeof v.method === 'string' ? v.method : null,
+                responseId: v.id ?? null,
+                itemType: typeof item.type === 'string' ? item.type : null,
+                itemStatus: typeof item.status === 'string' ? item.status : null,
+                itemName: typeof item.name === 'string' ? item.name : null,
+                turnId: typeof turn.id === 'string' ? turn.id : null,
+                turnStatus: typeof turn.status === 'string' ? turn.status : null,
+                hasAgentText: item.type === 'agentMessage' && typeof item.text === 'string',
+                errorCode: error.code ?? null,
+                errorMessage: typeof error.message === 'string' ? error.message.slice(0, 240) : null,
+              };
+              console.log(JSON.stringify(out));
+            }
+            NODE
+              stderr="$(dirname "$events")/app-server.stderr.log"
+              if [ -f "$stderr" ]; then
+                echo "stderr=$stderr"
+                stat -c 'stderr_size=%s modified=%y' "$stderr" 2>/dev/null || true
+                tail -30 "$stderr" 2>/dev/null | sed -E 's/(ghp_|github_pat_|sk-|Bearer )[A-Za-z0-9_.=-]+/[REDACTED]/g' || true
+              fi
+            done
 
             echo '=== RUN SNAPSHOT ==='
             node <<'NODE'
