@@ -1,0 +1,93 @@
+name: Live E2E Night Monitor
+
+on:
+  push:
+    branches:
+      - test/luna-live-e2e-monitor-20260901-night
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect latest production Builder run
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          command_timeout: 8m
+          script: |
+            set -eu
+            cd /home/ubuntu/bloombouquet
+            export PATH="$HOME/.local/bin:$HOME/.llama/bin:$HOME/.local/node_modules/.bin:$PATH"
+            echo '=== DISK ==='
+            df -hT /
+            echo '=== PM2 ==='
+            pm2 jlist | node -e '
+              let s=""; process.stdin.on("data",d=>s+=d); process.stdin.on("end",()=>{
+                const rows=JSON.parse(s);
+                for (const n of ["backend","bloom-builder-worker","bloom-evaluator-worker","bloom-evaluator-llm"]) {
+                  const p=rows.find(x=>x.name===n);
+                  console.log(JSON.stringify({name:n,pid:p?.pid,status:p?.pm2_env?.status,restarts:p?.pm2_env?.restart_time}));
+                }
+              });'
+            node <<'NODE'
+            require('dotenv').config({ path: '.env' });
+            const jwt = require('jsonwebtoken');
+            const base = 'http://127.0.0.1:3000';
+            const token = jwt.sign(
+              { id: 'sunwoo162-live-e2e', login: 'sunwoo162', name: 'sunwoo162', avatar_url: '', type: 'access' },
+              process.env.JWT_SECRET,
+              { expiresIn: '10m' },
+            );
+            const headers = { Cookie: `playground_token=${token}` };
+            async function get(path) {
+              const res = await fetch(`${base}${path}`, { headers });
+              const text = await res.text();
+              if (!res.ok) throw new Error(`${path} -> ${res.status}: ${text.slice(0, 500)}`);
+              return text ? JSON.parse(text) : null;
+            }
+            async function main() {
+              const raw = await get('/api/builder/projects');
+              const projects = (Array.isArray(raw) ? raw : (raw?.content || []))
+                .slice().sort((a,b) => Number(b.id || 0) - Number(a.id || 0));
+              const project = projects[0];
+              if (!project) { console.log('NO_BUILDER_PROJECT'); return; }
+              const runsRaw = await get(`/api/builder/projects/${project.id}/runs`);
+              const runs = (Array.isArray(runsRaw) ? runsRaw : (runsRaw?.content || []))
+                .slice().sort((a,b) => Number(b.id || 0) - Number(a.id || 0));
+              const run = runs[0];
+              if (!run) { console.log(JSON.stringify({projectId:project.id,noRun:true})); return; }
+              const snapshot = await get(`/api/builder/projects/${project.id}/runs/${run.id}/snapshot`);
+              const payload = snapshot?.payloadJson ? JSON.parse(snapshot.payloadJson) : null;
+              console.log('=== LATEST BUILDER ===');
+              console.log(JSON.stringify({
+                projectId: project.id,
+                runId: run.id,
+                projectStatus: project.status,
+                runStatus: run.status,
+                failureReason: run.failureReason || project.failureReason || null,
+                heartbeatAt: run.heartbeatAt,
+                phase: snapshot?.phase,
+                version: snapshot?.version,
+                repository: project.repositoryFullName || payload?.repository?.repository || null,
+              }, null, 2));
+              console.log('=== TASKS ===');
+              for (const task of payload?.taskRuns || []) {
+                console.log(JSON.stringify({
+                  taskId: task.taskId,
+                  role: task.role,
+                  status: task.status,
+                  attempts: task.attempts,
+                  pr: task.pullRequestNumber,
+                  commit: task.commitSha,
+                  lastError: task.lastError,
+                }));
+              }
+            }
+            main().catch((error) => { console.error(error.stack || String(error)); process.exit(1); });
+            NODE
