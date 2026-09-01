@@ -60,12 +60,15 @@ jobs:
             function inc(map, key) { map.set(key, (map.get(key) || 0) + 1); }
             function numericShape(value) {
               if (typeof value === 'number' && Number.isFinite(value)) return value;
-              if (Array.isArray(value)) return value.map(numericShape).filter(v => v !== undefined);
+              if (Array.isArray(value)) {
+                const out = value.map(numericShape).filter(v => v !== undefined);
+                return out.length ? out : undefined;
+              }
               if (value && typeof value === 'object') {
                 const out = {};
                 for (const [k,v] of Object.entries(value)) {
                   const n = numericShape(v);
-                  if (n !== undefined && (!(Array.isArray(n)) || n.length) && (!(n && typeof n === 'object' && !Array.isArray(n))) || Object.keys(n).length)) out[k] = n;
+                  if (n !== undefined) out[k] = n;
                 }
                 return Object.keys(out).length ? out : undefined;
               }
@@ -87,18 +90,16 @@ jobs:
                   completedAgentMessageBytes += Buffer.byteLength(item.text, 'utf8');
                 }
               }
-              if ((method === 'item/agentMessage/delta' || method === 'item/reasoning/summaryTextDelta') && typeof params.delta === 'string') {
-                if (method === 'item/agentMessage/delta') {
-                  deltaCount++;
-                  const bytes = Buffer.byteLength(params.delta, 'utf8');
-                  deltaBytes += bytes;
-                  maxDeltaBytes = Math.max(maxDeltaBytes, bytes);
-                  const hash = crypto.createHash('sha256').update(params.delta).digest('hex').slice(0,16);
-                  deltaHashes.set(hash, (deltaHashes.get(hash) || 0) + 1);
-                  if (typeof params.itemId === 'string') agentItemIds.add(params.itemId);
-                  consecutiveDelta++;
-                  maxConsecutiveDelta = Math.max(maxConsecutiveDelta, consecutiveDelta);
-                }
+              if (method === 'item/agentMessage/delta' && typeof params.delta === 'string') {
+                deltaCount++;
+                const bytes = Buffer.byteLength(params.delta, 'utf8');
+                deltaBytes += bytes;
+                maxDeltaBytes = Math.max(maxDeltaBytes, bytes);
+                const hash = crypto.createHash('sha256').update(params.delta).digest('hex').slice(0,16);
+                deltaHashes.set(hash, (deltaHashes.get(hash) || 0) + 1);
+                if (typeof params.itemId === 'string') agentItemIds.add(params.itemId);
+                consecutiveDelta++;
+                maxConsecutiveDelta = Math.max(maxConsecutiveDelta, consecutiveDelta);
               } else {
                 consecutiveDelta = 0;
                 lastNonDeltaIndex = i;
