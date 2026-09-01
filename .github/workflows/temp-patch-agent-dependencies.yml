@@ -10,7 +10,6 @@ permissions:
 
 jobs:
   patch:
-    if: github.event.head_commit.message != 'fix : materialize agent dependency commits'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -113,5 +112,3 @@ fn materialize_dependency_commits(
           git add bloom-runtime/src/agent_runtime.rs
           git commit -m 'fix : materialize agent dependency commits'
           git push origin HEAD:fix/agent-dependency-materialization
-
-# trigger after workflow registration
