@@ -24,7 +24,7 @@ jobs:
           script: |
             set -eu
             echo '=== ACTIVE LUNA AGENT PROCESSES ==='
-            active="$(pgrep -af 'luna-agent-bridge|codex app-server' || true)"
+            active="$(ps -eo pid=,comm=,args= | awk '$2 == "luna-agent-bridge" || ($2 == "codex" && $0 ~ /app-server/) { print }')"
             if [ -n "$active" ]; then
               printf '%s\n' "$active"
               echo 'REFUSE_CLEANUP_ACTIVE_AGENT'
