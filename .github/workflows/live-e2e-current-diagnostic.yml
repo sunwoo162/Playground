@@ -12,7 +12,7 @@ jobs:
   inspect:
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect production disk exhaustion
+      - name: Break down production root disk usage
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ssh.gsmsv.site
@@ -20,30 +20,34 @@ jobs:
           username: ubuntu
           password: ${{ secrets.SSH_PASSWORD }}
           timeout: 60s
-          command_timeout: 8m
+          command_timeout: 12m
           script: |
             set +e
             echo '=== NOW ==='
             date -Is
-            echo '=== FILESYSTEM SPACE ==='
-            df -hT
-            echo '=== FILESYSTEM INODES ==='
-            df -i
-            echo '=== TOP /HOME/UBUNTU ==='
-            du -xhd1 /home/ubuntu 2>/dev/null | sort -h | tail -30
-            echo '=== TOP BLOOM WORKSPACES ==='
-            du -xhd2 /home/ubuntu/bloom-workspaces 2>/dev/null | sort -h | tail -50
-            echo '=== TOP BLOOMBOUQUET ==='
-            du -xhd2 /home/ubuntu/bloombouquet 2>/dev/null | sort -h | tail -40
-            echo '=== TOP PM2 ==='
-            du -xhd2 /home/ubuntu/.pm2 2>/dev/null | sort -h | tail -40
-            echo '=== TOP CACHE ==='
-            du -xhd2 /home/ubuntu/.cache 2>/dev/null | sort -h | tail -40
-            echo '=== LARGE FILES HOME >= 250M ==='
-            find /home/ubuntu -xdev -type f -size +250M -printf '%s %TY-%Tm-%Td %TH:%TM:%TS %p\n' 2>/dev/null | sort -n | tail -50
-            echo '=== WORKSPACE PROJECT SIZES ==='
-            du -xsh /home/ubuntu/bloom-workspaces/* 2>/dev/null | sort -h | tail -50
-            echo '=== LUNA RUNTIME PROJECT SIZES ==='
-            du -xsh /home/ubuntu/bloom-workspaces/.luna-runtime/projects/* 2>/dev/null | sort -h | tail -50
-            echo '=== DISK RELATED KERNEL/JOURNAL ==='
-            sudo journalctl --since '2026-09-01 08:15:00' --no-pager 2>/dev/null | grep -Ei 'ENOSPC|no space left|filesystem|ext4|I/O error' | tail -100
+            echo '=== ROOT SPACE ==='
+            df -hT /
+            echo '=== ROOT TOP LEVEL ==='
+            sudo du -xhd1 / 2>/dev/null | sort -h | tail -30
+            echo '=== VAR TOP LEVEL ==='
+            sudo du -xhd1 /var 2>/dev/null | sort -h | tail -30
+            echo '=== VAR LIB ==='
+            sudo du -xhd2 /var/lib 2>/dev/null | sort -h | tail -50
+            echo '=== VAR LOG ==='
+            sudo du -xhd2 /var/log 2>/dev/null | sort -h | tail -50
+            echo '=== SRV ==='
+            sudo du -xhd3 /srv 2>/dev/null | sort -h | tail -60
+            echo '=== USR ==='
+            sudo du -xhd1 /usr 2>/dev/null | sort -h | tail -30
+            echo '=== OPT ==='
+            sudo du -xhd2 /opt 2>/dev/null | sort -h | tail -30
+            echo '=== DOCKER SYSTEM DF ==='
+            docker system df 2>&1 || sudo docker system df 2>&1 || true
+            echo '=== DOCKER VAR LIB ==='
+            sudo du -xhd2 /var/lib/docker 2>/dev/null | sort -h | tail -50
+            echo '=== JOURNAL DISK ==='
+            sudo journalctl --disk-usage 2>&1 || true
+            echo '=== DELETED OPEN FILES ==='
+            sudo lsof +L1 2>/dev/null | awk 'NR==1 || $7 ~ /^[0-9]+$/ {print}' | sort -k7,7n | tail -40
+            echo '=== LARGE ROOT FILES >= 500M ==='
+            sudo find / -xdev -type f -size +500M -printf '%s %TY-%Tm-%Td %TH:%TM:%TS %p\n' 2>/dev/null | sort -n | tail -60
