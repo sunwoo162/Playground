@@ -1,0 +1,70 @@
+name: Apply PM Topology Repair
+
+on:
+  push:
+    branches:
+      - test/luna-live-e2e-diagnostic-current
+    paths:
+      - .github/workflows/apply-pm-topology-repair.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/pm-topology-repair
+          fetch-depth: 0
+
+      - name: Apply minimal repair-boundary fix
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('bloom-worker/run.js')
+          text = path.read_text()
+
+          old_import = 'const { createObservedHeadlessBuilderExecutor } = require("../.tmp/bloom-worker/observedHeadlessBuilderExecutor.js");\n'
+          new_import = old_import + 'const { prepareOrchestrationPlan } = require("../.tmp/bloom-worker/orchestrationCore.js");\n'
+          if text.count(old_import) != 1:
+              raise SystemExit('unexpected observed executor import count')
+          text = text.replace(old_import, new_import, 1)
+
+          old_markers = '    "PM 계획",\n    "Task ID",\n'
+          new_markers = '    "PM 계획",\n    "PM Task DAG",\n    "제품 마케팅/문서화 DAG",\n    "Task ID",\n'
+          if text.count(old_markers) != 1:
+              raise SystemExit('unexpected PM semantic marker block count')
+          text = text.replace(old_markers, new_markers, 1)
+
+          old_call = '''        return await call({
+          command: "planProject",
+          ...input,
+          request: buildPmPlanningRequest(input.request, validationError),
+        });'''
+          new_call = '''        const result = await call({
+          command: "planProject",
+          ...input,
+          request: buildPmPlanningRequest(input.request, validationError),
+        });
+        result.plan = prepareOrchestrationPlan(result.plan);
+        return result;'''
+          if text.count(old_call) != 1:
+              raise SystemExit('unexpected PM call block count')
+          text = text.replace(old_call, new_call, 1)
+
+          path.write_text(text)
+          PY
+          git diff --check
+          git diff -- bloom-worker/run.js
+
+      - name: Commit fix
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add bloom-worker/run.js
+          git commit -m "fix : repair PM review topology inside retry"
+          git push origin HEAD:fix/pm-topology-repair
