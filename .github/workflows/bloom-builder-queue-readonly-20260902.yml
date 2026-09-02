@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Inspect builder 38 live attempt
+      - name: Inspect builder 38 repaired PM DAG
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ssh.gsmsv.site
@@ -27,6 +27,7 @@ jobs:
             echo "[trace] utc=$(date -u +%Y-%m-%dT%H:%M:%SZ) head=$(git rev-parse HEAD)"
             node <<'NODE'
             require('dotenv').config({ path: '.env' });
+            const fs = require('node:fs');
             const jwt = require('jsonwebtoken');
             const base = 'http://127.0.0.1:3000';
             const token = jwt.sign(
@@ -44,24 +45,22 @@ jobs:
             async function main() {
               const run = await get('/api/builder/projects/38/runs/38');
               const snapshot = await get('/api/builder/projects/38/runs/38/snapshot');
-              const payload = snapshot?.payloadJson ? JSON.parse(snapshot.payloadJson) : null;
               console.log(`[run] status=${run?.status || '-'} failure=${run?.failureReason || '-'} phase=${snapshot?.phase || '-'} version=${snapshot?.version ?? '-'}`);
-              console.log(`[repository] ${JSON.stringify(payload?.repository || null)}`);
-              console.log(`[blockedReason] ${payload?.blockedReason || '-'}`);
-              for (const task of payload?.taskRuns || []) {
-                console.log(`[task] id=${task.taskId} role=${task.role} status=${task.status} attempts=${task.attempts} branch=${task.branchName || '-'} commit=${task.commitSha || '-'} pr=${task.pullRequestNumber || '-'} session=${task.sessionId || '-'} turn=${task.turnId || '-'} events=${task.eventsPath || '-'} stderr=${task.stderrPath || '-'} lastError=${task.lastError || '-'} blockers=${JSON.stringify(task.blockers || [])}`);
-                if (task.verification?.length) console.log(`[verification:${task.taskId}] ${JSON.stringify(task.verification)}`);
+              const planPath = '/home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-38/pm/pm-plan.json';
+              if (!fs.existsSync(planPath)) {
+                console.log('[pm-plan] missing');
+                return;
+              }
+              const plan = JSON.parse(fs.readFileSync(planPath, 'utf8'));
+              console.log(`[pm-plan] repository=${JSON.stringify(plan.repository || null)} tasks=${plan.tasks?.length || 0}`);
+              for (const task of plan.tasks || []) {
+                console.log(`[pm-task] id=${task.id || '-'} slug=${task.taskSlug || '-'} role=${task.agentRole || task.role || '-'} deps=${JSON.stringify(task.dependencies || task.dependsOn || [])} title=${JSON.stringify(task.title || '')}`);
               }
             }
             main().catch((error) => { console.error(`[inspect] FAILED ${error.stack || error}`); process.exit(1); });
             NODE
-            ROOT=/home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-38
-            echo '[builder-38-files]'
-            if [ -d "$ROOT" ]; then
-              find "$ROOT" -maxdepth 8 -type f -printf '%TY-%Tm-%TdT%TH:%TM:%TSZ %s %p\n' 2>/dev/null | sort | tail -n 160
-            else
-              echo '[missing-root]'
-            fi
+            echo '[validator-source-hits]'
+            grep -RIn --exclude-dir=node_modules --exclude-dir=.git -E 'Documentation Agent Task|제품 마케팅/문서화 DAG|validateLiveE2EImplementationPlan|Marketing Agent' . | head -n 120 || true
             echo '[llama-current]'
             node <<'NODE'
             const { execFileSync } = require('node:child_process');
@@ -69,5 +68,3 @@ jobs:
             const p = list.find((x) => x.name === 'bloom-evaluator-llm');
             console.log(JSON.stringify({ pid: p?.pid || 0, status: p?.pm2_env?.status, restart_time: p?.pm2_env?.restart_time, max_memory_restart: p?.pm2_env?.max_memory_restart, memory: p?.monit?.memory, cpu: p?.monit?.cpu }, null, 2));
             NODE
-            echo '[builder-worker-logs]'
-            pm2 logs bloom-builder-worker --lines 320 --nostream 2>&1 | grep -E 'builder run 38|blocked|Runtime|runtime|Agent|task|Local model|failed|error|tool' | tail -n 220 || true
