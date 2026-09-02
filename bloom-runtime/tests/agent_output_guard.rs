@@ -14,10 +14,8 @@ mod runtime_under_test {
             .map_err(|error| error.to_string())?
             .as_nanos();
         let project_id = format!("builder-output-guard-{stamp}");
-        let root = env::temp_dir().join(format!(
-            "luna-output-guard-{}-{stamp}",
-            std::process::id()
-        ));
+        let root =
+            env::temp_dir().join(format!("luna-output-guard-{}-{stamp}", std::process::id()));
         let workspace = root.join("workspace");
         let worktree = root.join("worktree");
         let bin = root.join("bin");
@@ -50,8 +48,7 @@ printf '%s\n' '{"method":"turn/completed","params":{"turn":{"id":"turn-test","st
             .map_err(|error| error.to_string())?
             .permissions();
         permissions.set_mode(0o755);
-        std::fs::set_permissions(&fake_codex, permissions)
-            .map_err(|error| error.to_string())?;
+        std::fs::set_permissions(&fake_codex, permissions).map_err(|error| error.to_string())?;
 
         let original_path = env::var_os("PATH").unwrap_or_default();
         let mut path_entries = vec![bin];
