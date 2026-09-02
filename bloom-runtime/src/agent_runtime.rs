@@ -8,6 +8,7 @@ use std::{
 };
 
 const MAX_JSONL_LINE_BYTES: usize = 10 * 1024 * 1024;
+const MAX_AGENT_MESSAGE_DELTA_BYTES: usize = 512 * 1024;
 
 const AGENT_RESULT_SCHEMA: &str = r#"{
   "type": "object",
@@ -725,10 +726,29 @@ fn run_app_server_agent(
         let mut final_message: Option<String> = None;
         let mut turn_status: Option<String> = None;
         let mut turn_error: Option<String> = None;
+        let mut streamed_agent_message_bytes = 0usize;
 
         loop {
             let value = read_json_line(&mut reader, &mut events_log)?;
             let method = value.get("method").and_then(Value::as_str).unwrap_or_default();
+            if method == "item/agentMessage/delta" {
+                if let Some(delta) = value
+                    .get("params")
+                    .and_then(|params| params.get("delta"))
+                    .and_then(Value::as_str)
+                {
+                    streamed_agent_message_bytes = streamed_agent_message_bytes
+                        .checked_add(delta.len())
+                        .ok_or_else(|| "Codex Agent 메시지 누적 출력 안전 한도 계산이 overflow 되었습니다.".to_string())?;
+                    if streamed_agent_message_bytes > MAX_AGENT_MESSAGE_DELTA_BYTES {
+                        return Err(format!(
+                            "Codex Agent 메시지 누적 출력 안전 한도를 초과했습니다. bytes={}, limit={}",
+                            streamed_agent_message_bytes,
+                            MAX_AGENT_MESSAGE_DELTA_BYTES
+                        ));
+                    }
+                }
+            }
             if method == "item/completed" {
                 if let Some(item) = value.get("params").and_then(|params| params.get("item")) {
                     if item.get("type").and_then(Value::as_str) == Some("agentMessage") {
