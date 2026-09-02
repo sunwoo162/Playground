@@ -138,6 +138,43 @@ const UX_RESEARCH_SIGNALS = [
   "user interview",
 ];
 
+const CORE_BACKEND_IDENTITY_SIGNALS = [
+  "backend",
+  "api",
+  "server",
+  "endpoint",
+  "service",
+  "controller",
+  "handler",
+  "route",
+];
+
+const CORE_FRONTEND_IDENTITY_SIGNALS = [
+  "frontend",
+  "client",
+  "component",
+  "page",
+  "screen",
+  "view",
+  "ui",
+];
+
+const CORE_DESIGNER_IDENTITY_SIGNALS = [
+  "design",
+  "designer",
+  "visual",
+  "interaction",
+  "layout",
+  "prototype",
+  "wireframe",
+];
+
+function normalizedTaskIdentity(task: ProjectTaskPlan) {
+  return [task.taskSlug, task.title]
+    .join(" ")
+    .toLowerCase();
+}
+
 function normalizedTaskText(task: ProjectTaskPlan) {
   return [task.taskSlug, task.title, task.summary, ...task.acceptanceCriteria]
     .join(" ")
@@ -148,9 +185,10 @@ function matchesAny(text: string, signals: readonly string[]) {
   return signals.some((signal) => text.includes(signal));
 }
 
-function specialistRoleForTask(task: ProjectTaskPlan): ExecutableAgentRole | null {
-  const text = normalizedTaskText(task);
-
+function specialistRoleForText(
+  task: ProjectTaskPlan,
+  text: string,
+): ExecutableAgentRole | null {
   if ((task.role === "frontend" || task.role === "designer")
     && matchesAny(text, ACCESSIBILITY_SIGNALS)) {
     return "accessibility";
@@ -175,6 +213,31 @@ function specialistRoleForTask(task: ProjectTaskPlan): ExecutableAgentRole | nul
   if (matchesAny(text, API_INTEGRATION_SIGNALS)) return "api-integration";
   if (matchesAny(text, TEST_AUTOMATION_SIGNALS)) return "test-automation";
   return null;
+}
+
+function hasCoreImplementationIdentity(task: ProjectTaskPlan, identityText: string) {
+  if (task.role === "backend") {
+    return matchesAny(identityText, CORE_BACKEND_IDENTITY_SIGNALS);
+  }
+  if (task.role === "frontend") {
+    return matchesAny(identityText, CORE_FRONTEND_IDENTITY_SIGNALS);
+  }
+  if (task.role === "designer") {
+    return matchesAny(identityText, CORE_DESIGNER_IDENTITY_SIGNALS);
+  }
+  return false;
+}
+
+function specialistRoleForTask(task: ProjectTaskPlan): ExecutableAgentRole | null {
+  const identityText = normalizedTaskIdentity(task);
+  const explicitSpecialistRole = specialistRoleForText(task, identityText);
+  if (explicitSpecialistRole) return explicitSpecialistRole;
+
+  if (hasCoreImplementationIdentity(task, identityText)) {
+    return null;
+  }
+
+  return specialistRoleForText(task, normalizedTaskText(task));
 }
 
 export function routeSpecialistAgentTasks(plan: ProjectPlan): ProjectPlan {
