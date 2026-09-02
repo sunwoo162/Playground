@@ -66,6 +66,7 @@
     "ts/builderWorkerAdapter.policy-test.ts",
     "ts/headlessBuilderExecutor.ts",
     "ts/headlessBuilderExecutor.policy-test.ts",
+    "ts/intakeMissingInputsNormalization.policy-test.ts",
     "ts/nonWriterPublicationMetadata.policy-test.ts",
     "ts/headlessCrashRecovery.policy-test.ts",
     "ts/lunaReleasePromotion.policy-test.ts",

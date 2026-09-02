@@ -278,6 +278,19 @@ function parseSnapshot(
   return payload as HeadlessBuilderSnapshotPayload;
 }
 
+const NON_BLOCKING_MISSING_INPUT_SENTINELS = new Set([
+  "none",
+  "n/a",
+  "not applicable",
+  "없음",
+]);
+
+export function normalizeBlockingMissingInputs(items: string[]): string[] {
+  return items
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0 && !NON_BLOCKING_MISSING_INPUT_SENTINELS.has(item.toLowerCase()));
+}
+
 function initialTaskRun(task: ProjectTaskPlan, teamId: TeamId): ProjectTaskRun {
   return {
     taskId: task.id,
@@ -497,7 +510,7 @@ export function createHeadlessBuilderExecutor(
         request: payload.request,
       });
       payload.intake = intake;
-      const missingInputs = intake.analysis.missingInputs.map((item) => item.trim()).filter(Boolean);
+      const missingInputs = normalizeBlockingMissingInputs(intake.analysis.missingInputs);
       if (missingInputs.length > 0) {
         await failBlocked(`Project Intake 추가 확인 필요: ${missingInputs.join(" / ")}`);
       }
