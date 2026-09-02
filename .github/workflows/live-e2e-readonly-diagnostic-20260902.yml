@@ -28,6 +28,7 @@ jobs:
             require('dotenv').config({ path: '.env' });
             const fs = require('node:fs');
             const jwt = require('jsonwebtoken');
+            const { auditLiveE2ESnapshot } = require('./.tmp/bloom-worker/e2eSmoke.js');
             const base = 'http://127.0.0.1:3000';
             const marker = '[BLOOM-E2E-SMOKE]';
             const token = jwt.sign(
@@ -60,6 +61,13 @@ jobs:
               console.log(`[state] repository=${project.repositoryFullName || '-'} preview=${project.previewUrl || '-'} phase=${snapshot?.phase || '-'} version=${snapshot?.version || '-'} blocked=${payload?.blockedReason || '-'} runtime=${runtimeProjectId} repoName=${payload?.plan?.repositoryName || '-'}`);
               const planRoles = (payload?.plan?.tasks || []).map((task) => task.role);
               console.log(`[plan] roles=${planRoles.join(',')} frontend=${planRoles.includes('frontend')} backend=${planRoles.includes('backend')}`);
+
+              const audit = auditLiveE2ESnapshot(snapshot, run.status);
+              console.log(`[audit] passed=${audit.passed} completed=${audit.completedChecks}/${audit.totalChecks}`);
+              for (const check of audit.checks) {
+                console.log(`[audit-check] ${check.id} status=${check.status} detail=${check.detail}`);
+              }
+
               for (const task of payload?.taskRuns || []) {
                 console.log(`[task] ${task.taskId || task.id || '-'} role=${task.role} status=${task.status} attempts=${task.attempts ?? task.attempt ?? '-'} commit=${task.commitSha || '-'} pr=${task.pullRequestNumber || '-'} error=${String(task.error || task.lastError || '-').slice(0, 300)}`);
               }
