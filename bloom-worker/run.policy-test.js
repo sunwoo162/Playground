@@ -43,3 +43,14 @@ test('production PM2 config explicitly pins Bloom worker to evaluator mode', () 
 
   assert.match(ecosystem, /BLOOM_WORKER_MODE:\s*sharedEnv\.BLOOM_WORKER_MODE\s*\|\|\s*['"]evaluator['"]/);
 });
+
+test('Bloom worker compiler emits the Live E2E module required by the entrypoint', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'bloom-worker/run.js'), 'utf8');
+  const tsconfig = JSON.parse(fs.readFileSync(path.join(ROOT, 'bloom-runtime/tsconfig.worker.json'), 'utf8'));
+
+  assert.match(source, /\.\.\/\.tmp\/bloom-worker\/e2eSmoke\.js/);
+  assert.ok(
+    tsconfig.include.includes('ts/e2eSmoke.ts'),
+    'bloom-runtime/tsconfig.worker.json must compile ts/e2eSmoke.ts for bloom-worker/run.js',
+  );
+});
