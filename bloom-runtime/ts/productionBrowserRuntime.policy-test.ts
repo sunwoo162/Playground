@@ -40,4 +40,23 @@ assert(
   "local evaluator LLM must also use the two-hour graceful PM2 shutdown timeout",
 );
 
+const existingHealthProbeIndex = evaluatorSetup.indexOf('curl --fail --silent --show-error --max-time 3 "$HEALTH_URL"');
+const firstLlmDeleteIndex = evaluatorSetup.indexOf('pm2 delete bloom-evaluator-llm');
+assert(
+  existingHealthProbeIndex >= 0 && firstLlmDeleteIndex >= 0 && existingHealthProbeIndex < firstLlmDeleteIndex,
+  "healthy local evaluator LLM must be reused before any PM2 delete is attempted",
+);
+assert(
+  evaluatorSetup.includes("existing local evaluator model is healthy; keeping it"),
+  "healthy local evaluator LLM must stay online across worker-only deploys",
+);
+assert(
+  evaluatorSetup.includes("pm2 delete bloom-evaluator-llm >/dev/null 2>&1 &"),
+  "stale local evaluator cleanup must not block the deploy shell indefinitely",
+);
+assert(
+  evaluatorSetup.includes('kill -KILL "$llm_pid"'),
+  "stale local evaluator cleanup must have a bounded force-kill fallback",
+);
+
 console.log("PASS  Production Bloom workers provision browser dependencies and drain gracefully during deploys.");
