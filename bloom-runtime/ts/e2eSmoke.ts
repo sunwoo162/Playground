@@ -91,6 +91,25 @@ const GOVERNANCE_ROLES: ExecutableAgentRole[] = [
   "qa",
 ];
 
+type LiveE2EImplementationPlan = {
+  tasks: Array<{ role: ExecutableAgentRole }>;
+};
+
+export function validateLiveE2EImplementationPlan(
+  request: string,
+  plan: LiveE2EImplementationPlan,
+) {
+  if (!request.includes(LIVE_E2E_MARKER)) return;
+
+  const roles = new Set(plan.tasks.map((task) => task.role));
+  const missingRoles = IMPLEMENTATION_ROLES.filter((role) => !roles.has(role));
+  if (missingRoles.length > 0) {
+    throw new Error(
+      `Bloom live E2E PM 계획에 필수 구현 Agent role이 없습니다: ${missingRoles.join(", ")}`,
+    );
+  }
+}
+
 function compactTimestamp(now: Date) {
   const pad = (value: number) => String(value).padStart(2, "0");
   return [
