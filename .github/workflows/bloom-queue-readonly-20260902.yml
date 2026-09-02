@@ -1,0 +1,66 @@
+name: Bloom Queue Readonly 20260902
+
+on:
+  push:
+    branches:
+      - test/luna-live-e2e-readonly-20260902
+    paths:
+      - .github/queue-readonly-trigger-*.txt
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Inspect production builder queue
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          command_timeout: 8m
+          script: |
+            set -eu
+            cd /home/ubuntu/bloombouquet
+            node <<'NODE'
+            require('dotenv').config({ path: '.env' });
+            const jwt = require('jsonwebtoken');
+            const { execFileSync } = require('node:child_process');
+            const base = 'http://127.0.0.1:3000';
+            const token = jwt.sign(
+              { id: 'sunwoo162-live-e2e', login: 'sunwoo162', name: 'sunwoo162', avatar_url: '', type: 'access' },
+              process.env.JWT_SECRET,
+              { expiresIn: '10m' },
+            );
+            const headers = { Cookie: `playground_token=${token}` };
+            async function get(path) {
+              const response = await fetch(`${base}${path}`, { headers });
+              const text = await response.text();
+              if (!response.ok) throw new Error(`${path} -> ${response.status}: ${text.slice(0, 500)}`);
+              return text ? JSON.parse(text) : null;
+            }
+            async function main() {
+              console.log(`[queue] head=${execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim()}`);
+              const projects = await get('/api/builder/projects');
+              const latest = [...projects].sort((a,b)=>b.id-a.id).slice(0,12);
+              for (const project of latest) {
+                const runs = await get(`/api/builder/projects/${project.id}/runs`);
+                const run = [...runs].sort((a,b)=>b.id-a.id)[0];
+                console.log(`[queue-project] id=${project.id} marker=${String(project.brief||'').includes('[BLOOM-E2E-SMOKE]')} projectStatus=${project.status} repo=${project.repositoryFullName||'-'} preview=${project.previewUrl||'-'} run=${run?.id||'-'} runStatus=${run?.status||'-'} worker=${run?.workerId||'-'} lease=${run?.leaseExpiresAt||'-'} heartbeat=${run?.heartbeatAt||'-'} failure=${String(run?.failureReason||'-').slice(0,240)}`);
+              }
+              const list = JSON.parse(execFileSync('pm2',['jlist'],{encoding:'utf8'}));
+              for (const name of ['bloom-builder-worker','bloom-evaluator-worker']) {
+                const p = list.find((x)=>x.name===name);
+                const env = p?.pm2_env || {};
+                console.log(`[queue-pm2] ${name} status=${env.status||'-'} pid=${p?.pid||0} restarts=${env.restart_time??'-'}`);
+              }
+              const ps = execFileSync('bash',['-lc',"ps -eo pid,ppid,etime,cmd | grep -E 'bloom-worker/run.js|bloom-runtime-bridge' | grep -v grep || true"],{encoding:'utf8'}).trim();
+              console.log('[queue-processes]');
+              console.log(ps || 'none');
+            }
+            main().catch((error)=>{ console.error(error.stack||error); process.exit(1); });
+            NODE
