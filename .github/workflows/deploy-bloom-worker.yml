@@ -92,7 +92,7 @@ jobs:
             echo "Bloom worker deployment lock acquired"
 
             BLOOM_SWAP_FILE=/swapfile
-            if ! swapon --show=NAME --noheadings | grep -Fxq "$BLOOM_SWAP_FILE"; then
+            if ! swapon --show=NAME --noheadings --raw | grep -Fxq "$BLOOM_SWAP_FILE"; then
               if [ ! -f "$BLOOM_SWAP_FILE" ]; then
                 sudo fallocate -l 2G "$BLOOM_SWAP_FILE"
               fi

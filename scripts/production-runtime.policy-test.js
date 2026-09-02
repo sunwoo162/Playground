@@ -170,6 +170,7 @@ test('production Bloom worker provisions emergency swap before starting memory-h
   assert.match(workflow, /fallocate -l 2G/);
   assert.match(workflow, /mkswap/);
   assert.match(workflow, /swapon/);
+  assert.match(workflow, /swapon --show=NAME --noheadings --raw/);
   assert.match(workflow, /\/etc\/fstab/);
   assert.match(workflow, /vm\.swappiness=10/);
 });
