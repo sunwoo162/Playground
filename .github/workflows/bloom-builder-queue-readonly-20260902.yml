@@ -61,7 +61,7 @@ jobs:
                 console.log(`[queue] project=${project.id} marker=${marker} projectStatus=${project.status} run=${run?.id ?? '-'} runStatus=${run?.status ?? '-'} worker=${run?.workerId || '-'} phase=${phase} version=${version} failure=${run?.failureReason || '-'}`);
               }
               const list = JSON.parse(execFileSync('pm2', ['jlist'], { encoding: 'utf8' }));
-              for (const name of ['bloom-builder-worker','bloom-evaluator-worker']) {
+              for (const name of ['bloom-evaluator-llm','bloom-builder-worker','bloom-evaluator-worker']) {
                 const p = list.find((x) => x.name === name);
                 const env = p?.pm2_env || {};
                 console.log(`[pm2] ${name} status=${env.status || '-'} pid=${p?.pid || 0} restarts=${env.restart_time ?? '-'} uptime=${env.pm_uptime || '-'}`);
@@ -71,10 +71,10 @@ jobs:
             NODE
             echo '[process-tree]'
             ps -eo pid,ppid,etime,%cpu,%mem,stat,cmd --sort=pid | grep -E 'bloom-worker/run.js|bloom-runtime-bridge|bloomLocalAgentRuntime|llama|8091' | grep -v grep || true
-            echo '[builder-tree]'
-            pstree -ap $(pgrep -f 'bloom-worker/run.js' | tail -n 1) 2>/dev/null || true
             echo '[llama-health]'
             curl -fsS --max-time 3 http://127.0.0.1:8091/health || true
             echo
-            echo '[builder-33-files]'
-            find /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-33 -maxdepth 4 -type f -printf '%TY-%Tm-%TdT%TH:%TM:%TSZ %s %p\n' 2>/dev/null | sort | tail -n 40 || true
+            echo '[llama-logs]'
+            pm2 logs bloom-evaluator-llm --lines 120 --nostream 2>&1 | tail -n 160 || true
+            echo '[builder-34-files]'
+            find /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-34 -maxdepth 4 -type f -printf '%TY-%Tm-%TdT%TH:%TM:%TSZ %s %p\n' 2>/dev/null | sort | tail -n 40 || true
