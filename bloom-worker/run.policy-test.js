@@ -44,6 +44,29 @@ test('production PM2 config explicitly pins Bloom worker to evaluator mode', () 
   assert.match(ecosystem, /BLOOM_WORKER_MODE:\s*sharedEnv\.BLOOM_WORKER_MODE\s*\|\|\s*['"]evaluator['"]/);
 });
 
+test('production builder wires the compiled local agent runner', () => {
+  const ecosystem = fs.readFileSync(path.join(ROOT, 'ecosystem.config.js'), 'utf8');
+  const deploy = fs.readFileSync(path.join(ROOT, '.github/workflows/deploy-bloom-worker.yml'), 'utf8');
+  const tsconfig = JSON.parse(fs.readFileSync(path.join(ROOT, 'bloom-runtime/tsconfig.worker.json'), 'utf8'));
+
+  assert.match(
+    ecosystem,
+    /BLOOM_LOCAL_AGENT_RUNNER_PATH:\s*sharedEnv\.BLOOM_LOCAL_AGENT_RUNNER_PATH\s*\|\|\s*path\.join\(root,\s*['"]\.tmp\/bloom-worker\/bloomLocalAgentRuntime\.js['"]\)/,
+  );
+  assert.match(
+    deploy,
+    /set_env_value BLOOM_LOCAL_AGENT_RUNNER_PATH \/home\/ubuntu\/bloombouquet\/\.tmp\/bloom-worker\/bloomLocalAgentRuntime\.js/,
+  );
+  assert.match(
+    deploy,
+    /test -f \/home\/ubuntu\/bloombouquet\/\.tmp\/bloom-worker\/bloomLocalAgentRuntime\.js/,
+  );
+  assert.ok(
+    tsconfig.include.includes('ts/bloomLocalAgentRuntime.ts'),
+    'bloom-runtime/tsconfig.worker.json must compile ts/bloomLocalAgentRuntime.ts for production builder mode',
+  );
+});
+
 test('Bloom worker compiler emits the Live E2E module required by the entrypoint', () => {
   const source = fs.readFileSync(path.join(ROOT, 'bloom-worker/run.js'), 'utf8');
   const tsconfig = JSON.parse(fs.readFileSync(path.join(ROOT, 'bloom-runtime/tsconfig.worker.json'), 'utf8'));
