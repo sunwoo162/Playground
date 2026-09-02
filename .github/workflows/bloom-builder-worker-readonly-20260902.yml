@@ -26,6 +26,7 @@ jobs:
             cd /home/ubuntu/bloombouquet || exit 2
             echo "[trace] utc=$(date -u +%Y-%m-%dT%H:%M:%SZ) head=$(git rev-parse HEAD)"
             node <<'NODE'
+            const fs = require('node:fs');
             const { execFileSync } = require('node:child_process');
             try {
               const list = JSON.parse(execFileSync('pm2', ['jlist'], { encoding: 'utf8' }));
@@ -35,6 +36,20 @@ jobs:
                 console.log(`[pm2] ${name} status=${env.status || '-'} pid=${p?.pid || 0} restarts=${env.restart_time ?? '-'} uptime=${env.pm_uptime || '-'} script=${env.pm_exec_path || '-'}`);
               }
             } catch (e) { console.log(`[pm2] inspect failed ${e.message}`); }
+            try {
+              const raw = JSON.parse(fs.readFileSync('/home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-27/pm/pm-plan.json', 'utf8'));
+              const { prepareOrchestrationPlan } = require('./.tmp/bloom-worker/orchestrationCore.js');
+              const prepared = prepareOrchestrationPlan(raw);
+              const rawById = new Map((raw.tasks || []).map((task) => [task.id, task]));
+              console.log('[prepare-role-diff]');
+              for (const task of prepared.tasks || []) {
+                const before = rawById.get(task.id);
+                if (!before || before.role !== task.role) {
+                  console.log(`task=${task.id} raw=${before?.role || '<added>'} prepared=${task.role} title=${String(task.title || '').slice(0,160)}`);
+                }
+              }
+              console.log(`[prepared-roles] ${(prepared.tasks || []).map((task) => task.role).join(',')}`);
+            } catch (e) { console.log(`[prepare-role-diff] failed ${e.stack || e}`); }
             NODE
             echo '[processes]'
             ps -eo pid,ppid,etime,cmd | grep -E 'bloom-worker/run.js|luna-runtime-headless|bloom-runtime-bridge' | grep -v grep | tail -n 30 || true
@@ -56,7 +71,8 @@ jobs:
                     print(f"repositoryName={plan.get('repositoryName','-')} taskCount={len(tasks)}")
                     for task in tasks:
                         deps=task.get('dependsOn') or task.get('dependencies') or []
-                        print(f"task id={task.get('id','-')} role={task.get('role','-')} slug={task.get('taskSlug','-')} deps={','.join(map(str,deps))} title={str(task.get('title','-'))[:160]}")
+                        ac=' | '.join(map(str, task.get('acceptanceCriteria') or []))
+                        print(f"task id={task.get('id','-')} role={task.get('role','-')} slug={task.get('taskSlug','-')} deps={','.join(map(str,deps))} title={str(task.get('title','-'))[:120]} ac={ac[:420]}")
                 except Exception as e:
                     print('parse-failed',repr(e))
             else:
@@ -70,13 +86,9 @@ jobs:
                         try: v=json.loads(line)
                         except Exception: continue
                         method=v.get('method') or v.get('type') or '-'
-                        params=v.get('params') or {}
-                        item=params.get('item') if isinstance(params,dict) else None
-                        item_type=item.get('type') if isinstance(item,dict) else '-'
-                        status=(params.get('turn') or {}).get('status') if isinstance(params,dict) and isinstance(params.get('turn'),dict) else '-'
-                        rows.append((i,method,item_type,status))
+                        rows.append((i,method))
                 print(f'eventCount={len(rows)}')
-                for row in rows[-40:]: print(f'event line={row[0]} method={row[1]} item={row[2]} status={row[3]}')
+                for row in rows[-40:]: print(f'event line={row[0]} method={row[1]}')
             else:
                 print('missing')
             PY
