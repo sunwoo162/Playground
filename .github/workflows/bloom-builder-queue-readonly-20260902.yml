@@ -51,8 +51,12 @@ jobs:
               console.log(`[run] status=${run?.status || '-'} failure=${run?.failureReason || '-'} phase=${snapshot?.phase || '-'} version=${snapshot?.version ?? '-'}`);
               if (snapshot?.payloadJson) {
                 const payload = JSON.parse(snapshot.payloadJson);
-                console.log('[snapshot-payload]');
-                console.log(JSON.stringify(payload, null, 2));
+                console.log('[task-status]');
+                for (const task of payload.taskRuns || []) {
+                  console.log(`${task.taskId} status=${task.status} attempts=${task.attempts} branch=${task.branchName || '-'} commit=${task.commitSha || '-'} pr=${task.pullRequestNumber || '-'} error=${JSON.stringify(task.lastError || null)} blockers=${JSON.stringify(task.blockers || [])}`);
+                }
+                console.log('[scheduler]');
+                console.log(JSON.stringify(payload.schedulerObservability || null, null, 2));
               }
               const root = `/home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-${projectId}`;
               const planPath = path.join(root, 'pm', 'pm-plan.json');
@@ -60,20 +64,20 @@ jobs:
                 const plan = JSON.parse(fs.readFileSync(planPath, 'utf8'));
                 console.log(`[pm-plan] tasks=${plan.tasks?.length || 0}`);
                 for (const task of plan.tasks || []) {
-                  console.log(`[pm-task] id=${task.id || '-'} slug=${task.taskSlug || '-'} role=${task.agentRole || task.role || '-'} deps=${JSON.stringify(task.dependencies || task.dependsOn || [])} title=${JSON.stringify(task.title || '')}`);
-                }
-              }
-              console.log('[runtime-files]');
-              for (const candidate of ['tasks', 'agents', 'reports', 'events']) {
-                const dir = path.join(root, candidate);
-                if (!fs.existsSync(dir)) continue;
-                for (const entry of fs.readdirSync(dir, { withFileTypes: true }).slice(0, 80)) {
-                  console.log(`${candidate}/${entry.name}${entry.isDirectory() ? '/' : ''}`);
+                  console.log(`[pm-task] id=${task.id || '-'} slug=${task.taskSlug || '-'} role=${task.agentRole || task.role || '-'} deps=${JSON.stringify(task.dependencies || task.dependsOn || [])}`);
                 }
               }
             }
             main().catch((error) => { console.error(`[inspect] FAILED ${error.stack || error}`); process.exit(1); });
             NODE
+            ROOT=/home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-39
+            echo '[agent-files]'
+            find "$ROOT/agents" -maxdepth 4 -type f -printf '%TY-%Tm-%TdT%TH:%TM:%TSZ %s %p\n' 2>/dev/null | sort | tail -n 120 || true
+            echo '[agent-event-tails]'
+            find "$ROOT/agents" -maxdepth 4 -type f \( -name '*.jsonl' -o -name '*stderr*' -o -name '*.log' \) -print0 2>/dev/null | while IFS= read -r -d '' f; do
+              echo "--- $f"
+              tail -n 8 "$f" | sed -E 's/([Tt][Oo][Kk][Ee][Nn]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd]|[Ss][Ee][Cc][Rr][Ee][Tt]|[Aa][Uu][Tt][Hh][Oo][Rr][Ii][Zz][Aa][Tt][Ii][Oo][Nn])[^ ]*/\1=<redacted>/g' || true
+            done
             echo '[active-runtimes]'
             ps -eo pid,ppid,etime,%cpu,%mem,stat,cmd --sort=pid | grep -E 'bloom-runtime-bridge|bloomLocalAgentRuntime|llama|8091' | grep -v grep || true
             echo '[llama-current]'
