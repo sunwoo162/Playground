@@ -33,6 +33,7 @@
     "ts/lunaReleaseIdentity.ts",
     "ts/lunaDeliveryController.ts",
     "ts/lunaDeliveryAutomation.ts",
-    "ts/lunaProductionDelivery.ts"
+    "ts/lunaProductionDelivery.ts",
+    "ts/e2eSmoke.ts"
   ]
 }
