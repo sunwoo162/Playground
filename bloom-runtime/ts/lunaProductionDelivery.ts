@@ -4,6 +4,7 @@ import * as http from "node:http";
 import * as path from "node:path";
 
 import { automateLunaDelivery } from "./lunaDeliveryAutomation";
+import { writeLunaReviewPackage } from "./lunaReviewPackage";
 import {
   runDeliveryBuild,
   type LunaDeliveryBuildResult,
@@ -501,6 +502,18 @@ export function createLunaProductionDeliveryHook(
       dependencies,
     });
 
-    return { publicUrl: result.delivery.publicUrl };
+    const reviewPackage = await writeLunaReviewPackage(input.workspacePath, {
+      projectName: input.projectName,
+      projectSlug: input.slug,
+      repositoryFullName: input.repositoryFullName,
+      commitSha: input.mainSha,
+      publicUrl: result.delivery.publicUrl,
+      requiresAuth: input.requiresAuth,
+    });
+
+    return {
+      publicUrl: result.delivery.publicUrl,
+      reviewPackagePath: reviewPackage.path,
+    };
   };
 }

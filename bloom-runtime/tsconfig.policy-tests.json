@@ -83,6 +83,10 @@
     "ts/lunaDeliveryController.policy-test.ts",
     "ts/lunaDeliveryAutomation.policy-test.ts",
     "ts/lunaReleasedDeliverySha.policy-test.ts",
-    "ts/bloomLocalAgentRuntime.ts"
+    "ts/bloomLocalAgentRuntime.ts",
+    "ts/lunaReviewPackage.ts",
+    "ts/lunaReviewPackage.policy-test.ts",
+    "ts/bloomLocalAgentRuntime.policy-test.ts",
+    "ts/codexFreeRuntime.policy-test.ts"
   ]
 }

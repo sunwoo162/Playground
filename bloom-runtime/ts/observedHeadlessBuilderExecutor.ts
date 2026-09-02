@@ -50,7 +50,7 @@ export type LunaIntegratedDeliveryInput = {
 
 export type LunaIntegratedDeliveryHook = (
   input: LunaIntegratedDeliveryInput,
-) => Promise<{ publicUrl: string }>;
+) => Promise<{ publicUrl: string; reviewPackagePath?: string }>;
 
 export type ObservedHeadlessBuilderExecutorOptions = HeadlessBuilderExecutorOptions & {
   deliverIntegratedProject?: LunaIntegratedDeliveryHook;

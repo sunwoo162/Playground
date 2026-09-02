@@ -38,6 +38,7 @@
     "ts/lunaDeliveryAutomation.ts",
     "ts/lunaProductionDelivery.ts",
     "ts/e2eSmoke.ts",
-    "ts/bloomLocalAgentRuntime.ts"
+    "ts/bloomLocalAgentRuntime.ts",
+    "ts/lunaReviewPackage.ts"
   ]
 }
