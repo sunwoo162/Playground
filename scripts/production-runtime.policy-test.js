@@ -195,6 +195,7 @@ test('production deploy proves the local evaluator can complete a real JSON infe
   const workflow = readBloomWorkerDeployWorkflow();
   assert.match(workflow, /createLocalEvaluatorTransport/);
   assert.match(workflow, /production-inference-smoke/);
+  assert.doesNotMatch(workflow, /timeoutMs:\s*120000/, 'production inference smoke must not shorten the evaluator transport timeout below its production default');
   assert.match(workflow, /Return exactly one JSON object with/);
   assert.match(workflow, /Bloom local evaluator inference smoke OK/);
   assert.match(workflow, /value\.ok !== true/);
