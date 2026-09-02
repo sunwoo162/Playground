@@ -135,6 +135,47 @@ async function testStructuredInferenceUsesServerSchema() {
   );
 }
 
+async function testLocalAgentBoundsToolHistoryBeforeModelCalls() {
+  const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-context-"));
+  const largeContent = "x".repeat(128 * 1024);
+  const bodies: Array<Record<string, unknown>> = [];
+  let calls = 0;
+  const fetchImpl: typeof fetch = async (_input, init) => {
+    bodies.push(JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>);
+    calls += 1;
+    if (calls <= 4) {
+      return streamingResponse([
+        `data: ${JSON.stringify({ choices: [{ delta: { content: '{"action":"read","path":"large.txt"}' } }] })}\n\n`,
+        "data: [DONE]\n\n",
+      ]);
+    }
+    return streamingResponse([
+      `data: ${JSON.stringify({ choices: [{ delta: { content: '{"action":"final","report":{"status":"completed","summary":"done","rationaleSummary":"done","evidence":[],"verification":[],"commitSha":null,"pullRequestNumber":null,"pullRequestUrl":null,"reviewedPullRequests":[],"blockers":[]}}' } }] })}\n\n`,
+      "data: [DONE]\n\n",
+    ]);
+  };
+
+  try {
+    await fs.writeFile(path.join(worktree, "large.txt"), largeContent, "utf8");
+    await runLocalAgent({
+      projectId: "policy",
+      taskId: "BLOOM-CONTEXT",
+      worktree,
+      prompt: "inspect the large file repeatedly, then finish",
+    }, { fetchImpl, maxSteps: 5 });
+
+    assert.equal(bodies.length, 5);
+    const requestSizes = bodies.map((body) => Buffer.byteLength(JSON.stringify(body.messages ?? []), "utf8"));
+    assert.ok(Math.max(...requestSizes) < 32 * 1024,
+      `normal Local Agent requests must keep rolling tool history below 32KB; got ${requestSizes.join(", ")}`);
+    const finalMessages = bodies[bodies.length - 1]?.messages as Array<{ content?: string }> | undefined;
+    assert.match(finalMessages?.map((message) => message.content ?? "").join("\n") ?? "", /truncated|omitted|history/i,
+      "bounded Agent context must make omitted tool output explicit instead of silently dropping it");
+  } finally {
+    await fs.rm(worktree, { recursive: true, force: true });
+  }
+}
+
 async function testLocalAgentUsesServerActionSchema() {
   const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-schema-"));
   let body: Record<string, unknown> | null = null;
@@ -173,6 +214,7 @@ async function main() {
   await testRetriesOneTransientFetchFailure();
   await testRetriesTruncatedJsonConcise();
   await testStructuredInferenceUsesServerSchema();
+  await testLocalAgentBoundsToolHistoryBeforeModelCalls();
   await testLocalAgentUsesServerActionSchema();
   console.log("Bloom local Agent inference transport policy tests passed");
 }
