@@ -1,6 +1,6 @@
 import * as assert from "node:assert/strict";
 
-import { requestLocalModel } from "./bloomLocalAgentRuntime";
+import { requestLocalModel, runLocalStructuredInference } from "./bloomLocalAgentRuntime";
 
 const encoder = new TextEncoder();
 
@@ -100,10 +100,41 @@ async function testRetriesTruncatedJsonConcise() {
   assert.match(retryMessages?.[retryMessages.length - 1]?.content ?? "", /concise|token limit|valid JSON/i,
     "the retry must explicitly ask for a shorter complete JSON object");
 }
+async function testStructuredInferenceUsesServerSchema() {
+  let body: Record<string, unknown> | null = null;
+  const outputSchema = {
+    type: "object",
+    additionalProperties: false,
+    required: ["requiredField"],
+    properties: { requiredField: { type: "string", pattern: "^forced$" } },
+  };
+  const fetchImpl: typeof fetch = async (_input, init) => {
+    body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+    return streamingResponse([
+      'data: {"choices":[{"delta":{"content":"{\\"requiredField\\":\\"forced\\"}"}}]}\n\n',
+      'data: [DONE]\n\n',
+    ]);
+  };
+
+  const result = await runLocalStructuredInference({
+    mode: "structured",
+    title: "schema-probe",
+    prompt: "return structured output",
+    outputSchema,
+  }, { fetchImpl });
+
+  assert.deepEqual(result.output, { requiredField: "forced" });
+  assert.deepEqual(
+    (body as Record<string, unknown> | null)?.response_format,
+    { type: "json_object", schema: outputSchema },
+    "structured inference must pass its JSON schema to llama.cpp response_format so required fields and patterns are grammar-constrained",
+  );
+}
 async function main() {
   await testStreamsLongModelResponses();
   await testRetriesOneTransientFetchFailure();
   await testRetriesTruncatedJsonConcise();
+  await testStructuredInferenceUsesServerSchema();
   console.log("Bloom local Agent inference transport policy tests passed");
 }
 
