@@ -19,6 +19,7 @@
     "ts/seniorAgent.ts",
     "ts/seniorAgent.policy-test.ts",
     "ts/specialistRouting.ts",
+    "ts/specialistRoutingCoreRole.policy-test.ts",
     "ts/teamExpansion.policy-test.ts",
     "ts/pmSpecialistRoles.policy-test.ts",
     "ts/planTopology.ts",
