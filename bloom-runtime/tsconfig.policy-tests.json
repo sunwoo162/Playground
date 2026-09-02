@@ -33,6 +33,7 @@
     "ts/githubEmptyRepositoryBootstrap.policy-test.ts",
     "ts/productionGhCredentials.policy-test.ts",
     "ts/productionBrowserRuntime.policy-test.ts",
+    "ts/localEvaluatorMemory.policy-test.ts",
     "ts/agentRuntimeOwnedPublishing.policy-test.ts",
     "ts/agentDependencyMaterialization.policy-test.ts",
     "ts/executionControl.ts",
