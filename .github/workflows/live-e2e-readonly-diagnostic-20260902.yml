@@ -1,4 +1,4 @@
-name: Luna Live E2E Readonly Audit
+name: Bloom Live E2E PM Role Repair Verification
 
 on:
   push:
@@ -6,74 +6,119 @@ on:
       - test/luna-live-e2e-readonly-20260902
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  inspect:
+  repair:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
-      - name: Inspect production Bloom state and Agent streams
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Checkout fix branch
+        uses: actions/checkout@v4
         with:
-          host: ssh.gsmsv.site
-          port: 24136
-          username: ubuntu
-          password: ${{ secrets.SSH_PASSWORD }}
-          command_timeout: 8m
-          script: |
-            set -eu
-            cd /home/ubuntu/bloombouquet
-            node <<'NODE'
-            require('dotenv').config({ path: '.env' });
-            const jwt = require('jsonwebtoken');
-            const base='http://127.0.0.1:3000';
-            const marker='[BLOOM-E2E-SMOKE]';
-            const token=jwt.sign({id:'sunwoo162-live-e2e',login:'sunwoo162',name:'sunwoo162',avatar_url:'',type:'access'},process.env.JWT_SECRET,{expiresIn:'20m'});
-            const headers={Cookie:`playground_token=${token}`};
-            async function get(path){const r=await fetch(`${base}${path}`,{headers});const t=await r.text();if(!r.ok)throw new Error(`${path} -> ${r.status}: ${t.slice(0,500)}`);return t?JSON.parse(t):null;}
-            async function main(){
-              const projects=await get('/api/builder/projects');
-              const project=[...projects].sort((a,b)=>b.id-a.id).find((p)=>String(p.brief||'').includes(marker));
-              const runs=await get(`/api/builder/projects/${project.id}/runs`);
-              const run=[...runs].sort((a,b)=>b.id-a.id)[0];
-              const snapshot=await get(`/api/builder/projects/${project.id}/runs/${run.id}/snapshot`);
-              const p=snapshot?JSON.parse(snapshot.payloadJson):null;
-              console.log(`[state] project=${project.id} run=${run.id} projectStatus=${project.status} runStatus=${run.status} worker=${run.workerId||'-'} failure=${run.failureReason||'-'}`);
-              console.log(`[state] repository=${project.repositoryFullName||'-'} preview=${project.previewUrl||'-'} phase=${snapshot?.phase||'-'} version=${snapshot?.version||'-'} blocked=${p?.blockedReason||'-'} runtime=${p?.runtimeProjectId||'-'} repoName=${p?.plan?.repositoryName||'-'}`);
-              for(const r of p?.taskRuns||[]) console.log(`[task] ${r.taskId||r.id||'-'} role=${r.role} status=${r.status} attempts=${r.attempts??r.attempt??'-'} commit=${r.commitSha||'-'} pr=${r.pullRequestNumber||'-'} error=${String(r.error||'-').slice(0,300)}`);
-            }
-            main().catch((e)=>{console.error(`[state] FAILED ${e.stack||e}`);process.exit(1)});
-            NODE
+          ref: fix/live-e2e-pm-implementation-roles
+          fetch-depth: 0
 
-            python3 <<'PY'
-            import glob, json, os
-            root='/home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-26/agents'
-            files=sorted(glob.glob(root+'/*/*/app-server-events.jsonl'))
-            if not files:
-                print('[streams] none')
-            for path in files:
-                events=deltas=delta_bytes=completed=turns=failed=0
-                last='-'
-                try:
-                    f=open(path,'r',encoding='utf-8',errors='replace')
-                except OSError:
-                    continue
-                with f:
-                    for line in f:
-                        events+=1
-                        try:v=json.loads(line)
-                        except Exception:continue
-                        m=v.get('method') or '-';last=m
-                        if m=='item/agentMessage/delta':
-                            deltas+=1
-                            d=((v.get('params') or {}).get('delta'))
-                            if isinstance(d,str):delta_bytes+=len(d.encode())
-                        elif m=='item/completed':
-                            item=(v.get('params') or {}).get('item') or {}
-                            if item.get('type')=='agentMessage':completed+=1
-                        elif m=='turn/completed':turns+=1
-                        elif m=='turn/failed':failed+=1
-                rel=os.path.relpath(path,root)
-                print(f'[stream] {rel} fileBytes={os.path.getsize(path)} events={events} deltas={deltas} deltaBytes={delta_bytes} remaining={max(0,524288-delta_bytes)} completedMessages={completed} turnCompleted={turns} turnFailed={failed} last={last}')
-            PY
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Add Live E2E PM implementation-role validation
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          e2e = Path('bloom-runtime/ts/e2eSmoke.ts')
+          text = e2e.read_text()
+          anchor = '''const GOVERNANCE_ROLES: ExecutableAgentRole[] = [
+            "data-marketing",
+            "documentation",
+            "code-review",
+            "reviewer",
+            "qa",
+          ];
+          '''
+          insert = anchor + '''
+          type LiveE2EImplementationPlan = {
+            tasks: Array<{ role: ExecutableAgentRole }>;
+          };
+
+          export function validateLiveE2EImplementationPlan(
+            request: string,
+            plan: LiveE2EImplementationPlan,
+          ) {
+            if (!request.includes(LIVE_E2E_MARKER)) return;
+
+            const roles = new Set(plan.tasks.map((task) => task.role));
+            const missingRoles = IMPLEMENTATION_ROLES.filter((role) => !roles.has(role));
+            if (missingRoles.length > 0) {
+              throw new Error(
+                `Bloom live E2E PM 계획에 필수 구현 Agent role이 없습니다: ${missingRoles.join(", ")}`,
+              );
+            }
+          }
+          '''
+          if 'export function validateLiveE2EImplementationPlan' not in text:
+              if anchor not in text:
+                  raise SystemExit('e2eSmoke.ts insertion anchor not found')
+              text = text.replace(anchor, insert, 1)
+              e2e.write_text(text)
+
+          worker = Path('bloom-worker/run.js')
+          text = worker.read_text()
+          require_anchor = 'const { prepareOrchestrationPlan } = require("../.tmp/bloom-worker/orchestrationCore.js");\n'
+          require_insert = require_anchor + 'const { validateLiveE2EImplementationPlan } = require("../.tmp/bloom-worker/e2eSmoke.js");\n'
+          if 'const { validateLiveE2EImplementationPlan }' not in text:
+              if require_anchor not in text:
+                  raise SystemExit('run.js require anchor not found')
+              text = text.replace(require_anchor, require_insert, 1)
+
+          semantic_anchor = '    "PM Task DAG",\n'
+          semantic_insert = semantic_anchor + '    "필수 구현 Agent role",\n'
+          if '    "필수 구현 Agent role",' not in text:
+              if semantic_anchor not in text:
+                  raise SystemExit('run.js semantic marker anchor not found')
+              text = text.replace(semantic_anchor, semantic_insert, 1)
+
+          validation_anchor = '        result.plan = prepareOrchestrationPlan(result.plan);\n        return result;\n'
+          validation_insert = '        result.plan = prepareOrchestrationPlan(result.plan);\n        validateLiveE2EImplementationPlan(input.request, result.plan);\n        return result;\n'
+          if 'validateLiveE2EImplementationPlan(input.request, result.plan);' not in text:
+              if validation_anchor not in text:
+                  raise SystemExit('run.js PM repair validation anchor not found')
+              text = text.replace(validation_anchor, validation_insert, 1)
+
+          worker.write_text(text)
+          PY
+
+      - name: Run Bloom runtime policy tests
+        run: pnpm run test:bloom-runtime
+
+      - name: Run production runtime policy tests
+        run: pnpm run test:production-runtime
+
+      - name: Build Bloom worker
+        run: pnpm run build:bloom-worker
+
+      - name: Check diff
+        run: |
+          git diff --check
+          git diff --name-status
+
+      - name: Commit verified implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add bloom-runtime/ts/e2eSmoke.ts bloom-worker/run.js
+          git diff --cached --quiet && exit 0
+          git commit -m "fix : repair missing live e2e implementation roles"
+          git push origin HEAD:fix/live-e2e-pm-implementation-roles
