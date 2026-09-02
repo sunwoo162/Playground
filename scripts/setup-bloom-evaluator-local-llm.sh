@@ -41,7 +41,7 @@ pm2 delete bloom-evaluator-llm >/dev/null 2>&1 || true
 BLOOM_LLAMA_BIN="$LLAMA_BIN" pm2 start "$ROOT_DIR/bloom-worker/start-local-evaluator-llm.sh" \
   --name bloom-evaluator-llm \
   --interpreter bash \
-  --max-memory-restart 2600M \
+  --max-memory-restart 3400M \
   --kill-timeout 7200000
 
 HEALTH_URL="http://127.0.0.1:${BLOOM_LOCAL_EVALUATOR_PORT:-8091}/health"
