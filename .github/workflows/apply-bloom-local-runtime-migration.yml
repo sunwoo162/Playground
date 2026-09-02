@@ -25,6 +25,7 @@ jobs:
 
       - name: Apply Codex-free runtime migration
         run: |
+          python .github/scripts/fix_bloom_local_agent_compat.py
           python .github/scripts/migrate_bloom_local_runtime.py
           python .github/scripts/migrate_bloom_runtime_tests.py
           git add bloom-runtime bloom-worker
@@ -68,7 +69,8 @@ jobs:
 
       - name: Remove one-time migration helpers
         run: |
-          git rm .github/scripts/migrate_bloom_local_runtime.py \
+          git rm .github/scripts/fix_bloom_local_agent_compat.py \
+            .github/scripts/migrate_bloom_local_runtime.py \
             .github/scripts/migrate_bloom_runtime_tests.py \
             .github/scripts/migrate_luna_review_package.py \
             .github/workflows/apply-bloom-local-runtime-migration.yml
