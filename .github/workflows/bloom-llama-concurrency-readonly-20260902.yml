@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Inspect production llama restart cause
+      - name: Isolate PM2 llama restart trigger
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ssh.gsmsv.site
@@ -23,44 +23,24 @@ jobs:
           command_timeout: 6m
           script: |
             set -eu
-            cd /home/ubuntu/bloombouquet
-            echo "[trace] utc=$(date -u +%Y-%m-%dT%H:%M:%SZ) head=$(git rev-parse HEAD)"
-            echo '[memory]'
-            free -h || true
-            echo '[llama-process]'
-            ps -eo pid,ppid,lstart,etime,rss,vsz,%cpu,%mem,cmd | grep -E 'llama serve|8091' | grep -v grep || true
-            echo '[pm2-llama-metadata]'
+            echo '[pm2-exact-window]'
+            LOG="$HOME/.pm2/pm2.log"
+            if [ -f "$LOG" ]; then
+              awk '$0 >= "2026-09-02T09:48:50" && $0 <= "2026-09-02T09:49:20" {print}' "$LOG" || true
+              echo '[first-kill-with-context]'
+              grep -B 30 -A 5 -m1 '2026-09-02T09:49:18: PM2 log: pid=171514 msg=failed to kill' "$LOG" || true
+              echo '[memory-keywords-nearby]'
+              grep -Ei -B 8 -A 8 'memory|2600|2\.6|exceed|max_memory|max memory' "$LOG" | tail -n 120 || true
+            fi
+            echo '[pm2-current]'
             node <<'NODE'
             const { execFileSync } = require('node:child_process');
             const list = JSON.parse(execFileSync('pm2', ['jlist'], { encoding: 'utf8' }));
             const p = list.find((x) => x.name === 'bloom-evaluator-llm');
-            const e = p?.pm2_env || {};
             console.log(JSON.stringify({
               pid: p?.pid || 0,
-              status: e.status,
-              restart_time: e.restart_time,
-              unstable_restarts: e.unstable_restarts,
-              exit_code: e.exit_code,
-              pm_uptime: e.pm_uptime,
-              created_at: e.created_at,
-              autorestart: e.autorestart,
-              max_memory_restart: e.max_memory_restart,
-              kill_retry_time: e.kill_retry_time,
-              min_uptime: e.min_uptime,
+              restart_time: p?.pm2_env?.restart_time,
+              max_memory_restart: p?.pm2_env?.max_memory_restart,
+              status: p?.pm2_env?.status,
             }, null, 2));
             NODE
-            echo '[pm2-log-restart-window]'
-            if [ -f "$HOME/.pm2/pm2.log" ]; then
-              grep -E '2026-09-02T09:(4[3-9]|50):|bloom-evaluator-llm|max memory|memory limit|exceeds|SIG|exit|restart' "$HOME/.pm2/pm2.log" | tail -n 400 || true
-            fi
-            echo '[kernel-oom-window]'
-            sudo journalctl -k --since '2026-09-02 09:43:00' --until '2026-09-02 09:51:30' --no-pager 2>/dev/null | grep -Ei 'oom|out of memory|killed process|memory cgroup|segfault|general protection|llama' | tail -n 300 || true
-            echo '[system-service-window]'
-            sudo journalctl --since '2026-09-02 09:43:00' --until '2026-09-02 09:51:30' --no-pager 2>/dev/null | grep -Ei 'pm2|llama|oom|out of memory|killed process|segfault' | tail -n 300 || true
-            echo '[llama-tail-before-after]'
-            if [ -f "$HOME/.pm2/logs/bloom-evaluator-llm-error.log" ]; then
-              tail -n 1500 "$HOME/.pm2/logs/bloom-evaluator-llm-error.log" | grep -E 'srv|slot|error|fail|fatal|alloc|memory|cancel|load_model|release|signal|terminate|killed' | tail -n 700 || true
-            fi
-            echo '[llama-health]'
-            curl -fsS --max-time 3 http://127.0.0.1:8091/health || true
-            echo
