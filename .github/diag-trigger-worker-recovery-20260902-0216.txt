@@ -1,0 +1,1 @@
+read-only worker recovery verification after Deploy Bloom Worker #68 rerun
