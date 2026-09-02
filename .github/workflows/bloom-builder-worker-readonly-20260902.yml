@@ -44,6 +44,42 @@ jobs:
             else
               echo 'missing'
             fi
+            python3 <<'PY'
+            import json, os
+            root='/home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-27/pm'
+            plan_path=os.path.join(root,'pm-plan.json')
+            print('[pm-plan]')
+            if os.path.isfile(plan_path):
+                try:
+                    plan=json.load(open(plan_path,encoding='utf-8'))
+                    tasks=plan.get('tasks') or []
+                    print(f"repositoryName={plan.get('repositoryName','-')} taskCount={len(tasks)}")
+                    for task in tasks:
+                        deps=task.get('dependsOn') or task.get('dependencies') or []
+                        print(f"task id={task.get('id','-')} role={task.get('role','-')} slug={task.get('taskSlug','-')} deps={','.join(map(str,deps))} title={str(task.get('title','-'))[:160]}")
+                except Exception as e:
+                    print('parse-failed',repr(e))
+            else:
+                print('missing')
+            events_path=os.path.join(root,'pm-events.jsonl')
+            print('[pm-events-summary]')
+            if os.path.isfile(events_path):
+                rows=[]
+                with open(events_path,encoding='utf-8',errors='replace') as f:
+                    for i,line in enumerate(f,1):
+                        try: v=json.loads(line)
+                        except Exception: continue
+                        method=v.get('method') or v.get('type') or '-'
+                        params=v.get('params') or {}
+                        item=params.get('item') if isinstance(params,dict) else None
+                        item_type=item.get('type') if isinstance(item,dict) else '-'
+                        status=(params.get('turn') or {}).get('status') if isinstance(params,dict) and isinstance(params.get('turn'),dict) else '-'
+                        rows.append((i,method,item_type,status))
+                print(f'eventCount={len(rows)}')
+                for row in rows[-40:]: print(f'event line={row[0]} method={row[1]} item={row[2]} status={row[3]}')
+            else:
+                print('missing')
+            PY
             for log in "$HOME/.pm2/logs/bloom-builder-worker-out.log" "$HOME/.pm2/logs/bloom-builder-worker-error.log"; do
               echo "[log] $log"
               if [ -f "$log" ]; then
