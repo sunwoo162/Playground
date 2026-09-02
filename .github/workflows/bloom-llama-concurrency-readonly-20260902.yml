@@ -1,0 +1,42 @@
+name: Bloom Llama Concurrency Readonly 20260902
+
+on:
+  push:
+    branches:
+      - test/luna-live-e2e-readonly-20260902
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Inspect production llama concurrency logs
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          command_timeout: 6m
+          script: |
+            set -eu
+            cd /home/ubuntu/bloombouquet
+            echo "[trace] utc=$(date -u +%Y-%m-%dT%H:%M:%SZ) head=$(git rev-parse HEAD)"
+            echo '[llama-process]'
+            ps -eo pid,ppid,lstart,etime,%cpu,%mem,cmd | grep -E 'llama serve|8091' | grep -v grep || true
+            echo '[llama-error-log]'
+            if [ -f "$HOME/.pm2/logs/bloom-evaluator-llm-error.log" ]; then
+              tail -n 1000 "$HOME/.pm2/logs/bloom-evaluator-llm-error.log" | grep -E 'slot|task|request|queue|busy|error|fail|POST|completion|cancel|release|launch' | tail -n 500 || true
+            fi
+            echo '[llama-out-log]'
+            if [ -f "$HOME/.pm2/logs/bloom-evaluator-llm-out.log" ]; then
+              tail -n 1000 "$HOME/.pm2/logs/bloom-evaluator-llm-out.log" | grep -E 'slot|task|request|queue|busy|error|fail|POST|completion|cancel|release|launch' | tail -n 500 || true
+            fi
+            echo '[llama-health]'
+            curl -fsS --max-time 3 http://127.0.0.1:8091/health || true
+            echo
+            echo '[connections]'
+            ss -tnp | grep ':8091' || true
