@@ -118,10 +118,84 @@ export function validateMarketingDocumentationPlan(plan: ProjectPlan) {
   }
 }
 
+function appendMarketingVerificationChain(
+  tasks: ProjectTaskPlan[],
+  marketingTask: ProjectTaskPlan,
+) {
+  const documentationTask: ProjectTaskPlan = {
+    id: nextTaskId(tasks, "MKTDOC"),
+    title: "마케팅 전략 문서 검증 및 제품 문서 통합",
+    role: "documentation",
+    taskSlug: nextTaskSlug(tasks, "marketing-documentation"),
+    summary: `Data & Marketing Agent의 ${PRODUCT_MARKETING_POLICY.analysisPath}를 실제 제품과 독립 대조해 ${PRODUCT_MARKETING_POLICY.documentPath}를 작성하고 제품 문서에서 연결합니다.`,
+    dependsOn: [marketingTask.id],
+    acceptanceCriteria: [
+      `${PRODUCT_MARKETING_POLICY.documentPath}가 실제 제품과 마케팅 분석을 대조한 결과를 담는다.`,
+      "근거 없는 주장과 확인되지 않은 성과 수치를 제거하고 evidence와 hypothesis를 구분한다.",
+    ],
+  };
+  tasks.push(documentationTask);
+
+  const codeReviewTask: ProjectTaskPlan = {
+    id: nextTaskId(tasks, "MKTCR"),
+    title: "마케팅 및 문서 PR 코드 리뷰",
+    role: "code-review",
+    taskSlug: nextTaskSlug(tasks, "marketing-docs-code-review"),
+    summary: "Data & Marketing과 Documentation 산출물을 함께 검토해 제품 사실, 문서 정확성, 개인정보/보안 위험과 repository 일관성을 확인합니다.",
+    dependsOn: [marketingTask.id, documentationTask.id],
+    acceptanceCriteria: ["마케팅 분석과 Documentation 산출물을 모두 검토하고 verdict를 기록한다."],
+  };
+  tasks.push(codeReviewTask);
+
+  const reviewerTask: ProjectTaskPlan = {
+    id: nextTaskId(tasks, "MKTREV"),
+    title: "제품 마케팅 전략 완성도 검토",
+    role: "reviewer",
+    taskSlug: nextTaskSlug(tasks, "marketing-product-review"),
+    summary: "제품 요구사항과 실제 release를 기준으로 마케팅 전략 및 문서 검증 결과를 독립 검토합니다.",
+    dependsOn: [codeReviewTask.id],
+    acceptanceCriteria: ["마케팅 전략과 문서가 실제 제품 가치와 출시 상태를 왜곡하지 않는지 검토한다."],
+  };
+  tasks.push(reviewerTask);
+
+  const qaTask: ProjectTaskPlan = {
+    id: nextTaskId(tasks, "MKTQA"),
+    title: "마케팅 문서 및 측정 계획 QA",
+    role: "qa",
+    taskSlug: nextTaskSlug(tasks, "marketing-documentation-qa"),
+    summary: "최종 마케팅/문서화 결과의 파일, 링크, 제품 사실, 측정 계획과 민감정보 노출 여부를 검증합니다.",
+    dependsOn: [reviewerTask.id],
+    acceptanceCriteria: ["최종 통합 후 마케팅 분석과 go-to-market 문서가 실제 repository에서 검증된다."],
+  };
+  tasks.push(qaTask);
+}
+
 export function ensureMarketingDocumentationPlan(plan: ProjectPlan): ProjectPlan {
-  if (plan.tasks.some((task) => task.role === "data-marketing")) {
-    validateMarketingDocumentationPlan(plan);
-    return plan;
+  const existingMarketingTasks = plan.tasks.filter((task) => task.role === "data-marketing");
+  if (existingMarketingTasks.length > 0) {
+    const missingDocumentation = existingMarketingTasks.filter((marketing) =>
+      !plan.tasks.some(
+        (task) => task.role === "documentation" && transitiveDependsOn(plan, task.id, marketing.id),
+      ));
+    if (missingDocumentation.length === 0) {
+      validateMarketingDocumentationPlan(plan);
+      return plan;
+    }
+
+    const requiredTaskCount = plan.tasks.length + (missingDocumentation.length * 4);
+    if (requiredTaskCount > 40) {
+      throw new Error(
+        `PM 계획 Task가 ${plan.tasks.length}개라 누락된 마케팅/문서화 검증 체인을 안전하게 복구할 수 없습니다.`,
+      );
+    }
+
+    const tasks = [...plan.tasks];
+    for (const marketingTask of missingDocumentation) {
+      appendMarketingVerificationChain(tasks, marketingTask);
+    }
+    const repairedPlan = { ...plan, tasks };
+    validateMarketingDocumentationPlan(repairedPlan);
+    return repairedPlan;
   }
 
   if (plan.tasks.length > MAX_PM_TASKS_BEFORE_MARKETING) {
