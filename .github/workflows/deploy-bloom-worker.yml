@@ -225,7 +225,6 @@ jobs:
               const transport = createLocalEvaluatorTransport({
                 endpoint: 'http://127.0.0.1:8091/v1/chat/completions',
                 model: 'qwen2.5-coder-1.5b-instruct',
-                timeoutMs: 120000,
                 maxTokens: 64,
                 maxRetries: 2,
               });
