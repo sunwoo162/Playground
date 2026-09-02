@@ -8,11 +8,8 @@ import type {
 import {
   buildAggregateEvaluatorPrompt,
   buildIndependentEvaluatorPrompt,
-  createCodexSeniorEvaluatorRunner,
   parseAggregateEvaluatorOutput,
   parseIndependentEvaluatorOutput,
-  type CodexEvaluatorRequest,
-  type CodexEvaluatorTransport,
 } from "./bloomBouquetSeniorEvaluator";
 
 const submission = {
@@ -174,53 +171,10 @@ function testAggregatePromptAndParser() {
   );
 }
 
-async function testCodexRunnerUsesReadOnlySandbox() {
-  const requests: CodexEvaluatorRequest[] = [];
-  const transport: CodexEvaluatorTransport = {
-    async run(request: CodexEvaluatorRequest) {
-      requests.push(request);
-      if (request.title.includes("process-evaluator")) {
-        return {
-          overallScore: 82,
-          overallStars: 4.1,
-          reportSummary: "Aggregate report",
-        };
-      }
-      return {
-        score: 88,
-        stars: 4.4,
-        assessment: frontend.assessment,
-        evidence: frontend.evidence,
-        severity: frontend.severity,
-        impact: frontend.impact,
-        recommendation: frontend.recommendation,
-        priority: frontend.priority,
-        confidence: frontend.confidence,
-        technicalTerms: frontend.technicalTerms,
-      };
-    },
-  };
-  const runner = createCodexSeniorEvaluatorRunner({ transport });
-
-  assert.deepEqual(await runner.evaluate(independentInput), frontend);
-  assert.deepEqual(await runner.aggregate(aggregateInput), {
-    overallScore: 82,
-    overallStars: 4.1,
-    reportSummary: "Aggregate report",
-  });
-  assert.equal(requests.length, 2);
-  for (const request of requests) {
-    assert.deepEqual(request.sandboxPolicy, { type: "readOnly", networkAccess: true });
-    assert.equal(request.approvalPolicy, "never");
-    assert.ok(request.outputSchema && typeof request.outputSchema === "object");
-  }
-}
-
 async function main() {
   testIndependentPromptContract();
   testIndependentOutputParser();
   testAggregatePromptAndParser();
-  await testCodexRunnerUsesReadOnlySandbox();
   console.log("BloomBouquet senior evaluator policy tests passed");
 }
 

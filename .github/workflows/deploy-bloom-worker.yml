@@ -114,6 +114,7 @@ jobs:
             unset GITHUB_CREDENTIAL_SMOKE
             pnpm install --frozen-lockfile
             pnpm run build:bloom-worker
+            test -f /home/ubuntu/bloombouquet/.tmp/bloom-worker/bloomLocalAgentRuntime.js || { echo "Bloom Local Agent runner is missing"; exit 1; }
             chmod 755 bloom-runtime/target/release/bloom-runtime-bridge
             test -x bloom-runtime/target/release/bloom-runtime-bridge || { echo "Bloom runtime bridge is missing"; exit 1; }
             BRIDGE_SMOKE_OUTPUT="$(printf '%s' '{}' | bloom-runtime/target/release/bloom-runtime-bridge 2>/dev/null || true)"
@@ -159,7 +160,10 @@ jobs:
             set_env_value BLOOM_WORKER_MODE evaluator
             set_env_value BLOOM_EVALUATOR_RUNTIME local
             set_env_value BLOOM_LOCAL_EVALUATOR_URL http://127.0.0.1:8091/v1/chat/completions
+            set_env_value BLOOM_LOCAL_AGENT_RUNNER_PATH /home/ubuntu/bloombouquet/.tmp/bloom-worker/bloomLocalAgentRuntime.js
+            set_env_value BLOOM_LOCAL_AGENT_URL http://127.0.0.1:8091/v1/chat/completions
             append_default_env BLOOM_LOCAL_EVALUATOR_MODEL qwen2.5-coder-1.5b-instruct
+            append_default_env BLOOM_LOCAL_AGENT_MODEL qwen2.5-coder-1.5b-instruct
             append_default_env BLOOM_API_BASE_URL http://localhost:8080
             append_default_env BLOOM_WORKER_ID bloom-evaluator-production
             append_default_env BLOOM_EVALUATOR_WORKER_ID bloom-evaluator-production
@@ -175,6 +179,7 @@ jobs:
             grep -Eq '^LUNA_DELIVERY_TOKEN=.+$' "$ENV_FILE" || { echo "LUNA_DELIVERY_TOKEN is missing"; exit 1; }
             grep -Eq '^BLOOM_WORKER_MODE=evaluator$' "$ENV_FILE" || { echo "BLOOM_WORKER_MODE must be evaluator"; exit 1; }
             grep -Eq '^BLOOM_EVALUATOR_RUNTIME=local$' "$ENV_FILE" || { echo "BLOOM_EVALUATOR_RUNTIME must be local"; exit 1; }
+            grep -Eq '^BLOOM_LOCAL_AGENT_RUNNER_PATH=/home/ubuntu/bloombouquet/\.tmp/bloom-worker/bloomLocalAgentRuntime\.js$' "$ENV_FILE" || { echo "BLOOM_LOCAL_AGENT_RUNNER_PATH is invalid"; exit 1; }
 
             if [ "$TOKEN_CREATED" = "true" ]; then
               pm2 reload ecosystem.config.js --only backend --update-env

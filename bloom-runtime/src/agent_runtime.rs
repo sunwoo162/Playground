@@ -9,6 +9,7 @@ use std::{
 
 const MAX_JSONL_LINE_BYTES: usize = 10 * 1024 * 1024;
 const MAX_AGENT_MESSAGE_DELTA_BYTES: usize = 512 * 1024;
+const MAX_LOCAL_AGENT_OUTPUT_BYTES: usize = 4 * 1024 * 1024;
 
 const AGENT_RESULT_SCHEMA: &str = r#"{
   "type": "object",
@@ -484,11 +485,11 @@ fn agent_prompt(input: &AgentTaskRuntimeInput, branch: Option<&str>) -> String {
     let dependencies = dependency_context(&input.dependencies);
     let mode = if is_repository_writer(&input.role) {
         format!(
-            "You are a repository-changing worker. Your dedicated branch is `{}`. Inspect the actual repository first, implement the task in this worktree, and run applicable verification. Formatting, lint, and test failures caused by your task changes are defects to fix before returning completed. If an applicable verification command cannot run because the execution environment is genuinely unavailable, record the exact command and error; do not treat a not-yet-deployed public URL as a blocker unless this task owns deployment. Git metadata is protected inside the Codex sandbox, so do not run Git write commands such as add, commit, checkout, switch, reset, rebase, merge, or push, do not create or update a PR, and do not create temporary Git metadata to work around the sandbox. Read-only Git inspection is allowed. Luna Runtime has materialized completed dependency commits into this worktree before your turn; if Git conflict markers are present, resolve them semantically using the dependency context and verification instead of reporting that upstream work is missing. Luna Runtime will publish your completed work after this turn. Runtime-owned Git publication is not a task blocker: never return blocked solely because you cannot commit, push, or create a PR inside the sandbox. Never push directly to `main` or `develop`.",
+            "You are a repository-changing worker. Your dedicated branch is `{}`. Inspect the actual repository first, implement the task in this worktree, and run applicable verification. Formatting, lint, and test failures caused by your task changes are defects to fix before returning completed. If an applicable verification command cannot run because the execution environment is genuinely unavailable, record the exact command and error; do not treat a not-yet-deployed public URL as a blocker unless this task owns deployment. Git metadata is owned by Luna Runtime and the local model tool boundary forbids Git writes, so do not run Git write commands such as add, commit, checkout, switch, reset, rebase, merge, or push, do not create or update a PR, and do not create temporary Git metadata to work around the sandbox. Read-only Git inspection is allowed. Luna Runtime has materialized completed dependency commits into this worktree before your turn; if Git conflict markers are present, resolve them semantically using the dependency context and verification instead of reporting that upstream work is missing. Luna Runtime will publish your completed work after this turn. Runtime-owned Git publication is not a task blocker: never return blocked solely because you cannot commit, push, or create a PR inside the sandbox. Never push directly to `main` or `develop`.",
             branch.unwrap_or("unknown")
         )
     } else if is_review_role(&input.role) {
-        "You are an independent verification/review worker. Do not modify product source files or create a feature branch. Inspect the actual repository and dependency PRs directly. Run the checks appropriate to your role. A missing CI check on an early or partial writer PR is not by itself a blocker; distinguish a missing check from a failed check. If the CI workflow did not exist at that writer commit, review the diff, commit, dependency, and available verification evidence independently and record CI as not-run instead of failed. An existing failed CI check is a blocker. Final integration and release gates own enforcement of current mergeability and check results. Before writing a review comment, search the PR for a top-level comment prefixed with your Luna Agent ID; if one exists, reuse or update your existing prefixed top-level comment instead of creating a duplicate. When reviewing a PR, leave a concise top-level PR comment prefixed with your Luna Agent ID and an evidence-based verdict. Do not merge, close, label, retarget, or otherwise mutate pull requests; the review comment is the only GitHub write this role owns. Do not pretend GitHub native self-approval is an independent approval when all agents share one GitHub credential.".to_string()
+        "You are an independent verification/review worker. Do not modify product source files or create a feature branch. Inspect the actual repository and dependency PRs directly. Run the checks appropriate to your role. A missing CI check on an early or partial writer PR is not by itself a blocker; distinguish a missing check from a failed check. If the CI workflow did not exist at that writer commit, review the diff, commit, dependency, and available verification evidence independently and record CI as not-run instead of failed. An existing failed CI check is a blocker. Final integration and release gates own enforcement of current mergeability and check results. Do not create review comments or otherwise mutate GitHub from the local model tool boundary. Record every PR you actually inspected in reviewedPullRequests with an evidence-based verdict in the report. Do not pretend GitHub native self-approval is an independent approval when all agents share one GitHub credential.".to_string()
     } else {
         "You are an independent analysis worker. Inspect available repository and dependency evidence, produce a concrete task result, and do not modify product source files unless the task contract explicitly requires repository changes.".to_string()
     };
@@ -507,66 +508,7 @@ fn agent_prompt(input: &AgentTaskRuntimeInput, branch: Option<&str>) -> String {
     )
 }
 
-fn append_event(log: &mut File, line: &str) -> Result<(), String> {
-    log.write_all(line.as_bytes())
-        .and_then(|_| log.write_all(b"\n"))
-        .and_then(|_| log.flush())
-        .map_err(|error| format!("Agent event log 기록 실패: {error}"))
-}
-
-fn write_json_line(stdin: &mut ChildStdin, value: &Value) -> Result<(), String> {
-    serde_json::to_writer(&mut *stdin, value)
-        .map_err(|error| format!("Codex app-server 요청 직렬화 실패: {error}"))?;
-    stdin
-        .write_all(b"\n")
-        .and_then(|_| stdin.flush())
-        .map_err(|error| format!("Codex app-server 요청 전송 실패: {error}"))
-}
-
-fn read_json_line(
-    reader: &mut BufReader<impl std::io::Read>,
-    log: &mut File,
-) -> Result<Value, String> {
-    let mut line = String::new();
-    let read = reader
-        .read_line(&mut line)
-        .map_err(|error| format!("Codex app-server stdout 읽기 실패: {error}"))?;
-    if read == 0 {
-        return Err("Codex app-server가 예상보다 일찍 종료되었습니다.".to_string());
-    }
-    if line.len() > MAX_JSONL_LINE_BYTES {
-        return Err("Codex app-server JSONL 메시지가 10MB 안전 한도를 초과했습니다.".to_string());
-    }
-    let trimmed = line.trim();
-    append_event(log, trimmed)?;
-    serde_json::from_str(trimmed)
-        .map_err(|error| format!("Codex app-server JSONL 파싱 실패: {error}; line={trimmed}"))
-}
-
-fn response_result<'a>(value: &'a Value, id: i64) -> Result<Option<&'a Value>, String> {
-    if value.get("id").and_then(Value::as_i64) != Some(id) {
-        return Ok(None);
-    }
-    if let Some(error) = value.get("error") {
-        return Err(format!("Codex app-server request {id} 실패: {error}"));
-    }
-    Ok(value.get("result"))
-}
-
-fn wait_for_response(
-    reader: &mut BufReader<impl std::io::Read>,
-    log: &mut File,
-    id: i64,
-) -> Result<Value, String> {
-    loop {
-        let value = read_json_line(reader, log)?;
-        if let Some(result) = response_result(&value, id)? {
-            return Ok(result.clone());
-        }
-    }
-}
-
-fn run_app_server_agent(
+fn run_local_agent(
     input: &AgentTaskRuntimeInput,
     worktree: &Path,
     branch: Option<&str>,
@@ -584,18 +526,14 @@ fn run_app_server_agent(
         .join(&input.task_id);
     fs::create_dir_all(&runtime_dir)
         .map_err(|error| format!("Agent runtime directory 생성 실패: {error}"))?;
+    let events_path = runtime_dir.join("local-agent-events.jsonl");
+    let stderr_path = runtime_dir.join("local-agent.stderr.log");
+    let runner = std::env::var("BLOOM_LOCAL_AGENT_RUNNER_PATH")
+        .map_err(|_| "BLOOM_LOCAL_AGENT_RUNNER_PATH is required.".to_string())?;
+    if !Path::new(runner.trim()).is_file() {
+        return Err(format!("Bloom Local Agent runner를 찾을 수 없습니다: {runner}"));
+    }
 
-    let events_path = runtime_dir.join("app-server-events.jsonl");
-    let stderr_path = runtime_dir.join("app-server.stderr.log");
-    let mut events_log = OpenOptions::new()
-        .create(true)
-        .truncate(true)
-        .write(true)
-        .open(&events_path)
-        .map_err(|error| format!("Agent event log 생성 실패: {error}"))?;
-    let stderr_file = File::create(&stderr_path)
-        .map_err(|error| format!("Agent stderr log 생성 실패: {error}"))?;
-    let git_metadata_root = workspace.join(".git");
     let tool_state_root = std::env::temp_dir()
         .join("luna-agent-tools")
         .join(&input.project_id)
@@ -607,20 +545,13 @@ fn run_app_server_agent(
     let xdg_state_home = tool_state_root.join("xdg-state");
     let npm_cache = tool_state_root.join("npm-cache");
     let corepack_home = tool_state_root.join("corepack");
-    for directory in [
-        &pnpm_home,
-        &xdg_data_home,
-        &xdg_cache_home,
-        &xdg_state_home,
-        &npm_cache,
-        &corepack_home,
-    ] {
+    for directory in [&pnpm_home, &xdg_data_home, &xdg_cache_home, &xdg_state_home, &npm_cache, &corepack_home] {
         fs::create_dir_all(directory)
             .map_err(|error| format!("Agent tool state directory 생성 실패: {error}"))?;
     }
 
-    let mut child = Command::new("codex")
-        .args(["app-server", "--listen", "stdio://"])
+    let mut child = Command::new("node")
+        .arg(runner.trim())
         .current_dir(worktree)
         .env("PNPM_HOME", &pnpm_home)
         .env("XDG_DATA_HOME", &xdg_data_home)
@@ -630,177 +561,57 @@ fn run_app_server_agent(
         .env("COREPACK_HOME", &corepack_home)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::from(stderr_file))
+        .stderr(Stdio::piped())
         .spawn()
-        .map_err(|error| format!("Codex app-server 실행 실패: {error}"))?;
+        .map_err(|error| format!("Bloom Local Agent runner 실행 실패: {error}"))?;
+    let mut stdin = child.stdin.take().ok_or_else(|| "Local Agent stdin을 열 수 없습니다.".to_string())?;
+    serde_json::to_writer(
+        &mut stdin,
+        &json!({
+            "mode": "agent",
+            "projectId": input.project_id,
+            "taskId": input.task_id,
+            "worktree": worktree.to_string_lossy(),
+            "prompt": agent_prompt(input, branch),
+        }),
+    )
+    .map_err(|error| format!("Local Agent 요청 직렬화 실패: {error}"))?;
+    stdin.write_all(b"
+").and_then(|_| stdin.flush())
+        .map_err(|error| format!("Local Agent 요청 전송 실패: {error}"))?;
+    drop(stdin);
 
-    let protocol_result = (|| -> Result<(String, String, String, AgentTaskReport), String> {
-        let mut stdin = child
-            .stdin
-            .take()
-            .ok_or_else(|| "Codex app-server stdin을 열 수 없습니다.".to_string())?;
-        let stdout = child
-            .stdout
-            .take()
-            .ok_or_else(|| "Codex app-server stdout을 열 수 없습니다.".to_string())?;
-        let mut reader = BufReader::new(stdout);
-
-        write_json_line(
-            &mut stdin,
-            &json!({
-                "method": "initialize",
-                "id": 0,
-                "params": {
-                    "clientInfo": {
-                        "name": "luna_project_teams",
-                        "title": "Luna Project Teams",
-                        "version": "0.1.0"
-                    },
-                    "capabilities": {}
-                }
-            }),
-        )?;
-        wait_for_response(&mut reader, &mut events_log, 0)?;
-        write_json_line(&mut stdin, &json!({ "method": "initialized", "params": {} }))?;
-
-        write_json_line(
-            &mut stdin,
-            &json!({
-                "method": "thread/start",
-                "id": 1,
-                "params": {
-                    "cwd": worktree.to_string_lossy(),
-                    "approvalPolicy": "never",
-                    "sandbox": "workspace-write",
-                    "serviceName": "luna_project_teams"
-                }
-            }),
-        )?;
-        let thread_result = wait_for_response(&mut reader, &mut events_log, 1)?;
-        let thread = thread_result
-            .get("thread")
-            .ok_or_else(|| "Codex app-server thread/start 결과에 thread가 없습니다.".to_string())?;
-        let thread_id = thread
-            .get("id")
-            .and_then(Value::as_str)
-            .ok_or_else(|| "Codex app-server thread ID가 없습니다.".to_string())?
-            .to_string();
-
-        let schema: Value = serde_json::from_str(AGENT_RESULT_SCHEMA)
-            .map_err(|error| format!("Agent output schema 파싱 실패: {error}"))?;
-        let prompt = agent_prompt(input, branch);
-        write_json_line(
-            &mut stdin,
-            &json!({
-                "method": "turn/start",
-                "id": 2,
-                "params": {
-                    "threadId": thread_id,
-                    "input": [{ "type": "text", "text": prompt }],
-                    "cwd": worktree.to_string_lossy(),
-                    "title": format!("{}: {}", input.task_id, input.title),
-                    "approvalPolicy": "never",
-                    "sandboxPolicy": {
-                        "type": "workspaceWrite",
-                        "writableRoots": [
-                            worktree.to_string_lossy(),
-                            git_metadata_root.to_string_lossy()
-                        ],
-                        "networkAccess": true,
-                        "excludeTmpdirEnvVar": false,
-                        "excludeSlashTmp": false
-                    },
-                    "outputSchema": schema
-                }
-            }),
-        )?;
-        let turn_result = wait_for_response(&mut reader, &mut events_log, 2)?;
-        let turn_id = turn_result
-            .get("turn")
-            .and_then(|turn| turn.get("id"))
-            .and_then(Value::as_str)
-            .ok_or_else(|| "Codex app-server turn ID가 없습니다.".to_string())?
-            .to_string();
-        let session_id = format!("{thread_id}-{turn_id}");
-
-        let mut final_message: Option<String> = None;
-        let mut turn_status: Option<String> = None;
-        let mut turn_error: Option<String> = None;
-        let mut streamed_agent_message_bytes = 0usize;
-
-        loop {
-            let value = read_json_line(&mut reader, &mut events_log)?;
-            let method = value.get("method").and_then(Value::as_str).unwrap_or_default();
-            if method == "item/agentMessage/delta" {
-                if let Some(delta) = value
-                    .get("params")
-                    .and_then(|params| params.get("delta"))
-                    .and_then(Value::as_str)
-                {
-                    streamed_agent_message_bytes = streamed_agent_message_bytes
-                        .checked_add(delta.len())
-                        .ok_or_else(|| "Codex Agent 메시지 누적 출력 안전 한도 계산이 overflow 되었습니다.".to_string())?;
-                    if streamed_agent_message_bytes > MAX_AGENT_MESSAGE_DELTA_BYTES {
-                        return Err(format!(
-                            "Codex Agent 메시지 누적 출력 안전 한도를 초과했습니다. bytes={}, limit={}",
-                            streamed_agent_message_bytes,
-                            MAX_AGENT_MESSAGE_DELTA_BYTES
-                        ));
-                    }
-                }
-            }
-            if method == "item/completed" {
-                if let Some(item) = value.get("params").and_then(|params| params.get("item")) {
-                    if item.get("type").and_then(Value::as_str) == Some("agentMessage") {
-                        if let Some(text) = item.get("text").and_then(Value::as_str) {
-                            final_message = Some(text.to_string());
-                        }
-                    }
-                }
-            }
-            if method == "turn/completed" {
-                let turn = value
-                    .get("params")
-                    .and_then(|params| params.get("turn"))
-                    .ok_or_else(|| "turn/completed payload에 turn이 없습니다.".to_string())?;
-                if turn.get("id").and_then(Value::as_str) != Some(turn_id.as_str()) {
-                    continue;
-                }
-                turn_status = turn.get("status").and_then(Value::as_str).map(str::to_string);
-                turn_error = turn
-                    .get("error")
-                    .and_then(|error| error.get("message"))
-                    .and_then(Value::as_str)
-                    .map(str::to_string);
-                break;
-            }
-        }
-
-        if turn_status.as_deref() != Some("completed") {
-            return Err(format!(
-                "Codex Agent turn이 완료되지 않았습니다. status={} error={}",
-                turn_status.unwrap_or_else(|| "unknown".to_string()),
-                turn_error.unwrap_or_else(|| "-".to_string())
-            ));
-        }
-
-        let final_message = final_message
-            .ok_or_else(|| "Codex Agent final agentMessage가 없습니다.".to_string())?;
-        let report: AgentTaskReport = serde_json::from_str(&final_message)
-            .map_err(|error| format!("Codex Agent 결과 JSON 파싱 실패: {error}"))?;
-        if !matches!(report.status.as_str(), "completed" | "blocked") {
-            return Err(format!("Codex Agent 결과 status가 잘못되었습니다: {}", report.status));
-        }
-
-        Ok((thread_id, session_id, turn_id, report))
-    })();
-
-    let _ = child.kill();
-    let _ = child.wait();
-
-    let (thread_id, session_id, turn_id, report) = protocol_result?;
+    let output = child.wait_with_output()
+        .map_err(|error| format!("Local Agent 실행 결과 확인 실패: {error}"))?;
+    fs::write(&stderr_path, &output.stderr)
+        .map_err(|error| format!("Local Agent stderr 저장 실패: {error}"))?;
+    if output.stdout.len() > MAX_LOCAL_AGENT_OUTPUT_BYTES || output.stderr.len() > MAX_LOCAL_AGENT_OUTPUT_BYTES {
+        return Err(format!("Local Agent output exceeded the safe limit. limit={MAX_LOCAL_AGENT_OUTPUT_BYTES}"));
+    }
+    if !output.status.success() {
+        let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(if detail.is_empty() { "Local Agent runner failed.".to_string() } else { format!("Local Agent runner failed: {detail}") });
+    }
+    let result: Value = serde_json::from_slice(&output.stdout)
+        .map_err(|error| format!("Local Agent result JSON parsing failed: {error}"))?;
+    let session_id = result.get("sessionId").and_then(Value::as_str)
+        .ok_or_else(|| "Local Agent sessionId가 없습니다.".to_string())?.to_string();
+    let turn_id = result.get("turnId").and_then(Value::as_str)
+        .ok_or_else(|| "Local Agent turnId가 없습니다.".to_string())?.to_string();
+    let report: AgentTaskReport = serde_json::from_value(
+        result.get("report").cloned().ok_or_else(|| "Local Agent report가 없습니다.".to_string())?
+    ).map_err(|error| format!("Local Agent report JSON parsing failed: {error}"))?;
+    if !matches!(report.status.as_str(), "completed" | "blocked") {
+        return Err(format!("Local Agent report status가 잘못되었습니다: {}", report.status));
+    }
+    let events = result.get("events").and_then(Value::as_array)
+        .map(|items| items.iter().map(Value::to_string).collect::<Vec<_>>().join("
+"))
+        .unwrap_or_default();
+    fs::write(&events_path, events)
+        .map_err(|error| format!("Local Agent event log 저장 실패: {error}"))?;
     Ok((
-        thread_id,
+        session_id.clone(),
         session_id,
         turn_id,
         report,
@@ -1056,7 +867,7 @@ fn dispatch_agent_task_blocking(input: AgentTaskRuntimeInput) -> Result<AgentTas
     let (worktree, branch) = prepare_agent_worktree(&input)?;
     materialize_dependency_commits(&input, &worktree)?;
     let (thread_id, session_id, turn_id, mut report, events_path, stderr_path) =
-        run_app_server_agent(&input, &worktree, branch.as_deref())?;
+        run_local_agent(&input, &worktree, branch.as_deref())?;
 
     if branch.is_some() {
         recover_runtime_owned_publication_blocker(&input, &worktree, &mut report)?;

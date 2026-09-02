@@ -27,6 +27,9 @@ const commonWorkerEnv = {
   BLOOM_API_BASE_URL: sharedEnv.BLOOM_API_BASE_URL || 'http://localhost:8080',
   BLOOM_WORKER_POLL_INTERVAL_MS: sharedEnv.BLOOM_WORKER_POLL_INTERVAL_MS || '5000',
   BLOOM_WORKER_HEARTBEAT_INTERVAL_MS: sharedEnv.BLOOM_WORKER_HEARTBEAT_INTERVAL_MS || '30000',
+  BLOOM_LOCAL_AGENT_RUNNER_PATH: sharedEnv.BLOOM_LOCAL_AGENT_RUNNER_PATH || path.join(root, '.tmp/bloom-worker/bloomLocalAgentRuntime.js'),
+  BLOOM_LOCAL_AGENT_URL: sharedEnv.BLOOM_LOCAL_AGENT_URL || sharedEnv.BLOOM_LOCAL_EVALUATOR_URL || 'http://127.0.0.1:8091/v1/chat/completions',
+  BLOOM_LOCAL_AGENT_MODEL: sharedEnv.BLOOM_LOCAL_AGENT_MODEL || sharedEnv.BLOOM_LOCAL_EVALUATOR_MODEL || 'qwen2.5-coder-1.5b-instruct',
 };
 
 module.exports = {

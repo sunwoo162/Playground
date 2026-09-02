@@ -1,3 +1,4 @@
+use crate::local_inference_runtime;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
@@ -148,10 +149,8 @@ pub struct ProjectRuntimePreflight {
     git_available: bool,
     gh_available: bool,
     gh_authenticated: bool,
-    codex_available: bool,
-    codex_authenticated: bool,
-    codex_chatgpt_auth: bool,
-    codex_auth_mode: String,
+    local_inference_available: bool,
+    local_inference_mode: String,
     organization_accessible: bool,
     message: String,
 }
@@ -201,7 +200,7 @@ struct PmProjectPlan {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct PmCodexRunResult {
+struct PmLocalRunResult {
     plan: PmProjectPlan,
     session_id: Option<String>,
     events_path: String,
@@ -211,7 +210,7 @@ struct PmCodexRunResult {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StartProjectRuntimeResult {
-    pm: PmCodexRunResult,
+    pm: PmLocalRunResult,
     repository: ProjectRepositoryBootstrap,
 }
 
@@ -437,39 +436,11 @@ fn ensure_expected_origin(workspace: &Path, organization: &str, repository: &str
     }
 }
 
-fn codex_auth_status(codex_available: bool) -> (bool, bool, String) {
-    if !codex_available {
-        return (false, false, "none".to_string());
-    }
-
-    let Ok(output) = Command::new("codex").args(["login", "status"]).output() else {
-        return (false, false, "none".to_string());
-    };
-    if !output.status.success() {
-        return (false, false, "none".to_string());
-    }
-
-    let combined = format!(
-        "{}\n{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    )
-    .to_ascii_lowercase();
-    let chatgpt_auth = combined.contains("chatgpt");
-    (
-        true,
-        chatgpt_auth,
-        if chatgpt_auth { "chatgpt" } else { "other" }.to_string(),
-    )
-}
-
 #[tauri::command]
 pub fn project_runtime_preflight(organization: String) -> ProjectRuntimePreflight {
     let organization = organization.trim().to_string();
     let git_available = command_succeeds("git", &["--version"]);
     let gh_available = command_succeeds("gh", &["--version"]);
-    let codex_available = command_succeeds("codex", &["--version"]);
-    let (codex_authenticated, codex_chatgpt_auth, codex_auth_mode) = codex_auth_status(codex_available);
     let gh_authenticated = gh_available
         && command_succeeds("gh", &["auth", "status", "--hostname", "github.com"]);
     let organization_accessible = if gh_authenticated && !organization.is_empty() {
@@ -482,17 +453,13 @@ pub fn project_runtime_preflight(organization: String) -> ProjectRuntimePrefligh
     } else {
         false
     };
-
-    let message = if !codex_available {
-        "Codex CLI가 필요합니다.".to_string()
-    } else if !codex_authenticated {
-        "Codex CLI 로그인이 필요합니다. ChatGPT 계정으로 `codex login`을 완료해 주세요.".to_string()
-    } else if !codex_chatgpt_auth {
-        "Codex가 API key/access token 모드입니다. Luna Runtime은 ChatGPT 로그인만 허용합니다.".to_string()
+    let local_inference_available = local_inference_runtime::local_agent_runner_path().is_ok();
+    let message = if !local_inference_available {
+        "Bloom Local Agent runner가 준비되지 않았습니다.".to_string()
     } else if git_available && gh_available && gh_authenticated && organization_accessible {
-        "Git, GitHub CLI, ChatGPT Codex 로그인과 GitHub owner 접근이 준비되었습니다.".to_string()
+        "Git, GitHub CLI, Bloom Local Agent와 GitHub owner 접근이 준비되었습니다.".to_string()
     } else {
-        "누락된 로컬 Runtime 조건을 확인해 주세요. ChatGPT GitHub Connector와 로컬 CLI 인증은 별도입니다.".to_string()
+        "누락된 로컬 Runtime 조건을 확인해 주세요.".to_string()
     };
 
     ProjectRuntimePreflight {
@@ -500,10 +467,8 @@ pub fn project_runtime_preflight(organization: String) -> ProjectRuntimePrefligh
         git_available,
         gh_available,
         gh_authenticated,
-        codex_available,
-        codex_authenticated,
-        codex_chatgpt_auth,
-        codex_auth_mode,
+        local_inference_available,
+        local_inference_mode: if local_inference_available { "local" } else { "unavailable" }.to_string(),
         organization_accessible,
         message,
     }
@@ -660,7 +625,7 @@ fn pm_prompt(
     request: &str,
 ) -> String {
     format!(
-        r#"You are the independent PM Codex Agent for Bloom team {team_name} ({team_id}).
+        r#"You are the independent PM Local Agent for Bloom team {team_name} ({team_id}).
 
 Project ID: {project_id}
 GitHub Organization: {organization}
@@ -695,38 +660,14 @@ Operating contract:
     )
 }
 
-fn extract_codex_session_id(events: &str) -> Option<String> {
-    for line in events.lines() {
-        let Ok(value) = serde_json::from_str::<Value>(line) else {
-            continue;
-        };
-        for key in ["session_id", "sessionId", "thread_id", "threadId"] {
-            if let Some(id) = value.get(key).and_then(Value::as_str) {
-                if !id.trim().is_empty() {
-                    return Some(id.to_string());
-                }
-            }
-        }
-        let event_type = value.get("type").and_then(Value::as_str).unwrap_or_default();
-        if event_type.contains("thread") || event_type.contains("session") {
-            if let Some(id) = value.get("id").and_then(Value::as_str) {
-                if !id.trim().is_empty() {
-                    return Some(id.to_string());
-                }
-            }
-        }
-    }
-    None
-}
-
-fn run_pm_codex(
+fn run_pm_local(
     organization: &str,
     workspace_root: &str,
     project_id: &str,
     team_id: &str,
     team_name: &str,
     request: &str,
-) -> Result<PmCodexRunResult, String> {
+) -> Result<PmLocalRunResult, String> {
     validate_github_name(organization, "Organization")?;
     validate_github_name(project_id, "Project ID")?;
     if request.trim().is_empty() {
@@ -736,17 +677,6 @@ fn run_pm_codex(
         return Err("Workspace root를 먼저 설정해 주세요.".to_string());
     }
 
-    let preflight = project_runtime_preflight(organization.to_string());
-    if !preflight.codex_available {
-        return Err("Codex CLI가 설치되어 있지 않습니다.".to_string());
-    }
-    if !preflight.codex_authenticated {
-        return Err("Codex CLI 로그인이 필요합니다. `codex login`을 실행해 주세요.".to_string());
-    }
-    if !preflight.codex_chatgpt_auth {
-        return Err("Luna는 ChatGPT 로그인 상태의 Codex만 실행합니다.".to_string());
-    }
-
     let planning_dir = PathBuf::from(workspace_root)
         .join(".luna-runtime")
         .join("projects")
@@ -754,7 +684,6 @@ fn run_pm_codex(
         .join("pm");
     fs::create_dir_all(&planning_dir)
         .map_err(|error| format!("PM planning directory 생성 실패: {error}"))?;
-
     let schema_path = planning_dir.join("pm-plan.schema.json");
     let output_path = planning_dir.join("pm-plan.json");
     let events_path = planning_dir.join("pm-events.jsonl");
@@ -762,35 +691,27 @@ fn run_pm_codex(
         .map_err(|error| format!("PM output schema 저장 실패: {error}"))?;
 
     let prompt = pm_prompt(organization, project_id, team_id, team_name, request.trim());
-    let args = vec![
-        "exec".to_string(),
-        "--json".to_string(),
-        "--output-schema".to_string(),
-        schema_path.to_string_lossy().to_string(),
-        "--output-last-message".to_string(),
-        output_path.to_string_lossy().to_string(),
-        "--sandbox".to_string(),
-        "read-only".to_string(),
-        "--skip-git-repo-check".to_string(),
-        "-C".to_string(),
-        planning_dir.to_string_lossy().to_string(),
-        "-".to_string(),
-    ];
-
-    let output = run_checked_with_stdin("codex", &args, &prompt)?;
-    fs::write(&events_path, &output.stdout)
-        .map_err(|error| format!("PM Codex event log 저장 실패: {error}"))?;
-
-    let raw_plan = fs::read_to_string(&output_path)
-        .map_err(|error| format!("PM Codex 결과 파일 읽기 실패: {error}"))?;
-    let plan: PmProjectPlan = serde_json::from_str(&raw_plan)
-        .map_err(|error| format!("PM Codex 결과 JSON 파싱 실패: {error}"))?;
+    let inference = local_inference_runtime::run_structured_json(
+        "pm-plan",
+        &prompt,
+        PM_PLAN_SCHEMA,
+        &planning_dir,
+    )?;
+    fs::write(
+        &output_path,
+        serde_json::to_vec_pretty(&inference.output)
+            .map_err(|error| format!("PM plan serialization failed: {error}"))?,
+    )
+    .map_err(|error| format!("PM plan output write failed: {error}"))?;
+    fs::write(&events_path, &inference.events_jsonl)
+        .map_err(|error| format!("PM plan event log write failed: {error}"))?;
+    let plan: PmProjectPlan = serde_json::from_value(inference.output)
+        .map_err(|error| format!("PM plan JSON parsing failed: {error}"))?;
     validate_project_plan(&plan)?;
 
-    let events = String::from_utf8_lossy(&output.stdout);
-    Ok(PmCodexRunResult {
+    Ok(PmLocalRunResult {
         plan,
-        session_id: extract_codex_session_id(&events),
+        session_id: inference.session_id,
         events_path: events_path.to_string_lossy().to_string(),
         output_path: output_path.to_string_lossy().to_string(),
     })
@@ -806,7 +727,7 @@ pub async fn plan_project_runtime(
     request: String,
 ) -> Result<Value, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let pm = run_pm_codex(
+        let pm = run_pm_local(
             organization.trim(),
             workspace_root.trim(),
             project_id.trim(),
@@ -839,11 +760,11 @@ fn start_project_runtime_blocking(
             organization.trim()
         ));
     }
-    if !preflight.codex_chatgpt_auth {
+    if !preflight.local_inference_available {
         return Err(preflight.message);
     }
 
-    let pm = run_pm_codex(
+    let pm = run_pm_local(
         organization.trim(),
         workspace_root.trim(),
         project_id.trim(),

@@ -146,7 +146,7 @@ export function beginProjectFailureReplan(
             },
             status: "planning",
             runtimeFailureSource: "pm",
-            runtimeMessage: `${sourceLabel} · PM Codex 복구 재계획 ${nextAttempt}회차 생성 중`,
+            runtimeMessage: `${sourceLabel} · PM Local Agent 복구 재계획 ${nextAttempt}회차 생성 중`,
           }
         : item,
     ),

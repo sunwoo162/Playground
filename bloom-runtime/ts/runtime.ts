@@ -17,10 +17,8 @@ export type ProjectRuntimePreflight = {
   gitAvailable: boolean;
   ghAvailable: boolean;
   ghAuthenticated: boolean;
-  codexAvailable: boolean;
-  codexAuthenticated: boolean;
-  codexChatgptAuth: boolean;
-  codexAuthMode: "chatgpt" | "other" | "none";
+  localInferenceAvailable: boolean;
+  localInferenceMode: "local" | "unavailable";
   organizationAccessible: boolean;
   message: string;
 };
