@@ -1,0 +1,69 @@
+﻿name: Bloom E2E Readonly Audit
+
+on:
+  push:
+    branches:
+      - ops/e2e-readonly-audit-20260902
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Read production Bloom E2E evidence
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          command_timeout: 12m
+          script: |
+            set -eu
+            cd /home/ubuntu/bloombouquet
+            export PATH="$HOME/.local/bin:$HOME/.llama/bin:$HOME/.local/node_modules/.bin:$PATH"
+            echo "=== runtime identity ==="
+            git rev-parse --short HEAD
+            codex --version || true
+            codex login status || true
+            echo "=== compile canonical auditor ==="
+            pnpm --dir apps/desktop exec tsc -p ../../bloom-runtime/tsconfig.policy-tests.json
+            node <<'NODE'
+            require('dotenv').config({ path: '.env' });
+            const jwt = require('jsonwebtoken');
+            const { auditLiveE2ESnapshot } = require('./.tmp/bloom-policy-tests/e2eSmoke.js');
+            const base = 'http://127.0.0.1:3000';
+            const token = jwt.sign({ id: 'sunwoo162-live-e2e', login: 'sunwoo162', name: 'sunwoo162', avatar_url: '', type: 'access' }, process.env.JWT_SECRET, { expiresIn: '15m' });
+            const headers = { Cookie: `playground_token=${token}` };
+            async function get(path) {
+              const response = await fetch(`${base}${path}`, { headers });
+              const text = await response.text();
+              if (!response.ok) return { ok: false, status: response.status, text };
+              return { ok: true, status: response.status, value: text ? JSON.parse(text) : null };
+            }
+            (async () => {
+              for (let id = 27; id <= 36; id += 1) {
+                const run = await get(`/api/builder/projects/${id}/runs/${id}`);
+                if (!run.ok) continue;
+                const snapshot = await get(`/api/builder/projects/${id}/runs/${id}/snapshot`);
+                const project = await get(`/api/builder/projects/${id}`);
+                const audit = auditLiveE2ESnapshot(snapshot.ok ? snapshot.value : null, run.value.status);
+                console.log(`[canonical-audit] projectId=${id} runId=${id} status=${run.value.status} passed=${audit.passed} completed=${audit.completedChecks}/${audit.totalChecks}`);
+                console.log(`[canonical-audit] checks=${audit.checks.map((c) => `${c.id}:${c.status}`).join(',')}`);
+                if (project.ok) console.log(`[canonical-audit] repository=${project.value.repositoryFullName || '-'} preview=${project.value.previewUrl || '-'}`);
+                if (snapshot.ok && snapshot.value?.payloadJson) {
+                  const payload = JSON.parse(snapshot.value.payloadJson);
+                  const roles = payload.plan?.tasks?.map((task) => task.role) || [];
+                  console.log(`[canonical-audit] phase=${snapshot.value.phase} version=${snapshot.value.version} roles=${roles.join(',')}`);
+                  console.log(`[canonical-audit] frontend=${roles.includes('frontend')} backend=${roles.includes('backend')} blocked=${payload.blockedReason || '-'}`);
+                  const runs = payload.taskRuns || [];
+                  console.log(`[canonical-audit] taskRuns=${runs.map((r) => `${r.id || r.taskId}:${r.role}:${r.status}`).join('|')}`);
+                }
+              }
+            })().catch((error) => { console.error(error); process.exit(1); });
+            NODE
+            echo "=== builder error tail ==="
+            pm2 logs bloom-builder-production --lines 800 --nostream 2>&1 | grep -Ei 'codex|usage|limit|blocked|failed|error|Agent task|runId=|projectId=' | tail -n 300 || true
