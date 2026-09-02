@@ -38,9 +38,9 @@ jobs:
             TOKEN="$(node - <<'NODE'
             const jwt = require('jsonwebtoken');
             process.stdout.write(jwt.sign({
-              id: 'bloom-runtime-diagnostics',
-              login: 'bloom-runtime-diagnostics',
-              name: 'Bloom Runtime Diagnostics',
+              id: 'bloom-live-e2e-actions',
+              login: 'bloom-live-e2e',
+              name: 'Bloom Live E2E',
               avatar_url: '',
               type: 'access',
             }, process.env.JWT_SECRET, { expiresIn: '10m' }));
