@@ -1,6 +1,9 @@
 import * as assert from "node:assert/strict";
+import * as fs from "node:fs/promises";
+import * as os from "node:os";
+import * as path from "node:path";
 
-import { requestLocalModel, runLocalStructuredInference } from "./bloomLocalAgentRuntime";
+import { requestLocalModel, runLocalAgent, runLocalStructuredInference } from "./bloomLocalAgentRuntime";
 
 const encoder = new TextEncoder();
 
@@ -100,6 +103,7 @@ async function testRetriesTruncatedJsonConcise() {
   assert.match(retryMessages?.[retryMessages.length - 1]?.content ?? "", /concise|token limit|valid JSON/i,
     "the retry must explicitly ask for a shorter complete JSON object");
 }
+
 async function testStructuredInferenceUsesServerSchema() {
   let body: Record<string, unknown> | null = null;
   const outputSchema = {
@@ -130,11 +134,46 @@ async function testStructuredInferenceUsesServerSchema() {
     "structured inference must pass its JSON schema to llama.cpp response_format so required fields and patterns are grammar-constrained",
   );
 }
+
+async function testLocalAgentUsesServerActionSchema() {
+  const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-schema-"));
+  let body: Record<string, unknown> | null = null;
+  const fetchImpl: typeof fetch = async (_input, init) => {
+    body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+    return streamingResponse([
+      'data: {"choices":[{"delta":{"content":"{\\"action\\":\\"final\\",\\"report\\":{\\"status\\":\\"completed\\",\\"summary\\":\\"done\\",\\"rationaleSummary\\":\\"done\\",\\"evidence\\":[],\\"verification\\":[],\\"commitSha\\":null,\\"pullRequestNumber\\":null,\\"pullRequestUrl\\":null,\\"reviewedPullRequests\\":[],\\"blockers\\":[]}}"}}]}\n\n',
+      'data: [DONE]\n\n',
+    ]);
+  };
+
+  try {
+    const result = await runLocalAgent({
+      projectId: "policy",
+      taskId: "BLOOM-001",
+      worktree,
+      prompt: "finish",
+    }, { fetchImpl, maxSteps: 1 });
+
+    assert.equal(result.report.status, "completed");
+    const responseFormat = (body as Record<string, unknown> | null)?.response_format as Record<string, unknown> | undefined;
+    assert.equal(responseFormat?.type, "json_object");
+    const schema = responseFormat?.schema as Record<string, unknown> | undefined;
+    assert.ok(schema, "normal Local Agent turns must pass an action JSON schema to llama.cpp instead of relying on unconstrained json_object output");
+    const properties = schema.properties as Record<string, unknown> | undefined;
+    const action = properties?.action as Record<string, unknown> | undefined;
+    assert.deepEqual(action?.enum, ["list", "read", "write", "delete", "run", "final"],
+      "the Agent action schema must constrain the protocol to the six supported actions");
+  } finally {
+    await fs.rm(worktree, { recursive: true, force: true });
+  }
+}
+
 async function main() {
   await testStreamsLongModelResponses();
   await testRetriesOneTransientFetchFailure();
   await testRetriesTruncatedJsonConcise();
   await testStructuredInferenceUsesServerSchema();
+  await testLocalAgentUsesServerActionSchema();
   console.log("Bloom local Agent inference transport policy tests passed");
 }
 
