@@ -271,6 +271,62 @@ function finalReportContract(): string {
   });
 }
 
+function agentActionSchema(): JsonObject {
+  return {
+    type: "object",
+    additionalProperties: false,
+    required: ["action"],
+    properties: {
+      action: { type: "string", enum: ["list", "read", "write", "delete", "run", "final"] },
+      path: { type: "string" },
+      content: { type: "string" },
+      command: { type: "string" },
+      args: { type: "array", items: { type: "string" } },
+      cwd: { type: "string" },
+      report: {
+        type: "object",
+        additionalProperties: false,
+        required: [
+          "status",
+          "summary",
+          "rationaleSummary",
+          "evidence",
+          "verification",
+          "commitSha",
+          "pullRequestNumber",
+          "pullRequestUrl",
+          "reviewedPullRequests",
+          "blockers",
+        ],
+        properties: {
+          status: { type: "string", enum: ["completed", "blocked"] },
+          summary: { type: "string" },
+          rationaleSummary: { type: "string" },
+          evidence: { type: "array", items: { type: "string" } },
+          verification: {
+            type: "array",
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["name", "status", "details"],
+              properties: {
+                name: { type: "string" },
+                status: { type: "string", enum: ["passed", "failed", "blocked", "not-run"] },
+                details: { type: "string" },
+              },
+            },
+          },
+          commitSha: { type: ["string", "null"] },
+          pullRequestNumber: { type: ["integer", "null"] },
+          pullRequestUrl: { type: ["string", "null"] },
+          reviewedPullRequests: { type: "array", items: { type: "integer" } },
+          blockers: { type: "array", items: { type: "string" } },
+        },
+      },
+    },
+  };
+}
+
 function systemPrompt(): string {
   return [
     "You are Bloom's local implementation worker. You can only act through the JSON tool protocol below.",
@@ -414,8 +470,9 @@ export async function runLocalAgent(input: LocalAgentInput, options: LocalAgentO
     { role: "system", content: systemPrompt() },
     { role: "user", content: input.prompt },
   ];
+  const actionSchema = agentActionSchema();
   for (let step = 1; step <= maxSteps; step += 1) {
-    const action = await callModel(endpoint, model, messages, fetchImpl);
+    const action = await callModel(endpoint, model, messages, fetchImpl, actionSchema);
     events.push({ step, action: String(action.action ?? "unknown") });
     messages.push({ role: "assistant", content: JSON.stringify(action) });
     if (action.action === "final") {
