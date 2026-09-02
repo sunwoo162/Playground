@@ -76,5 +76,8 @@ jobs:
             echo
             echo '[llama-logs]'
             pm2 logs bloom-evaluator-llm --lines 120 --nostream 2>&1 | tail -n 160 || true
-            echo '[builder-34-files]'
-            find /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-34 -maxdepth 4 -type f -printf '%TY-%Tm-%TdT%TH:%TM:%TSZ %s %p\n' 2>/dev/null | sort | tail -n 40 || true
+            echo '[builder-logs]'
+            pm2 logs bloom-builder-worker --lines 160 --nostream 2>&1 | grep -E 'PM plan|builder run 36|semantic validation|repair' | tail -n 80 || true
+            echo '[builder-36-pm-plan]'
+            PM_PLAN=/home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-36/pm/pm-plan.json
+            if [ -f "$PM_PLAN" ]; then cat "$PM_PLAN"; else echo '[missing]'; fi
