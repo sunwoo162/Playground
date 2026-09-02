@@ -2,6 +2,7 @@ import {
   auditLiveE2ESnapshot,
   createLiveE2ESmokeRequest,
   LIVE_E2E_MARKER,
+  validateLiveE2EImplementationPlan,
   type LiveE2ESnapshotEnvelope,
 } from "./e2eSmoke";
 
@@ -108,6 +109,24 @@ function main() {
   assert(request.repositoryName === "bloom-e2e-pulseboard-20260827-101112", "E2E repository name must use Bloom prefix and timestamp");
   assert(request.request.includes(LIVE_E2E_MARKER), "E2E request must include Bloom marker");
   assert(!request.request.includes("LUNA-E2E"), "E2E request must not use the old Luna marker");
+
+  validateLiveE2EImplementationPlan(request.request, {
+    tasks: [{ role: "frontend" }, { role: "backend" }],
+  });
+
+  let missingBackendError = "";
+  try {
+    validateLiveE2EImplementationPlan(request.request, {
+      tasks: [{ role: "frontend" }, { role: "security" }],
+    });
+  } catch (error) {
+    missingBackendError = error instanceof Error ? error.message : String(error);
+  }
+  assert(missingBackendError.includes("backend"), "Live E2E PM validation must reject a plan without a backend role");
+
+  validateLiveE2EImplementationPlan("Build a normal frontend-only project", {
+    tasks: [{ role: "frontend" }],
+  });
 
   const completed = completedSnapshot();
   const completedAudit = auditLiveE2ESnapshot(completed, "completed");
