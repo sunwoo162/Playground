@@ -75,39 +75,7 @@ jobs:
             curl -fsS --max-time 3 http://127.0.0.1:8091/health || true
             echo
             echo '[builder-logs]'
-            pm2 logs bloom-builder-worker --lines 160 --nostream 2>&1 | grep -E 'PM plan|builder run 36|semantic validation|repair' | tail -n 80 || true
-            echo '[builder-36-pm-plan]'
-            PM_PLAN=/home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-36/pm/pm-plan.json
+            pm2 logs bloom-builder-worker --lines 160 --nostream 2>&1 | grep -E 'PM plan|builder run 37|semantic validation|repair|repository' | tail -n 100 || true
+            echo '[builder-37-pm-plan]'
+            PM_PLAN=/home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-37/pm/pm-plan.json
             if [ -f "$PM_PLAN" ]; then cat "$PM_PLAN"; else echo '[missing]'; fi
-            echo '[schema-probe]'
-            node <<'NODE'
-            async function main() {
-              const modelsResponse = await fetch('http://127.0.0.1:8091/v1/models');
-              const models = await modelsResponse.json();
-              const model = models?.data?.[0]?.id || 'local';
-              const schema = {
-                type: 'object',
-                additionalProperties: false,
-                required: ['requiredField'],
-                properties: {
-                  requiredField: { type: 'string', pattern: '^forced$' },
-                },
-              };
-              const response = await fetch('http://127.0.0.1:8091/v1/chat/completions', {
-                method: 'POST',
-                headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({
-                  model,
-                  messages: [{ role: 'user', content: 'Return an empty JSON object {}. Do not include requiredField.' }],
-                  temperature: 0,
-                  max_tokens: 64,
-                  stream: false,
-                  response_format: { type: 'json_object', schema },
-                }),
-              });
-              const text = await response.text();
-              console.log(`[schema-probe] status=${response.status} body=${text.slice(0, 1200)}`);
-              if (!response.ok) process.exit(2);
-            }
-            main().catch((error) => { console.error(error.stack || error); process.exit(1); });
-            NODE
