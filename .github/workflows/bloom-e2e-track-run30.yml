@@ -1,0 +1,100 @@
+﻿name: Bloom E2E Track Run30
+
+on:
+  push:
+    branches:
+      - ops/e2e-readonly-audit-20260902
+
+permissions:
+  contents: read
+
+jobs:
+  track:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Track production run 30 read-only
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          command_timeout: 85m
+          script: |
+            set -eu
+            cd /home/ubuntu/bloombouquet
+            export PATH="$HOME/.local/bin:$HOME/.llama/bin:$HOME/.local/node_modules/.bin:$PATH"
+            pnpm --dir apps/desktop exec tsc -p ../../bloom-runtime/tsconfig.policy-tests.json
+            node <<'NODE'
+            require('dotenv').config({ path: '.env' });
+            const jwt = require('jsonwebtoken');
+            const { auditLiveE2ESnapshot } = require('./.tmp/bloom-policy-tests/e2eSmoke.js');
+            const base = 'http://127.0.0.1:3000';
+            const projectId = 30;
+            const runId = 30;
+            const token = jwt.sign({ id: 'sunwoo162-live-e2e', login: 'sunwoo162', name: 'sunwoo162', avatar_url: '', type: 'access' }, process.env.JWT_SECRET, { expiresIn: '90m' });
+            const headers = { Cookie: `playground_token=${token}` };
+            const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+            async function request(path, options = {}) {
+              const response = await fetch(`${base}${path}`, { ...options, headers: { ...headers, ...(options.headers || {}) } });
+              const text = await response.text();
+              if (!response.ok) throw new Error(`${path} -> ${response.status}: ${text.slice(0, 1000)}`);
+              return text ? JSON.parse(text) : null;
+            }
+            (async () => {
+              const deadline = Date.now() + 70 * 60 * 1000;
+              let seen = '';
+              while (Date.now() < deadline) {
+                const run = await request(`/api/builder/projects/${projectId}/runs/${runId}`);
+                const snapshot = await request(`/api/builder/projects/${projectId}/runs/${runId}/snapshot`);
+                const audit = auditLiveE2ESnapshot(snapshot, run.status);
+                const payload = snapshot?.payloadJson ? JSON.parse(snapshot.payloadJson) : null;
+                const state = `${run.status}|${snapshot?.phase}|${snapshot?.version}|${audit.completedChecks}`;
+                if (state !== seen) {
+                  seen = state;
+                  const roles = payload?.plan?.tasks?.map((task) => task.role) || [];
+                  console.log(`[track] status=${run.status} phase=${snapshot?.phase || '-'} version=${snapshot?.version ?? '-'} audit=${audit.completedChecks}/${audit.totalChecks} passed=${audit.passed}`);
+                  console.log(`[track] frontend=${roles.includes('frontend')} backend=${roles.includes('backend')} blocked=${payload?.blockedReason || '-'}`);
+                  console.log(`[track] tasks=${(payload?.taskRuns || []).map((r) => `${r.taskId}:${r.role}:${r.status}`).join('|')}`);
+                }
+                if (run.status === 'completed' || run.status === 'failed') {
+                  console.log(`[track-final] audit passed=${audit.passed} completed=${audit.completedChecks}/${audit.totalChecks}`);
+                  console.log(`[track-final] checks=${audit.checks.map((c) => `${c.id}:${c.status}:${c.detail}`).join(' || ')}`);
+                  for (const task of (payload?.taskRuns || []).filter((r) => r.status === 'blocked')) {
+                    console.log(`[track-final] blocked ${task.taskId}:${task.role} lastError=${task.lastError || '-'} blockers=${JSON.stringify(task.blockers || [])}`);
+                  }
+                  if (run.status !== 'completed') process.exit(2);
+                  const project = await request(`/api/builder/projects/${projectId}`);
+                  const repositoryName = String(project.repositoryFullName || '').split('/').pop();
+                  console.log(`[track-final] repository=${project.repositoryFullName || '-'} preview=${project.previewUrl || '-'}`);
+                  if (!repositoryName) throw new Error('missing repositoryFullName');
+                  const deliveryResponse = await fetch(`${base}/internal/luna/delivery/projects/${repositoryName}`, { headers: { 'X-Luna-Delivery-Token': process.env.LUNA_DELIVERY_TOKEN } });
+                  const deliveryText = await deliveryResponse.text();
+                  if (!deliveryResponse.ok) throw new Error(`delivery -> ${deliveryResponse.status}: ${deliveryText}`);
+                  const delivery = JSON.parse(deliveryText);
+                  const publicUrl = delivery.project?.publicUrl || delivery.publicUrl || null;
+                  const evaluationRunId = delivery.project?.bloomEvaluationRunId || delivery.bloomEvaluationRunId || null;
+                  console.log(`[track-final] deliveryState=${delivery.project?.deliveryState || delivery.deliveryState || '-'} publicUrl=${publicUrl || '-'} bloomEvaluationRunId=${evaluationRunId || '-'}`);
+                  if (!evaluationRunId) throw new Error('missing Bloom evaluation run id');
+                  const evalDeadline = Date.now() + 20 * 60 * 1000;
+                  while (Date.now() < evalDeadline) {
+                    const response = await fetch(`${base}/api/bloom-bouquet/public/evaluations/${evaluationRunId}`);
+                    const text = await response.text();
+                    if (!response.ok) throw new Error(`evaluation -> ${response.status}: ${text}`);
+                    const evaluation = JSON.parse(text);
+                    console.log(`[track-eval] status=${evaluation.status || '-'} score=${evaluation.finalScore ?? '-'} stars=${evaluation.starRating ?? '-'}`);
+                    if (evaluation.status === 'COMPLETED') {
+                      console.log('[track-final] EVALUATION PASS');
+                      return;
+                    }
+                    if (evaluation.status === 'FAILED') throw new Error('Bloom evaluation failed');
+                    await sleep(15000);
+                  }
+                  throw new Error('evaluation timeout');
+                }
+                await sleep(30000);
+              }
+              throw new Error('run 30 tracker timeout');
+            })().catch((error) => { console.error(`[track-error] ${error.stack || error}`); process.exit(1); });
+            NODE
