@@ -283,7 +283,7 @@ Analyze:
 - external dependencies that appear necessary
 - meaningful production risk flags
 - conservative assumptions you had to make
-- missingInputs MUST contain only Product Owner or environment information without which execution would be unsafe or impossible. Examples: a required credential/secret for a mandatory external service, legal/ownership authorization, an irreversible destructive target, or a required external endpoint/dataset that the platform cannot provision.
+- missingInputs MUST contain only Product Owner or environment information without which execution would be unsafe or impossible. If nothing concrete is missing, return an empty array: `missingInputs: []`. Examples of blocker categories include a required credential/secret for a mandatory external service, legal/ownership authorization, an irreversible destructive target, or a required external endpoint/dataset that the platform cannot provision. Never copy or paraphrase this example catalog into missingInputs; name only the concrete missing value for this project.
 - Non-blocking uncertainty belongs in assumptions, not missingInputs. Examples include unspecified visual branding, traffic estimates, performance/SLA targets, test coverage percentages, seed data, optional backup/retention/moderation policy, or other preferences that a PM can choose conservatively.
 - a concise rationale summary grounded in the request
 

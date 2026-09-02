@@ -285,10 +285,22 @@ const NON_BLOCKING_MISSING_INPUT_SENTINELS = new Set([
   "없음",
 ]);
 
+const COPIED_BLOCKER_CATALOG = [
+  "required credential/secret for a mandatory external service",
+  "legal/ownership authorization",
+  "irreversible destructive target",
+  "required external endpoint/dataset that the platform cannot provision",
+];
+
+function copiedBlockerCatalog(item: string): boolean {
+  const normalized = item.toLowerCase();
+  return COPIED_BLOCKER_CATALOG.every((fragment) => normalized.includes(fragment));
+}
+
 export function normalizeBlockingMissingInputs(items: string[]): string[] {
   return items
     .map((item) => item.trim())
-    .filter((item) => item.length > 0 && !NON_BLOCKING_MISSING_INPUT_SENTINELS.has(item.toLowerCase()));
+    .filter((item) => item.length > 0 && !NON_BLOCKING_MISSING_INPUT_SENTINELS.has(item.toLowerCase()) && !copiedBlockerCatalog(item));
 }
 
 function initialTaskRun(task: ProjectTaskPlan, teamId: TeamId): ProjectTaskRun {
