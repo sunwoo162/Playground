@@ -152,6 +152,17 @@ test('production Bloom worker is evaluator-only and verifies the started runtime
   assert.match(workflow, /started mode=evaluator runtime=local workerId=/);
 });
 
+test('production Bloom worker serializes remote provision runs before touching the checkout', () => {
+  const workflow = readBloomWorkerDeployWorkflow();
+  const lockFd = workflow.indexOf('exec 9>"$DEPLOY_LOCK_FILE"');
+  const lockWait = workflow.indexOf('flock --wait 1800 9');
+  const fetchMain = workflow.indexOf('git fetch origin main');
+
+  assert.notEqual(lockFd, -1, 'remote provision must hold a server-side deployment lock');
+  assert.notEqual(lockWait, -1, 'remote provision must wait for an earlier SSH deploy to finish');
+  assert.notEqual(fetchMain, -1, 'remote provision must still refresh main');
+  assert.ok(lockFd < fetchMain && lockWait < fetchMain, 'deployment lock must be acquired before touching the shared checkout');
+});
 test('production evaluator uses a local model runtime without interactive Codex authentication', () => {
   const workflow = readBloomWorkerDeployWorkflow();
 
