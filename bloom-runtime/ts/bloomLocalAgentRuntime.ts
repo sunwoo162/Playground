@@ -128,6 +128,7 @@ export type LocalModelRequest = {
   endpoint: string;
   model: string;
   messages: ModelMessage[];
+  responseSchema?: JsonObject;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
   maxRetries?: number;
@@ -209,7 +210,9 @@ export async function requestLocalModel(input: LocalModelRequest): Promise<JsonO
           temperature: 0.1,
           max_tokens: 4096,
           stream: true,
-          response_format: { type: "json_object" },
+          response_format: input.responseSchema
+            ? { type: "json_object", schema: input.responseSchema }
+            : { type: "json_object" },
         }),
         signal: controller.signal,
       });
@@ -248,8 +251,9 @@ async function callModel(
   model: string,
   messages: ModelMessage[],
   fetchImpl: typeof fetch,
+  responseSchema?: JsonObject,
 ): Promise<JsonObject> {
-  return requestLocalModel({ endpoint, model, messages, fetchImpl });
+  return requestLocalModel({ endpoint, model, messages, fetchImpl, responseSchema });
 }
 
 function finalReportContract(): string {
@@ -392,7 +396,7 @@ export async function runLocalStructuredInference(
   const output = await callModel(endpoint, model, [
     { role: "system", content: system },
     { role: "user", content: input.prompt },
-  ], fetchImpl);
+  ], fetchImpl, input.outputSchema);
   return { sessionId, output, events: [{ type: "structured-completed", title: input.title }] };
 }
 
