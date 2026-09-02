@@ -39,6 +39,18 @@ assert(
   "review-topology validation failures must be classified as repairable PM semantic errors",
 );
 assert(
+  workerSource.includes("validateLiveE2EImplementationPlan"),
+  "production PM repair wrapper must validate required Live E2E implementation roles",
+);
+assert(
+  workerSource.includes("필수 구현 Agent role"),
+  "missing Live E2E implementation roles must be classified as a repairable PM semantic error",
+);
+assert(
+  workerSource.includes("validateLiveE2EImplementationPlan(input.request, result.plan);"),
+  "Live E2E implementation-role validation must run inside the PM repair retry boundary",
+);
+assert(
   workerSource.includes("result.plan = prepareOrchestrationPlan(result.plan);"),
   "PM repair wrapper must validate the prepared review topology inside its retry boundary",
 );
@@ -47,4 +59,4 @@ assert(
   "repaired PM plans must still pass authoritative Rust runtime validation",
 );
 
-console.log("PASS  PM planning repairs structured and review-topology semantic failures before failing the run.");
+console.log("PASS  PM planning repairs structured, review-topology, and Live E2E implementation-role semantic failures before failing the run.");

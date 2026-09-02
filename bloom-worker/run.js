@@ -13,6 +13,7 @@ const { createCodexSeniorEvaluatorRunner } = require("../.tmp/bloom-worker/bloom
 const { createLocalSeniorEvaluatorRunner } = require("../.tmp/bloom-worker/bloomBouquetLocalSeniorEvaluator.js");
 const { createLunaProductionDeliveryHook } = require("../.tmp/bloom-worker/lunaProductionDelivery.js");
 const { prepareOrchestrationPlan } = require("../.tmp/bloom-worker/orchestrationCore.js");
+const { validateLiveE2EImplementationPlan } = require("../.tmp/bloom-worker/e2eSmoke.js");
 
 const MAX_BRIDGE_OUTPUT_BYTES = 16 * 1024 * 1024;
 const MAX_PM_PLAN_ATTEMPTS = 2;
@@ -88,6 +89,7 @@ function isSemanticPmPlanError(error) {
     "PM repository",
     "PM 계획",
     "PM Task DAG",
+    "필수 구현 Agent role",
     "제품 마케팅/문서화 DAG",
     "Task ID",
     "taskSlug",
@@ -184,6 +186,7 @@ function createRuntimeBridge(binaryPath) {
           request: buildPmPlanningRequest(input.request, validationError),
         });
         result.plan = prepareOrchestrationPlan(result.plan);
+        validateLiveE2EImplementationPlan(input.request, result.plan);
         return result;
       } catch (error) {
         if (attempt >= MAX_PM_PLAN_ATTEMPTS || !isSemanticPmPlanError(error)) {
