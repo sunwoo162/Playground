@@ -43,7 +43,7 @@ async function testStreamsLongModelResponses() {
   });
 
   assert.deepEqual(result, { ok: true });
-  assert.equal(body?.stream, true, "Local Agent inference must stream tokens so long generations do not wait for one final HTTP response");
+  assert.equal((body as Record<string, unknown> | null)?.stream, true, "Local Agent inference must stream tokens so long generations do not wait for one final HTTP response");
   assert.ok(signal, "Local Agent inference must bound every model request with an AbortSignal");
 }
 
