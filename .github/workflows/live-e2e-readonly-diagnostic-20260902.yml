@@ -1,4 +1,4 @@
-name: Luna Output Guard Minimal-Diff Verification
+name: Luna Live E2E Readonly Audit
 
 on:
   push:
@@ -6,134 +6,138 @@ on:
       - test/luna-live-e2e-readonly-20260902
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   inspect:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - name: Inspect latest production Bloom Live E2E
+        uses: appleboy/ssh-action@v1.0.3
         with:
-          ref: fix/luna-agent-output-guard
-          fetch-depth: 0
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          command_timeout: 8m
+          script: |
+            set -eu
+            cd /home/ubuntu/bloombouquet
+            node <<'NODE'
+            require('dotenv').config({ path: '.env' });
+            const jwt = require('jsonwebtoken');
 
-      - uses: pnpm/action-setup@v4
+            const base = 'http://127.0.0.1:3000';
+            const marker = '[BLOOM-E2E-SMOKE]';
+            const writerRoles = new Set([
+              'design-system', 'designer', 'ux-research', 'frontend', 'backend',
+              'database', 'security', 'devops', 'accessibility', 'performance',
+              'api-integration', 'test-automation', 'data-marketing', 'documentation',
+              'debug-router',
+            ]);
+            const implementationRoles = ['frontend', 'backend'];
+            const governanceRoles = ['data-marketing', 'documentation', 'code-review', 'reviewer', 'qa'];
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
+            const token = jwt.sign({
+              id: 'sunwoo162-live-e2e',
+              login: 'sunwoo162',
+              name: 'sunwoo162',
+              avatar_url: '',
+              type: 'access',
+            }, process.env.JWT_SECRET, { expiresIn: '20m' });
+            const headers = { Cookie: `playground_token=${token}` };
 
-      - name: Restore main source shape and reapply minimal guard
-        shell: bash
-        run: |
-          set -euo pipefail
-          git fetch origin main
-          git checkout origin/main -- bloom-runtime/src/agent_runtime.rs
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path('bloom-runtime/src/agent_runtime.rs')
-          text = path.read_text()
+            async function request(path) {
+              const response = await fetch(`${base}${path}`, { headers });
+              const text = await response.text();
+              if (!response.ok) {
+                throw new Error(`GET ${path} -> ${response.status}: ${text.slice(0, 500)}`);
+              }
+              return text ? JSON.parse(text) : null;
+            }
 
-          const_anchor = 'const MAX_JSONL_LINE_BYTES: usize = 10 * 1024 * 1024;\n'
-          assert text.count(const_anchor) == 1, text.count(const_anchor)
-          text = text.replace(
-              const_anchor,
-              const_anchor + 'const MAX_AGENT_MESSAGE_DELTA_BYTES: usize = 512 * 1024;\n',
-              1,
-          )
+            function roleRuns(payload, role) {
+              return payload.taskRuns.filter((run) => run.role === role);
+            }
 
-          state_anchor = '''        let mut final_message: Option<String> = None;
-                  let mut turn_status: Option<String> = None;
-                  let mut turn_error: Option<String> = None;
-          '''
-          assert text.count(state_anchor) == 1, text.count(state_anchor)
-          text = text.replace(
-              state_anchor,
-              state_anchor + '        let mut streamed_agent_message_bytes = 0usize;\n',
-              1,
-          )
+            function allRolesDone(payload, roles) {
+              return roles.every((role) => {
+                const runs = roleRuns(payload, role);
+                return runs.length > 0 && runs.every((run) => run.status === 'done');
+              });
+            }
 
-          loop_anchor = '''            let value = read_json_line(&mut reader, &mut events_log)?;
-                      let method = value.get("method").and_then(Value::as_str).unwrap_or_default();
-          '''
-          assert text.count(loop_anchor) == 1, text.count(loop_anchor)
-          guard = '''            let value = read_json_line(&mut reader, &mut events_log)?;
-                      let method = value.get("method").and_then(Value::as_str).unwrap_or_default();
-                      if method == "item/agentMessage/delta" {
-                          if let Some(delta) = value
-                              .get("params")
-                              .and_then(|params| params.get("delta"))
-                              .and_then(Value::as_str)
-                          {
-                              streamed_agent_message_bytes = streamed_agent_message_bytes
-                                  .checked_add(delta.len())
-                                  .ok_or_else(|| "Codex Agent 메시지 누적 출력 안전 한도 계산이 overflow 되었습니다.".to_string())?;
-                              if streamed_agent_message_bytes > MAX_AGENT_MESSAGE_DELTA_BYTES {
-                                  return Err(format!(
-                                      "Codex Agent 메시지 누적 출력 안전 한도를 초과했습니다. bytes={}, limit={}",
-                                      streamed_agent_message_bytes,
-                                      MAX_AGENT_MESSAGE_DELTA_BYTES
-                                  ));
-                              }
-                          }
-                      }
-          '''
-          text = text.replace(loop_anchor, guard, 1)
-          path.write_text(text)
-          PY
-          git diff --check
-          grep -F 'report.blockers.iter().all(is_runtime_owned_publication_blocker)' bloom-runtime/src/agent_runtime.rs
+            async function main() {
+              const projects = await request('/api/builder/projects');
+              const project = [...projects]
+                .sort((a, b) => Number(b.id) - Number(a.id))
+                .find((item) => typeof item.brief === 'string' && item.brief.includes(marker));
+              if (!project) throw new Error('No Bloom Live E2E project found');
 
-      - name: Install workspace dependencies
-        run: pnpm install --frozen-lockfile
+              const runs = await request(`/api/builder/projects/${project.id}/runs`);
+              const run = [...runs].sort((a, b) => Number(b.id) - Number(a.id))[0];
+              if (!run) throw new Error(`Project #${project.id} has no run`);
 
-      - name: Verify Bloom runtime policy suite
-        run: pnpm run test:bloom-runtime
+              const snapshot = await request(`/api/builder/projects/${project.id}/runs/${run.id}/snapshot`);
+              console.log(`[audit] project=${project.id} run=${run.id} projectStatus=${project.status} runStatus=${run.status}`);
+              console.log(`[audit] repository=${project.repositoryFullName || '-'} preview=${project.previewUrl || '-'}`);
+              console.log(`[audit] worker=${run.workerId || '-'} failureReason=${run.failureReason || '-'}`);
+              if (!snapshot) {
+                console.log('[audit] snapshot=none');
+                return;
+              }
 
-      - name: Assert final PR diff is exactly runtime plus regression
-        shell: bash
-        run: |
-          set -euo pipefail
-          git diff --check origin/main...HEAD || true
-          mapfile -t committed < <(git diff --name-only origin/main...HEAD | sort)
-          printf 'committed-before-repair=%s\n' "${committed[@]}"
-          mapfile -t effective < <(git diff --name-only origin/main -- bloom-runtime/src/agent_runtime.rs bloom-runtime/tests/agent_output_guard.rs | sort)
-          printf 'effective=%s\n' "${effective[@]}"
-          test "${#effective[@]}" -eq 2
-          test "${effective[0]}" = 'bloom-runtime/src/agent_runtime.rs'
-          test "${effective[1]}" = 'bloom-runtime/tests/agent_output_guard.rs'
+              const payload = JSON.parse(snapshot.payloadJson);
+              const terminal = run.status === 'completed' || run.status === 'failed';
+              const writers = payload.taskRuns.filter((item) => writerRoles.has(item.role));
+              const writerPrNumbers = writers
+                .map((item) => item.pullRequestNumber)
+                .filter((value) => typeof value === 'number');
+              const writerPrsVerified = writers.length > 0 && writers.every((item) =>
+                item.status === 'done'
+                && Boolean(item.commitSha)
+                && typeof item.pullRequestNumber === 'number'
+                && Boolean(item.pullRequestUrl));
+              const reviewed = new Set(roleRuns(payload, 'code-review').flatMap((item) => item.reviewedPullRequests || []));
+              const reviewCoverage = writerPrNumbers.length > 0 && writerPrNumbers.every((number) => reviewed.has(number));
+              const integrationExpected = payload.integrationPullRequestNumbers || [];
+              const mergedNumbers = new Set(payload.integration?.mergedPullRequests?.map((item) => item.number) || []);
+              const integrationComplete = integrationExpected.length > 0
+                && writerPrNumbers.every((number) => integrationExpected.includes(number))
+                && integrationExpected.every((number) => mergedNumbers.has(number));
 
-      - name: Build Bloom worker
-        run: pnpm run build:bloom-worker
+              const rawChecks = [
+                ['Bloom orchestration snapshot', String(payload.request || '').includes(marker), 'snapshot marker'],
+                ['Organization Intake', Boolean(payload.intake?.analysis && payload.intake?.sessionId), 'intake analysis + session'],
+                ['PM plan', Boolean(payload.plan && payload.pm?.sessionId), 'plan + PM session'],
+                ['Repository bootstrap', Boolean(payload.repository?.repository && payload.repository?.workspacePath), 'repository + workspace'],
+                ['Frontend + Backend implementation', allRolesDone(payload, implementationRoles), 'frontend/backend done'],
+                ['Writer commit / PR evidence', writerPrsVerified, `${writers.length} writer task(s)`],
+                ['Governance chain', allRolesDone(payload, governanceRoles), 'data-marketing -> documentation -> code-review -> reviewer -> qa'],
+                ['Code Review PR coverage', reviewCoverage, `${reviewed.size}/${writerPrNumbers.length} reviewed writer PR(s)`],
+                ['Integration merge', integrationComplete, `${mergedNumbers.size}/${integrationExpected.length} integration PR(s) merged`],
+                ['Run completion', run.status === 'completed' && snapshot.phase === 'completed' && !payload.blockedReason, `run=${run.status} phase=${snapshot.phase} blocked=${payload.blockedReason || '-'}`],
+              ];
 
-      - name: Install Tauri Linux dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            patchelf
+              console.log(`[audit] snapshotPhase=${snapshot.phase} version=${snapshot.version} blocked=${payload.blockedReason || '-'}`);
+              console.log(`[audit] intakeSession=${payload.intake?.sessionId || '-'} pmSession=${payload.pm?.sessionId || '-'}`);
+              console.log(`[audit] runtimeProjectId=${payload.runtimeProjectId || '-'} repositoryName=${payload.plan?.repositoryName || '-'}`);
+              for (const item of payload.taskRuns) {
+                console.log(`[task] ${item.taskId || item.id || '-'} role=${item.role} status=${item.status} attempts=${item.attempts ?? item.attempt ?? '-'} commit=${item.commitSha || '-'} pr=${item.pullRequestNumber || '-'} error=${String(item.error || '-').slice(0, 280)}`);
+              }
 
-      - name: Verify runaway-output regression
-        run: cargo test --manifest-path bloom-runtime/Cargo.toml --test agent_output_guard rejects_agent_message_delta_stream_over_safe_limit -- --nocapture
+              let passed = 0;
+              rawChecks.forEach(([label, condition, detail], index) => {
+                const status = condition ? 'PASS' : terminal ? 'FAIL' : 'PENDING';
+                if (condition) passed += 1;
+                console.log(`[milestone] ${index + 1}/10 ${status} ${label} :: ${detail}`);
+              });
+              console.log(`[audit] RESULT ${passed}/10${passed === 10 ? ' ALL PASS' : ''}`);
+            }
 
-      - name: Verify all Bloom runtime Rust tests
-        run: cargo test --manifest-path bloom-runtime/Cargo.toml
-
-      - name: Verify Bloom runtime Rust build
-        run: cargo check --manifest-path bloom-runtime/Cargo.toml
-
-      - name: Commit minimal source repair
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add bloom-runtime/src/agent_runtime.rs
-          git diff --cached --check
-          git diff --cached --stat
-          git commit -m 'fix : preserve Luna runtime policy shape'
-          git push origin HEAD:fix/luna-agent-output-guard
+            main().catch((error) => {
+              console.error(`[audit] FAILED ${error instanceof Error ? error.stack || error.message : String(error)}`);
+              process.exit(1);
+            });
+            NODE
