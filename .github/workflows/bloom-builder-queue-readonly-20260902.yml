@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Inspect builder 38 repaired PM DAG
+      - name: Inspect active builder task wave
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ssh.gsmsv.site
@@ -28,6 +28,7 @@ jobs:
             node <<'NODE'
             require('dotenv').config({ path: '.env' });
             const fs = require('node:fs');
+            const path = require('node:path');
             const jwt = require('jsonwebtoken');
             const base = 'http://127.0.0.1:3000';
             const token = jwt.sign(
@@ -36,31 +37,45 @@ jobs:
               { expiresIn: '10m' },
             );
             const headers = { Cookie: `playground_token=${token}` };
-            async function get(path) {
-              const response = await fetch(`${base}${path}`, { headers });
+            async function get(route) {
+              const response = await fetch(`${base}${route}`, { headers });
               const text = await response.text();
-              if (!response.ok) throw new Error(`${path} -> ${response.status}: ${text.slice(0, 500)}`);
+              if (!response.ok) throw new Error(`${route} -> ${response.status}: ${text.slice(0, 500)}`);
               return text ? JSON.parse(text) : null;
             }
             async function main() {
-              const run = await get('/api/builder/projects/38/runs/38');
-              const snapshot = await get('/api/builder/projects/38/runs/38/snapshot');
+              const projectId = 39;
+              const runId = 39;
+              const run = await get(`/api/builder/projects/${projectId}/runs/${runId}`);
+              const snapshot = await get(`/api/builder/projects/${projectId}/runs/${runId}/snapshot`);
               console.log(`[run] status=${run?.status || '-'} failure=${run?.failureReason || '-'} phase=${snapshot?.phase || '-'} version=${snapshot?.version ?? '-'}`);
-              const planPath = '/home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-38/pm/pm-plan.json';
-              if (!fs.existsSync(planPath)) {
-                console.log('[pm-plan] missing');
-                return;
+              if (snapshot?.payloadJson) {
+                const payload = JSON.parse(snapshot.payloadJson);
+                console.log('[snapshot-payload]');
+                console.log(JSON.stringify(payload, null, 2));
               }
-              const plan = JSON.parse(fs.readFileSync(planPath, 'utf8'));
-              console.log(`[pm-plan] repository=${JSON.stringify(plan.repository || null)} tasks=${plan.tasks?.length || 0}`);
-              for (const task of plan.tasks || []) {
-                console.log(`[pm-task] id=${task.id || '-'} slug=${task.taskSlug || '-'} role=${task.agentRole || task.role || '-'} deps=${JSON.stringify(task.dependencies || task.dependsOn || [])} title=${JSON.stringify(task.title || '')}`);
+              const root = `/home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-${projectId}`;
+              const planPath = path.join(root, 'pm', 'pm-plan.json');
+              if (fs.existsSync(planPath)) {
+                const plan = JSON.parse(fs.readFileSync(planPath, 'utf8'));
+                console.log(`[pm-plan] tasks=${plan.tasks?.length || 0}`);
+                for (const task of plan.tasks || []) {
+                  console.log(`[pm-task] id=${task.id || '-'} slug=${task.taskSlug || '-'} role=${task.agentRole || task.role || '-'} deps=${JSON.stringify(task.dependencies || task.dependsOn || [])} title=${JSON.stringify(task.title || '')}`);
+                }
+              }
+              console.log('[runtime-files]');
+              for (const candidate of ['tasks', 'agents', 'reports', 'events']) {
+                const dir = path.join(root, candidate);
+                if (!fs.existsSync(dir)) continue;
+                for (const entry of fs.readdirSync(dir, { withFileTypes: true }).slice(0, 80)) {
+                  console.log(`${candidate}/${entry.name}${entry.isDirectory() ? '/' : ''}`);
+                }
               }
             }
             main().catch((error) => { console.error(`[inspect] FAILED ${error.stack || error}`); process.exit(1); });
             NODE
-            echo '[validator-source-hits]'
-            grep -RIn --exclude-dir=node_modules --exclude-dir=.git -E 'Documentation Agent Task|제품 마케팅/문서화 DAG|validateLiveE2EImplementationPlan|Marketing Agent' . | head -n 120 || true
+            echo '[active-runtimes]'
+            ps -eo pid,ppid,etime,%cpu,%mem,stat,cmd --sort=pid | grep -E 'bloom-runtime-bridge|bloomLocalAgentRuntime|llama|8091' | grep -v grep || true
             echo '[llama-current]'
             node <<'NODE'
             const { execFileSync } = require('node:child_process');
