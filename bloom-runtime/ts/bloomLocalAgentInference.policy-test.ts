@@ -68,9 +68,42 @@ async function testRetriesOneTransientFetchFailure() {
   assert.equal(calls, 2, "a transient local fetch failure should retry once instead of failing the whole Builder run");
 }
 
+function truncatedLengthResponse(): Response {
+  return streamingResponse([
+    'data: {"choices":[{"delta":{"content":"{\\"ok\\":"},"finish_reason":null}]}\n\n',
+    'data: {"choices":[{"delta":{},"finish_reason":"length"}]}\n\n',
+    'data: [DONE]\n\n',
+  ]);
+}
+
+async function testRetriesTruncatedJsonConcise() {
+  const bodies: Array<Record<string, unknown>> = [];
+  let calls = 0;
+  const fetchImpl: typeof fetch = async (_input, init) => {
+    calls += 1;
+    bodies.push(JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>);
+    return calls === 1 ? truncatedLengthResponse() : successResponse();
+  };
+
+  const result = await requestLocalModel({
+    endpoint: "http://127.0.0.1:8091/v1/chat/completions",
+    model: "qwen2.5-coder-1.5b-instruct",
+    messages: [{ role: "user", content: "return json" }],
+    fetchImpl,
+    timeoutMs: 1_000,
+    maxRetries: 1,
+  });
+
+  assert.deepEqual(result, { ok: true });
+  assert.equal(calls, 2, "a token-limit truncated JSON response should retry once");
+  const retryMessages = bodies[1]?.messages as Array<{ role?: string; content?: string }> | undefined;
+  assert.match(retryMessages?.[retryMessages.length - 1]?.content ?? "", /concise|token limit|valid JSON/i,
+    "the retry must explicitly ask for a shorter complete JSON object");
+}
 async function main() {
   await testStreamsLongModelResponses();
   await testRetriesOneTransientFetchFailure();
+  await testRetriesTruncatedJsonConcise();
   console.log("Bloom local Agent inference transport policy tests passed");
 }
 

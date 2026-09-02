@@ -178,10 +178,21 @@ function isTransientTransportError(error: unknown): boolean {
   return error instanceof TypeError || (error instanceof Error && /fetch failed|socket|connection|reset/i.test(error.message));
 }
 
+function outputRetryInstruction(error: unknown): string | null {
+  if (!(error instanceof Error)) return null;
+  if (!/token limit|not valid JSON|empty response|missing message content/i.test(error.message)) return null;
+  return [
+    "Your previous response was incomplete or invalid JSON.",
+    "Retry from scratch and return exactly one concise valid JSON object matching the required schema.",
+    "Finish the complete JSON well before the token limit; schema maxima are upper bounds, not targets.",
+  ].join(" ");
+}
+
 export async function requestLocalModel(input: LocalModelRequest): Promise<JsonObject> {
   const fetchImpl = input.fetchImpl ?? fetch;
   const timeoutMs = input.timeoutMs ?? 15 * 60 * 1000;
   const maxRetries = input.maxRetries ?? 1;
+  let retryInstruction: string | null = null;
 
   for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
     const controller = new AbortController();
@@ -192,7 +203,9 @@ export async function requestLocalModel(input: LocalModelRequest): Promise<JsonO
         headers: { "content-type": "application/json", accept: "text/event-stream, application/json" },
         body: JSON.stringify({
           model: input.model,
-          messages: input.messages,
+          messages: retryInstruction
+            ? [...input.messages, { role: "user", content: retryInstruction }]
+            : input.messages,
           temperature: 0.1,
           max_tokens: 4096,
           stream: true,
@@ -216,6 +229,11 @@ export async function requestLocalModel(input: LocalModelRequest): Promise<JsonO
       return parseCompletionEnvelope(raw);
     } catch (error) {
       if (controller.signal.aborted) throw new Error(`Local model request timed out after ${timeoutMs}ms.`);
+      const correction = outputRetryInstruction(error);
+      if (attempt < maxRetries && correction) {
+        retryInstruction = correction;
+        continue;
+      }
       if (attempt < maxRetries && isTransientTransportError(error)) continue;
       throw error;
     } finally {
@@ -365,6 +383,7 @@ export async function runLocalStructuredInference(
   const system = [
     "You are Bloom's local structured inference engine.",
     "Return exactly one JSON object and no Markdown or tool request.",
+    "Keep values concise and finish valid JSON well before the token limit; schema maxima are upper bounds, not targets.",
     "You have no tools, network access, credentials, or mutation permission.",
     "Required output schema:",
     JSON.stringify(input.outputSchema),
