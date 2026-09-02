@@ -69,5 +69,12 @@ jobs:
             }
             main().catch((error) => { console.error(`[queue] FAILED ${error.stack || error}`); process.exit(1); });
             NODE
-            echo '[children]'
-            ps -eo pid,ppid,etime,cmd | grep -E 'bloom-worker/run.js|bloom-runtime-bridge|luna-runtime-headless' | grep -v grep | tail -n 30 || true
+            echo '[process-tree]'
+            ps -eo pid,ppid,etime,%cpu,%mem,stat,cmd --sort=pid | grep -E 'bloom-worker/run.js|bloom-runtime-bridge|bloomLocalAgentRuntime|llama|8091' | grep -v grep || true
+            echo '[builder-tree]'
+            pstree -ap $(pgrep -f 'bloom-worker/run.js' | tail -n 1) 2>/dev/null || true
+            echo '[llama-health]'
+            curl -fsS --max-time 3 http://127.0.0.1:8091/health || true
+            echo
+            echo '[builder-33-files]'
+            find /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-33 -maxdepth 4 -type f -printf '%TY-%Tm-%TdT%TH:%TM:%TSZ %s %p\n' 2>/dev/null | sort | tail -n 40 || true
