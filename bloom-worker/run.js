@@ -17,6 +17,7 @@ const { validateLiveE2EImplementationPlan } = require("../.tmp/bloom-worker/e2eS
 const MAX_BRIDGE_OUTPUT_BYTES = 16 * 1024 * 1024;
 const MAX_PM_PLAN_ATTEMPTS = 2;
 const PM_PLAN_UNIQUENESS_CONTRACT = "Task IDs and taskSlug values must each be unique across the plan.";
+const PM_PLAN_MARKETING_CHAIN_CONTRACT = `Mandatory governance dependency chain: data-marketing -> documentation -> code-review -> reviewer -> qa. In this invariant, "after" means a transitive dependsOn path, not task array order. Documentation must transitively depend on Data & Marketing; Code Review must transitively depend on both Data & Marketing and Documentation; Reviewer must transitively depend on Code Review; QA must transitively depend on Reviewer.`;
 const TEAM_NAMES = new Map([
   ["rose", "장미"],
   ["lily", "백합"],
@@ -106,7 +107,7 @@ function isSemanticPmPlanError(error) {
 function buildPmPlanningRequest(request, validationError = "") {
   const sections = [
     request,
-    `Bloom PM planning invariant:\n- ${PM_PLAN_UNIQUENESS_CONTRACT}`,
+    `Bloom PM planning invariants:\n- ${PM_PLAN_UNIQUENESS_CONTRACT}\n- ${PM_PLAN_MARKETING_CHAIN_CONTRACT}`,
   ];
   if (validationError) {
     sections.push(
