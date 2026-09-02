@@ -204,6 +204,7 @@ export type HeadlessBuilderExecutorOptions = {
   teamId: TeamId;
   teamName: string;
   runtime: HeadlessBuilderRuntime;
+  maxParallelTasks?: number;
   now?: () => string;
 };
 
@@ -472,6 +473,10 @@ export function createHeadlessBuilderExecutor(
   const organization = options.organization.trim();
   const workspaceRoot = options.workspaceRoot.trim();
   const teamName = options.teamName.trim();
+  const maxParallelTasks = options.maxParallelTasks ?? 6;
+  if (!Number.isInteger(maxParallelTasks) || maxParallelTasks < 1 || maxParallelTasks > 6) {
+    throw new Error("Headless Builder maxParallelTasks must be an integer between 1 and 6.");
+  }
   if (!organization) throw new Error("Headless Builder GitHub organization이 필요합니다.");
   if (!workspaceRoot) throw new Error("Headless Builder workspace root가 필요합니다.");
   if (!teamName) throw new Error("Headless Builder team name이 필요합니다.");
@@ -607,7 +612,7 @@ export function createHeadlessBuilderExecutor(
         await failBlocked("하나 이상의 Agent Task가 blocked 상태라 orchestration을 계속할 수 없습니다.");
       }
 
-      const wave = selectAdaptiveOrchestrationWave(payload.plan, payload.taskRuns);
+      const wave = selectAdaptiveOrchestrationWave(payload.plan, payload.taskRuns, maxParallelTasks);
       if (wave.length === 0) {
         await failBlocked("실행 가능한 Agent Task가 없지만 Task DAG가 완료되지 않았습니다.");
       }

@@ -91,6 +91,22 @@ jobs:
             fi
             echo "Bloom worker deployment lock acquired"
 
+            BLOOM_SWAP_FILE=/swapfile
+            if ! swapon --show=NAME --noheadings | grep -Fxq "$BLOOM_SWAP_FILE"; then
+              if [ ! -f "$BLOOM_SWAP_FILE" ]; then
+                sudo fallocate -l 2G "$BLOOM_SWAP_FILE"
+              fi
+              sudo chmod 600 "$BLOOM_SWAP_FILE"
+              sudo mkswap "$BLOOM_SWAP_FILE" >/dev/null
+              sudo swapon "$BLOOM_SWAP_FILE"
+            fi
+            if ! grep -Fq "$BLOOM_SWAP_FILE none swap sw 0 0" /etc/fstab; then
+              printf '%s none swap sw 0 0\n' "$BLOOM_SWAP_FILE" | sudo tee -a /etc/fstab >/dev/null
+            fi
+            printf 'vm.swappiness=10\n' | sudo tee /etc/sysctl.d/99-bloom-memory.conf >/dev/null
+            sudo sysctl -p /etc/sysctl.d/99-bloom-memory.conf >/dev/null
+            swapon --show
+
             git fetch origin main
             git reset --hard origin/main
 
@@ -179,6 +195,7 @@ jobs:
             append_default_env BLOOM_BUILDER_WORKER_ID bloom-builder-production
             append_default_env BLOOM_GITHUB_ORGANIZATION sunwoo162
             append_default_env BLOOM_WORKSPACE_ROOT /home/ubuntu/bloom-workspaces
+            set_env_value BLOOM_BUILDER_MAX_PARALLEL_TASKS 2
             append_default_env BLOOM_TEAM_ID rose
             append_default_env BLOOM_TEAM_NAME Rose
             append_default_env BLOOM_WORKER_POLL_INTERVAL_MS 5000
