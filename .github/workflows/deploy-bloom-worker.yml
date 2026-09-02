@@ -82,6 +82,15 @@ jobs:
             cd /home/ubuntu/bloombouquet
             export PATH="$HOME/.local/bin:$HOME/.llama/bin:$HOME/.local/node_modules/.bin:$PATH"
 
+            DEPLOY_LOCK_FILE=/tmp/bloombouquet-bloom-worker-deploy.lock
+            exec 9>"$DEPLOY_LOCK_FILE"
+            echo "Waiting for Bloom worker deployment lock"
+            if ! flock --wait 1800 9; then
+              echo "Timed out waiting for Bloom worker deployment lock"
+              exit 1
+            fi
+            echo "Bloom worker deployment lock acquired"
+
             git fetch origin main
             git reset --hard origin/main
 
