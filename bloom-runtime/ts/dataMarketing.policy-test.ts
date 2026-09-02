@@ -115,6 +115,31 @@ function run() {
   }
 
   {
+    const partialPlan = basePlan([
+      ...basePlan().tasks,
+      {
+        id: "BLOOM-421",
+        title: "Analyze product marketing",
+        role: "data-marketing",
+        taskSlug: "product-marketing-strategy",
+        summary: `Write ${PRODUCT_MARKETING_POLICY.analysisPath}.`,
+        dependsOn: ["DEV-001"],
+        acceptanceCriteria: ["Marketing analysis recorded"],
+      },
+    ]);
+    const repaired = ensureMarketingDocumentationPlan(partialPlan);
+    const marketing = repaired.tasks.filter((task) => task.role === "data-marketing");
+    const documentation = repaired.tasks.find(
+      (task) => task.role === "documentation" && task.dependsOn.includes("BLOOM-421"),
+    );
+
+    assert(marketing.length === 1, "existing Data & Marketing task must be preserved without duplication");
+    assert(Boolean(documentation), "missing Documentation chain must be repaired after an existing marketing task");
+    validateMarketingDocumentationPlan(repaired);
+    validateProjectPlanReviewTopology(repaired);
+  }
+
+  {
     let threw = false;
     try {
       validateMarketingDocumentationPlan(basePlan());
