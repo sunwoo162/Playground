@@ -52,19 +52,20 @@ test('BloomBouquet shares one thin-border editorial visual system', () => {
 });
 
 test('public showcase uses a compact product-site typography and layout scale', () => {
+  const showcase = source(paths.showcase);
   const css = source(paths.showcaseCss);
+  assert.doesNotMatch(showcase, /bouquet-showcase-intro/);
 
   assert.match(css, /bouquet-showcase-shell\s*\{[^}]*padding:\s*0 32px 88px/s);
-  assert.match(css, /bouquet-showcase-hero\s*\{[^}]*padding:\s*clamp\(58px,\s*6vw,\s*76px\) 0 34px/s);
-  assert.match(css, /bouquet-showcase-intro h1\s*\{[^}]*font-size:\s*clamp\(40px,\s*4\.8vw,\s*64px\)[^}]*line-height:\s*1\.04[^}]*letter-spacing:\s*-\.035em/s);
-  assert.match(css, /bouquet-showcase-copy\s*\{[^}]*max-width:\s*600px[^}]*font-size:\s*15px[^}]*line-height:\s*1\.68/s);
+  assert.match(css, /bouquet-showcase-hero\s*\{[^}]*justify-content:\s*flex-end[^}]*padding:\s*20px 0/s);
+  assert.doesNotMatch(css, /bouquet-showcase-intro|bouquet-showcase-copy/);
   assert.match(css, /bouquet-team-filter button,[\s\S]*?font-size:\s*10px/s);
   assert.match(css, /bouquet-project-gallery\s*\{[^}]*gap:\s*36px 28px/s);
   assert.match(css, /bouquet-project-heading h2\s*\{[^}]*font-size:\s*21px/s);
   assert.match(css, /bouquet-project-heading p\s*\{[^}]*font-size:\s*13px[^}]*line-height:\s*1\.65/s);
   assert.match(css, /bouquet-project-meta span\s*\{[^}]*font-size:\s*10px/s);
   assert.match(css, /bouquet-project-card \.bouquet-score-badge strong\s*\{\s*font-size:\s*26px/s);
-  assert.match(css, /@media \(max-width:\s*700px\)[\s\S]*?bouquet-showcase-intro h1\s*\{\s*font-size:\s*clamp\(36px,\s*10vw,\s*44px\)/s);
+  assert.match(css, /@media \(max-width:\s*700px\)[\s\S]*?bouquet-showcase-hero\s*\{\s*padding:\s*16px 0/s);
 });
 
 test('public showcase is a real project gallery with dedicated detail and agent report views', () => {

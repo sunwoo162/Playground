@@ -101,11 +101,6 @@ export default function BouquetShowcaseApp() {
       <header className="bouquet-showcase-header">
         <div className="bouquet-showcase-nav"><BouquetWordmark /></div>
         <div className="bouquet-showcase-hero">
-          <div className="bouquet-showcase-intro">
-            <p className="bouquet-kicker">LUNA AGENT SYSTEM · PROJECT SHOWCASE</p>
-            <h1>만든 프로젝트를<br />결과로 보여줍니다.</h1>
-            <p className="bouquet-showcase-copy">Luna Agent System이 만든 실제 배포 프로젝트와 독립적인 Senior Agent 평가 결과를 한곳에서 확인합니다.</p>
-          </div>
           <div className="bouquet-showcase-metrics" aria-label="BloomBouquet summary">
             <Metric value={projects.length} label="Projects" />
             <Metric value={teamNames.length} label="Teams" />
