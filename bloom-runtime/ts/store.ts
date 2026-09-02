@@ -361,7 +361,7 @@ export function startProject(state: ProjectTeamsState, request: string): StartPr
     workspacePath: null,
     pmSessionId: null,
     runtimeFailureSource: null,
-    runtimeMessage: `팀 배정 완료 · ${allocation.record.reason} · PM Codex 실행 준비`,
+    runtimeMessage: `팀 배정 완료 · ${allocation.record.reason} · PM Local Agent 실행 준비`,
   };
 
   const nextState: ProjectTeamsState = {
@@ -396,7 +396,7 @@ export function beginProjectPlanning(state: ProjectTeamsState, projectId: string
     ...currentProject,
     status: "planning",
     runtimeFailureSource: null,
-    runtimeMessage: "PM Codex가 프로젝트를 분석하고 실제 서비스 계획을 작성 중",
+    runtimeMessage: "PM Local Agent가 프로젝트를 분석하고 실제 서비스 계획을 작성 중",
   }));
 
   nextState = {

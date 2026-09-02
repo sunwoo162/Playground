@@ -1,6 +1,3 @@
-import { spawn } from "node:child_process";
-import { createInterface } from "node:readline";
-
 import {
   SENIOR_EVALUATION_REPORT_CONTRACT,
   type AgentEvaluation,
@@ -15,9 +12,6 @@ import type {
   IndependentEvaluatorRole,
   SeniorEvaluatorRunner,
 } from "./bloomBouquetEvaluatorWorker";
-
-const MAX_JSONL_LINE_BYTES = 10 * 1024 * 1024;
-const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
 
 const SEVERITIES: EvaluationSeverity[] = ["info", "low", "medium", "high", "critical"];
 const PRIORITIES: EvaluationPriority[] = ["p3", "p2", "p1", "p0"];
@@ -85,28 +79,6 @@ export const AGGREGATE_EVALUATOR_OUTPUT_SCHEMA = {
     reportSummary: { type: "string", minLength: 1, maxLength: 20000 },
   },
 } as const;
-
-export type CodexEvaluatorRequest = {
-  title: string;
-  prompt: string;
-  outputSchema: Record<string, unknown>;
-  approvalPolicy: "never";
-  sandboxPolicy: {
-    type: "readOnly";
-    networkAccess: true;
-  };
-};
-
-export type CodexEvaluatorTransport = {
-  run(request: CodexEvaluatorRequest): Promise<unknown>;
-};
-
-export type CodexSeniorEvaluatorRunnerOptions = {
-  transport?: CodexEvaluatorTransport;
-  command?: string;
-  cwd?: string;
-  timeoutMs?: number;
-};
 
 function evidenceAvailability(input: IndependentEvaluatorInput): string {
   const frontend = input.submission.frontendRepositoryUrl ?? "NOT PROVIDED";
@@ -274,188 +246,5 @@ export function parseAggregateEvaluatorOutput(value: unknown): AggregateEvaluati
     overallScore: requireIntegerRange(record.overallScore, "overallScore", 0, 100),
     overallStars: requireNumberRange(record.overallStars, "overallStars", 1, 5),
     reportSummary: requireString(record.reportSummary, "reportSummary", 20000),
-  };
-}
-
-function createDefaultCodexTransport(options: {
-  command: string;
-  cwd: string;
-  timeoutMs: number;
-}): CodexEvaluatorTransport {
-  return {
-    async run(request) {
-      const child = spawn(options.command, ["app-server", "--listen", "stdio://"], {
-        cwd: options.cwd,
-        windowsHide: true,
-        stdio: ["pipe", "pipe", "pipe"],
-      });
-      const lines = createInterface({ input: child.stdout, crlfDelay: Infinity });
-      const iterator = lines[Symbol.asyncIterator]();
-      let childError: Error | null = null;
-      let timedOut = false;
-      let stderrBytes = 0;
-
-      child.on("error", (error) => {
-        childError = error;
-      });
-      child.stderr.on("data", (chunk: Buffer) => {
-        stderrBytes += chunk.length;
-        if (stderrBytes > MAX_JSONL_LINE_BYTES) child.kill();
-      });
-
-      const timeout = setTimeout(() => {
-        timedOut = true;
-        child.kill();
-      }, options.timeoutMs);
-
-      const write = (message: unknown) => {
-        if (!child.stdin.writable) throw new Error("Codex evaluator stdin is not writable.");
-        child.stdin.write(`${JSON.stringify(message)}\n`);
-      };
-
-      const read = async (): Promise<Record<string, unknown>> => {
-        const next = await iterator.next();
-        if (next.done) {
-          if (timedOut) throw new Error(`Codex evaluator timed out after ${options.timeoutMs}ms.`);
-          if (childError) throw new Error(`Codex evaluator process failed: ${childError.message}`);
-          throw new Error("Codex evaluator app-server exited before the protocol completed.");
-        }
-        const line = String(next.value).trim();
-        if (Buffer.byteLength(line, "utf8") > MAX_JSONL_LINE_BYTES) {
-          throw new Error("Codex evaluator JSONL message exceeded the 10MB safety limit.");
-        }
-        let parsed: unknown;
-        try {
-          parsed = JSON.parse(line);
-        } catch {
-          throw new Error("Codex evaluator returned invalid JSONL.");
-        }
-        return asRecord(parsed, "Codex app-server message");
-      };
-
-      const waitForResponse = async (id: number): Promise<Record<string, unknown>> => {
-        while (true) {
-          const message = await read();
-          if (message.id !== id) continue;
-          if (message.error !== undefined) throw new Error(`Codex evaluator request ${id} failed.`);
-          return asRecord(message.result, `Codex evaluator response ${id}`);
-        }
-      };
-
-      try {
-        write({
-          method: "initialize",
-          id: 0,
-          params: {
-            clientInfo: {
-              name: "bloombouquet_evaluator",
-              title: "BloomBouquet Senior Evaluator",
-              version: "0.1.0",
-            },
-            capabilities: {},
-          },
-        });
-        await waitForResponse(0);
-        write({ method: "initialized", params: {} });
-
-        write({
-          method: "thread/start",
-          id: 1,
-          params: {
-            cwd: options.cwd,
-            approvalPolicy: request.approvalPolicy,
-            sandbox: "read-only",
-            serviceName: "bloombouquet_evaluator",
-          },
-        });
-        const threadResult = await waitForResponse(1);
-        const thread = asRecord(threadResult.thread, "Codex evaluator thread");
-        const threadId = requireString(thread.id, "thread.id", 256);
-
-        write({
-          method: "turn/start",
-          id: 2,
-          params: {
-            threadId,
-            input: [{ type: "text", text: request.prompt }],
-            cwd: options.cwd,
-            title: request.title,
-            approvalPolicy: request.approvalPolicy,
-            sandboxPolicy: request.sandboxPolicy,
-            outputSchema: request.outputSchema,
-          },
-        });
-        const turnResult = await waitForResponse(2);
-        const turn = asRecord(turnResult.turn, "Codex evaluator turn");
-        const turnId = requireString(turn.id, "turn.id", 256);
-
-        let finalMessage: string | null = null;
-        while (true) {
-          const message = await read();
-          const method = typeof message.method === "string" ? message.method : "";
-          if (method === "item/completed") {
-            const params = asRecord(message.params, "item/completed params");
-            const item = asRecord(params.item, "item/completed item");
-            if (item.type === "agentMessage" && typeof item.text === "string") {
-              finalMessage = item.text;
-            }
-          }
-          if (method !== "turn/completed") continue;
-
-          const params = asRecord(message.params, "turn/completed params");
-          const completedTurn = asRecord(params.turn, "turn/completed turn");
-          if (completedTurn.id !== turnId) continue;
-          if (completedTurn.status !== "completed") {
-            throw new Error("Codex evaluator turn did not complete successfully.");
-          }
-          break;
-        }
-
-        if (!finalMessage) throw new Error("Codex evaluator final agentMessage is missing.");
-        try {
-          return JSON.parse(finalMessage) as unknown;
-        } catch {
-          throw new Error("Codex evaluator final message is not valid JSON.");
-        }
-      } finally {
-        clearTimeout(timeout);
-        lines.close();
-        child.stdin.end();
-        if (!child.killed) child.kill();
-      }
-    },
-  };
-}
-
-export function createCodexSeniorEvaluatorRunner(
-  options: CodexSeniorEvaluatorRunnerOptions = {},
-): SeniorEvaluatorRunner {
-  const transport = options.transport ?? createDefaultCodexTransport({
-    command: options.command?.trim() || "codex",
-    cwd: options.cwd?.trim() || process.cwd(),
-    timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-  });
-
-  return {
-    async evaluate(input) {
-      const output = await transport.run({
-        title: `BloomBouquet ${input.role} evaluator run ${input.runId}`,
-        prompt: buildIndependentEvaluatorPrompt(input),
-        outputSchema: INDEPENDENT_EVALUATOR_OUTPUT_SCHEMA as unknown as Record<string, unknown>,
-        approvalPolicy: "never",
-        sandboxPolicy: { type: "readOnly", networkAccess: true },
-      });
-      return parseIndependentEvaluatorOutput(output, input.role);
-    },
-    async aggregate(input) {
-      const output = await transport.run({
-        title: `BloomBouquet process-evaluator run ${input.runId}`,
-        prompt: buildAggregateEvaluatorPrompt(input),
-        outputSchema: AGGREGATE_EVALUATOR_OUTPUT_SCHEMA as unknown as Record<string, unknown>,
-        approvalPolicy: "never",
-        sandboxPolicy: { type: "readOnly", networkAccess: true },
-      });
-      return parseAggregateEvaluatorOutput(output);
-    },
   };
 }

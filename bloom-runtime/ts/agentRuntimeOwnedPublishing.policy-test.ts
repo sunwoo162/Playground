@@ -17,7 +17,7 @@ const reconciliationSource = fs.readFileSync(
 
 assert(
   source.includes("fn publish_repository_writer_result("),
-  "Luna Runtime must own repository-writer publishing outside the Codex sandbox",
+  "Luna Runtime must own repository-writer publishing outside the local model tool boundary",
 );
 assert(
   source.includes('git_args(worktree, &["add", "-A"])'),
@@ -29,11 +29,11 @@ assert(
 );
 assert(
   source.includes("Luna Runtime will publish your completed work after this turn"),
-  "writer prompt must tell Codex not to work around protected Git metadata",
+  "writer prompt must tell the local model not to work around protected Git metadata",
 );
 assert(
   source.includes("publish_repository_writer_result(&input, &worktree, branch_name, &mut report)?;"),
-  "dispatch must publish and verify writer work after the sandboxed turn completes",
+  "dispatch must publish and verify writer work after the local model turn completes",
 );
 
 assert(
@@ -58,7 +58,7 @@ assert(
 );
 assert(
   source.includes("AgentToolStateGuard::prepare(tool_state_root.clone())?"),
-  "agent runtime must activate tool-state cleanup before spawning Codex",
+  "agent runtime must activate tool-state cleanup before spawning the local Agent runner",
 );
 assert(
   source.includes("if root.exists()"),
@@ -128,12 +128,12 @@ for (const role of REPOSITORY_WRITER_ROLES) {
 }
 
 assert(
-  source.includes("reuse or update your existing prefixed top-level comment instead of creating a duplicate"),
-  "review retries must make GitHub comment publication idempotent",
+  source.includes("Do not create review comments or otherwise mutate GitHub from the local model tool boundary"),
+  "review agents must not perform GitHub mutations from the local model tool boundary",
 );
 assert(
-  source.includes("Do not merge, close, label, retarget, or otherwise mutate pull requests"),
-  "review agents must not perform non-idempotent GitHub mutations outside their review comment",
+  source.includes("Record every PR you actually inspected in reviewedPullRequests"),
+  "review agents must preserve inspected PR evidence in the structured report",
 );
 
 console.log("PASS  Luna Runtime owns publishing and cleans task-scoped tool state.");

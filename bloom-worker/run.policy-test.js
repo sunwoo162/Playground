@@ -23,10 +23,10 @@ test('Bloom worker entrypoint wires evaluator runtime and gates builder behind m
 
   assert.match(source, /createBloomBouquetEvaluatorHttpClient/);
   assert.match(source, /runBloomBouquetEvaluatorOnce/);
-  assert.match(source, /createCodexSeniorEvaluatorRunner/);
+  assert.doesNotMatch(source, /createCodexSeniorEvaluatorRunner/);
   assert.match(source, /createLocalSeniorEvaluatorRunner/);
   assert.match(source, /BLOOM_EVALUATOR_RUNTIME/);
-  assert.match(source, /evaluatorRuntime === ['"]local['"]/);
+  assert.match(source, /createLocalSeniorEvaluatorRunner\(\)/);
   assert.match(source, /resolveBloomWorkerMode/);
   assert.match(source, /mode === ['"]builder['"]/);
 });

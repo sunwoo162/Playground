@@ -9,7 +9,6 @@ const { createBuilderWorkerHttpClient } = require("../.tmp/bloom-worker/builderW
 const { createObservedHeadlessBuilderExecutor } = require("../.tmp/bloom-worker/observedHeadlessBuilderExecutor.js");
 const { createBloomBouquetEvaluatorHttpClient } = require("../.tmp/bloom-worker/bloomBouquetEvaluatorHttpClient.js");
 const { runBloomBouquetEvaluatorOnce } = require("../.tmp/bloom-worker/bloomBouquetEvaluatorWorker.js");
-const { createCodexSeniorEvaluatorRunner } = require("../.tmp/bloom-worker/bloomBouquetSeniorEvaluator.js");
 const { createLocalSeniorEvaluatorRunner } = require("../.tmp/bloom-worker/bloomBouquetLocalSeniorEvaluator.js");
 const { createLunaProductionDeliveryHook } = require("../.tmp/bloom-worker/lunaProductionDelivery.js");
 const { prepareOrchestrationPlan } = require("../.tmp/bloom-worker/orchestrationCore.js");
@@ -25,7 +24,11 @@ const TEAM_NAMES = new Map([
   ["sunflower", "해바라기"],
   ["cherry-blossom", "벚꽃"],
 ]);
-const EVALUATOR_RUNTIMES = new Set(["codex", "local"]);
+const EVALUATOR_RUNTIMES = new Set(["local"]);
+
+if (!process.env.BLOOM_LOCAL_AGENT_RUNNER_PATH) {
+  process.env.BLOOM_LOCAL_AGENT_RUNNER_PATH = path.resolve(__dirname, "../.tmp/bloom-worker/bloomLocalAgentRuntime.js");
+}
 
 function configValue(primary, legacy) {
   return process.env[primary]?.trim() || (legacy ? process.env[legacy]?.trim() : "") || "";
@@ -51,9 +54,9 @@ function integerConfig(primary, legacy, fallback, minimum) {
 }
 
 function resolveEvaluatorRuntime(value) {
-  const normalized = String(value || "codex").trim().toLowerCase() || "codex";
+  const normalized = String(value || "local").trim().toLowerCase() || "local";
   if (!EVALUATOR_RUNTIMES.has(normalized)) {
-    throw new Error(`BLOOM_EVALUATOR_RUNTIME은 codex 또는 local이어야 합니다: ${normalized}`);
+    throw new Error(`BLOOM_EVALUATOR_RUNTIME은 local이어야 합니다: ${normalized}`);
   }
   return normalized;
 }
@@ -229,9 +232,7 @@ async function runEvaluatorMode({ baseUrl, token, pollIntervalMs, isStopping }) 
 
   const evaluatorRuntime = resolveEvaluatorRuntime(process.env.BLOOM_EVALUATOR_RUNTIME);
   const client = createBloomBouquetEvaluatorHttpClient({ baseUrl, token });
-  const runner = evaluatorRuntime === "local"
-    ? createLocalSeniorEvaluatorRunner()
-    : createCodexSeniorEvaluatorRunner({ cwd: path.resolve(__dirname, "..") });
+  const runner = createLocalSeniorEvaluatorRunner();
 
   console.log(`[bloom-worker] started mode=evaluator runtime=${evaluatorRuntime} workerId=${workerId} api=${baseUrl}`);
   while (!isStopping()) {

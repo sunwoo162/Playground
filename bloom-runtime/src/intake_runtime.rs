@@ -1,3 +1,4 @@
+use crate::local_inference_runtime;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
@@ -212,63 +213,6 @@ pub struct AnalyzeProjectIntakeResult {
     output_path: String,
 }
 
-fn run_checked_with_stdin(program: &str, args: &[String], input: &str) -> Result<Output, String> {
-    let mut child = Command::new(program)
-        .args(args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|error| format!("{program} 실행 실패: {error}"))?;
-
-    if let Some(mut stdin) = child.stdin.take() {
-        stdin
-            .write_all(input.as_bytes())
-            .map_err(|error| format!("{program} 입력 전달 실패: {error}"))?;
-    }
-
-    let output = child
-        .wait_with_output()
-        .map_err(|error| format!("{program} 실행 결과 확인 실패: {error}"))?;
-    if output.status.success() {
-        return Ok(output);
-    }
-
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    let detail = if !stderr.is_empty() { stderr } else { stdout };
-    Err(if detail.is_empty() {
-        format!("{program} 명령이 실패했습니다.")
-    } else {
-        format!("{program} 명령 실패: {detail}")
-    })
-}
-
-fn command_succeeds(program: &str, args: &[&str]) -> bool {
-    Command::new(program)
-        .args(args)
-        .output()
-        .map(|output| output.status.success())
-        .unwrap_or(false)
-}
-
-fn codex_chatgpt_authenticated() -> bool {
-    let Ok(output) = Command::new("codex").args(["login", "status"]).output() else {
-        return false;
-    };
-    if !output.status.success() {
-        return false;
-    }
-
-    let combined = format!(
-        "{}\n{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    )
-    .to_ascii_lowercase();
-    combined.contains("chatgpt")
-}
-
 fn validate_identifier(value: &str, label: &str) -> Result<(), String> {
     let value = value.trim();
     if value.is_empty() || value.len() > 120 {
@@ -281,30 +225,6 @@ fn validate_identifier(value: &str, label: &str) -> Result<(), String> {
         return Err(format!("{label} 값에 사용할 수 없는 문자가 있습니다."));
     }
     Ok(())
-}
-
-fn extract_codex_session_id(events: &str) -> Option<String> {
-    for line in events.lines() {
-        let Ok(value) = serde_json::from_str::<Value>(line) else {
-            continue;
-        };
-        for key in ["session_id", "sessionId", "thread_id", "threadId"] {
-            if let Some(id) = value.get(key).and_then(Value::as_str) {
-                if !id.trim().is_empty() {
-                    return Some(id.to_string());
-                }
-            }
-        }
-        let event_type = value.get("type").and_then(Value::as_str).unwrap_or_default();
-        if event_type.contains("thread") || event_type.contains("session") {
-            if let Some(id) = value.get("id").and_then(Value::as_str) {
-                if !id.trim().is_empty() {
-                    return Some(id.to_string());
-                }
-            }
-        }
-    }
-    None
 }
 
 fn validate_analysis(analysis: &ProjectIntakeAnalysis) -> Result<(), String> {
@@ -402,12 +322,6 @@ fn analyze_project_intake_blocking(
     if request.len() > 20_000 {
         return Err("프로젝트 요구사항이 너무 깁니다. 핵심 요구사항을 20,000자 이내로 정리해 주세요.".to_string());
     }
-    if !command_succeeds("codex", &["--version"]) {
-        return Err("Codex CLI가 설치되어 있지 않습니다.".to_string());
-    }
-    if !codex_chatgpt_authenticated() {
-        return Err("Bloom Project Intake는 ChatGPT 로그인 상태의 Codex가 필요합니다.".to_string());
-    }
 
     let intake_dir = PathBuf::from(&workspace_root)
         .join(".luna-runtime")
@@ -423,35 +337,27 @@ fn analyze_project_intake_blocking(
         .map_err(|error| format!("Project Intake schema 저장 실패: {error}"))?;
 
     let prompt = intake_prompt(&organization, &intake_id, &request);
-    let args = vec![
-        "exec".to_string(),
-        "--json".to_string(),
-        "--output-schema".to_string(),
-        schema_path.to_string_lossy().to_string(),
-        "--output-last-message".to_string(),
-        output_path.to_string_lossy().to_string(),
-        "--sandbox".to_string(),
-        "read-only".to_string(),
-        "--skip-git-repo-check".to_string(),
-        "-C".to_string(),
-        intake_dir.to_string_lossy().to_string(),
-        "-".to_string(),
-    ];
-
-    let output = run_checked_with_stdin("codex", &args, &prompt)?;
-    fs::write(&events_path, &output.stdout)
-        .map_err(|error| format!("Project Intake event log 저장 실패: {error}"))?;
-
-    let raw_analysis = fs::read_to_string(&output_path)
-        .map_err(|error| format!("Project Intake 결과 파일 읽기 실패: {error}"))?;
-    let analysis: ProjectIntakeAnalysis = serde_json::from_str(&raw_analysis)
-        .map_err(|error| format!("Project Intake 결과 JSON 파싱 실패: {error}"))?;
+    let inference = local_inference_runtime::run_structured_json(
+        "project-intake",
+        &prompt,
+        INTAKE_SCHEMA,
+        &intake_dir,
+    )?;
+    fs::write(
+        &output_path,
+        serde_json::to_vec_pretty(&inference.output)
+            .map_err(|error| format!("Project Intake result serialization failed: {error}"))?,
+    )
+    .map_err(|error| format!("Project Intake result file write failed: {error}"))?;
+    fs::write(&events_path, &inference.events_jsonl)
+        .map_err(|error| format!("Project Intake event log write failed: {error}"))?;
+    let analysis: ProjectIntakeAnalysis = serde_json::from_value(inference.output)
+        .map_err(|error| format!("Project Intake result JSON parsing failed: {error}"))?;
     validate_analysis(&analysis)?;
 
-    let events = String::from_utf8_lossy(&output.stdout);
     Ok(AnalyzeProjectIntakeResult {
         analysis,
-        session_id: extract_codex_session_id(&events),
+        session_id: inference.session_id,
         events_path: events_path.to_string_lossy().to_string(),
         output_path: output_path.to_string_lossy().to_string(),
     })

@@ -66,7 +66,7 @@ export function startProjectWithIntake(
     workspacePath: null,
     pmSessionId: null,
     runtimeFailureSource: null,
-    runtimeMessage: `Organization Intake 완료 · ${intake.complexity} · 팀 배정 완료 · ${allocation.record.reason} · PM Codex 실행 준비`,
+    runtimeMessage: `Organization Intake 완료 · ${intake.complexity} · 팀 배정 완료 · ${allocation.record.reason} · PM Local Agent 실행 준비`,
   };
 
   const nextState: ProjectTeamsState = {

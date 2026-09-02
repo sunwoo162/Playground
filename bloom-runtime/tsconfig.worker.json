@@ -5,7 +5,10 @@
     "moduleResolution": "Node",
     "strict": true,
     "skipLibCheck": true,
-    "lib": ["ES2020", "DOM"],
+    "lib": [
+      "ES2020",
+      "DOM"
+    ],
     "rootDir": "ts",
     "outDir": "../.tmp/bloom-worker"
   },
@@ -34,6 +37,7 @@
     "ts/lunaDeliveryController.ts",
     "ts/lunaDeliveryAutomation.ts",
     "ts/lunaProductionDelivery.ts",
-    "ts/e2eSmoke.ts"
+    "ts/e2eSmoke.ts",
+    "ts/bloomLocalAgentRuntime.ts"
   ]
 }

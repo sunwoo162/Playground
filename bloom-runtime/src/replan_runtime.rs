@@ -1,3 +1,4 @@
+use crate::local_inference_runtime;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
@@ -255,22 +256,6 @@ fn valid_slug(value: &str) -> bool {
         })
 }
 
-fn codex_chatgpt_authenticated() -> bool {
-    let Ok(output) = Command::new("codex").args(["login", "status"]).output() else {
-        return false;
-    };
-    if !output.status.success() {
-        return false;
-    }
-    let combined = format!(
-        "{}\n{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    )
-    .to_ascii_lowercase();
-    combined.contains("chatgpt")
-}
-
 fn validate_workspace(workspace: &Path) -> Result<(), String> {
     if !workspace.exists() || !workspace.join(".git").exists() {
         return Err("PM replan workspace가 Git 저장소가 아닙니다.".to_string());
@@ -510,7 +495,7 @@ fn prompt(input: &ReplanProjectInput) -> Result<String, String> {
     let reopenable = input.reopenable_task_ids.join(", ");
 
     Ok(format!(
-        r#"You are the independent PM Codex Agent for Luna team {team_name} ({team_id}).
+        r#"You are the independent PM Local Agent Agent for Luna team {team_name} ({team_id}).
 
 Project: {project_id}
 Existing repository: {repository}
@@ -592,9 +577,6 @@ fn run_replan_blocking(input: ReplanProjectInput) -> Result<ReplanProjectResult,
 
     let workspace = PathBuf::from(input.workspace_path.trim());
     validate_workspace(&workspace)?;
-    if !codex_chatgpt_authenticated() {
-        return Err("PM replan은 ChatGPT 로그인 상태의 Codex가 필요합니다.".to_string());
-    }
 
     let runtime_dir = workspace
         .parent()
@@ -615,35 +597,28 @@ fn run_replan_blocking(input: ReplanProjectInput) -> Result<ReplanProjectResult,
         .map_err(|error| format!("PM replan schema 저장 실패: {error}"))?;
 
     let prompt = prompt(&input)?;
-    let args = vec![
-        "exec".to_string(),
-        "--json".to_string(),
-        "--output-schema".to_string(),
-        schema_path.to_string_lossy().to_string(),
-        "--output-last-message".to_string(),
-        output_path.to_string_lossy().to_string(),
-        "--sandbox".to_string(),
-        "read-only".to_string(),
-        "-C".to_string(),
-        workspace.to_string_lossy().to_string(),
-        "-".to_string(),
-    ];
-
-    let output = run_checked_with_stdin("codex", &args, &prompt)?;
-    fs::write(&events_path, &output.stdout)
-        .map_err(|error| format!("PM replan event log 저장 실패: {error}"))?;
-
-    let raw = fs::read_to_string(&output_path)
-        .map_err(|error| format!("PM replan 결과 읽기 실패: {error}"))?;
-    let proposal: ProjectReplanProposal = serde_json::from_str(&raw)
-        .map_err(|error| format!("PM replan 결과 JSON 파싱 실패: {error}"))?;
+    let inference = local_inference_runtime::run_structured_json(
+        "pm-replan",
+        &prompt,
+        REPLAN_SCHEMA,
+        &workspace,
+    )?;
+    fs::write(
+        &output_path,
+        serde_json::to_vec_pretty(&inference.output)
+            .map_err(|error| format!("PM replan result serialization failed: {error}"))?,
+    )
+    .map_err(|error| format!("PM replan result write failed: {error}"))?;
+    fs::write(&events_path, &inference.events_jsonl)
+        .map_err(|error| format!("PM replan event log write failed: {error}"))?;
+    let proposal: ProjectReplanProposal = serde_json::from_value(inference.output)
+        .map_err(|error| format!("PM replan result JSON parsing failed: {error}"))?;
     validate_proposal(&input, &proposal)?;
 
-    let events = String::from_utf8_lossy(&output.stdout);
     Ok(ReplanProjectResult {
         project_id: input.project_id.clone(),
         trigger_route_id: input.failure_route.id.clone(),
-        session_id: extract_session_id(&events),
+        session_id: inference.session_id,
         events_path: events_path.to_string_lossy().to_string(),
         output_path: output_path.to_string_lossy().to_string(),
         proposal,

@@ -250,62 +250,6 @@ pub struct MarketDiscoveryResult {
     idea_output_path: String,
 }
 
-fn run_checked_with_stdin(program: &str, args: &[String], input: &str) -> Result<Output, String> {
-    let mut child = Command::new(program)
-        .args(args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|error| format!("{program} 실행 실패: {error}"))?;
-
-    if let Some(mut stdin) = child.stdin.take() {
-        stdin
-            .write_all(input.as_bytes())
-            .map_err(|error| format!("{program} 입력 전달 실패: {error}"))?;
-    }
-
-    let output = child
-        .wait_with_output()
-        .map_err(|error| format!("{program} 실행 결과 확인 실패: {error}"))?;
-    if output.status.success() {
-        return Ok(output);
-    }
-
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    let detail = if !stderr.is_empty() { stderr } else { stdout };
-    Err(if detail.is_empty() {
-        format!("{program} 명령이 실패했습니다.")
-    } else {
-        format!("{program} 명령 실패: {detail}")
-    })
-}
-
-fn command_output(program: &str, args: &[&str]) -> Option<String> {
-    let output = Command::new(program).args(args).output().ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    Some(format!(
-        "{}\n{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    ))
-}
-
-fn codex_chatgpt_authenticated() -> bool {
-    command_output("codex", &["login", "status"])
-        .map(|value| value.to_ascii_lowercase().contains("chatgpt"))
-        .unwrap_or(false)
-}
-
-fn codex_web_search_supported() -> bool {
-    command_output("codex", &["exec", "--help"])
-        .map(|value| value.contains("--search"))
-        .unwrap_or(false)
-}
-
 fn validate_identifier(value: &str, label: &str) -> Result<(), String> {
     let value = value.trim();
     if value.is_empty() || value.len() > 120 {
@@ -318,31 +262,6 @@ fn validate_identifier(value: &str, label: &str) -> Result<(), String> {
         return Err(format!("{label} 값에 사용할 수 없는 문자가 있습니다."));
     }
     Ok(())
-}
-
-fn extract_codex_session_id(events: &str) -> Option<String> {
-    for line in events.lines() {
-        let Ok(value) = serde_json::from_str::<Value>(line) else {
-            continue;
-        };
-        for key in ["session_id", "sessionId", "thread_id", "threadId"] {
-            if let Some(id) = value.get(key).and_then(Value::as_str) {
-                if !id.trim().is_empty() {
-                    return Some(id.to_string());
-                }
-            }
-        }
-        if let Some(item) = value.get("item") {
-            for key in ["session_id", "sessionId", "thread_id", "threadId"] {
-                if let Some(id) = item.get(key).and_then(Value::as_str) {
-                    if !id.trim().is_empty() {
-                        return Some(id.to_string());
-                    }
-                }
-            }
-        }
-    }
-    None
 }
 
 fn valid_http_url(value: &str) -> bool {
@@ -413,7 +332,7 @@ Organization: {organization}
 Product Owner discovery topic:
 {topic}
 
-This is market discovery before a delivery team or project repository exists. Use Codex web search to inspect current public evidence. Search broadly enough to avoid anchoring on one result, but keep the report decision-useful.
+This is market discovery before a delivery team or project repository exists. Do not fabricate live web evidence in the local runtime to inspect current public evidence. Search broadly enough to avoid anchoring on one result, but keep the report decision-useful.
 
 Required research behavior:
 - Find repeated user pains, demand/search/community signals, existing alternatives and competition, distribution opportunities, monetization evidence/hypotheses, and meaningful constraints.
@@ -460,134 +379,24 @@ Return only JSON matching the supplied schema.
     )
 }
 
-fn run_codex_stage(
-    discovery_dir: &Path,
-    schema_name: &str,
-    output_name: &str,
-    events_name: &str,
-    schema: &str,
-    prompt: &str,
-    enable_search: bool,
-) -> Result<(String, String, Option<String>), String> {
-    let schema_path = discovery_dir.join(schema_name);
-    let output_path = discovery_dir.join(output_name);
-    let events_path = discovery_dir.join(events_name);
-    fs::write(&schema_path, schema)
-        .map_err(|error| format!("Market Discovery schema 저장 실패: {error}"))?;
-
-    let mut args = vec!["exec".to_string()];
-    if enable_search {
-        args.push("--search".to_string());
-    }
-    args.extend([
-        "--json".to_string(),
-        "--ephemeral".to_string(),
-        "--output-schema".to_string(),
-        schema_path.to_string_lossy().to_string(),
-        "--output-last-message".to_string(),
-        output_path.to_string_lossy().to_string(),
-        "--sandbox".to_string(),
-        "read-only".to_string(),
-        "--skip-git-repo-check".to_string(),
-        "-C".to_string(),
-        discovery_dir.to_string_lossy().to_string(),
-        "-".to_string(),
-    ]);
-
-    let output = run_checked_with_stdin("codex", &args, prompt)?;
-    fs::write(&events_path, &output.stdout)
-        .map_err(|error| format!("Market Discovery event log 저장 실패: {error}"))?;
-    let raw = fs::read_to_string(&output_path)
-        .map_err(|error| format!("Market Discovery output 읽기 실패: {error}"))?;
-    let events = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok((
-        raw,
-        events_path.to_string_lossy().to_string(),
-        extract_codex_session_id(&events),
-    ))
-}
-
 fn run_market_discovery_blocking(
     organization: String,
     workspace_root: String,
     discovery_id: String,
     topic: String,
 ) -> Result<MarketDiscoveryResult, String> {
-    let organization = organization.trim().to_string();
-    let workspace_root = workspace_root.trim().to_string();
-    let discovery_id = discovery_id.trim().to_string();
-    let topic = topic.trim().to_string();
-
-    validate_identifier(&organization, "Organization")?;
-    validate_identifier(&discovery_id, "Discovery ID")?;
-    if workspace_root.is_empty() {
+    validate_identifier(organization.trim(), "Organization")?;
+    validate_identifier(discovery_id.trim(), "Discovery ID")?;
+    if workspace_root.trim().is_empty() {
         return Err("Workspace root를 먼저 설정해 주세요.".to_string());
     }
-    if topic.is_empty() {
+    if topic.trim().is_empty() {
         return Err("시장 탐색 주제가 비어 있습니다.".to_string());
     }
-    if topic.len() > 12_000 {
-        return Err("시장 탐색 주제가 너무 깁니다. 12,000자 이내로 정리해 주세요.".to_string());
-    }
-    if command_output("codex", &["--version"]).is_none() {
-        return Err("Codex CLI가 설치되어 있지 않습니다.".to_string());
-    }
-    if !codex_chatgpt_authenticated() {
-        return Err("Market Discovery는 ChatGPT 로그인 상태의 Codex가 필요합니다.".to_string());
-    }
-    if !codex_web_search_supported() {
-        return Err("현재 Codex CLI가 `codex exec --search`를 지원하지 않습니다. Codex를 업데이트한 뒤 다시 시도하세요.".to_string());
-    }
-
-    let discovery_dir = PathBuf::from(&workspace_root)
-        .join(".luna-runtime")
-        .join("market-discovery")
-        .join(&discovery_id);
-    fs::create_dir_all(&discovery_dir)
-        .map_err(|error| format!("Market Discovery directory 생성 실패: {error}"))?;
-
-    let market_prompt = market_prompt(&organization, &discovery_id, &topic);
-    let (market_raw, market_events_path, market_session_id) = run_codex_stage(
-        &discovery_dir,
-        "market.schema.json",
-        "market.json",
-        "market.events.jsonl",
-        MARKET_SCHEMA,
-        &market_prompt,
-        true,
-    )?;
-    let market: MarketDiscoveryAnalysis = serde_json::from_str(&market_raw)
-        .map_err(|error| format!("Market Discovery 분석 JSON 파싱 실패: {error}"))?;
-    validate_market(&market)?;
-
-    let normalized_market_json = serde_json::to_string_pretty(&market)
-        .map_err(|error| format!("Market Discovery 분석 직렬화 실패: {error}"))?;
-    let idea_prompt = idea_prompt(&discovery_id, &topic, &normalized_market_json);
-    let (idea_raw, idea_events_path, idea_session_id) = run_codex_stage(
-        &discovery_dir,
-        "ideas.schema.json",
-        "ideas.json",
-        "ideas.events.jsonl",
-        IDEA_SCHEMA,
-        &idea_prompt,
-        false,
-    )?;
-    let portfolio: IdeaPortfolio = serde_json::from_str(&idea_raw)
-        .map_err(|error| format!("Idea Agent 결과 JSON 파싱 실패: {error}"))?;
-    validate_portfolio(&portfolio, &market)?;
-
-    Ok(MarketDiscoveryResult {
-        discovery_id,
-        topic,
-        market,
-        portfolio,
-        market_session_id,
-        idea_session_id,
-        market_events_path,
-        market_output_path: discovery_dir.join("market.json").to_string_lossy().to_string(),
-        idea_events_path,
-        idea_output_path: discovery_dir.join("ideas.json").to_string_lossy().to_string(),
-    })
+    Err(
+        "Local-only Bloom Runtime does not perform live web market research. Use ChatGPT to review current public evidence, then provide the reviewed product direction to Luna."
+            .to_string(),
+    )
 }
 
 #[tauri::command]

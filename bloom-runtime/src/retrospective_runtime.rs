@@ -1,3 +1,4 @@
+use crate::local_inference_runtime;
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -254,22 +255,6 @@ fn validate_input(input: &RunProjectRetrospectivesInput) -> Result<PathBuf, Stri
     Ok(workspace)
 }
 
-fn codex_chatgpt_authenticated() -> bool {
-    let Ok(output) = Command::new("codex").args(["login", "status"]).output() else {
-        return false;
-    };
-    if !output.status.success() {
-        return false;
-    }
-    let combined = format!(
-        "{}\n{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    )
-    .to_ascii_lowercase();
-    combined.contains("chatgpt")
-}
-
 fn format_lines(values: &[String], empty: &str) -> String {
     if values.is_empty() {
         empty.to_string()
@@ -360,27 +345,22 @@ Retrospective contract:
         prs = prs,
     );
 
-    let args = vec![
-        "exec".to_string(),
-        "--json".to_string(),
-        "--output-schema".to_string(),
-        schema_path.to_string_lossy().to_string(),
-        "--output-last-message".to_string(),
-        output_path.to_string_lossy().to_string(),
-        "--sandbox".to_string(),
-        "read-only".to_string(),
-        "-C".to_string(),
-        workspace.to_string_lossy().to_string(),
-        "-".to_string(),
-    ];
-
-    let output = run_checked_with_stdin("codex", &args, &prompt)?;
-    fs::write(&events_path, &output.stdout)
-        .map_err(|error| format!("Agent 회고 event 저장 실패: {error}"))?;
-    let raw = fs::read_to_string(&output_path)
-        .map_err(|error| format!("Agent 회고 결과 읽기 실패: {error}"))?;
-    let report: AgentRetrospectiveReport = serde_json::from_str(&raw)
-        .map_err(|error| format!("Agent 회고 결과 JSON 파싱 실패: {error}"))?;
+    let inference = local_inference_runtime::run_structured_json(
+        "agent-retrospective",
+        &prompt,
+        AGENT_RETROSPECTIVE_SCHEMA,
+        workspace,
+    )?;
+    fs::write(
+        &output_path,
+        serde_json::to_vec_pretty(&inference.output)
+            .map_err(|error| format!("Agent retrospective serialization failed: {error}"))?,
+    )
+    .map_err(|error| format!("Agent retrospective output write failed: {error}"))?;
+    fs::write(&events_path, &inference.events_jsonl)
+        .map_err(|error| format!("Agent retrospective event write failed: {error}"))?;
+    let report: AgentRetrospectiveReport = serde_json::from_value(inference.output)
+        .map_err(|error| format!("Agent retrospective JSON parsing failed: {error}"))?;
 
     Ok(AgentRetrospectiveResult {
         agent_id: participant.agent_id.clone(),
@@ -455,27 +435,22 @@ fn run_team_evolution(
         .map_err(|error| format!("Team Evolution schema 저장 실패: {error}"))?;
 
     let prompt = evolution_prompt(input, retrospectives)?;
-    let args = vec![
-        "exec".to_string(),
-        "--json".to_string(),
-        "--output-schema".to_string(),
-        schema_path.to_string_lossy().to_string(),
-        "--output-last-message".to_string(),
-        output_path.to_string_lossy().to_string(),
-        "--sandbox".to_string(),
-        "read-only".to_string(),
-        "-C".to_string(),
-        workspace.to_string_lossy().to_string(),
-        "-".to_string(),
-    ];
-
-    let output = run_checked_with_stdin("codex", &args, &prompt)?;
-    fs::write(&events_path, &output.stdout)
-        .map_err(|error| format!("Team Evolution event 저장 실패: {error}"))?;
-    let raw = fs::read_to_string(&output_path)
-        .map_err(|error| format!("Team Evolution 결과 읽기 실패: {error}"))?;
-    let proposal: TeamEvolutionProposal = serde_json::from_str(&raw)
-        .map_err(|error| format!("Team Evolution 결과 JSON 파싱 실패: {error}"))?;
+    let inference = local_inference_runtime::run_structured_json(
+        "team-evolution",
+        &prompt,
+        TEAM_EVOLUTION_SCHEMA,
+        workspace,
+    )?;
+    fs::write(
+        &output_path,
+        serde_json::to_vec_pretty(&inference.output)
+            .map_err(|error| format!("Team Evolution serialization failed: {error}"))?,
+    )
+    .map_err(|error| format!("Team Evolution output write failed: {error}"))?;
+    fs::write(&events_path, &inference.events_jsonl)
+        .map_err(|error| format!("Team Evolution event write failed: {error}"))?;
+    let proposal: TeamEvolutionProposal = serde_json::from_value(inference.output)
+        .map_err(|error| format!("Team Evolution JSON parsing failed: {error}"))?;
 
     Ok((
         proposal,
@@ -488,9 +463,6 @@ fn run_project_retrospectives_blocking(
     input: RunProjectRetrospectivesInput,
 ) -> Result<RunProjectRetrospectivesResult, String> {
     let workspace = validate_input(&input)?;
-    if !codex_chatgpt_authenticated() {
-        return Err("ChatGPT 로그인 상태의 Codex가 필요합니다.".to_string());
-    }
 
     let workspace_root = workspace
         .parent()

@@ -1,3 +1,4 @@
+use crate::local_inference_runtime;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
@@ -122,42 +123,6 @@ pub struct RouteAgentFailureResult {
     pub decision: FailureRouteDecision,
 }
 
-fn output_detail(output: &Output) -> String {
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if !stderr.is_empty() { stderr } else { stdout }
-}
-
-fn run_checked_with_stdin(program: &str, args: &[String], input: &str) -> Result<Output, String> {
-    let mut child = Command::new(program)
-        .args(args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|error| format!("{program} 실행 실패: {error}"))?;
-
-    if let Some(mut stdin) = child.stdin.take() {
-        stdin
-            .write_all(input.as_bytes())
-            .map_err(|error| format!("{program} 입력 전달 실패: {error}"))?;
-    }
-
-    let output = child
-        .wait_with_output()
-        .map_err(|error| format!("{program} 실행 결과 확인 실패: {error}"))?;
-    if output.status.success() {
-        Ok(output)
-    } else {
-        let detail = output_detail(&output);
-        Err(if detail.is_empty() {
-            format!("{program} 명령이 실패했습니다.")
-        } else {
-            format!("{program} 명령 실패: {detail}")
-        })
-    }
-}
-
 fn validate_segment(value: &str, label: &str) -> Result<(), String> {
     if value.trim().is_empty()
         || value.len() > 100
@@ -257,28 +222,6 @@ Independent routing contract:
     )
 }
 
-fn extract_session_id(events: &str) -> Option<String> {
-    for line in events.lines() {
-        let Ok(value) = serde_json::from_str::<Value>(line) else {
-            continue;
-        };
-        for key in ["session_id", "sessionId", "thread_id", "threadId"] {
-            if let Some(id) = value.get(key).and_then(Value::as_str) {
-                if !id.trim().is_empty() {
-                    return Some(id.to_string());
-                }
-            }
-        }
-        let event_type = value.get("type").and_then(Value::as_str).unwrap_or_default();
-        if (event_type.contains("thread") || event_type.contains("session"))
-            && value.get("id").and_then(Value::as_str).is_some()
-        {
-            return value.get("id").and_then(Value::as_str).map(str::to_string);
-        }
-    }
-    None
-}
-
 fn validate_decision(input: &RouteAgentFailureInput, decision: &FailureRouteDecision) -> Result<(), String> {
     if input.route_attempt >= MAX_ROUTE_ATTEMPTS && decision.route == "retry-owner" {
         return Err(format!(
@@ -351,36 +294,29 @@ fn run_failure_router_blocking(input: RouteAgentFailureInput) -> Result<RouteAge
         .map_err(|error| format!("Failure Router schema 저장 실패: {error}"))?;
 
     let prompt = router_prompt(&input);
-    let args = vec![
-        "exec".to_string(),
-        "--json".to_string(),
-        "--output-schema".to_string(),
-        schema_path.to_string_lossy().to_string(),
-        "--output-last-message".to_string(),
-        output_path.to_string_lossy().to_string(),
-        "--sandbox".to_string(),
-        "read-only".to_string(),
-        "-C".to_string(),
-        workspace.to_string_lossy().to_string(),
-        "-".to_string(),
-    ];
-
-    let output = run_checked_with_stdin("codex", &args, &prompt)?;
-    fs::write(&events_path, &output.stdout)
-        .map_err(|error| format!("Failure Router event log 저장 실패: {error}"))?;
-
-    let raw_result = fs::read_to_string(&output_path)
-        .map_err(|error| format!("Failure Router 결과 읽기 실패: {error}"))?;
-    let decision: FailureRouteDecision = serde_json::from_str(&raw_result)
-        .map_err(|error| format!("Failure Router 결과 JSON 파싱 실패: {error}"))?;
+    let inference = local_inference_runtime::run_structured_json(
+        "failure-router",
+        &prompt,
+        FAILURE_ROUTE_SCHEMA,
+        &workspace,
+    )?;
+    fs::write(
+        &output_path,
+        serde_json::to_vec_pretty(&inference.output)
+            .map_err(|error| format!("Failure Router serialization failed: {error}"))?,
+    )
+    .map_err(|error| format!("Failure Router output write failed: {error}"))?;
+    fs::write(&events_path, &inference.events_jsonl)
+        .map_err(|error| format!("Failure Router event write failed: {error}"))?;
+    let decision: FailureRouteDecision = serde_json::from_value(inference.output)
+        .map_err(|error| format!("Failure Router JSON parsing failed: {error}"))?;
     validate_decision(&input, &decision)?;
 
-    let events = String::from_utf8_lossy(&output.stdout);
     Ok(RouteAgentFailureResult {
         project_id: input.project_id.clone(),
         failed_task_id: input.failed_task_id.clone(),
         router_agent_id: format!("{}:debug-router", input.team_id),
-        session_id: extract_session_id(&events),
+        session_id: inference.session_id,
         events_path: events_path.to_string_lossy().to_string(),
         output_path: output_path.to_string_lossy().to_string(),
         decision,

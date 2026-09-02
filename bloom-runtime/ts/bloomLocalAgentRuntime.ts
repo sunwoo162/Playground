@@ -78,7 +78,7 @@ export function resolveLocalEndpoint(raw?: string): URL {
 
 export function validateRelativePath(value: unknown): string {
   if (typeof value !== "string" || !value.trim()) throw new Error("Tool path is required.");
-  const normalized = value.replaceAll("\\", "/").trim();
+  const normalized = value.replace(/\\/g, "/").trim();
   if (path.isAbsolute(normalized) || normalized === ".." || normalized.startsWith("../")
       || normalized.includes("/../") || normalized.includes("\0")) {
     throw new Error("Tool path must stay inside the task worktree.");
@@ -106,7 +106,7 @@ function sanitizedEnv(): NodeJS.ProcessEnv {
 }
 
 export function isAllowedCommand(command: string, args: string[]): boolean {
-  const name = command.replaceAll("\\", "/").split("/").pop()?.toLowerCase() ?? "";
+  const name = command.replace(/\\/g, "/").split("/").pop()?.toLowerCase() ?? "";
   if (name === "git") {
     return ["status", "diff", "log", "show", "rev-parse", "branch"].includes(args[0] ?? "");
   }
@@ -193,7 +193,7 @@ async function executeRun(root: string, action: JsonObject): Promise<JsonObject>
     ? action.args as string[] : [];
   if (!command || !isAllowedCommand(command, args)) throw new Error(`Command is not allowed: ${command} ${args.join(" ")}`);
   if (args.some((arg) => arg.includes("\0"))) throw new Error("Command argument contains a NUL byte.");
-  if (command.replaceAll("\\", "/").split("/").pop()?.toLowerCase() === "node" && args[0]) {
+  if (command.replace(/\\/g, "/").split("/").pop()?.toLowerCase() === "node" && args[0]) {
     resolveInside(root, args[0]);
   }
   const cwd = action.cwd ? resolveInside(root, action.cwd) : root;
