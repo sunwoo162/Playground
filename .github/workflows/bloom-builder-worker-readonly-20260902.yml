@@ -1,0 +1,54 @@
+name: Bloom Builder Worker Readonly Trace
+
+on:
+  push:
+    branches:
+      - test/luna-live-e2e-readonly-20260902
+
+permissions:
+  contents: read
+
+jobs:
+  trace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Trace production builder worker
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          command_timeout: 6m
+          script: |
+            set +e
+            cd /home/ubuntu/bloombouquet || exit 2
+            echo "[trace] utc=$(date -u +%Y-%m-%dT%H:%M:%SZ) head=$(git rev-parse HEAD)"
+            node <<'NODE'
+            const { execFileSync } = require('node:child_process');
+            try {
+              const list = JSON.parse(execFileSync('pm2', ['jlist'], { encoding: 'utf8' }));
+              for (const name of ['bloom-builder-worker','bloom-evaluator-worker']) {
+                const p = list.find((x) => x.name === name);
+                const env = p?.pm2_env || {};
+                console.log(`[pm2] ${name} status=${env.status || '-'} pid=${p?.pid || 0} restarts=${env.restart_time ?? '-'} uptime=${env.pm_uptime || '-'} script=${env.pm_exec_path || '-'}`);
+              }
+            } catch (e) { console.log(`[pm2] inspect failed ${e.message}`); }
+            NODE
+            echo '[processes]'
+            ps -eo pid,ppid,etime,cmd | grep -E 'bloom-worker/run.js|luna-runtime-headless|bloom-runtime-bridge' | grep -v grep | tail -n 30 || true
+            echo '[runtime-builder-27]'
+            if [ -d /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-27 ]; then
+              find /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-27 -maxdepth 5 -type f -printf '%TY-%Tm-%TdT%TH:%TM:%TSZ %s %p\n' 2>/dev/null | sort | tail -n 80
+            else
+              echo 'missing'
+            fi
+            for log in "$HOME/.pm2/logs/bloom-builder-worker-out.log" "$HOME/.pm2/logs/bloom-builder-worker-error.log"; do
+              echo "[log] $log"
+              if [ -f "$log" ]; then
+                tail -n 120 "$log" | sed -E 's/([Tt][Oo][Kk][Ee][Nn]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd]|[Ss][Ee][Cc][Rr][Ee][Tt]|[Aa][Uu][Tt][Hh][Oo][Rr][Ii][Zz][Aa][Tt][Ii][Oo][Nn])[^ ]*/\1=<redacted>/g'
+              else
+                echo 'missing'
+              fi
+            done
