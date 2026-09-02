@@ -37,14 +37,72 @@ fi
 
 chmod +x "$ROOT_DIR/bloom-worker/start-local-evaluator-llm.sh"
 
-pm2 delete bloom-evaluator-llm >/dev/null 2>&1 || true
+HEALTH_URL="http://127.0.0.1:${BLOOM_LOCAL_EVALUATOR_PORT:-8091}/health"
+if pm2 describe bloom-evaluator-llm >/dev/null 2>&1 \
+  && curl --fail --silent --show-error --max-time 3 "$HEALTH_URL" >/dev/null 2>&1; then
+  pm2 save >/dev/null
+  echo "[bloom-evaluator-local] existing local evaluator model is healthy; keeping it"
+  exit 0
+fi
+
+delete_stale_llm() {
+  if ! pm2 describe bloom-evaluator-llm >/dev/null 2>&1; then
+    return 0
+  fi
+
+  pm2 delete bloom-evaluator-llm >/dev/null 2>&1 &
+  local delete_pid=$!
+  for _ in $(seq 1 30); do
+    if ! kill -0 "$delete_pid" 2>/dev/null; then
+      wait "$delete_pid" || true
+      delete_pid=""
+      break
+    fi
+    sleep 1
+  done
+
+  if ! pm2 describe bloom-evaluator-llm >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local llm_pid
+  llm_pid="$(pm2 pid bloom-evaluator-llm 2>/dev/null | tr -d '[:space:]' || true)"
+  if [[ "$llm_pid" =~ ^[0-9]+$ ]] && (( llm_pid > 0 )); then
+    echo "[bloom-evaluator-local] forcing stale local evaluator process $llm_pid to stop"
+    kill -KILL "$llm_pid" 2>/dev/null || true
+  fi
+
+  if [[ -n "$delete_pid" ]]; then
+    for _ in $(seq 1 10); do
+      if ! kill -0 "$delete_pid" 2>/dev/null; then
+        wait "$delete_pid" || true
+        delete_pid=""
+        break
+      fi
+      sleep 1
+    done
+  fi
+  if [[ -n "$delete_pid" ]] && kill -0 "$delete_pid" 2>/dev/null; then
+    kill -KILL "$delete_pid" 2>/dev/null || true
+    wait "$delete_pid" || true
+  fi
+
+  if pm2 describe bloom-evaluator-llm >/dev/null 2>&1; then
+    timeout --signal=KILL 10s pm2 delete bloom-evaluator-llm >/dev/null 2>&1 || true
+  fi
+  if pm2 describe bloom-evaluator-llm >/dev/null 2>&1; then
+    echo "[bloom-evaluator-local] stale local evaluator process could not be removed within 50 seconds" >&2
+    return 1
+  fi
+}
+
+delete_stale_llm
 BLOOM_LLAMA_BIN="$LLAMA_BIN" pm2 start "$ROOT_DIR/bloom-worker/start-local-evaluator-llm.sh" \
   --name bloom-evaluator-llm \
   --interpreter bash \
   --max-memory-restart 3400M \
   --kill-timeout 7200000
 
-HEALTH_URL="http://127.0.0.1:${BLOOM_LOCAL_EVALUATOR_PORT:-8091}/health"
 echo "[bloom-evaluator-local] waiting for local model health"
 for _ in $(seq 1 450); do
   if curl --fail --silent --show-error --max-time 3 "$HEALTH_URL" >/dev/null 2>&1; then
