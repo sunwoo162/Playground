@@ -27,3 +27,13 @@ test('Bloom Live E2E workflow uses the normal Builder API with ephemeral auth', 
   assert.doesNotMatch(source, /echo[^\n]*\$\{?TOKEN\}?/);
   assert.doesNotMatch(source, /GITHUB_ENV[^\n]*TOKEN/);
 });
+
+test('Bloom Live E2E failure diagnostics capture local model memory evidence', () => {
+  const source = fs.readFileSync(WORKFLOW, 'utf8');
+
+  assert.match(source, /pm2 status bloom-evaluator-llm/);
+  assert.match(source, /pm2 logs bloom-evaluator-llm --lines 160 --nostream/);
+  assert.match(source, /free -m/);
+  assert.match(source, /swapon --show/);
+  assert.match(source, /dmesg[^\n]*out of memory\|oom\|killed process/i);
+});
