@@ -274,6 +274,15 @@ async function runBuilderMode({ baseUrl, token, pollIntervalMs, isStopping }) {
     30000,
     1000,
   );
+  const maxParallelTasks = integerConfig(
+    "BLOOM_BUILDER_MAX_PARALLEL_TASKS",
+    undefined,
+    6,
+    1,
+  );
+  if (maxParallelTasks > 6) {
+    throw new Error("BLOOM_BUILDER_MAX_PARALLEL_TASKS must be 6 or less.");
+  }
   if (heartbeatIntervalMs >= 90000) {
     throw new Error("BLOOM_WORKER_HEARTBEAT_INTERVAL_MS는 90초 lease보다 짧아야 합니다.");
   }
@@ -296,10 +305,11 @@ async function runBuilderMode({ baseUrl, token, pollIntervalMs, isStopping }) {
     teamId,
     teamName,
     runtime,
+    maxParallelTasks,
     deliverIntegratedProject,
   });
 
-  console.log(`[bloom-worker] started mode=builder workerId=${workerId} team=${teamId} api=${baseUrl}`);
+  console.log(`[bloom-worker] started mode=builder workerId=${workerId} team=${teamId} maxParallelTasks=${maxParallelTasks} api=${baseUrl}`);
   while (!isStopping()) {
     try {
       const outcome = await runBuilderWorkerOnce(client, workerId, execute, {

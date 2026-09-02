@@ -163,6 +163,17 @@ test('production Bloom worker serializes remote provision runs before touching t
   assert.notEqual(fetchMain, -1, 'remote provision must still refresh main');
   assert.ok(lockFd < fetchMain && lockWait < fetchMain, 'deployment lock must be acquired before touching the shared checkout');
 });
+test('production Bloom worker provisions emergency swap before starting memory-heavy local inference', () => {
+  const workflow = readBloomWorkerDeployWorkflow();
+
+  assert.match(workflow, /BLOOM_SWAP_FILE=\/swapfile/);
+  assert.match(workflow, /fallocate -l 2G/);
+  assert.match(workflow, /mkswap/);
+  assert.match(workflow, /swapon/);
+  assert.match(workflow, /swapon --show=NAME --noheadings --raw/);
+  assert.match(workflow, /\/etc\/fstab/);
+  assert.match(workflow, /vm\.swappiness=10/);
+});
 test('production evaluator uses a local model runtime without interactive Codex authentication', () => {
   const workflow = readBloomWorkerDeployWorkflow();
 

@@ -67,6 +67,14 @@ test('production builder wires the compiled local agent runner', () => {
   );
 });
 
+test('production builder forwards a bounded Agent wave limit into the headless executor', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'bloom-worker/run.js'), 'utf8');
+  const deploy = fs.readFileSync(path.join(ROOT, '.github/workflows/deploy-bloom-worker.yml'), 'utf8');
+
+  assert.match(source, /BLOOM_BUILDER_MAX_PARALLEL_TASKS/);
+  assert.match(source, /createObservedHeadlessBuilderExecutor\(\{[\s\S]*maxParallelTasks/);
+  assert.match(deploy, /set_env_value BLOOM_BUILDER_MAX_PARALLEL_TASKS 2/);
+});
 test('Bloom worker compiler emits the Live E2E module required by the entrypoint', () => {
   const source = fs.readFileSync(path.join(ROOT, 'bloom-worker/run.js'), 'utf8');
   const tsconfig = JSON.parse(fs.readFileSync(path.join(ROOT, 'bloom-runtime/tsconfig.worker.json'), 'utf8'));
