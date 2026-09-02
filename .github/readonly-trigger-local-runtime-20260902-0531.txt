@@ -1,0 +1,1 @@
+Canonical read-only audit for the fresh production Live E2E run using the Bloom local agent runtime.
