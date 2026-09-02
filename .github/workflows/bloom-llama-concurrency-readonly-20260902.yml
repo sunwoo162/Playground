@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Isolate PM2 llama restart trigger
+      - name: Inspect active llama slot timing
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ssh.gsmsv.site
@@ -23,14 +23,18 @@ jobs:
           command_timeout: 6m
           script: |
             set -eu
-            echo '[pm2-exact-window]'
-            LOG="$HOME/.pm2/pm2.log"
-            if [ -f "$LOG" ]; then
-              awk '$0 >= "2026-09-02T09:48:50" && $0 <= "2026-09-02T09:49:20" {print}' "$LOG" || true
-              echo '[first-kill-with-context]'
-              grep -B 30 -A 5 -m1 '2026-09-02T09:49:18: PM2 log: pid=171514 msg=failed to kill' "$LOG" || true
-              echo '[memory-keywords-nearby]'
-              grep -Ei -B 8 -A 8 'memory|2600|2\.6|exceed|max_memory|max memory' "$LOG" | tail -n 120 || true
+            echo '[llama-health]'
+            curl -fsS http://127.0.0.1:8091/health || true
+            echo
+            echo '[llama-out-tail]'
+            OUT="$HOME/.pm2/logs/bloom-evaluator-llm-out.log"
+            if [ -f "$OUT" ]; then
+              tail -n 180 "$OUT" | grep -E 'slot|prompt eval|eval time|tokens per second|request|timings|processing task|released|stop processing|n_prompt_tokens|n_decoded|tokens' | tail -n 120 || true
+            fi
+            echo '[llama-error-tail]'
+            ERR="$HOME/.pm2/logs/bloom-evaluator-llm-error.log"
+            if [ -f "$ERR" ]; then
+              tail -n 100 "$ERR" | grep -Ev 'Authorization|Bearer|token=' | tail -n 80 || true
             fi
             echo '[pm2-current]'
             node <<'NODE'
@@ -42,5 +46,7 @@ jobs:
               restart_time: p?.pm2_env?.restart_time,
               max_memory_restart: p?.pm2_env?.max_memory_restart,
               status: p?.pm2_env?.status,
+              memory: p?.monit?.memory,
+              cpu: p?.monit?.cpu,
             }, null, 2));
             NODE
