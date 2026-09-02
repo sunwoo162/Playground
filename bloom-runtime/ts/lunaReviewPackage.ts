@@ -58,6 +58,7 @@ export function buildLunaReviewPackage(input: LunaReviewPackageInput): LunaRevie
     requiresAuth: input.requiresAuth,
     generatedAt: new Date().toISOString(),
     reviewInstructions: [
+      "Send the deployed publicUrl to ChatGPT for the independent review handoff.",
       "Review the deployed URL and repository at the exact deployment commit.",
       "Check architecture, correctness, security, performance, accessibility, UX, tests, and deployment behavior.",
       "Return PASS, NEEDS_FIX, or BLOCKED with evidence-backed findings and concrete Luna repair instructions.",
