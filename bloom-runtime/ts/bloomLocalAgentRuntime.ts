@@ -7,6 +7,8 @@ const DEFAULT_MODEL = "qwen2.5-coder-1.5b-instruct";
 const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
 const MAX_TOOL_OUTPUT_BYTES = 512 * 1024;
 const MAX_FILE_BYTES = 1024 * 1024;
+const MAX_AGENT_HISTORY_BYTES = 8 * 1024;
+const MAX_AGENT_HISTORY_MESSAGE_BYTES = 4 * 1024;
 const DEFAULT_MAX_STEPS = 64;
 const DEFAULT_TIMEOUT_MS = 2 * 60 * 1000;
 
@@ -40,6 +42,48 @@ function asObject(value: unknown, label: string): JsonObject {
     throw new Error(`${label} must be a JSON object.`);
   }
   return value as JsonObject;
+}
+
+function truncateAgentHistoryContent(content: string, maxBytes: number): string {
+  const source = Buffer.from(content, "utf8");
+  if (source.length <= maxBytes) return content;
+  const marker = Buffer.from("\n...[truncated for local Agent context budget]...\n", "utf8");
+  if (maxBytes <= marker.length) return marker.subarray(0, maxBytes).toString("utf8");
+  const available = maxBytes - marker.length;
+  const headBytes = Math.floor(available * 0.7);
+  const tailBytes = available - headBytes;
+  return Buffer.concat([
+    source.subarray(0, headBytes),
+    marker,
+    source.subarray(Math.max(headBytes, source.length - tailBytes)),
+  ]).toString("utf8");
+}
+
+function boundedAgentMessages(messages: ModelMessage[]): ModelMessage[] {
+  if (messages.length <= 2) return messages;
+  const base = messages.slice(0, 2);
+  const selected: ModelMessage[] = [];
+  let remaining = MAX_AGENT_HISTORY_BYTES;
+
+  for (let index = messages.length - 1; index >= 2 && remaining > 0; index -= 1) {
+    const message = messages[index];
+    const content = truncateAgentHistoryContent(
+      message.content,
+      Math.min(MAX_AGENT_HISTORY_MESSAGE_BYTES, remaining),
+    );
+    const bytes = Buffer.byteLength(content, "utf8");
+    selected.unshift({ ...message, content });
+    remaining -= bytes;
+  }
+
+  const omitted = messages.length - 2 - selected.length;
+  if (omitted > 0) {
+    base.push({
+      role: "user",
+      content: `CONTEXT_HISTORY ${omitted} earlier Agent/tool messages omitted to stay within the local model context budget. Re-read files or rerun safe commands when exact older output is needed.`,
+    });
+  }
+  return [...base, ...selected];
 }
 
 function parseJsonObject(text: string): JsonObject {
@@ -472,7 +516,7 @@ export async function runLocalAgent(input: LocalAgentInput, options: LocalAgentO
   ];
   const actionSchema = agentActionSchema();
   for (let step = 1; step <= maxSteps; step += 1) {
-    const action = await callModel(endpoint, model, messages, fetchImpl, actionSchema);
+    const action = await callModel(endpoint, model, boundedAgentMessages(messages), fetchImpl, actionSchema);
     events.push({ step, action: String(action.action ?? "unknown") });
     messages.push({ role: "assistant", content: JSON.stringify(action) });
     if (action.action === "final") {
