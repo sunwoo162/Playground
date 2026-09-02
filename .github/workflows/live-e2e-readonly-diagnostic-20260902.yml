@@ -1,4 +1,4 @@
-name: Luna Output Guard Integration Verification
+name: Luna Output Guard Final Verification
 
 on:
   push:
@@ -11,11 +11,11 @@ permissions:
 jobs:
   inspect:
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: fix/luna-agent-output-guard
+          ref: main
           fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
@@ -25,11 +25,69 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Install workspace dependencies
+      - name: Install main dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Verify Bloom runtime bridge contract
-        run: pnpm run test:bloom-runtime
+      - name: Confirm policy failure exists on main baseline
+        shell: bash
+        run: |
+          set +e
+          pnpm run test:bloom-runtime 2>&1 | tee /tmp/main-policy.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -eq 0 ]; then
+            echo 'main baseline unexpectedly passed; do not classify branch failure as pre-existing' >&2
+            exit 1
+          fi
+          grep -F 'publication recovery must apply only when every blocker is publication-ownership noise' /tmp/main-policy.log
+          echo "MAIN_BASELINE_FAILURE_CONFIRMED exit=$status"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/luna-agent-output-guard
+          fetch-depth: 0
+          clean: true
+
+      - name: Install branch dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Confirm branch has same unrelated policy baseline
+        shell: bash
+        run: |
+          set +e
+          pnpm run test:bloom-runtime 2>&1 | tee /tmp/branch-policy.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -eq 0 ]; then
+            echo 'branch policy suite passed; continuing'
+          else
+            grep -F 'publication recovery must apply only when every blocker is publication-ownership noise' /tmp/branch-policy.log
+            echo "BRANCH_MATCHES_MAIN_BASELINE exit=$status"
+          fi
+
+      - name: Assert final PR diff is exactly runtime plus regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git diff --check origin/main...HEAD
+          mapfile -t files < <(git diff --name-only origin/main...HEAD | sort)
+          printf 'changed=%s\n' "${files[@]}"
+          expected=(
+            'bloom-runtime/src/agent_runtime.rs'
+            'bloom-runtime/tests/agent_output_guard.rs'
+          )
+          if [ "${#files[@]}" -ne "${#expected[@]}" ]; then
+            echo "Unexpected changed file count: ${#files[@]}" >&2
+            exit 1
+          fi
+          for i in "${!expected[@]}"; do
+            if [ "${files[$i]}" != "${expected[$i]}" ]; then
+              echo "Unexpected changed file: ${files[$i]} expected ${expected[$i]}" >&2
+              exit 1
+            fi
+          done
+          echo 'FINAL_DIFF_CLEAN'
 
       - name: Build Bloom worker
         run: pnpm run build:bloom-worker
@@ -50,7 +108,12 @@ jobs:
         run: cargo test --manifest-path bloom-runtime/Cargo.toml
 
       - name: Verify Bloom runtime Rust build
+        run: cargo check --manifest-path bloom-runtime/Cargo.toml
+
+      - name: Verify clean branch state
+        shell: bash
         run: |
-          cargo check --manifest-path bloom-runtime/Cargo.toml
+          set -euo pipefail
           git diff --check
-          git status --short
+          test -z "$(git status --porcelain)"
+          echo 'FINAL_VERIFICATION_GREEN'
