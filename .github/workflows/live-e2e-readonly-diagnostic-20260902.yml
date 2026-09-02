@@ -1,4 +1,4 @@
-name: Luna Live E2E Readonly Audit
+name: Bloom Worker Provision Readonly Diagnostic
 
 on:
   push:
@@ -9,117 +9,170 @@ permissions:
   contents: read
 
 jobs:
-  inspect:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+  inspect-worker:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 12
     steps:
-      - name: Inspect latest production Bloom Live E2E
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ssh.gsmsv.site
-          port: 24136
-          username: ubuntu
-          password: ${{ secrets.SSH_PASSWORD }}
-          command_timeout: 8m
-          script: |
-            set -eu
-            cd /home/ubuntu/bloombouquet
+      - name: Install SSH client helper
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sshpass
+
+      - name: Collect read-only worker diagnostics
+        env:
+          SSHPASS: ${{ secrets.SSH_PASSWORD }}
+        run: |
+          set +e
+          sshpass -e ssh \
+            -p 24136 \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            -o ConnectTimeout=15 \
+            ubuntu@ssh.gsmsv.site 'bash -s' > bloom-worker-diag.txt 2>&1 <<'REMOTE'
+          set +e
+          cd /home/ubuntu/bloombouquet || { echo '[fatal] repository directory missing'; exit 2; }
+          export PATH="$HOME/.local/bin:$HOME/.llama/bin:$HOME/.local/node_modules/.bin:$PATH"
+
+          echo "[meta] host=$(hostname) user=$(id -un) utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "[git] head=$(git rev-parse HEAD 2>/dev/null || echo missing)"
+          echo "[git] origin_main=$(git rev-parse origin/main 2>/dev/null || echo missing)"
+          echo "[git] dirty_count=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
+          echo "[disk] $(df -h / | tail -1)"
+          for cmd in node npm pnpm pm2 gh curl openssl; do
+            if command -v "$cmd" >/dev/null 2>&1; then
+              echo "[command] $cmd=present path=$(command -v "$cmd")"
+            else
+              echo "[command] $cmd=MISSING"
+            fi
+          done
+
+          if [ -x bloom-runtime/target/release/bloom-runtime-bridge ]; then
+            echo "[bridge] executable=yes sha256=$(sha256sum bloom-runtime/target/release/bloom-runtime-bridge | awk '{print $1}')"
+            BRIDGE_SMOKE_OUTPUT="$(printf '%s' '{}' | bloom-runtime/target/release/bloom-runtime-bridge 2>/dev/null || true)"
+            if printf '%s' "$BRIDGE_SMOKE_OUTPUT" | grep -Fq '"ok":false'; then
+              echo '[bridge] smoke=PASS'
+            else
+              echo '[bridge] smoke=FAIL'
+            fi
+          else
+            echo '[bridge] executable=NO smoke=FAIL'
+          fi
+
+          if [ -f .tmp/bloom-worker/e2eSmoke.js ]; then
             node <<'NODE'
-            require('dotenv').config({ path: '.env' });
-            const fs = require('node:fs');
-            const jwt = require('jsonwebtoken');
-            const { auditLiveE2ESnapshot } = require('./.tmp/bloom-worker/e2eSmoke.js');
-            const base = 'http://127.0.0.1:3000';
-            const marker = '[BLOOM-E2E-SMOKE]';
-            const token = jwt.sign(
-              { id: 'sunwoo162-live-e2e', login: 'sunwoo162', name: 'sunwoo162', avatar_url: '', type: 'access' },
-              process.env.JWT_SECRET,
-              { expiresIn: '20m' },
-            );
-            const headers = { Cookie: `playground_token=${token}` };
-            async function get(path) {
-              const response = await fetch(`${base}${path}`, { headers });
-              const text = await response.text();
-              if (!response.ok) throw new Error(`${path} -> ${response.status}: ${text.slice(0, 500)}`);
-              return text ? JSON.parse(text) : null;
+          try {
+            const moduleValue = require('./.tmp/bloom-worker/e2eSmoke.js');
+            console.log(`[bundle] e2eSmoke=present validator=${typeof moduleValue.validateLiveE2EImplementationPlan === 'function' ? 'PASS' : 'FAIL'}`);
+          } catch (error) {
+            console.log(`[bundle] e2eSmoke=LOAD_FAIL error=${String(error && error.message || error).slice(0, 240)}`);
+          }
+          NODE
+          else
+            echo '[bundle] e2eSmoke=MISSING validator=FAIL'
+          fi
+          if [ -f .tmp/bloom-worker/run.js ]; then
+            if grep -Fq 'validateLiveE2EImplementationPlan' .tmp/bloom-worker/run.js; then
+              echo '[bundle] worker_wiring=PASS'
+            else
+              echo '[bundle] worker_wiring=FAIL'
+            fi
+          else
+            echo '[bundle] run=MISSING worker_wiring=FAIL'
+          fi
+
+          ENV_FILE=/home/ubuntu/bloombouquet/.env
+          if [ -r "$ENV_FILE" ]; then
+            echo '[env] readable=yes'
+            for key in BUILDER_WORKER_TOKEN LUNA_DELIVERY_TOKEN BLOOM_WORKER_MODE BLOOM_EVALUATOR_RUNTIME BLOOM_LOCAL_EVALUATOR_URL; do
+              if grep -Eq "^${key}=.+$" "$ENV_FILE"; then
+                echo "[env] $key=present"
+              else
+                echo "[env] $key=MISSING"
+              fi
+            done
+          else
+            echo '[env] readable=NO'
+          fi
+
+          if curl -fsS --max-time 3 http://127.0.0.1:8091/health >/dev/null 2>&1; then
+            echo '[evaluator] health=PASS'
+          else
+            echo '[evaluator] health=FAIL'
+          fi
+
+          if [ -f .tmp/bloom-worker/bloomBouquetLocalSeniorEvaluator.js ]; then
+            node <<'NODE'
+          const { createLocalEvaluatorTransport } = require('./.tmp/bloom-worker/bloomBouquetLocalSeniorEvaluator.js');
+          async function main() {
+            try {
+              const transport = createLocalEvaluatorTransport({
+                endpoint: 'http://127.0.0.1:8091/v1/chat/completions',
+                model: 'qwen2.5-coder-1.5b-instruct',
+                timeoutMs: 120000,
+                maxTokens: 64,
+                maxRetries: 0,
+              });
+              const value = await transport.run({
+                title: 'readonly-production-inference-diagnostic',
+                prompt: 'Return exactly one JSON object with {"ok":true}. Do not add any other fields.',
+                outputSchema: {
+                  type: 'object',
+                  additionalProperties: false,
+                  required: ['ok'],
+                  properties: { ok: { type: 'boolean' } },
+                },
+              });
+              console.log(`[evaluator] inference=${value && value.ok === true ? 'PASS' : 'FAIL_UNEXPECTED'}`);
+            } catch (error) {
+              console.log(`[evaluator] inference=FAIL error=${String(error && error.message || error).slice(0, 400)}`);
             }
-            async function main() {
-              const projects = await get('/api/builder/projects');
-              const project = [...projects]
-                .sort((a, b) => b.id - a.id)
-                .find((item) => String(item.brief || '').includes(marker));
-              if (!project) throw new Error('Bloom Live E2E project not found');
-              const runs = await get(`/api/builder/projects/${project.id}/runs`);
-              const run = [...runs].sort((a, b) => b.id - a.id)[0];
-              if (!run) throw new Error(`Run not found for project ${project.id}`);
-              const snapshot = await get(`/api/builder/projects/${project.id}/runs/${run.id}/snapshot`);
-              const payload = snapshot ? JSON.parse(snapshot.payloadJson) : null;
-              const runtimeProjectId = payload?.runtimeProjectId || `builder-${project.id}`;
-              fs.writeFileSync('/tmp/bloom-live-e2e-runtime-id', runtimeProjectId);
+          }
+          main();
+          NODE
+          else
+            echo '[evaluator] inference=SKIP bundle_missing'
+          fi
 
-              console.log(`[state] project=${project.id} run=${run.id} projectStatus=${project.status} runStatus=${run.status} worker=${run.workerId || '-'} failure=${run.failureReason || '-'}`);
-              console.log(`[state] repository=${project.repositoryFullName || '-'} preview=${project.previewUrl || '-'} phase=${snapshot?.phase || '-'} version=${snapshot?.version || '-'} blocked=${payload?.blockedReason || '-'} runtime=${runtimeProjectId} repoName=${payload?.plan?.repositoryName || '-'}`);
-              const planRoles = (payload?.plan?.tasks || []).map((task) => task.role);
-              console.log(`[plan] roles=${planRoles.join(',')} frontend=${planRoles.includes('frontend')} backend=${planRoles.includes('backend')}`);
-
-              const audit = auditLiveE2ESnapshot(snapshot, run.status);
-              console.log(`[audit] passed=${audit.passed} completed=${audit.completedChecks}/${audit.totalChecks}`);
-              for (const check of audit.checks) {
-                console.log(`[audit-check] ${check.id} status=${check.status} detail=${check.detail}`);
+          node <<'NODE'
+          const { execFileSync } = require('node:child_process');
+          try {
+            const raw = execFileSync('pm2', ['jlist'], { encoding: 'utf8' });
+            const processes = JSON.parse(raw);
+            for (const name of ['bloom-evaluator-llm', 'bloom-evaluator-worker', 'bloom-builder-worker', 'backend']) {
+              const process = processes.find((item) => item.name === name);
+              if (!process) {
+                console.log(`[pm2] ${name}=MISSING`);
+                continue;
               }
-
-              for (const task of payload?.taskRuns || []) {
-                console.log(`[task] ${task.taskId || task.id || '-'} role=${task.role} status=${task.status} attempts=${task.attempts ?? task.attempt ?? '-'} commit=${task.commitSha || '-'} pr=${task.pullRequestNumber || '-'} error=${String(task.error || task.lastError || '-').slice(0, 300)}`);
-              }
+              const env = process.pm2_env || {};
+              console.log(`[pm2] ${name} status=${env.status || '-'} pid=${process.pid || 0} restarts=${env.restart_time ?? '-'} cwd=${env.pm_cwd || '-'} script=${env.pm_exec_path || '-'}`);
             }
-            main().catch((error) => {
-              console.error(`[state] FAILED ${error.stack || error}`);
-              process.exit(1);
-            });
-            NODE
+          } catch (error) {
+            console.log(`[pm2] jlist=FAIL error=${String(error && error.message || error).slice(0, 300)}`);
+          }
+          NODE
 
-            python3 <<'PY'
-            import glob, json, os
+          for name in bloom-evaluator-worker bloom-builder-worker bloom-evaluator-llm; do
+            LOG="$HOME/.pm2/logs/${name}-error.log"
+            if [ -f "$LOG" ]; then
+              echo "[pm2-error] $name lines=$(wc -l < "$LOG" | tr -d ' ') bytes=$(wc -c < "$LOG" | tr -d ' ')"
+              tail -n 20 "$LOG" \
+                | sed -E 's/([Tt][Oo][Kk][Ee][Nn]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd]|[Ss][Ee][Cc][Rr][Ee][Tt]|[Aa][Uu][Tt][Hh][Oo][Rr][Ii][Zz][Aa][Tt][Ii][Oo][Nn])[^ ]*/\1=<redacted>/g' \
+                | sed "s/^/[pm2-error-line] $name /"
+            else
+              echo "[pm2-error] $name log=MISSING"
+            fi
+          done
+          REMOTE
+          status=$?
+          echo "[ssh] exit=$status" >> bloom-worker-diag.txt
+          cat bloom-worker-diag.txt
+          exit 0
 
-            marker_path = '/tmp/bloom-live-e2e-runtime-id'
-            runtime_id = open(marker_path, 'r', encoding='utf-8').read().strip()
-            root = f'/home/ubuntu/bloom-workspaces/.luna-runtime/projects/{runtime_id}/agents'
-            files = sorted(glob.glob(root + '/*/*/app-server-events.jsonl'))
-            if not files:
-                print(f'[streams] none runtime={runtime_id}')
-            for path in files:
-                events = deltas = delta_bytes = completed = turns = failed = 0
-                last = '-'
-                try:
-                    handle = open(path, 'r', encoding='utf-8', errors='replace')
-                except OSError:
-                    continue
-                with handle:
-                    for line in handle:
-                        events += 1
-                        try:
-                            value = json.loads(line)
-                        except Exception:
-                            continue
-                        method = value.get('method') or '-'
-                        last = method
-                        if method == 'item/agentMessage/delta':
-                            deltas += 1
-                            delta = ((value.get('params') or {}).get('delta'))
-                            if isinstance(delta, str):
-                                delta_bytes += len(delta.encode())
-                        elif method == 'item/completed':
-                            item = (value.get('params') or {}).get('item') or {}
-                            if item.get('type') == 'agentMessage':
-                                completed += 1
-                        elif method == 'turn/completed':
-                            turns += 1
-                        elif method == 'turn/failed':
-                            failed += 1
-                relative = os.path.relpath(path, root)
-                print(
-                    f'[stream] {relative} fileBytes={os.path.getsize(path)} events={events} '
-                    f'deltas={deltas} deltaBytes={delta_bytes} remaining={max(0, 524288-delta_bytes)} '
-                    f'completedMessages={completed} turnCompleted={turns} turnFailed={failed} last={last}'
-                )
-            PY
+      - name: Upload diagnostic report
+        uses: actions/upload-artifact@v4
+        with:
+          name: bloom-worker-provision-diagnostic
+          path: bloom-worker-diag.txt
+          if-no-files-found: error
+          retention-days: 1
