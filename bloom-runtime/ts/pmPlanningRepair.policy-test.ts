@@ -44,7 +44,7 @@ assert(
 );
 assert(
   workerSource.includes("필수 구현 Agent role"),
-  "missing Live E2E implementation roles must be classified as repairable PM semantic errors",
+  "missing Live E2E implementation roles must be classified as a repairable PM semantic error",
 );
 assert(
   workerSource.includes("validateLiveE2EImplementationPlan(input.request, result.plan);"),
