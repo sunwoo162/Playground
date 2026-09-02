@@ -1,0 +1,190 @@
+name: Bloom Live E2E
+
+on:
+  workflow_dispatch:
+    inputs:
+      timeout_minutes:
+        description: Maximum time to wait for the production run
+        required: true
+        default: '300'
+        type: choice
+        options:
+          - '180'
+          - '240'
+          - '300'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bloom-live-e2e
+  cancel-in-progress: false
+
+jobs:
+  live-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - name: Require production SSH credential
+        env:
+          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+        run: |
+          test -n "$SSH_PASSWORD" || { echo "SSH_PASSWORD is required" >&2; exit 1; }
+
+      - name: Run production Bloom Live E2E
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          command_timeout: 325m
+          script: |
+            set -euo pipefail
+            cd /home/ubuntu/bloombouquet
+
+            API_BASE="http://127.0.0.1:3000"
+            TIMEOUT_MINUTES="${{ inputs.timeout_minutes }}"
+            ENV_FILE="/home/ubuntu/bloombouquet/.env"
+            test -f "$ENV_FILE" || { echo "Bloom production env is missing" >&2; exit 1; }
+            set -a
+            . "$ENV_FILE"
+            set +a
+            test -n "${JWT_SECRET:-}" || { echo "JWT_SECRET is missing" >&2; exit 1; }
+
+            TOKEN="$(node - <<'NODE'
+            const jwt = require('jsonwebtoken');
+            const token = jwt.sign({
+              id: 'bloom-live-e2e-actions',
+              login: 'bloom-live-e2e',
+              name: 'Bloom Live E2E',
+              avatar_url: '',
+              type: 'access',
+            }, process.env.JWT_SECRET, { expiresIn: '1h' });
+            process.stdout.write(token);
+            NODE
+            )"
+            export TOKEN
+            trap 'unset TOKEN' EXIT
+
+            RUN_KEY="$(date -u +%Y%m%d-%H%M%S)"
+            REPOSITORY_NAME="bloom-e2e-pulseboard-${RUN_KEY,,}"
+            export RUN_KEY REPOSITORY_NAME
+            PROJECT_BODY="$(node - <<'NODE'
+            const brief = `[BLOOM-E2E-SMOKE] Build a small but production-quality full-stack web product named Pulseboard. Use the exact repository name ${process.env.REPOSITORY_NAME}. The product is a lightweight feedback board for a small product team. Users can create feedback with title, details, and category; list feedback; filter by category and status; and move feedback between open, planned, and done. Use a web frontend plus an API with SQLite persistence. Do not use authentication, payments, realtime infrastructure, paid services, or external APIs. The repository must be a project monorepo with clear frontend/API separation, meaningful automated tests, responsive accessible UI, loading/error/empty states, and reproducible setup. The PM must include actual Frontend and Backend implementation work. Bloom's mandatory Data & Marketing -> Documentation -> Code Review -> Reviewer -> QA chain must remain intact. Finish only after every repository-writing Agent has commit and PR evidence, Code Review covers every writer PR, Reviewer and QA pass, and the integration PR set is merged.`;
+            process.stdout.write(JSON.stringify({
+              brief,
+              platform: 'web',
+              features: [],
+              templateId: 'live-e2e',
+            }));
+            NODE
+            )"
+
+            PROJECT_JSON="$(curl -fsS --max-time 30 -X POST "$API_BASE/api/builder/projects" \
+              -H "Authorization: Bearer ${TOKEN}" \
+              -H 'Content-Type: application/json' \
+              --data "$PROJECT_BODY")"
+            PROJECT_ID="$(printf '%s' "$PROJECT_JSON" | node -e '
+              const body = JSON.parse(require("fs").readFileSync(0, "utf8"));
+              if (!body.id) process.exit(2);
+              process.stdout.write(String(body.id));
+            ')"
+            RUN_JSON="$(curl -fsS --max-time 30 -X POST "$API_BASE/api/builder/projects/${PROJECT_ID}/runs" \
+              -H "Authorization: Bearer ${TOKEN}")"
+            RUN_ID="$(printf '%s' "$RUN_JSON" | node -e '
+              const body = JSON.parse(require("fs").readFileSync(0, "utf8"));
+              if (!body.id) process.exit(2);
+              process.stdout.write(String(body.id));
+            ')"
+
+            echo "Bloom Live E2E started: project=${PROJECT_ID} run=${RUN_ID} repo=${REPOSITORY_NAME}"
+            DEADLINE=$(( $(date +%s) + TIMEOUT_MINUTES * 60 ))
+            LAST_STATUS=""
+            SNAPSHOT_FILE="$(mktemp)"
+            trap 'rm -f "$SNAPSHOT_FILE"; unset TOKEN' EXIT
+
+            summarize_snapshot() {
+              if [ ! -s "$SNAPSHOT_FILE" ]; then
+                echo "No orchestration snapshot available yet."
+                return
+              fi
+              node - "$SNAPSHOT_FILE" <<'NODE'
+            const fs = require('fs');
+            const envelope = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+            const payload = JSON.parse(envelope.payloadJson);
+            const tasks = (payload.taskRuns ?? []).map((run) => ({ taskId: run.taskId, role: run.role, status: run.status, attempts: run.attempts, summary: run.summary }));
+            console.log(JSON.stringify({ phase: envelope.phase, blockedReason: payload.blockedReason, repository: payload.plan?.repositoryName ?? null, tasks }, null, 2));
+            NODE
+            }
+            validate_completed_snapshot() {
+              node - "$SNAPSHOT_FILE" <<'NODE'
+            const fs = require('fs');
+            const envelope = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+            const payload = JSON.parse(envelope.payloadJson);
+            const byRole = (role) => (payload.taskRuns ?? []).filter((run) => run.role === role);
+            const allDone = (roles) => roles.every((role) => byRole(role).length > 0 && byRole(role).every((run) => run.status === 'done'));
+            const implementationOk = allDone(['frontend', 'backend']);
+            const governanceOk = allDone(['data-marketing', 'documentation', 'code-review', 'reviewer', 'qa']);
+            const writers = (payload.taskRuns ?? []).filter((run) => ['design-system','designer','ux-research','frontend','backend','database','security','devops'].includes(run.role));
+            const writerEvidenceOk = writers.length > 0 && writers.every((run) => run.status === 'done' && run.commitSha && Number.isInteger(run.pullRequestNumber) && run.pullRequestUrl);
+            const merged = new Set(payload.integration?.mergedPullRequests?.map((pr) => pr.number) ?? []);
+            const expected = payload.integrationPullRequestNumbers ?? [];
+            const integrationOk = expected.length > 0 && expected.every((number) => merged.has(number));
+            const passed = envelope.phase === 'completed' && !payload.blockedReason && implementationOk && governanceOk && writerEvidenceOk && integrationOk;
+            console.log(`audit phase=${envelope.phase} implementation=${implementationOk} governance=${governanceOk} writerEvidence=${writerEvidenceOk} integration=${integrationOk}`);
+            if (!passed) process.exit(3);
+            NODE
+            }
+
+            refresh_snapshot() {
+              local code
+              code="$(curl -sS --max-time 30 -o "$SNAPSHOT_FILE" -w '%{http_code}' \
+                -H "Authorization: Bearer ${TOKEN}" \
+                "$API_BASE/api/builder/projects/${PROJECT_ID}/runs/${RUN_ID}/snapshot")"
+              [ "$code" = "200" ] || : > "$SNAPSHOT_FILE"
+            }
+            while true; do
+              RUN_JSON="$(curl -fsS --max-time 30 \
+                -H "Authorization: Bearer ${TOKEN}" \
+                "$API_BASE/api/builder/projects/${PROJECT_ID}/runs/${RUN_ID}")"
+              STATUS="$(printf '%s' "$RUN_JSON" | node -e '
+                const body = JSON.parse(require("fs").readFileSync(0, "utf8"));
+                process.stdout.write(String(body.status ?? "unknown"));
+              ')"
+
+              if [ "$STATUS" != "$LAST_STATUS" ]; then
+                echo "Run #${RUN_ID} status: ${STATUS}"
+                LAST_STATUS="$STATUS"
+              fi
+
+              refresh_snapshot
+
+              if [ "$STATUS" = "completed" ]; then
+                test -s "$SNAPSHOT_FILE" || { echo "Completed run has no snapshot" >&2; exit 1; }
+                summarize_snapshot
+                validate_completed_snapshot
+                echo "Bloom Live E2E passed: project=${PROJECT_ID} run=${RUN_ID}"
+                exit 0
+              fi
+
+              if [ "$STATUS" = "failed" ]; then
+                echo "Bloom Live E2E failed: project=${PROJECT_ID} run=${RUN_ID}" >&2
+                printf '%s\n' "$RUN_JSON"
+                summarize_snapshot
+                echo "=== bloom-builder-worker logs ==="
+                pm2 logs bloom-builder-worker --lines 160 --nostream || true
+                echo "=== bloom-evaluator-worker logs ==="
+                pm2 logs bloom-evaluator-worker --lines 80 --nostream || true
+                exit 1
+              fi
+
+              if [ "$(date +%s)" -ge "$DEADLINE" ]; then
+                echo "Bloom Live E2E timed out after ${TIMEOUT_MINUTES} minutes" >&2
+                summarize_snapshot
+                pm2 logs bloom-builder-worker --lines 160 --nostream || true
+                exit 1
+              fi
+
+              sleep 30
+            done
