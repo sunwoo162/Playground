@@ -1,0 +1,2 @@
+Fresh production Live E2E after PR #167 / merge a03a8f2efad911fd830bbbad03788c8ecbee621d.
+Purpose: verify the 512 KiB Luna Agent streaming output guard, worker recovery, delivery, and Bloom evaluation end to end.
