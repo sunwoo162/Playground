@@ -7,6 +7,7 @@ import type {
 import {
   createHeadlessBuilderExecutor,
   HEADLESS_BUILDER_SNAPSHOT_SCHEMA_VERSION,
+  normalizeBlockingMissingInputs,
   type HeadlessAgentTaskRunResult,
   type HeadlessBuilderRuntime,
   type HeadlessBuilderSnapshotPayload,
@@ -436,10 +437,20 @@ async function testUnrecoverableRunningTaskBlocksWithoutRedispatch() {
   assert(phases.includes("blocked"), "unrecoverable task evidence must be durably snapshotted as blocked");
 }
 
+function testCopiedIntakeBlockerCatalogIsNonBlocking() {
+  const copied = "a required credential/secret for a mandatory external service / legal/ownership authorization / an irreversible destructive target / a required external endpoint/dataset that the platform cannot provision";
+  const normalized = normalizeBlockingMissingInputs([copied]);
+  assert(normalized.length === 0, "copied intake blocker examples must not block execution");
+
+  const concrete = normalizeBlockingMissingInputs(["Stripe production API secret"]);
+  assert(concrete.length === 1, "a concrete missing production credential must remain blocking");
+}
+
 async function run() {
   await testFreshClaimPersistsEveryExternalSideEffectBoundary();
   await testInterruptedRunningTaskReconcilesBeforeAnyRedispatch();
   await testUnrecoverableRunningTaskBlocksWithoutRedispatch();
+  testCopiedIntakeBlockerCatalogIsNonBlocking();
   console.log("headlessBuilderExecutor policy tests passed");
 }
 
