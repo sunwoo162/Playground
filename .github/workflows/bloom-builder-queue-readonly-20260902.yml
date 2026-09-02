@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Inspect builder 37 task failure
+      - name: Inspect builder 38 live attempt
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ssh.gsmsv.site
@@ -42,8 +42,8 @@ jobs:
               return text ? JSON.parse(text) : null;
             }
             async function main() {
-              const run = await get('/api/builder/projects/37/runs/37');
-              const snapshot = await get('/api/builder/projects/37/runs/37/snapshot');
+              const run = await get('/api/builder/projects/38/runs/38');
+              const snapshot = await get('/api/builder/projects/38/runs/38/snapshot');
               const payload = snapshot?.payloadJson ? JSON.parse(snapshot.payloadJson) : null;
               console.log(`[run] status=${run?.status || '-'} failure=${run?.failureReason || '-'} phase=${snapshot?.phase || '-'} version=${snapshot?.version ?? '-'}`);
               console.log(`[repository] ${JSON.stringify(payload?.repository || null)}`);
@@ -55,19 +55,19 @@ jobs:
             }
             main().catch((error) => { console.error(`[inspect] FAILED ${error.stack || error}`); process.exit(1); });
             NODE
-            ROOT=/home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-37
-            echo '[builder-37-files]'
+            ROOT=/home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-38
+            echo '[builder-38-files]'
             if [ -d "$ROOT" ]; then
               find "$ROOT" -maxdepth 8 -type f -printf '%TY-%Tm-%TdT%TH:%TM:%TSZ %s %p\n' 2>/dev/null | sort | tail -n 160
             else
               echo '[missing-root]'
             fi
-            echo '[task-diagnostics]'
-            if [ -d "$ROOT" ]; then
-              find "$ROOT" -maxdepth 10 -type f \( -name '*stderr*' -o -name '*events*' -o -name '*report*' \) -print0 2>/dev/null | while IFS= read -r -d '' file; do
-                echo "--- $file"
-                tail -n 100 "$file" 2>/dev/null | sed -E 's/([Tt][Oo][Kk][Ee][Nn]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd]|[Ss][Ee][Cc][Rr][Ee][Tt]|[Aa][Uu][Tt][Hh][Oo][Rr][Ii][Zz][Aa][Tt][Ii][Oo][Nn])[^ ]*/\1=<redacted>/g' || true
-              done
-            fi
+            echo '[llama-current]'
+            node <<'NODE'
+            const { execFileSync } = require('node:child_process');
+            const list = JSON.parse(execFileSync('pm2', ['jlist'], { encoding: 'utf8' }));
+            const p = list.find((x) => x.name === 'bloom-evaluator-llm');
+            console.log(JSON.stringify({ pid: p?.pid || 0, status: p?.pm2_env?.status, restart_time: p?.pm2_env?.restart_time, max_memory_restart: p?.pm2_env?.max_memory_restart, memory: p?.monit?.memory, cpu: p?.monit?.cpu }, null, 2));
+            NODE
             echo '[builder-worker-logs]'
-            pm2 logs bloom-builder-worker --lines 320 --nostream 2>&1 | grep -E 'builder run 37|blocked|Runtime|runtime|Agent|task|Local model|failed|error|tool' | tail -n 220 || true
+            pm2 logs bloom-builder-worker --lines 320 --nostream 2>&1 | grep -E 'builder run 38|blocked|Runtime|runtime|Agent|task|Local model|failed|error|tool' | tail -n 220 || true
