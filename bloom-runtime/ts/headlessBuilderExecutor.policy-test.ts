@@ -278,7 +278,7 @@ function fakeRuntime(events: string[]) {
   };
 }
 
-function executor(runtime: HeadlessBuilderRuntime) {
+function executor(runtime: HeadlessBuilderRuntime, maxParallelTasks?: number) {
   let tick = 0;
   return createHeadlessBuilderExecutor({
     organization: "example",
@@ -286,6 +286,7 @@ function executor(runtime: HeadlessBuilderRuntime) {
     teamId: TEAM_ID,
     teamName: "Rose",
     runtime,
+    ...(maxParallelTasks === undefined ? {} : { maxParallelTasks }),
     now: () => `2026-08-27T01:00:${String(tick++).padStart(2, "0")}Z`,
   });
 }
@@ -398,6 +399,15 @@ async function testFreshClaimPersistsEveryExternalSideEffectBoundary() {
   assert(runtime.maxActive === 2, "independent frontend/backend tasks should execute in the same two-task wave");
 }
 
+async function testExecutorHonorsConfiguredParallelTaskLimit() {
+  const events: string[] = [];
+  const runtime = fakeRuntime(events);
+  const { client } = fakeClient(null, events);
+
+  await executor(runtime.runtime, 1)(CLAIM, client);
+
+  assert(runtime.maxActive === 1, "configured low-memory concurrency limit must serialize Agent dispatches");
+}
 async function testInterruptedRunningTaskReconcilesBeforeAnyRedispatch() {
   const events: string[] = [];
   const runtime = fakeRuntime(events);
@@ -438,6 +448,7 @@ async function testUnrecoverableRunningTaskBlocksWithoutRedispatch() {
 
 async function run() {
   await testFreshClaimPersistsEveryExternalSideEffectBoundary();
+  await testExecutorHonorsConfiguredParallelTaskLimit();
   await testInterruptedRunningTaskReconcilesBeforeAnyRedispatch();
   await testUnrecoverableRunningTaskBlocksWithoutRedispatch();
   console.log("headlessBuilderExecutor policy tests passed");
