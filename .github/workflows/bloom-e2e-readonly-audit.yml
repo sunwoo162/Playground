@@ -34,6 +34,7 @@ jobs:
             node <<'NODE'
             require('dotenv').config({ path: '.env' });
             const jwt = require('jsonwebtoken');
+            const fs = require('node:fs');
             const { auditLiveE2ESnapshot } = require('./.tmp/bloom-policy-tests/e2eSmoke.js');
             const base = 'http://127.0.0.1:3000';
             const token = jwt.sign({ id: 'sunwoo162-live-e2e', login: 'sunwoo162', name: 'sunwoo162', avatar_url: '', type: 'access' }, process.env.JWT_SECRET, { expiresIn: '15m' });
@@ -61,9 +62,18 @@ jobs:
                   console.log(`[canonical-audit] frontend=${roles.includes('frontend')} backend=${roles.includes('backend')} blocked=${payload.blockedReason || '-'}`);
                   const runs = payload.taskRuns || [];
                   console.log(`[canonical-audit] taskRuns=${runs.map((r) => `${r.id || r.taskId}:${r.role}:${r.status}`).join('|')}`);
+                  for (const task of runs.filter((r) => r.status === 'blocked' || r.status === 'running')) {
+                    console.log(`[task-detail] ${task.taskId}:${task.role}:${task.status} attempts=${task.attempts} lastError=${task.lastError || '-'} blockers=${JSON.stringify(task.blockers || [])}`);
+                    console.log(`[task-detail] stderrPath=${task.stderrPath || '-'} eventsPath=${task.eventsPath || '-'}`);
+                    if (task.stderrPath && fs.existsSync(task.stderrPath)) {
+                      const stderr = fs.readFileSync(task.stderrPath, 'utf8').slice(-16000);
+                      console.log(`[task-stderr] ${task.taskId}\n${stderr}`);
+                    }
+                  }
                 }
               }
             })().catch((error) => { console.error(error); process.exit(1); });
             NODE
             echo "=== builder error tail ==="
             pm2 logs bloom-builder-production --lines 800 --nostream 2>&1 | grep -Ei 'codex|usage|limit|blocked|failed|error|Agent task|runId=|projectId=' | tail -n 300 || true
+
