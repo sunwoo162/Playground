@@ -1,0 +1,55 @@
+name: Apply Intake None Sentinel Fix
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.head_ref == 'fix/local-intake-none-sentinel' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "Luna Bloom"
+          git config user.email "luna-bloom@users.noreply.github.com"
+
+      - name: Apply minimal intake normalization
+        run: |
+          python .github/scripts/apply_intake_none_sentinel_fix.py
+          git add bloom-runtime/ts/headlessBuilderExecutor.ts
+          git commit -m "fix : ignore local intake none sentinel"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify Bloom runtime policy tests
+        run: pnpm run test:bloom-runtime
+
+      - name: Remove one-time fix helpers
+        run: |
+          git rm .github/scripts/apply_intake_none_sentinel_fix.py .github/workflows/apply-intake-none-sentinel-fix.yml
+          git commit -m "chore : remove intake fix helper"
+
+      - name: Push fixed branch
+        run: git push origin HEAD:${{ github.event.pull_request.head.ref }}
