@@ -124,33 +124,114 @@ export function isAllowedCommand(command: string, args: string[]): boolean {
   return false;
 }
 
+export type LocalModelRequest = {
+  endpoint: string;
+  model: string;
+  messages: ModelMessage[];
+  fetchImpl?: typeof fetch;
+  timeoutMs?: number;
+  maxRetries?: number;
+};
+
+function parseCompletionEnvelope(raw: string): JsonObject {
+  const envelope = JSON.parse(raw) as { choices?: Array<{ message?: { content?: unknown } }> };
+  const content = envelope.choices?.[0]?.message?.content;
+  if (typeof content !== "string") throw new Error("Local model response is missing message content.");
+  return parseJsonObject(content);
+}
+
+async function readStreamingCompletion(response: Response): Promise<JsonObject> {
+  if (!response.body) throw new Error("Local model streaming response is missing a body.");
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffered = "";
+  let content = "";
+  let bytes = 0;
+
+  const consumeLine = (line: string) => {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("data:")) return;
+    const payload = trimmed.slice(5).trim();
+    if (!payload || payload === "[DONE]") return;
+    const event = JSON.parse(payload) as { choices?: Array<{ delta?: { content?: unknown } }> };
+    const token = event.choices?.[0]?.delta?.content;
+    if (typeof token === "string") content += token;
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    bytes += value.byteLength;
+    if (bytes > MAX_RESPONSE_BYTES) throw new Error("Local model HTTP response exceeded the 4MB safety limit.");
+    buffered += decoder.decode(value, { stream: true });
+    const lines = buffered.split(/\r?\n/);
+    buffered = lines.pop() ?? "";
+    for (const line of lines) consumeLine(line);
+  }
+  buffered += decoder.decode();
+  if (buffered) consumeLine(buffered);
+  if (!content) throw new Error("Local model streaming response is missing message content.");
+  return parseJsonObject(content);
+}
+
+function isTransientTransportError(error: unknown): boolean {
+  return error instanceof TypeError || (error instanceof Error && /fetch failed|socket|connection|reset/i.test(error.message));
+}
+
+export async function requestLocalModel(input: LocalModelRequest): Promise<JsonObject> {
+  const fetchImpl = input.fetchImpl ?? fetch;
+  const timeoutMs = input.timeoutMs ?? 15 * 60 * 1000;
+  const maxRetries = input.maxRetries ?? 1;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetchImpl(input.endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "text/event-stream, application/json" },
+        body: JSON.stringify({
+          model: input.model,
+          messages: input.messages,
+          temperature: 0.1,
+          max_tokens: 4096,
+          stream: true,
+          response_format: { type: "json_object" },
+        }),
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        const raw = await response.text();
+        if (Buffer.byteLength(raw, "utf8") > MAX_RESPONSE_BYTES) {
+          throw new Error("Local model HTTP response exceeded the 4MB safety limit.");
+        }
+        throw new Error(`Local model HTTP ${response.status}: ${raw.slice(0, 1000)}`);
+      }
+      const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+      if (contentType.includes("text/event-stream")) return await readStreamingCompletion(response);
+      const raw = await response.text();
+      if (Buffer.byteLength(raw, "utf8") > MAX_RESPONSE_BYTES) {
+        throw new Error("Local model HTTP response exceeded the 4MB safety limit.");
+      }
+      return parseCompletionEnvelope(raw);
+    } catch (error) {
+      if (controller.signal.aborted) throw new Error(`Local model request timed out after ${timeoutMs}ms.`);
+      if (attempt < maxRetries && isTransientTransportError(error)) continue;
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  throw new Error("Local model request exhausted retries.");
+}
+
 async function callModel(
   endpoint: string,
   model: string,
   messages: ModelMessage[],
   fetchImpl: typeof fetch,
 ): Promise<JsonObject> {
-  const response = await fetchImpl(endpoint, {
-    method: "POST",
-    headers: { "content-type": "application/json", accept: "application/json" },
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature: 0.1,
-      max_tokens: 4096,
-      stream: false,
-      response_format: { type: "json_object" },
-    }),
-  });
-  const raw = await response.text();
-  if (Buffer.byteLength(raw, "utf8") > MAX_RESPONSE_BYTES) {
-    throw new Error("Local model HTTP response exceeded the 4MB safety limit.");
-  }
-  if (!response.ok) throw new Error(`Local model HTTP ${response.status}: ${raw.slice(0, 1000)}`);
-  const envelope = JSON.parse(raw) as { choices?: Array<{ message?: { content?: unknown } }> };
-  const content = envelope.choices?.[0]?.message?.content;
-  if (typeof content !== "string") throw new Error("Local model response is missing message content.");
-  return parseJsonObject(content);
+  return requestLocalModel({ endpoint, model, messages, fetchImpl });
 }
 
 function finalReportContract(): string {
