@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Inspect latest production Bloom Live E2E
+      - name: Inspect production Bloom state and Agent streams
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ssh.gsmsv.site
@@ -27,86 +27,53 @@ jobs:
             node <<'NODE'
             require('dotenv').config({ path: '.env' });
             const jwt = require('jsonwebtoken');
-            const base = 'http://127.0.0.1:3000';
-            const marker = '[BLOOM-E2E-SMOKE]';
-            const writerRoles = new Set(['design-system','designer','ux-research','frontend','backend','database','security','devops','accessibility','performance','api-integration','test-automation','data-marketing','documentation','debug-router']);
-            const token = jwt.sign({ id:'sunwoo162-live-e2e', login:'sunwoo162', name:'sunwoo162', avatar_url:'', type:'access' }, process.env.JWT_SECRET, { expiresIn:'20m' });
-            const headers = { Cookie: `playground_token=${token}` };
-            async function get(path) {
-              const r = await fetch(`${base}${path}`, { headers });
-              const t = await r.text();
-              if (!r.ok) throw new Error(`GET ${path} -> ${r.status}: ${t.slice(0,500)}`);
-              return t ? JSON.parse(t) : null;
+            const base='http://127.0.0.1:3000';
+            const marker='[BLOOM-E2E-SMOKE]';
+            const token=jwt.sign({id:'sunwoo162-live-e2e',login:'sunwoo162',name:'sunwoo162',avatar_url:'',type:'access'},process.env.JWT_SECRET,{expiresIn:'20m'});
+            const headers={Cookie:`playground_token=${token}`};
+            async function get(path){const r=await fetch(`${base}${path}`,{headers});const t=await r.text();if(!r.ok)throw new Error(`${path} -> ${r.status}: ${t.slice(0,500)}`);return t?JSON.parse(t):null;}
+            async function main(){
+              const projects=await get('/api/builder/projects');
+              const project=[...projects].sort((a,b)=>b.id-a.id).find((p)=>String(p.brief||'').includes(marker));
+              const runs=await get(`/api/builder/projects/${project.id}/runs`);
+              const run=[...runs].sort((a,b)=>b.id-a.id)[0];
+              const snapshot=await get(`/api/builder/projects/${project.id}/runs/${run.id}/snapshot`);
+              const p=snapshot?JSON.parse(snapshot.payloadJson):null;
+              console.log(`[state] project=${project.id} run=${run.id} projectStatus=${project.status} runStatus=${run.status} worker=${run.workerId||'-'} failure=${run.failureReason||'-'}`);
+              console.log(`[state] repository=${project.repositoryFullName||'-'} preview=${project.previewUrl||'-'} phase=${snapshot?.phase||'-'} version=${snapshot?.version||'-'} blocked=${p?.blockedReason||'-'} runtime=${p?.runtimeProjectId||'-'} repoName=${p?.plan?.repositoryName||'-'}`);
+              for(const r of p?.taskRuns||[]) console.log(`[task] ${r.taskId||r.id||'-'} role=${r.role} status=${r.status} attempts=${r.attempts??r.attempt??'-'} commit=${r.commitSha||'-'} pr=${r.pullRequestNumber||'-'} error=${String(r.error||'-').slice(0,300)}`);
             }
-            const roleRuns = (p, role) => p.taskRuns.filter((r) => r.role === role);
-            const rolesDone = (p, roles) => roles.every((role) => { const rs=roleRuns(p,role); return rs.length>0 && rs.every((r)=>r.status==='done'); });
-            async function main() {
-              const projects = await get('/api/builder/projects');
-              const project = [...projects].sort((a,b)=>Number(b.id)-Number(a.id)).find((p)=>String(p.brief||'').includes(marker));
-              if (!project) throw new Error('No Bloom Live E2E project found');
-              const runs = await get(`/api/builder/projects/${project.id}/runs`);
-              const run = [...runs].sort((a,b)=>Number(b.id)-Number(a.id))[0];
-              const snapshot = await get(`/api/builder/projects/${project.id}/runs/${run.id}/snapshot`);
-              console.log(`[audit] project=${project.id} run=${run.id} projectStatus=${project.status} runStatus=${run.status}`);
-              console.log(`[audit] repository=${project.repositoryFullName||'-'} preview=${project.previewUrl||'-'} worker=${run.workerId||'-'} failureReason=${run.failureReason||'-'}`);
-              if (!snapshot) { console.log('[audit] snapshot=none'); return; }
-              const p = JSON.parse(snapshot.payloadJson);
-              const terminal = run.status==='completed'||run.status==='failed';
-              const writers = p.taskRuns.filter((r)=>writerRoles.has(r.role));
-              const writerPrs = writers.map((r)=>r.pullRequestNumber).filter(Number.isInteger);
-              const writerEvidence = writers.length>0 && writers.every((r)=>r.status==='done'&&r.commitSha&&Number.isInteger(r.pullRequestNumber)&&r.pullRequestUrl);
-              const reviewed = new Set(roleRuns(p,'code-review').flatMap((r)=>r.reviewedPullRequests||[]));
-              const reviewCoverage = writerPrs.length>0 && writerPrs.every((n)=>reviewed.has(n));
-              const expected = p.integrationPullRequestNumbers||[];
-              const merged = new Set(p.integration?.mergedPullRequests?.map((r)=>r.number)||[]);
-              const integration = expected.length>0 && writerPrs.every((n)=>expected.includes(n)) && expected.every((n)=>merged.has(n));
-              const checks = [
-                ['Snapshot',String(p.request||'').includes(marker)],
-                ['Intake',Boolean(p.intake?.analysis&&p.intake?.sessionId)],
-                ['PM plan',Boolean(p.plan&&p.pm?.sessionId)],
-                ['Repository bootstrap',Boolean(p.repository?.repository&&p.repository?.workspacePath)],
-                ['Frontend + Backend',rolesDone(p,['frontend','backend'])],
-                ['Writer commit / PR evidence',writerEvidence],
-                ['Governance chain',rolesDone(p,['data-marketing','documentation','code-review','reviewer','qa'])],
-                ['Code Review coverage',reviewCoverage],
-                ['Integration merge',integration],
-                ['Run completion',run.status==='completed'&&snapshot.phase==='completed'&&!p.blockedReason],
-              ];
-              console.log(`[audit] snapshotPhase=${snapshot.phase} version=${snapshot.version} blocked=${p.blockedReason||'-'} runtimeProjectId=${p.runtimeProjectId||'-'} repositoryName=${p.plan?.repositoryName||'-'}`);
-              for (const r of p.taskRuns) console.log(`[task] ${r.taskId||r.id||'-'} role=${r.role} status=${r.status} attempts=${r.attempts??r.attempt??'-'} commit=${r.commitSha||'-'} pr=${r.pullRequestNumber||'-'} error=${String(r.error||'-').slice(0,280)}`);
-              let passed=0;
-              checks.forEach(([label,ok],i)=>{ if(ok) passed++; console.log(`[milestone] ${i+1}/10 ${ok?'PASS':terminal?'FAIL':'PENDING'} ${label}`); });
-              console.log(`[audit] RESULT ${passed}/10${passed===10?' ALL PASS':''}`);
-              console.log(`[audit] RUNTIME_PROJECT=${p.runtimeProjectId||''}`);
-            }
-            main().catch((e)=>{ console.error(`[audit] FAILED ${e.stack||e}`); process.exit(1); });
+            main().catch((e)=>{console.error(`[state] FAILED ${e.stack||e}`);process.exit(1)});
             NODE
 
-            EVENT_FILE="$(find /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-26/agents -type f -path '*/T-001/app-server-events.jsonl' 2>/dev/null | head -n 1 || true)"
-            if [ -n "$EVENT_FILE" ]; then
-              python3 - "$EVENT_FILE" <<'PY'
-            import json, os, sys
-            path=sys.argv[1]
-            events=0; deltas=0; delta_bytes=0; completed=0; turns=0; failed=0; last_method='-'
-            with open(path,'r',encoding='utf-8',errors='replace') as f:
-                for line in f:
-                    events += 1
-                    try: v=json.loads(line)
-                    except Exception: continue
-                    m=v.get('method') or '-'; last_method=m
-                    if m=='item/agentMessage/delta':
-                        deltas += 1
-                        d=((v.get('params') or {}).get('delta'))
-                        if isinstance(d,str): delta_bytes += len(d.encode())
-                    elif m=='item/completed':
-                        item=(v.get('params') or {}).get('item') or {}
-                        if item.get('type')=='agentMessage': completed += 1
-                    elif m=='turn/completed': turns += 1
-                    elif m=='turn/failed': failed += 1
-            print(f'[stream] path={path}')
-            print(f'[stream] fileBytes={os.path.getsize(path)} events={events} agentDeltas={deltas} agentDeltaBytes={delta_bytes} completedAgentMessages={completed} turnCompleted={turns} turnFailed={failed} lastMethod={last_method}')
-            print(f'[stream] guardLimitBytes={512*1024} remaining={max(0,512*1024-delta_bytes)}')
+            python3 <<'PY'
+            import glob, json, os
+            root='/home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-26/agents'
+            files=sorted(glob.glob(root+'/*/*/app-server-events.jsonl'))
+            if not files:
+                print('[streams] none')
+            for path in files:
+                events=deltas=delta_bytes=completed=turns=failed=0
+                last='-'
+                try:
+                    f=open(path,'r',encoding='utf-8',errors='replace')
+                except OSError:
+                    continue
+                with f:
+                    for line in f:
+                        events+=1
+                        try:v=json.loads(line)
+                        except Exception:continue
+                        m=v.get('method') or '-';last=m
+                        if m=='item/agentMessage/delta':
+                            deltas+=1
+                            d=((v.get('params') or {}).get('delta'))
+                            if isinstance(d,str):delta_bytes+=len(d.encode())
+                        elif m=='item/completed':
+                            item=(v.get('params') or {}).get('item') or {}
+                            if item.get('type')=='agentMessage':completed+=1
+                        elif m=='turn/completed':turns+=1
+                        elif m=='turn/failed':failed+=1
+                rel=os.path.relpath(path,root)
+                print(f'[stream] {rel} fileBytes={os.path.getsize(path)} events={events} deltas={deltas} deltaBytes={delta_bytes} remaining={max(0,524288-delta_bytes)} completedMessages={completed} turnCompleted={turns} turnFailed={failed} last={last}')
             PY
-            else
-              echo '[stream] T-001 event file not found (task may already have advanced)'
-            fi
