@@ -4,8 +4,8 @@ function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
-const noneOnly = normalizeBlockingMissingInputs([" none "]);
-assert(noneOnly.length === 0, "the Local Intake sentinel `none` must not block project execution");
+const noneOnly = normalizeBlockingMissingInputs([" none ", " NONE "]);
+assert(noneOnly.length === 0, "the Local Intake sentinel `none` must not block project execution regardless of casing");
 
 const mixed = normalizeBlockingMissingInputs(["none", " OAuth client id "]);
 assert(
