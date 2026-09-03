@@ -13,7 +13,7 @@ const { runBloomBouquetEvaluatorOnce } = require("../.tmp/bloom-worker/bloomBouq
 const { createLocalSeniorEvaluatorRunner } = require("../.tmp/bloom-worker/bloomBouquetLocalSeniorEvaluator.js");
 const { createLunaProductionDeliveryHook } = require("../.tmp/bloom-worker/lunaProductionDelivery.js");
 const { prepareOrchestrationPlan } = require("../.tmp/bloom-worker/orchestrationCore.js");
-const { validateLiveE2EImplementationPlan } = require("../.tmp/bloom-worker/e2eSmoke.js");
+const { enforceLiveE2ERepositoryName, validateLiveE2EImplementationPlan } = require("../.tmp/bloom-worker/e2eSmoke.js");
 
 const MAX_BRIDGE_OUTPUT_BYTES = 16 * 1024 * 1024;
 const MAX_PM_PLAN_ATTEMPTS = 2;
@@ -190,6 +190,7 @@ function createRuntimeBridge(binaryPath) {
           request: buildPmPlanningRequest(input.request, validationError),
         });
         result.plan = prepareOrchestrationPlan(result.plan);
+        result.plan = enforceLiveE2ERepositoryName(input.request, result.plan);
         validateLiveE2EImplementationPlan(input.request, result.plan);
         return result;
       } catch (error) {

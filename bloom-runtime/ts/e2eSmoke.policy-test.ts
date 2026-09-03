@@ -5,6 +5,7 @@ import {
   validateLiveE2EImplementationPlan,
   type LiveE2ESnapshotEnvelope,
 } from "./e2eSmoke";
+import * as e2eSmokeModule from "./e2eSmoke";
 
 function assert(condition: boolean, message: string) {
   if (!condition) throw new Error(message);
@@ -127,6 +128,16 @@ function main() {
     wrongRepositoryError = error instanceof Error ? error.message : String(error);
   }
   assert(wrongRepositoryError.includes(request.repositoryName), "Live E2E PM validation must reject a repository name that differs from the exact smoke request");
+
+  const enforceLiveE2ERepositoryName = (e2eSmokeModule as unknown as Record<string, unknown>).enforceLiveE2ERepositoryName;
+  assert(typeof enforceLiveE2ERepositoryName === "function", "Live E2E runtime must expose deterministic repository-name enforcement");
+  const normalizedLivePlan = {
+    repositoryName: "bloom-e2e-pulseboard",
+    tasks: [{ role: "frontend" as const }, { role: "backend" as const }],
+  };
+  (enforceLiveE2ERepositoryName as (request: string, plan: typeof normalizedLivePlan) => typeof normalizedLivePlan)(request.request, normalizedLivePlan);
+  assert(normalizedLivePlan.repositoryName === request.repositoryName, "Live E2E runtime must overwrite a PM repository mismatch with the exact smoke request name");
+  validateLiveE2EImplementationPlan(request.request, normalizedLivePlan);
 
   let missingBackendError = "";
   try {

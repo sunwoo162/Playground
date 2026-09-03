@@ -51,6 +51,14 @@ assert(
   "Live E2E implementation-role validation must run inside the PM repair retry boundary",
 );
 assert(
+  workerSource.includes("result.plan = enforceLiveE2ERepositoryName(input.request, result.plan);"),
+  "Live E2E repository identity must be deterministically enforced before strict validation",
+);
+assert(
+  workerSource.indexOf("result.plan = enforceLiveE2ERepositoryName(input.request, result.plan);") < workerSource.indexOf("validateLiveE2EImplementationPlan(input.request, result.plan);"),
+  "Live E2E repository enforcement must run before strict validation so repo identity does not consume PM repair budget",
+);
+assert(
   workerSource.includes("result.plan = prepareOrchestrationPlan(result.plan);"),
   "PM repair wrapper must validate the prepared review topology inside its retry boundary",
 );
