@@ -114,6 +114,27 @@ jobs:
             if [ -n "$BUILDER_PID" ] && [ "$BUILDER_PID" != "0" ]; then
               ps -o pid,ppid,stat,etime,cmd -p "$BUILDER_PID" || true
               pgrep -a -P "$BUILDER_PID" || true
+              python3 - "$BUILDER_PID" <<'PY'
+            import os, sys
+            root=int(sys.argv[1]); children={}
+            for entry in os.listdir('/proc'):
+                if not entry.isdigit(): continue
+                try:
+                    stat=open(f'/proc/{entry}/stat',encoding='utf-8',errors='replace').read().split()
+                    children.setdefault(int(stat[3]),[]).append(int(entry))
+                except Exception: pass
+            queue=[root]; seen=set()
+            while queue:
+                parent=queue.pop(0)
+                for child in sorted(children.get(parent,[])):
+                    if child in seen: continue
+                    seen.add(child); queue.append(child)
+                    try: cmd=open(f'/proc/{child}/cmdline','rb').read().replace(b'\0',b' ').decode('utf-8','replace').strip()
+                    except Exception: cmd='?'
+                    try: cwd=os.readlink(f'/proc/{child}/cwd')
+                    except Exception: cwd='?'
+                    print(f'[desc] pid={child} ppid={parent} cwd={cwd} cmd={cmd[:700]}')
+            PY
             fi
             echo "=== builder logs ==="
             pm2 logs bloom-builder-worker --lines 120 --nostream || true
