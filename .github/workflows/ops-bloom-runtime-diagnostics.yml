@@ -147,6 +147,12 @@ jobs:
             if [ -n "$LLAMA_PID" ] && [ "$LLAMA_PID" != "0" ]; then
               ps -o pid,ppid,stat,etime,pcpu,pmem,rss,vsz,cmd -p "$LLAMA_PID" || true
             fi
+            pm2 jlist 2>/dev/null | node -e '
+              const fs = require("fs");
+              const apps = JSON.parse(fs.readFileSync(0, "utf8") || "[]");
+              const app = apps.find((entry) => entry?.name === "bloom-evaluator-llm");
+              console.log("[llama-pm2] " + JSON.stringify({ maxMemoryRestart: app?.pm2_env?.max_memory_restart ?? null, status: app?.pm2_env?.status ?? null }));
+            ' || true
             curl -fsS --max-time 3 http://127.0.0.1:8091/health || true
             echo
             pm2 logs bloom-evaluator-llm --lines 160 --nostream || true
