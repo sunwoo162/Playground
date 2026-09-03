@@ -1,0 +1,49 @@
+name: Ops Probe Bloom E2E 52 Drain
+
+on:
+  push:
+    branches:
+      - ops/e2e52-drain-probe
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require production SSH credential
+        env:
+          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+        run: test -n "$SSH_PASSWORD" || exit 1
+
+      - name: Inspect drain state
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          command_timeout: 3m
+          script: |
+            set -euo pipefail
+            cd /home/ubuntu/bloombouquet
+            echo "probe_time=$(date -u +%FT%TZ)"
+            echo "head=$(git rev-parse --short HEAD 2>/dev/null || true)"
+            ls -l /tmp/bloom-builder-worker.drain /tmp/bloom-builder-worker.busy 2>/dev/null || true
+            BUSY_PID="$(head -n 1 /tmp/bloom-builder-worker.busy 2>/dev/null || true)"
+            echo "busy_pid=${BUSY_PID:-none}"
+            if [ -n "$BUSY_PID" ]; then
+              ps -o pid,ppid,stat,etime,cmd -p "$BUSY_PID" || true
+              echo "descendants:"
+              pstree -p "$BUSY_PID" 2>/dev/null || true
+            fi
+            set -a
+            . /home/ubuntu/bloombouquet/.env
+            set +a
+            WORKER_ID="${BLOOM_BUILDER_WORKER_ID:-bloom-builder-production}"
+            ACTIVE="$(printf 'X-Builder-Worker-Token: %s\n' "$BUILDER_WORKER_TOKEN" | curl -fsS --max-time 5 \
+              -H @- "http://127.0.0.1:8080/internal/builder/worker/runs/active-lease?workerId=${WORKER_ID}" || echo probe-error)"
+            echo "active_lease=${ACTIVE}"
+            echo "builder_pm2_pid=$(pm2 pid bloom-builder-worker 2>/dev/null || true)"
