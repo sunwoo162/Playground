@@ -90,6 +90,7 @@
     "ts/lunaReviewPackage.policy-test.ts",
     "ts/bloomLocalAgentRuntime.policy-test.ts",
     "ts/bloomLocalAgentInference.policy-test.ts",
+    "ts/bloomLocalAgentNoProgress.policy-test.ts",
     "ts/codexFreeRuntime.policy-test.ts"
   ]
 }
