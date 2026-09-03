@@ -49,7 +49,7 @@ jobs:
 
             PROJECTS_JSON="$(curl -fsS --max-time 20 -H "Authorization: Bearer ${TOKEN}" "$API_BASE/api/builder/projects")"
             PROJECT_ID="$(printf '%s' "$PROJECTS_JSON" | node -e 'const a=JSON.parse(require("fs").readFileSync(0,"utf8")); a.sort((x,y)=>Number(y.id)-Number(x.id)); if(!a[0]?.id) process.exit(2); process.stdout.write(String(a[0].id));')"
-printf '%s' "$PROJECTS_JSON" | node -e 'const a=JSON.parse(require("fs").readFileSync(0,"utf8")); const p=a.find((x)=>String(x.id)===process.env.PROJECT_ID); if (p) console.log(JSON.stringify({id:p.id,brief:p.brief,templateId:p.templateId}));'
+            printf '%s' "$PROJECTS_JSON" | node -e 'const a=JSON.parse(require("fs").readFileSync(0,"utf8")); a.sort((x,y)=>Number(y.id)-Number(x.id)); const p=a[0]; if (p) console.log(JSON.stringify({id:p.id,brief:p.brief,templateId:p.templateId}));'
             RUNS_JSON="$(curl -fsS --max-time 20 -H "Authorization: Bearer ${TOKEN}" "$API_BASE/api/builder/projects/${PROJECT_ID}/runs")"
             RUN_ID="$(printf '%s' "$RUNS_JSON" | node -e 'const a=JSON.parse(require("fs").readFileSync(0,"utf8")); a.sort((x,y)=>Number(y.id)-Number(x.id)); if(!a[0]?.id) process.exit(2); process.stdout.write(String(a[0].id));')"
             echo "latest_project=${PROJECT_ID} latest_run=${RUN_ID}"
