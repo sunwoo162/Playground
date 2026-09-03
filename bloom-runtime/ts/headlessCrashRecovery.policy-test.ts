@@ -341,7 +341,7 @@ function transitionedRoleToDone(role: ExecutableAgentRole): CrashPredicate {
 async function testRepositoryBootstrapRecovery() {
   const runtime = fakeRuntime();
   const storage = persistentClient((next, previous, phase) =>
-    phase === "building" && previous?.repository === null && next.repository !== null);
+    phase === "bootstrap" && previous?.repository === null && next.repository !== null);
   const executor = makeExecutor(runtime.runtime);
   await expectCrash(executor, storage.client);
   await resume(executor, storage.client);

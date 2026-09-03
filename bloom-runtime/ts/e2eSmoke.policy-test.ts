@@ -113,6 +113,7 @@ function main() {
 
   const validImplementationPlan = {
     repositoryName: request.repositoryName,
+    scaffoldProfile: "react-api-sqlite-monorepo-v1" as const,
     tasks: [{ role: "frontend" as const }, { role: "backend" as const }],
   };
   validateLiveE2EImplementationPlan(request.request, validImplementationPlan);
@@ -121,6 +122,7 @@ function main() {
   try {
     const wrongRepositoryPlan = {
       repositoryName: "bloom-e2e-pulseboard",
+      scaffoldProfile: "react-api-sqlite-monorepo-v1" as const,
       tasks: [{ role: "frontend" as const }, { role: "backend" as const }],
     };
     validateLiveE2EImplementationPlan(request.request, wrongRepositoryPlan);
@@ -133,16 +135,24 @@ function main() {
   assert(typeof enforceLiveE2ERepositoryName === "function", "Live E2E runtime must expose deterministic repository-name enforcement");
   const normalizedLivePlan = {
     repositoryName: "bloom-e2e-pulseboard",
+    scaffoldProfile: "react-api-sqlite-monorepo-v1" as const,
     tasks: [{ role: "frontend" as const }, { role: "backend" as const }],
   };
   (enforceLiveE2ERepositoryName as (request: string, plan: typeof normalizedLivePlan) => typeof normalizedLivePlan)(request.request, normalizedLivePlan);
   assert(normalizedLivePlan.repositoryName === request.repositoryName, "Live E2E runtime must overwrite a PM repository mismatch with the exact smoke request name");
   validateLiveE2EImplementationPlan(request.request, normalizedLivePlan);
 
+  const enforceLiveE2EScaffoldProfile = (e2eSmokeModule as unknown as Record<string, unknown>).enforceLiveE2EScaffoldProfile;
+  assert(typeof enforceLiveE2EScaffoldProfile === "function", "Live E2E runtime must expose deterministic scaffold-profile enforcement");
+  const scaffoldPlan = { ...normalizedLivePlan, scaffoldProfile: "none" };
+  (enforceLiveE2EScaffoldProfile as (request: string, plan: typeof scaffoldPlan) => typeof scaffoldPlan)(request.request, scaffoldPlan);
+  assert(scaffoldPlan.scaffoldProfile === "react-api-sqlite-monorepo-v1", "Live E2E Pulseboard must use the deterministic React/API/SQLite scaffold profile");
+
   let missingBackendError = "";
   try {
     const missingBackendPlan = {
       repositoryName: request.repositoryName,
+      scaffoldProfile: "react-api-sqlite-monorepo-v1" as const,
       tasks: [{ role: "frontend" as const }, { role: "security" as const }],
     };
     validateLiveE2EImplementationPlan(request.request, missingBackendPlan);

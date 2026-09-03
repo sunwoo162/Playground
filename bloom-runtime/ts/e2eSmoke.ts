@@ -1,8 +1,9 @@
 import { REPOSITORY_WRITER_ROLES } from "./planTopology";
-import type { ExecutableAgentRole, ProjectTaskRun } from "./types";
+import type { ExecutableAgentRole, ProjectTaskRun, ScaffoldProfile } from "./types";
 
 export const LIVE_E2E_MARKER = "[BLOOM-E2E-SMOKE]";
 export const LIVE_E2E_PRODUCT = "Pulseboard";
+export const LIVE_E2E_SCAFFOLD_PROFILE: ScaffoldProfile = "react-api-sqlite-monorepo-v1";
 export const LIVE_E2E_SNAPSHOT_SCHEMA_VERSION = 1;
 
 export type E2ECheckStatus = "pass" | "pending" | "fail";
@@ -93,6 +94,7 @@ const GOVERNANCE_ROLES: ExecutableAgentRole[] = [
 
 type LiveE2EImplementationPlan = {
   repositoryName: string;
+  scaffoldProfile?: ScaffoldProfile;
   tasks: Array<{ role: ExecutableAgentRole }>;
 };
 
@@ -113,11 +115,24 @@ export function enforceLiveE2ERepositoryName<T extends { repositoryName: string 
   return plan;
 }
 
+export function enforceLiveE2EScaffoldProfile<T extends { scaffoldProfile?: ScaffoldProfile }>(
+  request: string,
+  plan: T,
+): T {
+  if (!request.includes(LIVE_E2E_MARKER)) return plan;
+  plan.scaffoldProfile = LIVE_E2E_SCAFFOLD_PROFILE;
+  return plan;
+}
+
 export function validateLiveE2EImplementationPlan(
   request: string,
   plan: LiveE2EImplementationPlan,
 ) {
   if (!request.includes(LIVE_E2E_MARKER)) return;
+
+  if (plan.scaffoldProfile !== LIVE_E2E_SCAFFOLD_PROFILE) {
+    throw new Error(`Bloom live E2E scaffold profile mismatch: expected=${LIVE_E2E_SCAFFOLD_PROFILE}, actual=${plan.scaffoldProfile ?? "missing"}`);
+  }
 
   const expectedRepositoryName = expectedLiveE2ERepositoryName(request);
   if (plan.repositoryName !== expectedRepositoryName) {
