@@ -209,6 +209,35 @@ async function testLocalAgentUsesServerActionSchema() {
   }
 }
 
+async function testLocalAgentTreatsMissingGreenfieldPathsAsCreatable() {
+  const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-greenfield-"));
+  let body: Record<string, unknown> | null = null;
+  const fetchImpl: typeof fetch = async (_input, init) => {
+    body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+    return streamingResponse([
+      'data: {"choices":[{"delta":{"content":"{\\"action\\":\\"final\\",\\"report\\":{\\"status\\":\\"completed\\",\\"summary\\":\\"done\\",\\"rationaleSummary\\":\\"done\\",\\"evidence\\":[],\\"verification\\":[],\\"commitSha\\":null,\\"pullRequestNumber\\":null,\\"pullRequestUrl\\":null,\\"reviewedPullRequests\\":[],\\"blockers\\":[]}}"}}]}\n\n',
+      'data: [DONE]\n\n',
+    ]);
+  };
+
+  try {
+    await runLocalAgent({
+      projectId: "policy",
+      taskId: "GREENFIELD-001",
+      worktree,
+      prompt: "create the frontend in this new repository",
+    }, { fetchImpl, maxSteps: 1 });
+
+    const messages = (body as Record<string, unknown> | null)?.messages as Array<{ role?: string; content?: string }> | undefined;
+    const system = messages?.find((message) => message.role === "system")?.content ?? "";
+    assert.match(system, /greenfield|empty repository/i,
+      "Local Agent must explicitly recognize that a new project repository can start empty");
+    assert.match(system, /missing.*(directory|file).*not.*block|create.*write/i,
+      "missing task-owned application paths must be described as creatable work, not a blocker");
+  } finally {
+    await fs.rm(worktree, { recursive: true, force: true });
+  }
+}
 async function main() {
   await testStreamsLongModelResponses();
   await testRetriesOneTransientFetchFailure();
@@ -216,6 +245,7 @@ async function main() {
   await testStructuredInferenceUsesServerSchema();
   await testLocalAgentBoundsToolHistoryBeforeModelCalls();
   await testLocalAgentUsesServerActionSchema();
+  await testLocalAgentTreatsMissingGreenfieldPathsAsCreatable();
   console.log("Bloom local Agent inference transport policy tests passed");
 }
 
