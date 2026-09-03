@@ -48,7 +48,7 @@ jobs:
             trap 'unset TOKEN' EXIT
 
             PROJECTS_JSON="$(curl -fsS --max-time 20 -H "Authorization: Bearer ${TOKEN}" "$API_BASE/api/builder/projects")"
-            PROJECT_ID="$(printf '%s' "$PROJECTS_JSON" | node -e 'const a=JSON.parse(require("fs").readFileSync(0,"utf8")); a.sort((x,y)=>Number(y.id)-Number(x.id)); if(!a[0]?.id) process.exit(2); process.stdout.write(String(a[0].id));')"
+            PROJECT_ID="50"
             RUNS_JSON="$(curl -fsS --max-time 20 -H "Authorization: Bearer ${TOKEN}" "$API_BASE/api/builder/projects/${PROJECT_ID}/runs")"
             RUN_ID="$(printf '%s' "$RUNS_JSON" | node -e 'const a=JSON.parse(require("fs").readFileSync(0,"utf8")); a.sort((x,y)=>Number(y.id)-Number(x.id)); if(!a[0]?.id) process.exit(2); process.stdout.write(String(a[0].id));')"
             echo "latest_project=${PROJECT_ID} latest_run=${RUN_ID}"
@@ -75,6 +75,18 @@ jobs:
             NODE
             fi
             rm -f "$SNAPSHOT_FILE"
+            echo "=== builder50 local agent streams ==="
+            python3 <<'PY'
+            import glob, json, os
+            root='/home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-50/agents'
+            for path in sorted(glob.glob(root+'/*/*/local-agent-events.jsonl')):
+                rows=[]
+                with open(path,encoding='utf-8',errors='replace') as f:
+                    for line in f:
+                        try: rows.append(json.loads(line))
+                        except Exception: pass
+                print('[agent-stream]', os.path.relpath(path,root), 'bytes='+str(os.path.getsize(path)), 'events='+str(len(rows)), 'last='+json.dumps(rows[-12:],ensure_ascii=False))
+            PY
 
             echo "=== builder process ==="
             BUILDER_PID="$(pm2 pid bloom-builder-worker || true)"
