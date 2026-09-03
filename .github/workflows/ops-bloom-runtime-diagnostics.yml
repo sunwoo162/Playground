@@ -129,6 +129,9 @@ jobs:
             find /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-50 -maxdepth 7 -type f -printf '%TY-%Tm-%TdT%TH:%TM:%TS %s %p\n' 2>/dev/null | sort | tail -120 || true
             echo "=== builder50 tool-state summary ==="
             du -sh /tmp/luna-agent-tools/builder-50 2>/dev/null || true
+            echo "=== builder50 local agent stderr ==="
+            STDERR50=/home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-50/agents/rose:frontend/BLOOM-001/local-agent.stderr.log
+            if [ -f "$STDERR50" ]; then cat "$STDERR50"; fi
             echo "=== builder50 local agent streams ==="
             python3 <<'PY'
             import glob, json, os
