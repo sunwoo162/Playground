@@ -107,3 +107,11 @@ test('Bloom auth return target is symbolic and preserves only bounded Luna hando
   assert.doesNotMatch(auth, /window\.location\.assign\(returnTarget/);
   assert.doesNotMatch(auth, /window\.location\.href\s*=\s*returnTarget/);
 });
+
+test('Builder hero omits the internal runtime pivot note from the user-facing surface', () => {
+  const builder = source(builderPath);
+
+  assert.doesNotMatch(builder, /builder-runtime-note/);
+  assert.doesNotMatch(builder, /현재 피벗 단계/);
+  assert.doesNotMatch(builder, /프로젝트 실행 큐 연결/);
+});

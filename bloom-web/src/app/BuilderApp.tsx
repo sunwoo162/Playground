@@ -379,11 +379,6 @@ export default function BuilderApp() {
             </p>
           </div>
 
-          <div className="builder-runtime-note">
-            <span>현재 피벗 단계</span>
-            <strong>프로젝트 실행 큐 연결</strong>
-            <p>프로젝트 저장 뒤 실제 Run queue까지 등록됩니다. worker가 claim하기 전에는 queued 상태로만 표시합니다.</p>
-          </div>
         </section>
 
         <div className="builder-layout">
