@@ -1,0 +1,69 @@
+name: Ops Abort Bloom E2E 52
+
+on:
+  push:
+    branches:
+      - ops/e2e52-abort
+
+permissions:
+  contents: read
+
+jobs:
+  abort:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Require production SSH credential
+        env:
+          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+        run: test -n "$SSH_PASSWORD" || { echo "SSH_PASSWORD is required" >&2; exit 1; }
+
+      - name: Fail only the guarded E2E run
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          command_timeout: 8m
+          script: |
+            set -euo pipefail
+            cd /home/ubuntu/bloombouquet
+            set -a
+            . /home/ubuntu/bloombouquet/.env
+            set +a
+            test -n "${JWT_SECRET:-}" || { echo "JWT_SECRET missing" >&2; exit 1; }
+            test -n "${BUILDER_WORKER_TOKEN:-}" || { echo "BUILDER_WORKER_TOKEN missing" >&2; exit 1; }
+            WORKER_ID="${BLOOM_BUILDER_WORKER_ID:-bloom-builder-production}"
+            test "$WORKER_ID" = "bloom-builder-production"
+            USER_TOKEN="$(node - <<'NODE'
+            const jwt = require('jsonwebtoken');
+            process.stdout.write(jwt.sign({
+              id: 'bloom-live-e2e-actions', login: 'bloom-live-e2e',
+              name: 'Bloom Live E2E', avatar_url: '', type: 'access'
+            }, process.env.JWT_SECRET, { expiresIn: '5m' }));
+            NODE
+            )"
+            RUN_JSON="$(curl -fsS --max-time 20 \
+              -H "Authorization: Bearer ${USER_TOKEN}" \
+              http://127.0.0.1:3000/api/builder/projects/52/runs/52)"
+            STATUS="$(printf '%s' "$RUN_JSON" | node -e '
+              const r=JSON.parse(require("fs").readFileSync(0,"utf8"));
+              if (Number(r.id)!==52 || Number(r.projectId)!==52 || r.workerId!=="bloom-builder-production") process.exit(3);
+              process.stdout.write(String(r.status));
+            ')"
+            echo "guard_ok project=52 run=52 status=${STATUS} worker=bloom-builder-production"
+            if [ "$STATUS" = "running" ]; then
+              FAIL_BODY='{"workerId":"bloom-builder-production","failureReason":"Live E2E 52 intentionally superseded by Local Agent write-target guard fix."}'
+              printf 'X-Builder-Worker-Token: %s\n' "$BUILDER_WORKER_TOKEN" | curl -fsS --max-time 20 \
+                -H @- -H 'Content-Type: application/json' \
+                -X POST http://127.0.0.1:8080/internal/builder/worker/runs/52/fail \
+                --data "$FAIL_BODY" >/dev/null
+            elif [ "$STATUS" != "failed" ] && [ "$STATUS" != "completed" ]; then
+              echo "unexpected run status: $STATUS" >&2
+              exit 4
+            fi
+            ACTIVE="$(printf 'X-Builder-Worker-Token: %s\n' "$BUILDER_WORKER_TOKEN" | curl -fsS --max-time 20 \
+              -H @- 'http://127.0.0.1:8080/internal/builder/worker/runs/active-lease?workerId=bloom-builder-production')"
+            test "$ACTIVE" = "false" || { echo "active lease remained true" >&2; exit 1; }
+            echo "run52_terminal_and_lease_cleared"
