@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const os = require('node:os');
 const test = require('node:test');
 
 const ROOT = path.resolve(__dirname, '..');
@@ -84,4 +85,31 @@ test('Bloom worker compiler emits the Live E2E module required by the entrypoint
     tsconfig.include.includes('ts/e2eSmoke.ts'),
     'bloom-runtime/tsconfig.worker.json must compile ts/e2eSmoke.ts for bloom-worker/run.js',
   );
+});
+
+test('builder drain state blocks new claim cycles and clears busy evidence after execution', async () => {
+  const drainModulePath = path.join(ROOT, 'bloom-worker/builder-drain-state.js');
+  assert.equal(fs.existsSync(drainModulePath), true, 'builder drain state module must exist');
+
+  const { createBuilderDrainState } = require(drainModulePath);
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'bloom-builder-drain-'));
+  const drainFile = path.join(tempRoot, 'drain');
+  const busyFile = path.join(tempRoot, 'busy');
+  const state = createBuilderDrainState({ drainFile, busyFile });
+
+  assert.equal(await state.isDraining(), false);
+  fs.writeFileSync(drainFile, 'deploy\n');
+  assert.equal(await state.isDraining(), true);
+
+  fs.rmSync(drainFile);
+  await state.withBusy(async () => assert.equal(fs.existsSync(busyFile), true));
+  assert.equal(fs.existsSync(busyFile), false);
+  await assert.rejects(state.withBusy(async () => { throw new Error('boom'); }), /boom/);
+  assert.equal(fs.existsSync(busyFile), false);
+
+  const source = fs.readFileSync(path.join(ROOT, 'bloom-worker/run.js'), 'utf8');
+  assert.match(source, /createBuilderDrainState/);
+  assert.match(source, /await drainState\.isDraining\(\)/);
+  assert.match(source, /await drainState\.withBusy\(/);
+  fs.rmSync(tempRoot, { recursive: true, force: true });
 });

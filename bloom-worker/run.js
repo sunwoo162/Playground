@@ -2,6 +2,7 @@ const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { createBuilderDrainState } = require("./builder-drain-state.js");
 
 const { resolveBloomWorkerMode } = require("./runtime-mode.js");
 const { runBuilderWorkerOnce } = require("../.tmp/bloom-worker/builderWorkerAdapter.js");
@@ -290,6 +291,11 @@ async function runBuilderMode({ baseUrl, token, pollIntervalMs, isStopping }) {
   const binaryPath = path.resolve(
     configValue("BLOOM_RUNTIME_BRIDGE_PATH", "BUILDER_RUNTIME_BRIDGE_PATH") || defaultBridgePath(),
   );
+  const drainState = createBuilderDrainState({
+    drainFile: configValue("BLOOM_BUILDER_DRAIN_FILE") || "/tmp/bloom-builder-worker.drain",
+    busyFile: configValue("BLOOM_BUILDER_BUSY_FILE") || "/tmp/bloom-builder-worker.busy",
+  });
+  let drainLogged = false;
   const runtime = createRuntimeBridge(binaryPath);
   const client = createBuilderWorkerHttpClient({ baseUrl, token });
   const deliverIntegratedProject = createLunaProductionDeliveryHook({
@@ -312,9 +318,19 @@ async function runBuilderMode({ baseUrl, token, pollIntervalMs, isStopping }) {
   console.log(`[bloom-worker] started mode=builder workerId=${workerId} team=${teamId} maxParallelTasks=${maxParallelTasks} api=${baseUrl}`);
   while (!isStopping()) {
     try {
-      const outcome = await runBuilderWorkerOnce(client, workerId, execute, {
-        heartbeatIntervalMs,
+      const cycle = await drainState.withBusy(async () => {
+        if (await drainState.isDraining()) return { draining: true, outcome: null };
+        const outcome = await runBuilderWorkerOnce(client, workerId, execute, { heartbeatIntervalMs });
+        return { draining: false, outcome };
       });
+      if (cycle.draining) {
+        if (!drainLogged) console.log('[bloom-worker] builder drain requested; new claims are paused.');
+        drainLogged = true;
+        await sleep(pollIntervalMs);
+        continue;
+      }
+      drainLogged = false;
+      const outcome = cycle.outcome;
       if (outcome.status !== "idle") {
         console.log(`[bloom-worker] builder run ${outcome.claim?.runId ?? "-"} -> ${outcome.status}`);
       }
