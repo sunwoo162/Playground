@@ -209,6 +209,131 @@ async function testLocalAgentUsesServerActionSchema() {
   }
 }
 
+async function testLocalAgentRejectsImmediateDuplicateSuccessfulWrite() {
+  const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-duplicate-write-"));
+  const bodies: Array<Record<string, unknown>> = [];
+  let calls = 0;
+  const duplicateWrite = '{"action":"write","path":"frontend/src/main.tsx","content":"export default function App(){ return null; }"}';
+  const fetchImpl: typeof fetch = async (_input, init) => {
+    bodies.push(JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>);
+    calls += 1;
+    const content = calls <= 2
+      ? duplicateWrite
+      : '{"action":"final","report":{"status":"completed","summary":"done","rationaleSummary":"done","evidence":[],"verification":[],"commitSha":null,"pullRequestNumber":null,"pullRequestUrl":null,"reviewedPullRequests":[],"blockers":[]}}';
+    return streamingResponse([
+      `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`,
+      "data: [DONE]\n\n",
+    ]);
+  };
+
+  try {
+    await runLocalAgent({
+      projectId: "policy",
+      taskId: "GREENFIELD-DUPLICATE",
+      worktree,
+      prompt: "implement a real frontend in this empty repository",
+    }, { fetchImpl, maxSteps: 3 });
+
+    const thirdRequestMessages = bodies[2]?.messages as Array<{ role?: string; content?: string }> | undefined;
+    const transcript = thirdRequestMessages?.map((message) => message.content ?? "").join("\n") ?? "";
+    assert.match(transcript, /already succeeded|no new progress|different action/i,
+      "an immediately repeated successful write must be rejected as no progress so the model is forced to choose a different action");
+  } finally {
+    await fs.rm(worktree, { recursive: true, force: true });
+  }
+}
+
+async function testLocalAgentFailsFastOnRepeatedSuccessfulWriteLoop() {
+  const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-stalled-write-"));
+  let calls = 0;
+  const duplicateWrite = '{"action":"write","path":"frontend/src/main.tsx","content":"export default function App(){ return null; }"}';
+  const fetchImpl: typeof fetch = async () => {
+    calls += 1;
+    return streamingResponse([
+      `data: ${JSON.stringify({ choices: [{ delta: { content: duplicateWrite } }] })}\n\n`,
+      "data: [DONE]\n\n",
+    ]);
+  };
+
+  try {
+    await assert.rejects(
+      runLocalAgent({
+        projectId: "policy",
+        taskId: "GREENFIELD-STALLED",
+        worktree,
+        prompt: "implement a real frontend in this empty repository",
+      }, { fetchImpl, maxSteps: 64 }),
+      /stalled.*identical.*write|repeated.*write.*progress/i,
+      "a model that ignores duplicate-write correction must fail fast instead of consuming the full 64-step budget",
+    );
+    assert.ok(calls <= 4, `duplicate-write stall detection must stop within four model turns; got ${calls}`);
+  } finally {
+    await fs.rm(worktree, { recursive: true, force: true });
+  }
+}
+
+async function testLocalAgentFailsFastOnRepeatedRejectedWriteLoop() {
+  const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-rejected-write-loop-"));
+  let calls = 0;
+  const invalidWrite = '{"action":"write","path":"frontend/src","content":"# copied task spec"}';
+  const fetchImpl: typeof fetch = async () => {
+    calls += 1;
+    return streamingResponse([
+      `data: ${JSON.stringify({ choices: [{ delta: { content: invalidWrite } }] })}\n\n`,
+      "data: [DONE]\n\n",
+    ]);
+  };
+
+  try {
+    await assert.rejects(
+      runLocalAgent({
+        projectId: "policy",
+        taskId: "GREENFIELD-REJECTED-WRITE-LOOP",
+        worktree,
+        prompt: "implement a real frontend in this empty repository",
+      }, { fetchImpl, maxSteps: 8 }),
+      /stalled.*(?:identical write|failed write path)|repeated.*write.*progress/i,
+      "a model that repeats the same rejected write must fail fast instead of exhausting the safety budget",
+    );
+    assert.ok(calls <= 4, `rejected duplicate-write stall detection must stop within four model turns; got ${calls}`);
+  } finally {
+    await fs.rm(worktree, { recursive: true, force: true });
+  }
+}
+
+async function testLocalAgentFailsFastWhenRejectedWriteChangesOnlyContent() {
+  const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-rejected-write-path-loop-"));
+  let calls = 0;
+  const fetchImpl: typeof fetch = async () => {
+    calls += 1;
+    const content = JSON.stringify({
+      action: "write",
+      path: "frontend/src",
+      content: `# copied task spec attempt ${calls}`,
+    });
+    return streamingResponse([
+      `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`,
+      "data: [DONE]\n\n",
+    ]);
+  };
+
+  try {
+    await assert.rejects(
+      runLocalAgent({
+        projectId: "policy",
+        taskId: "GREENFIELD-REJECTED-WRITE-PATH-LOOP",
+        worktree,
+        prompt: "implement a real frontend in this empty repository",
+      }, { fetchImpl, maxSteps: 8 }),
+      /stalled.*write.*path|repeated.*failed.*path|no progress/i,
+      "changing content must not bypass stall detection when the same write path is deterministically rejected",
+    );
+    assert.ok(calls <= 4, `rejected write-path stall detection must stop within four model turns; got ${calls}`);
+  } finally {
+    await fs.rm(worktree, { recursive: true, force: true });
+  }
+}
+
 async function testLocalAgentTreatsMissingGreenfieldPathsAsCreatable() {
   const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-greenfield-"));
   let body: Record<string, unknown> | null = null;
@@ -240,6 +365,8 @@ async function testLocalAgentTreatsMissingGreenfieldPathsAsCreatable() {
       "Local Agent must know parent directories are created automatically by write");
     assert.match(system, /never.*write.*directory path|never.*directory path.*write/i,
       "Local Agent must not use write with directory paths such as frontend/src");
+    assert.match(system, /readme|documentation/i,
+      "implementation guidance must distinguish product source work from README-style documentation");
   } finally {
     await fs.rm(worktree, { recursive: true, force: true });
   }
@@ -285,6 +412,10 @@ async function main() {
   await testStructuredInferenceUsesServerSchema();
   await testLocalAgentBoundsToolHistoryBeforeModelCalls();
   await testLocalAgentUsesServerActionSchema();
+  await testLocalAgentRejectsImmediateDuplicateSuccessfulWrite();
+  await testLocalAgentFailsFastOnRepeatedSuccessfulWriteLoop();
+  await testLocalAgentFailsFastOnRepeatedRejectedWriteLoop();
+  await testLocalAgentFailsFastWhenRejectedWriteChangesOnlyContent();
   await testLocalAgentTreatsMissingGreenfieldPathsAsCreatable();
   await testLocalAgentRejectsDirectoryLikeWriteTargetsAndRecovers();
   console.log("Bloom local Agent inference transport policy tests passed");
