@@ -130,6 +130,22 @@ export function validateRelativePath(value: unknown): string {
   return normalized;
 }
 
+const DIRECTORY_LIKE_WRITE_BASENAMES = new Set([
+  "api", "app", "assets", "backend", "client", "components", "config", "controllers",
+  "database", "db", "docs", "frontend", "hooks", "lib", "migrations", "models", "pages",
+  "prisma", "public", "routes", "scripts", "server", "services", "src", "styles", "test",
+  "tests", "types", "utils",
+]);
+
+function validateWriteTarget(value: unknown): string {
+  const normalized = validateRelativePath(value);
+  const basename = normalized.split("/").pop()?.toLowerCase() ?? "";
+  if (DIRECTORY_LIKE_WRITE_BASENAMES.has(basename)) {
+    throw new Error(`Write target looks like a directory path: ${normalized}. Write an actual regular file inside that directory instead.`);
+  }
+  return normalized;
+}
+
 function resolveInside(root: string, relative: unknown): string {
   const normalized = validateRelativePath(relative);
   const target = path.resolve(root, normalized);
@@ -450,7 +466,7 @@ async function executeAction(root: string, action: JsonObject): Promise<JsonObje
       if (typeof action.content !== "string" || Buffer.byteLength(action.content, "utf8") > MAX_FILE_BYTES) {
         throw new Error("Write content must be a string no larger than 1MB.");
       }
-      const target = resolveInside(root, action.path);
+      const target = resolveInside(root, validateWriteTarget(action.path));
       await fs.mkdir(path.dirname(target), { recursive: true });
       await fs.writeFile(target, action.content, "utf8");
       return { ok: true, bytes: Buffer.byteLength(action.content, "utf8") };
