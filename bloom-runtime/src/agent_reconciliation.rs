@@ -508,9 +508,10 @@ fn reconcile_interrupted_agent_task_blocking(
 
     let branch = writer_role(input.role.trim()).then(|| {
         format!(
-            "agent/{}/{}/{}",
+            "agent/{}/{}/{}-{}",
             input.team_id.trim(),
             input.role.trim(),
+            input.project_id.trim(),
             input.task_slug.trim()
         )
     });

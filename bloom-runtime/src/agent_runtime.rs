@@ -338,7 +338,7 @@ fn prepare_agent_worktree(input: &AgentTaskRuntimeInput) -> Result<(PathBuf, Opt
     }
 
     let branch = is_repository_writer(&input.role)
-        .then(|| format!("agent/{}/{}/{}", input.team_id, input.role, input.task_slug));
+        .then(|| format!("agent/{}/{}/{}-{}", input.team_id, input.role, input.project_id, input.task_slug));
 
     if worktree.exists() {
         if !worktree.join(".git").exists() {
