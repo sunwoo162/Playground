@@ -75,6 +75,10 @@ jobs:
             NODE
             fi
             rm -f "$SNAPSHOT_FILE"
+            echo "=== builder50 runtime files ==="
+            find /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-50 -maxdepth 7 -type f -printf '%TY-%Tm-%TdT%TH:%TM:%TS %s %p\n' 2>/dev/null | sort | tail -120 || true
+            echo "=== builder50 tool files ==="
+            find /tmp/luna-agent-tools/builder-50 -maxdepth 5 -type f -printf '%TY-%Tm-%TdT%TH:%TM:%TS %s %p\n' 2>/dev/null | sort | tail -120 || true
             echo "=== builder50 local agent streams ==="
             python3 <<'PY'
             import glob, json, os
