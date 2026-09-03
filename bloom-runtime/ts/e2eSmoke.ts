@@ -104,6 +104,15 @@ function expectedLiveE2ERepositoryName(request: string) {
   return match[1];
 }
 
+export function enforceLiveE2ERepositoryName<T extends { repositoryName: string }>(
+  request: string,
+  plan: T,
+): T {
+  if (!request.includes(LIVE_E2E_MARKER)) return plan;
+  plan.repositoryName = expectedLiveE2ERepositoryName(request);
+  return plan;
+}
+
 export function validateLiveE2EImplementationPlan(
   request: string,
   plan: LiveE2EImplementationPlan,
