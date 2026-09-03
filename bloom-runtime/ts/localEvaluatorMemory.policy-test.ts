@@ -15,8 +15,8 @@ assert(match, "production local llama must retain a PM2 max-memory restart guard
 
 const limitMiB = Number(match[1]);
 assert(
-  limitMiB >= 3200,
-  `production local llama memory guard must stay above observed Agent inference peak; found ${limitMiB}M`,
+  limitMiB >= 3800,
+  `production local llama memory guard must stay above the 3437 MiB long-run Agent inference peak with restart headroom; found ${limitMiB}M`,
 );
 
 console.log("PASS  Production local llama memory guard covers observed Agent inference peak.");

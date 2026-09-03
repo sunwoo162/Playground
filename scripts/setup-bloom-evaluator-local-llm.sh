@@ -100,7 +100,7 @@ delete_stale_llm
 BLOOM_LLAMA_BIN="$LLAMA_BIN" pm2 start "$ROOT_DIR/bloom-worker/start-local-evaluator-llm.sh" \
   --name bloom-evaluator-llm \
   --interpreter bash \
-  --max-memory-restart 3400M \
+  --max-memory-restart 3800M \
   --kill-timeout 7200000
 
 echo "[bloom-evaluator-local] waiting for local model health"
