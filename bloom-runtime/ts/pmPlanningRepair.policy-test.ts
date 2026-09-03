@@ -63,6 +63,14 @@ assert(
   "PM repair wrapper must validate the prepared review topology inside its retry boundary",
 );
 assert(
+  runtimeSource.includes("normalize_task_slug_collisions(&mut plan);"),
+  "PM runtime must deterministically disambiguate duplicate task slugs before strict validation",
+);
+assert(
+  runtimeSource.indexOf("normalize_task_slug_collisions(&mut plan);") < runtimeSource.indexOf("validate_project_plan(&plan)?;"),
+  "task slug collision normalization must happen before authoritative Rust plan validation",
+);
+assert(
   runtimeSource.includes("validate_project_plan(&plan)"),
   "repaired PM plans must still pass authoritative Rust runtime validation",
 );
