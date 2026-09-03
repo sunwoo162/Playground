@@ -94,6 +94,7 @@ jobs:
               WT="/home/ubuntu/bloom-workspaces/.luna-worktrees/builder-${PROJECT_ID}/${FRONTEND_TASK_ID}"
               echo "=== frontend worktree $WT ==="
               if [ -e "$WT/frontend/src" ]; then stat -c '[src-stat] type=%F size=%s mtime=%y' "$WT/frontend/src" || true; fi
+              if [ -f "$WT/frontend/src" ]; then echo "[src-content]"; sed -n '1,160p' "$WT/frontend/src"; fi
               echo "[frontend-files]"
               find "$WT/frontend" -maxdepth 4 -type f -printf '%TY-%Tm-%TdT%TH:%TM:%TS %s %p\n' 2>/dev/null | sort | tail -120 || true
               echo "[worktree-status]"
