@@ -244,6 +244,40 @@ async function testLocalAgentTreatsMissingGreenfieldPathsAsCreatable() {
     await fs.rm(worktree, { recursive: true, force: true });
   }
 }
+
+async function testLocalAgentRejectsDirectoryLikeWriteTargetsAndRecovers() {
+  const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-write-target-"));
+  const bodies: Array<Record<string, unknown>> = [];
+  let call = 0;
+  const fetchImpl: typeof fetch = async (_input, init) => {
+    bodies.push(JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>);
+    call += 1;
+    const content = call === 1
+      ? '{"action":"write","path":"frontend/src","content":"# copied task spec"}'
+      : call === 2
+        ? '{"action":"write","path":"frontend/src/main.tsx","content":"export default function App(){ return null; }"}'
+        : '{"action":"final","report":{"status":"completed","summary":"done","rationaleSummary":"done","evidence":[],"verification":[],"commitSha":null,"pullRequestNumber":null,"pullRequestUrl":null,"reviewedPullRequests":[],"blockers":[]}}';
+    return streamingResponse([
+      `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`,
+      'data: [DONE]\n\n',
+    ]);
+  };
+
+  try {
+    await runLocalAgent({ projectId: "policy", taskId: "GREENFIELD-WRITE-001", worktree, prompt: "implement a React frontend" }, { fetchImpl, maxSteps: 3 });
+    const src = path.join(worktree, "frontend", "src");
+    const stat = await fs.stat(src);
+    assert.ok(stat.isDirectory(), "directory-like write target must not become a regular file");
+    assert.equal(await fs.readFile(path.join(src, "main.tsx"), "utf8"), "export default function App(){ return null; }");
+    const secondMessages = bodies[1]?.messages as Array<{ content?: string }> | undefined;
+    const secondContext = secondMessages?.map((message) => message.content ?? "").join("\n") ?? "";
+    assert.match(secondContext, /TOOL_RESULT.*false.*(directory|file path|regular file)/i,
+      "invalid directory-like write must return a corrective tool error before the next model turn");
+  } finally {
+    await fs.rm(worktree, { recursive: true, force: true });
+  }
+}
+
 async function main() {
   await testStreamsLongModelResponses();
   await testRetriesOneTransientFetchFailure();
@@ -252,6 +286,7 @@ async function main() {
   await testLocalAgentBoundsToolHistoryBeforeModelCalls();
   await testLocalAgentUsesServerActionSchema();
   await testLocalAgentTreatsMissingGreenfieldPathsAsCreatable();
+  await testLocalAgentRejectsDirectoryLikeWriteTargetsAndRecovers();
   console.log("Bloom local Agent inference transport policy tests passed");
 }
 
