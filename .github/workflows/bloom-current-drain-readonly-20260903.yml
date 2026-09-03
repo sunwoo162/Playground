@@ -1,0 +1,81 @@
+name: Bloom Current Drain Readonly 20260903
+
+on:
+  push:
+    branches:
+      - test/luna-live-e2e-readonly-20260902
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Inspect current production drain
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          command_timeout: 6m
+          script: |
+            set -eu
+            cd /home/ubuntu/bloombouquet
+            echo "[head] $(git rev-parse HEAD)"
+            echo "[drain] $(test -e /tmp/bloom-builder-worker.drain && echo present || echo absent)"
+            if [ -e /tmp/bloom-builder-worker.busy ]; then
+              BUSY_PID="$(head -n 1 /tmp/bloom-builder-worker.busy 2>/dev/null || true)"
+              echo "[busy] pid=${BUSY_PID:-unknown}"
+              ps -o pid,ppid,etime,%cpu,%mem,stat,cmd -p "$BUSY_PID" 2>/dev/null || true
+            else
+              echo "[busy] absent"
+            fi
+            echo '[runtime-processes]'
+            ps -eo pid,ppid,etime,%cpu,%mem,stat,cmd --sort=pid \
+              | grep -E 'bloom-worker/run.js|bloom-runtime-bridge|bloomLocalAgentRuntime|llama serve' \
+              | grep -v grep || true
+            node <<'NODE'
+            require('dotenv').config({ path: '.env' });
+            const jwt = require('jsonwebtoken');
+            const base = 'http://127.0.0.1:3000';
+            const token = jwt.sign(
+              { id: 'bloom-drain-readonly', login: 'bloom-drain-readonly', name: 'Bloom Drain Readonly', avatar_url: '', type: 'access' },
+              process.env.JWT_SECRET,
+              { expiresIn: '10m' },
+            );
+            const headers = { Cookie: `playground_token=${token}` };
+            async function get(route) {
+              const response = await fetch(`${base}${route}`, { headers });
+              const text = await response.text();
+              if (!response.ok) throw new Error(`${route} -> ${response.status}: ${text.slice(0, 200)}`);
+              return text ? JSON.parse(text) : null;
+            }
+            async function main() {
+              const projects = await get('/api/builder/projects');
+              const rows = [];
+              for (const project of projects) {
+                const runs = await get(`/api/builder/projects/${project.id}/runs`);
+                for (const run of runs) {
+                  if (!['queued', 'running'].includes(run.status)) continue;
+                  rows.push({
+                    projectId: project.id,
+                    runId: run.id,
+                    status: run.status,
+                    workerId: run.workerId || '-',
+                    title: project.title || '-',
+                    brief: String(project.brief || '').slice(0, 120),
+                  });
+                }
+              }
+              rows.sort((a, b) => b.runId - a.runId);
+              console.log(`[active-runs] count=${rows.length}`);
+              for (const row of rows) console.log(JSON.stringify(row));
+            }
+            main().catch((error) => {
+              console.error(`[active-runs] FAILED ${error.stack || error}`);
+              process.exit(1);
+            });
+            NODE
