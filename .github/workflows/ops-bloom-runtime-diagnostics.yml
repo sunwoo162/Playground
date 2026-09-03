@@ -75,6 +75,31 @@ jobs:
             NODE
             fi
             rm -f "$SNAPSHOT_FILE"
+            echo "=== builder50 process descendants ==="
+            python3 <<'PY'
+            import os
+            root=282008
+            children={}
+            for entry in os.listdir('/proc'):
+                if not entry.isdigit(): continue
+                try:
+                    stat=open(f'/proc/{entry}/stat',encoding='utf-8',errors='replace').read().split()
+                    ppid=int(stat[3]); children.setdefault(ppid,[]).append(int(entry))
+                except Exception: pass
+            stack=[root]; seen=set()
+            while stack:
+                pid=stack.pop(0)
+                for child in sorted(children.get(pid,[])):
+                    if child in seen: continue
+                    seen.add(child); stack.append(child)
+                    try: cmd=open(f'/proc/{child}/cmdline','rb').read().replace(b'\0',b' ').decode('utf-8','replace').strip()
+                    except Exception: cmd='?'
+                    try: cwd=os.readlink(f'/proc/{child}/cwd')
+                    except Exception: cwd='?'
+                    print(f'[desc] pid={child} ppid={pid} cwd={cwd} cmd={cmd[:700]}')
+            PY
+            echo "=== recent luna agent paths ==="
+            find /home/ubuntu/bloom-workspaces/.luna-runtime /home/ubuntu/bloom-workspaces/.luna-worktrees /tmp/luna-agent-tools -type f -newermt '2026-09-03 03:36:30 UTC' -printf '%TY-%Tm-%TdT%TH:%TM:%TS %s %p\n' 2>/dev/null | sort | tail -200 || true
             echo "=== builder50 runtime files ==="
             find /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-50 -maxdepth 7 -type f -printf '%TY-%Tm-%TdT%TH:%TM:%TS %s %p\n' 2>/dev/null | sort | tail -120 || true
             echo "=== builder50 tool files ==="
