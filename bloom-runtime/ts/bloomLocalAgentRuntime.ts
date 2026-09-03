@@ -23,6 +23,7 @@ export type LocalAgentInput = {
   taskId: string;
   worktree: string;
   prompt: string;
+  eventsPath?: string;
 };
 
 export type LocalStructuredInferenceInput = {
@@ -525,6 +526,24 @@ export async function runLocalStructuredInference(
   return { sessionId, output, events: [{ type: "structured-completed", title: input.title }] };
 }
 
+function sanitizedAgentAction(action: JsonObject): JsonObject {
+  const kind = String(action.action ?? "unknown");
+  const event: JsonObject = { action: kind };
+  if (typeof action.path === "string") event.path = action.path;
+  if (kind === "write" && typeof action.content === "string") {
+    event.contentBytes = Buffer.byteLength(action.content, "utf8");
+    event.contentSha256 = createHash("sha256").update(action.content).digest("hex");
+  }
+  return event;
+}
+
+async function appendAgentJournal(eventsPath: string | undefined, event: JsonObject) {
+  if (!eventsPath?.trim()) return;
+  const resolved = path.resolve(eventsPath);
+  await fs.mkdir(path.dirname(resolved), { recursive: true });
+  await fs.appendFile(resolved, `${JSON.stringify(event)}\n`, "utf8");
+}
+
 export async function runLocalAgent(input: LocalAgentInput, options: LocalAgentOptions = {}) {
   const endpoint = resolveLocalEndpoint(options.endpoint).toString();
   const model = options.model?.trim() || process.env.BLOOM_LOCAL_AGENT_MODEL?.trim()
@@ -546,7 +565,9 @@ export async function runLocalAgent(input: LocalAgentInput, options: LocalAgentO
   const actionSchema = agentActionSchema();
   for (let step = 1; step <= maxSteps; step += 1) {
     const action = await callModel(endpoint, model, boundedAgentMessages(messages), fetchImpl, actionSchema);
-    events.push({ step, action: String(action.action ?? "unknown") });
+    const actionEvent = { step, ...sanitizedAgentAction(action) };
+    events.push(actionEvent);
+    await appendAgentJournal(input.eventsPath, actionEvent);
     messages.push({ role: "assistant", content: JSON.stringify(action) });
     if (action.action === "final") {
       return { sessionId, turnId, report: parseFinalReport(action.report), events };
@@ -597,7 +618,9 @@ export async function runLocalAgent(input: LocalAgentInput, options: LocalAgentO
       if (writeSignature) attemptedWriteSignatures.add(writeSignature);
       if (writeSignature && result.ok === true) successfulWriteSignatures.add(writeSignature);
     }
-    events.push({ step, toolResult: { ok: result.ok === true, exitCode: result.exitCode, error: result.error } });
+    const toolEvent = { step, toolResult: { ok: result.ok === true, exitCode: result.exitCode, error: result.error } };
+    events.push(toolEvent);
+    await appendAgentJournal(input.eventsPath, toolEvent);
     messages.push({ role: "user", content: `TOOL_RESULT ${JSON.stringify(result)}` });
   }
   throw new Error(`Local agent exceeded the ${maxSteps}-step safety limit without a final report.`);

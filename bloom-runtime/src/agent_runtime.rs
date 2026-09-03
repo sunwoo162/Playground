@@ -573,6 +573,7 @@ fn run_local_agent(
             "taskId": input.task_id,
             "worktree": worktree.to_string_lossy(),
             "prompt": agent_prompt(input, branch),
+            "eventsPath": events_path.to_string_lossy(),
         }),
     )
     .map_err(|error| format!("Local Agent 요청 직렬화 실패: {error}"))?;
