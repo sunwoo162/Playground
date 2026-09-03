@@ -319,6 +319,18 @@ fn is_task_id(value: &str) -> bool {
         && number.chars().all(|character| character.is_ascii_digit())
 }
 
+fn normalize_task_slug_collisions(plan: &mut PmProjectPlan) {
+    let mut used = HashSet::new();
+    for task in &mut plan.tasks {
+        if used.insert(task.task_slug.clone()) { continue; }
+        let suffix = task.id.to_ascii_lowercase();
+        let max_base_len = 48usize.saturating_sub(suffix.len() + 1);
+        let base = task.task_slug.chars().take(max_base_len).collect::<String>();
+        task.task_slug = format!("{}-{}", base.trim_end_matches('-'), suffix);
+        used.insert(task.task_slug.clone());
+    }
+}
+
 fn validate_project_plan(plan: &PmProjectPlan) -> Result<(), String> {
     validate_github_name(&plan.repository_name, "PM repository")?;
     if !is_lower_kebab(&plan.repository_name) || plan.repository_name.len() > 80 {
@@ -705,8 +717,9 @@ fn run_pm_local(
     .map_err(|error| format!("PM plan output write failed: {error}"))?;
     fs::write(&events_path, &inference.events_jsonl)
         .map_err(|error| format!("PM plan event log write failed: {error}"))?;
-    let plan: PmProjectPlan = serde_json::from_value(inference.output)
+    let mut plan: PmProjectPlan = serde_json::from_value(inference.output)
         .map_err(|error| format!("PM plan JSON parsing failed: {error}"))?;
+    normalize_task_slug_collisions(&mut plan);
     validate_project_plan(&plan)?;
 
     Ok(PmLocalRunResult {
@@ -808,4 +821,21 @@ pub async fn start_project_runtime(
 #[tauri::command]
 pub fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn task(id: &str, slug: &str) -> ProjectTaskPlan {
+        ProjectTaskPlan { id: id.into(), title: id.into(), role: "performance".into(), task_slug: slug.into(), summary: "work".into(), depends_on: vec![], acceptance_criteria: vec!["done".into()] }
+    }
+
+    #[test]
+    fn normalizes_duplicate_task_slugs_deterministically() {
+        let mut plan = PmProjectPlan { project_name: "Pulseboard".into(), repository_name: "pulseboard".into(), product_summary: "product".into(), architecture_summary: "arch".into(), needs_auth: false, technology_decisions: vec![], tasks: vec![task("PULSEBOARD-107", "performance"), task("PULSEBOARD-207", "performance")] };
+        normalize_task_slug_collisions(&mut plan);
+        assert_eq!(plan.tasks[0].task_slug, "performance");
+        assert_eq!(plan.tasks[1].task_slug, "performance-pulseboard-207");
+        validate_project_plan(&plan).expect("normalized plan must remain strictly valid");
+    }
 }
