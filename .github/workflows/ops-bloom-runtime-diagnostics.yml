@@ -147,5 +147,9 @@ jobs:
             curl -fsS --max-time 3 http://127.0.0.1:8091/health || true
             echo
             pm2 logs bloom-evaluator-llm --lines 160 --nostream || true
+            echo "=== pm2 daemon memory/restart log ==="
+            tail -n 500 /home/ubuntu/.pm2/pm2.log 2>/dev/null | grep -Ei 'bloom-evaluator-llm|max memory|memory|stopping app|restart|exceeded' | tail -n 160 || true
+            echo "=== host memory ==="
+            free -h || true
             echo "=== drain files ==="
             ls -l /tmp/bloom-builder-worker.drain /tmp/bloom-builder-worker.busy 2>/dev/null || true
