@@ -47,7 +47,28 @@ test('production diagnostics never print PM2 environment details', () => {
 test('PM2 ecosystem config changes trigger a backend restart', () => {
   const workflow = readDeployWorkflow();
   const detectionBlock = workflow.match(/- name: Detect backend changes[\s\S]*?- name: Set up JDK 17/)?.[0] ?? '';
-  assert.ok(detectionBlock.includes('ecosystem\\.config\\.js'), 'backend change detection must include ecosystem.config.js');
+  assert.match(detectionBlock, /ecosystem\\\.\(config\|backend\\\.config\)\\\.js/);
+});
+
+test('general production deploy drains active Bloom Builder before mutating shared runtime', () => {
+  const workflow = readDeployWorkflow();
+  const drain = workflow.indexOf('BLOOM_BUILDER_DRAIN_FILE=/tmp/bloom-builder-worker.drain');
+  const reset = workflow.indexOf('git fetch origin main');
+  assert.ok(drain >= 0 && reset > drain, 'Builder drain must begin before the shared checkout is mutated');
+  assert.match(workflow, /active-lease\?workerId=\$BLOOM_BUILDER_WORKER_ID/);
+  assert.match(workflow, /touch \"\$BLOOM_BUILDER_DRAIN_FILE\"/);
+  assert.match(workflow, /Bloom Builder drain complete/);
+});
+
+test('general production deploy uses worker-free PM2 app configs', () => {
+  const workflow = readDeployWorkflow();
+  assert.doesNotMatch(workflow, /pm2 start ecosystem\.config\.js --only (?:playground|backend)/);
+  assert.match(workflow, /pm2 start ecosystem\.playground\.config\.js --update-env/);
+  assert.match(workflow, /pm2 start ecosystem\.backend\.config\.js --update-env/);
+  for (const [fileName, appName] of [['ecosystem.playground.config.js', 'playground'], ['ecosystem.backend.config.js', 'backend']]) {
+    const config = require(path.join(ROOT, fileName));
+    assert.deepEqual(config.apps.map((app) => app.name), [appName]);
+  }
 });
 
 test('production deploy repairs an invalid shared JWT secret before PM2 startup', () => {
@@ -60,7 +81,7 @@ test('production deploy repairs an invalid shared JWT secret before PM2 startup'
 
 test('backend-specific env cannot override the shared JWT secret at PM2 startup', () => {
   const workflow = readDeployWorkflow();
-  const backendBlock = workflow.match(/if \[ "\$BACKEND_CHANGED"[\s\S]*?pm2 start ecosystem\.config\.js --only backend/)?.[0] ?? '';
+  const backendBlock = workflow.match(/if \[ "\$BACKEND_CHANGED"[\s\S]*?pm2 start ecosystem\.backend\.config\.js --update-env/)?.[0] ?? '';
   assert.match(backendBlock, /\. \/home\/ubuntu\/bloombouquet\/\.env\.backend/);
   assert.match(backendBlock, /export JWT_SECRET="\$SHARED_JWT_SECRET"/);
 });
