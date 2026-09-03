@@ -482,6 +482,16 @@ async function executeAction(root: string, action: JsonObject): Promise<JsonObje
   }
 }
 
+function failedActionFingerprint(action: JsonObject): string {
+  const kind = String(action.action ?? "unknown");
+  if (["list", "read", "write", "delete"].includes(kind)) {
+    return `${kind}:${String(action.path ?? "")}`;
+  }
+  if (kind === "run") {
+    return `run:${String(action.command ?? "")}:${JSON.stringify(action.args ?? [])}:${String(action.cwd ?? "")}`;
+  }
+  return JSON.stringify(action);
+}
 function parseFinalReport(value: unknown): JsonObject {
   const report = asObject(value, "Local Agent final report");
   if (report.status !== "completed" && report.status !== "blocked") throw new Error("Final report status must be completed or blocked.");
@@ -531,6 +541,7 @@ export async function runLocalAgent(input: LocalAgentInput, options: LocalAgentO
   const sessionId = `local-${input.projectId}-${input.taskId}-${Date.now()}`;
   const turnId = `${sessionId}-turn`;
   const events: JsonObject[] = [];
+  const failedActionCounts = new Map<string, number>();
   const messages: ModelMessage[] = [
     { role: "system", content: systemPrompt() },
     { role: "user", content: input.prompt },
@@ -544,10 +555,22 @@ export async function runLocalAgent(input: LocalAgentInput, options: LocalAgentO
       return { sessionId, turnId, report: parseFinalReport(action.report), events };
     }
     let result: JsonObject;
+    const fingerprint = failedActionFingerprint(action);
     try {
       result = await executeAction(worktree, action);
+      if (action.action === "write" || action.action === "delete") failedActionCounts.clear();
+      else failedActionCounts.delete(fingerprint);
     } catch (error) {
-      result = { ok: false, error: error instanceof Error ? error.message : String(error) };
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const repeatedFailures = (failedActionCounts.get(fingerprint) ?? 0) + 1;
+      failedActionCounts.set(fingerprint, repeatedFailures);
+      if (repeatedFailures >= 3) {
+        throw new Error(`Local agent no-progress: repeated failed action ${fingerprint} ${repeatedFailures} times. Last error: ${errorMessage}`);
+      }
+      result = { ok: false, error: errorMessage };
+      if (repeatedFailures >= 2) {
+        result.recovery = "RECOVERY_REQUIRED: This exact action has failed twice. Do not repeat it. Choose a different valid action or path. For a rejected write target, write a concrete regular file inside the intended directory and write implementation content, not copied task prose.";
+      }
     }
     events.push({ step, toolResult: { ok: result.ok === true, exitCode: result.exitCode, error: result.error } });
     messages.push({ role: "user", content: `TOOL_RESULT ${JSON.stringify(result)}` });
