@@ -80,6 +80,15 @@ jobs:
               echo "--- $f"
               tail -n 6 "$f" | sed -E 's/([Tt][Oo][Kk][Ee][Nn]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd]|[Ss][Ee][Cc][Rr][Ee][Tt]|[Aa][Uu][Tt][Hh][Oo][Rr][Ii][Zz][Aa][Tt][Ii][Oo][Nn])[^ ]*/\1=<redacted>/g' || true
             done
+            echo '[active-worktree]'
+            WORKTREE="/home/ubuntu/bloom-workspaces/.luna-worktrees/$RUNTIME_ID/BLOOM-001"
+            if [ -d "$WORKTREE" ]; then
+              git -C "$WORKTREE" status --short --branch || true
+              echo '[active-worktree-files]'
+              find "$WORKTREE" -maxdepth 4 -type f ! -path '*/.git/*' -printf '%TY-%Tm-%TdT%TH:%TM:%TSZ %s %p\n' 2>/dev/null | sort | tail -n 80 || true
+            else
+              echo "missing $WORKTREE"
+            fi
             echo '[runtime-processes]'
             ps -eo pid,ppid,etime,%cpu,%mem,stat,cmd --sort=pid \
               | grep -E 'bloom-worker/run.js|bloom-runtime-bridge|bloomLocalAgentRuntime|llama serve' \
