@@ -105,6 +105,9 @@ jobs:
               find "$WT/frontend" -maxdepth 4 -type f -printf '%TY-%Tm-%TdT%TH:%TM:%TS %s %p\n' 2>/dev/null | sort | tail -120 || true
               echo "[worktree-status]"
               git -C "$WT" status --short 2>/dev/null || true
+              echo "[worktree-files]"
+              find "$WT" -maxdepth 3 -type f -not -path '*/.git/*' -printf '%s %p\n' 2>/dev/null | sort | head -160 || true
+              if [ -f "$WT/README.md" ]; then echo "[readme-content]"; sed -n '1,180p' "$WT/README.md"; fi
               STDERR="$RUNTIME_ROOT/agents/rose:frontend/${FRONTEND_TASK_ID}/local-agent.stderr.log"
               if [ -s "$STDERR" ]; then echo "[frontend-stderr]"; cat "$STDERR"; fi
             fi
