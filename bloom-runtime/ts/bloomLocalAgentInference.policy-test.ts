@@ -234,6 +234,12 @@ async function testLocalAgentTreatsMissingGreenfieldPathsAsCreatable() {
       "Local Agent must explicitly recognize that a new project repository can start empty");
     assert.match(system, /missing.*(directory|file).*not.*block|create.*write/i,
       "missing task-owned application paths must be described as creatable work, not a blocker");
+    assert.match(system, /write action.*regular file/i,
+      "Local Agent must know that write creates a regular file, not a directory");
+    assert.match(system, /parent director(?:y|ies).*automatic/i,
+      "Local Agent must know parent directories are created automatically by write");
+    assert.match(system, /never.*write.*directory path|never.*directory path.*write/i,
+      "Local Agent must not use write with directory paths such as frontend/src");
   } finally {
     await fs.rm(worktree, { recursive: true, force: true });
   }
