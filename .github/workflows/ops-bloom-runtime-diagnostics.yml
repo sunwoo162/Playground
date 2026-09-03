@@ -100,6 +100,15 @@ jobs:
             PY
             echo "=== recent luna agent paths ==="
             find /home/ubuntu/bloom-workspaces/.luna-runtime /home/ubuntu/bloom-workspaces/.luna-worktrees /tmp/luna-agent-tools -type f -newermt '2026-09-03 03:36:30 UTC' -printf '%TY-%Tm-%TdT%TH:%TM:%TS %s %p\n' 2>/dev/null | sort | tail -200 || true
+            echo "=== builder50 frontend/src probe ==="
+            WT=/home/ubuntu/bloom-workspaces/.luna-worktrees/builder-50/BLOOM-001
+            if [ -e "$WT/frontend/src" ]; then
+              stat -c '[src-stat] type=%F size=%s mtime=%y' "$WT/frontend/src" || true
+              if [ -f "$WT/frontend/src" ]; then
+                echo '[src-content]'
+                sed -n '1,120p' "$WT/frontend/src"
+              fi
+            fi
             echo "=== builder50 BLOOM-001 worktree status ==="
             WT=/home/ubuntu/bloom-workspaces/.luna-worktrees/builder-50/BLOOM-001
             if [ -d "$WT" ]; then
