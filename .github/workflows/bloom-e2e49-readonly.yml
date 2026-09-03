@@ -54,7 +54,8 @@ jobs:
               if (!run) throw new Error(`run not found for project ${project.id}`);
               const snapshot = await get(`/api/builder/projects/${project.id}/runs/${run.id}/snapshot`, true);
               const payload = snapshot?.payloadJson ? JSON.parse(snapshot.payloadJson) : null;
-              const expected = String(project.brief || '').match(/Use the exact repository name ([A-Za-z0-9._-]+)/)?.[1] || '-';
+              const expectedMatch = String(project.brief || '').match(/Use the exact repository name ([A-Za-z0-9._-]+)/);
+              const expected = (expectedMatch?.[1] || '-').replace(/\.+$/, '');
               console.log(`[state] project=${project.id} run=${run.id} projectStatus=${project.status} runStatus=${run.status} worker=${run.workerId || '-'} failure=${run.failureReason || '-'}`);
               console.log(`[state] expectedRepo=${expected} projectRepo=${project.repositoryFullName || '-'} planRepo=${payload?.plan?.repositoryName || '-'} phase=${snapshot?.phase || '-'} version=${snapshot?.version ?? '-'}`);
               const roles = (payload?.plan?.tasks || []).map((task) => task.role);
@@ -64,11 +65,21 @@ jobs:
               }
               const runtimeProjectId = payload?.runtimeProjectId || `builder-${project.id}`;
               console.log(`[runtime] id=${runtimeProjectId}`);
+              require('node:fs').writeFileSync('/tmp/bloom-e2e49-runtime-id', runtimeProjectId);
               process.stdout.write(runtimeProjectId);
             }
             main().catch((error) => { console.error(`[inspect] FAILED ${error.stack || error}`); process.exit(1); });
             NODE
             echo
+            RUNTIME_ID="$(cat /tmp/bloom-e2e49-runtime-id 2>/dev/null || true)"
+            ROOT="/home/ubuntu/bloom-workspaces/.luna-runtime/projects/$RUNTIME_ID"
+            echo '[runtime-files]'
+            find "$ROOT" -maxdepth 5 -type f -printf '%TY-%Tm-%TdT%TH:%TM:%TSZ %s %p\n' 2>/dev/null | sort | tail -n 80 || true
+            echo '[runtime-log-tails]'
+            find "$ROOT" -maxdepth 5 -type f \( -name '*.log' -o -name '*.jsonl' \) -print0 2>/dev/null | while IFS= read -r -d '' f; do
+              echo "--- $f"
+              tail -n 6 "$f" | sed -E 's/([Tt][Oo][Kk][Ee][Nn]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd]|[Ss][Ee][Cc][Rr][Ee][Tt]|[Aa][Uu][Tt][Hh][Oo][Rr][Ii][Zz][Aa][Tt][Ii][Oo][Nn])[^ ]*/\1=<redacted>/g' || true
+            done
             echo '[runtime-processes]'
             ps -eo pid,ppid,etime,%cpu,%mem,stat,cmd --sort=pid \
               | grep -E 'bloom-worker/run.js|bloom-runtime-bridge|bloomLocalAgentRuntime|llama serve' \
