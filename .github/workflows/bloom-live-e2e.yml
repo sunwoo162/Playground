@@ -60,7 +60,7 @@ jobs:
               name: 'Bloom Live E2E',
               avatar_url: '',
               type: 'access',
-            }, process.env.JWT_SECRET, { expiresIn: '1h' });
+            }, process.env.JWT_SECRET, { expiresIn: '330m' });
             process.stdout.write(token);
             NODE
             )"
