@@ -89,6 +89,14 @@ jobs:
             else
               echo "missing $WORKTREE"
             fi
+            echo '[frontend-src-preview]'
+            if [ -f "$WORKTREE/frontend/src" ]; then
+              stat -c 'size=%s mtime=%y' "$WORKTREE/frontend/src" || true
+              sed -n '1,80p' "$WORKTREE/frontend/src" | head -c 4000 || true
+              echo
+            fi
+            echo '[llama-log-tail]'
+            pm2 logs bloom-evaluator-llm --lines 80 --nostream 2>&1 | tail -n 120 || true
             echo '[runtime-processes]'
             ps -eo pid,ppid,etime,%cpu,%mem,stat,cmd --sort=pid \
               | grep -E 'bloom-worker/run.js|bloom-runtime-bridge|bloomLocalAgentRuntime|llama serve' \
