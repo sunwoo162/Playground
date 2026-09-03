@@ -23,7 +23,13 @@ test('Bloom Live E2E workflow uses the normal Builder API with ephemeral auth', 
   assert.match(source, /POST[^\n]*\/api\/builder\/projects/);
   assert.match(source, /\/api\/builder\/projects\/\$\{PROJECT_ID\}\/runs/);
   assert.match(source, /Authorization: Bearer \$\{TOKEN\}/);
-  assert.match(source, /expiresIn:\s*['"]1h['"]/);
+  assert.match(source, /refresh_live_e2e_token\(\)/);
+  assert.match(source, /expiresIn:\s*['"]15m['"]/);
+  assert.doesNotMatch(source, /expiresIn:\s*['"]1h['"]/);
+  const loop = source.indexOf('while true; do');
+  const refreshInLoop = source.indexOf('refresh_live_e2e_token', loop);
+  const pollInLoop = source.indexOf('RUN_JSON=', loop);
+  assert.ok(loop >= 0 && refreshInLoop > loop && refreshInLoop < pollInLoop, 'each polling cycle must refresh the ephemeral JWT before API access');
   assert.doesNotMatch(source, /echo[^\n]*\$\{?TOKEN\}?/);
   assert.doesNotMatch(source, /GITHUB_ENV[^\n]*TOKEN/);
 });
