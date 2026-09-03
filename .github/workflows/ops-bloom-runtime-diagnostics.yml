@@ -100,6 +100,15 @@ jobs:
             PY
             echo "=== recent luna agent paths ==="
             find /home/ubuntu/bloom-workspaces/.luna-runtime /home/ubuntu/bloom-workspaces/.luna-worktrees /tmp/luna-agent-tools -type f -newermt '2026-09-03 03:36:30 UTC' -printf '%TY-%Tm-%TdT%TH:%TM:%TS %s %p\n' 2>/dev/null | sort | tail -200 || true
+            echo "=== builder50 BLOOM-001 worktree status ==="
+            WT=/home/ubuntu/bloom-workspaces/.luna-worktrees/builder-50/BLOOM-001
+            if [ -d "$WT" ]; then
+              git -C "$WT" status --short || true
+              echo "[diff-stat]"
+              git -C "$WT" diff --stat || true
+              echo "[recent-files]"
+              find "$WT" -maxdepth 4 -type f -newermt '2026-09-03 03:37:00 UTC' -printf '%TY-%Tm-%TdT%TH:%TM:%TS %s %p\n' 2>/dev/null | sort | tail -120 || true
+            fi
             echo "=== builder50 runtime files ==="
             find /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-50 -maxdepth 7 -type f -printf '%TY-%Tm-%TdT%TH:%TM:%TS %s %p\n' 2>/dev/null | sort | tail -120 || true
             echo "=== builder50 tool files ==="
