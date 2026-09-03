@@ -100,6 +100,13 @@ jobs:
             PY
             echo "=== recent luna agent paths ==="
             find /home/ubuntu/bloom-workspaces/.luna-runtime /home/ubuntu/bloom-workspaces/.luna-worktrees /tmp/luna-agent-tools -type f -newermt '2026-09-03 03:36:30 UTC' -printf '%TY-%Tm-%TdT%TH:%TM:%TS %s %p\n' 2>/dev/null | sort | tail -200 || true
+            echo "=== builder50 BLOOM-001 plan ==="
+            node <<'NODE'
+            const fs=require('fs');
+            const plan=JSON.parse(fs.readFileSync('/home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-50/pm/pm-plan.json','utf8'));
+            const task=(plan.tasks||[]).find((x)=>x.id==='BLOOM-001');
+            console.log(JSON.stringify(task,null,2));
+            NODE
             echo "=== builder50 frontend/src probe ==="
             WT=/home/ubuntu/bloom-workspaces/.luna-worktrees/builder-50/BLOOM-001
             if [ -e "$WT/frontend/src" ]; then
