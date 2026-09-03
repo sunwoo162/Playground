@@ -1,0 +1,106 @@
+name: Bloom Orphan Cycle Recover 20260903
+
+on:
+  push:
+    branches:
+      - test/luna-live-e2e-readonly-20260902
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Recover orphaned drained builder cycle
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          command_timeout: 8m
+          script: |
+            set -euo pipefail
+            cd /home/ubuntu/bloombouquet
+            DRAIN=/tmp/bloom-builder-worker.drain
+            BUSY=/tmp/bloom-builder-worker.busy
+            test -e "$DRAIN" || { echo '[guard] drain is not active'; exit 2; }
+            test -e "$BUSY" || { echo '[guard] busy marker is absent'; exit 3; }
+            BUSY_PID="$(head -n 1 "$BUSY" | tr -dc '0-9')"
+            [[ "$BUSY_PID" =~ ^[0-9]+$ ]] || { echo '[guard] invalid busy pid'; exit 4; }
+            kill -0 "$BUSY_PID" 2>/dev/null || { echo '[guard] busy pid is already dead'; exit 5; }
+            active_count() {
+              node <<'NODE'
+            require('dotenv').config({ path: '.env' });
+            const jwt = require('jsonwebtoken');
+            const base = 'http://127.0.0.1:3000';
+            const token = jwt.sign(
+              { id: 'bloom-orphan-recover', login: 'bloom-orphan-recover', name: 'Bloom Orphan Recover', avatar_url: '', type: 'access' },
+              process.env.JWT_SECRET,
+              { expiresIn: '5m' },
+            );
+            const headers = { Cookie: `playground_token=${token}` };
+            async function get(route) {
+              const response = await fetch(`${base}${route}`, { headers });
+              if (!response.ok) throw new Error(`${route} -> ${response.status}`);
+              return await response.json();
+            }
+            async function main() {
+              const projects = await get('/api/builder/projects');
+              let count = 0;
+              for (const project of projects) {
+                const runs = await get(`/api/builder/projects/${project.id}/runs`);
+                count += runs.filter((run) => run.status === 'queued' || run.status === 'running').length;
+              }
+              process.stdout.write(String(count));
+            }
+            main().catch((error) => { console.error(error); process.exit(1); });
+            NODE
+            }
+            FIRST="$(active_count)"
+            echo "[guard] active runs first=${FIRST} busyPid=${BUSY_PID}"
+            [ "$FIRST" = "0" ] || { echo '[guard] active Builder work exists'; exit 6; }
+            sleep 10
+            test -e "$DRAIN" || { echo '[guard] drain disappeared'; exit 7; }
+            test -e "$BUSY" || { echo '[guard] busy marker cleared naturally'; exit 0; }
+            CURRENT_PID="$(head -n 1 "$BUSY" | tr -dc '0-9')"
+            [ "$CURRENT_PID" = "$BUSY_PID" ] || { echo "[guard] busy pid changed to ${CURRENT_PID}"; exit 8; }
+            SECOND="$(active_count)"
+            echo "[guard] active runs second=${SECOND} busyPid=${BUSY_PID}"
+            [ "$SECOND" = "0" ] || { echo '[guard] active Builder work appeared'; exit 9; }
+
+            descendants() {
+              local parent="$1"
+              local child
+              for child in $(pgrep -P "$parent" 2>/dev/null || true); do
+                descendants "$child"
+                echo "$child"
+              done
+            }
+            DESCENDANTS="$(descendants "$BUSY_PID")"
+            echo "[recover] descendant pids: ${DESCENDANTS:-none}"
+            [ -n "$DESCENDANTS" ] || { echo '[recover] no descendants; refusing to touch worker'; exit 10; }
+            ps -o pid,ppid,etime,%cpu,%mem,stat,cmd -p "$(echo "$DESCENDANTS" | paste -sd, -)" || true
+            for pid in $DESCENDANTS; do
+              kill -TERM "$pid" 2>/dev/null || true
+            done
+            sleep 10
+            for pid in $DESCENDANTS; do
+              if kill -0 "$pid" 2>/dev/null; then
+                echo "[recover] force stopping descendant ${pid}"
+                kill -KILL "$pid" 2>/dev/null || true
+              fi
+            done
+
+            for _ in $(seq 1 30); do
+              if [ ! -e "$BUSY" ]; then
+                echo '[recover] busy marker cleared by worker finally'
+                exit 0
+              fi
+              sleep 2
+            done
+            echo '[recover] descendants stopped but busy marker did not clear; worker was not terminated' >&2
+            ps -o pid,ppid,etime,%cpu,%mem,stat,cmd -p "$BUSY_PID" || true
+            exit 11
