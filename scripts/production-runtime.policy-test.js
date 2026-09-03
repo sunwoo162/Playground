@@ -177,6 +177,11 @@ test('production Bloom worker drains active Builder work before mutating live ru
   assert.notEqual(stagedTransfer, -1, 'runtime bridge must transfer into a staging directory');
   assert.notEqual(drainTouch, -1, 'deployment must request Builder drain before live mutation');
   assert.notEqual(busyWait, -1, 'deployment must wait until the active Builder cycle is no longer busy');
+  assert.match(workflow, /internal\/builder\/worker\/runs\/active-lease\?workerId=/, 'drain must consult the authoritative Builder lease before treating a live worker PID as active work');
+  assert.match(workflow, /STALE_BUSY_CONFIRM_SECONDS=10/, 'stale live busy state must be confirmed across a grace window');
+  assert.match(workflow, /terminate_builder_descendants/, 'confirmed orphan Builder cycles must terminate only descendants before deployment continues');
+  assert.match(workflow, /-H @-/, 'lease probe must pass the worker token through stdin-backed curl headers');
+  assert.doesNotMatch(workflow, /-H \"X-Builder-Worker-Token: \$BUILDER_WORKER_TOKEN\"/, 'lease probe must not expose the worker token in curl process arguments');
   assert.notEqual(installNext, -1, 'staged runtime bridge must be copied to a next path after drain');
   assert.notEqual(smokeNext, -1, 'next runtime bridge smoke command must exist');
   assert.notEqual(smokeNextBinary, -1, 'next runtime bridge must be the binary under smoke');

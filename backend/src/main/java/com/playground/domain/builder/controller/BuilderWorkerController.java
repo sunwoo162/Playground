@@ -26,6 +26,11 @@ public class BuilderWorkerController {
                 .orElseGet(() -> ResponseEntity.noContent().build());
     }
 
+    @GetMapping("/runs/active-lease")
+    public ResponseEntity<Boolean> activeLease(@RequestParam String workerId) {
+        return ResponseEntity.ok(service.hasActiveLease(workerId));
+    }
+
     @PostMapping("/runs/{runId}/heartbeat")
     public ResponseEntity<BuilderWorkerDto.RunStateResponse> heartbeat(
             @PathVariable Long runId,

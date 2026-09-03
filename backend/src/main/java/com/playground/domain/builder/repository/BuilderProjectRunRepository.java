@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -19,6 +20,8 @@ public interface BuilderProjectRunRepository extends JpaRepository<BuilderProjec
     );
 
     List<BuilderProjectRun> findAllByProject_IdAndOwnerIdOrderByCreatedAtDesc(Long projectId, String ownerId);
+
+    boolean existsByWorkerIdAndStatusAndLeaseExpiresAtAfter(String workerId, String status, LocalDateTime now);
 
     Optional<BuilderProjectRun> findByIdAndProject_IdAndOwnerId(Long id, Long projectId, String ownerId);
 

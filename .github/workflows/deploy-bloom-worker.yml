@@ -97,6 +97,48 @@ jobs:
             NEXT_BRIDGE="$LIVE_BRIDGE.next-${{ github.run_id }}"
             BLOOM_BUILDER_DRAIN_FILE=/tmp/bloom-builder-worker.drain
             BLOOM_BUILDER_BUSY_FILE=/tmp/bloom-builder-worker.busy
+            ENV_FILE=/home/ubuntu/bloombouquet/.env
+            STALE_BUSY_CONFIRM_SECONDS=10
+            read_env_value() {
+              KEY="$1"
+              sed -n "s/^${KEY}=//p" "$ENV_FILE" 2>/dev/null | tail -n 1
+            }
+            BUILDER_WORKER_TOKEN="$(read_env_value BUILDER_WORKER_TOKEN)"
+            BLOOM_BUILDER_WORKER_ID="$(read_env_value BLOOM_BUILDER_WORKER_ID)"
+            BLOOM_BUILDER_WORKER_ID="${BLOOM_BUILDER_WORKER_ID:-bloom-builder-production}"
+            builder_active_lease_state() {
+              if [ -z "$BUILDER_WORKER_TOKEN" ]; then
+                echo unknown
+                return
+              fi
+              RESPONSE="$(printf 'X-Builder-Worker-Token: %s\n' "$BUILDER_WORKER_TOKEN" | curl -fsS --max-time 3 \
+                -H @- \
+                "http://127.0.0.1:8080/internal/builder/worker/runs/active-lease?workerId=$BLOOM_BUILDER_WORKER_ID" \
+                2>/dev/null || true)"
+              case "$RESPONSE" in
+                true|false) echo "$RESPONSE" ;;
+                *) echo unknown ;;
+              esac
+            }
+            terminate_builder_descendants() {
+              PARENT_PID="$1"
+              descendants() {
+                local parent="$1"
+                local child
+                for child in $(pgrep -P "$parent" 2>/dev/null || true); do
+                  descendants "$child"
+                  echo "$child"
+                done
+              }
+              DESCENDANT_PIDS="$(descendants "$PARENT_PID")"
+              [ -n "$DESCENDANT_PIDS" ] || return 1
+              echo "Stopping orphan Bloom Builder descendants: $(echo "$DESCENDANT_PIDS" | tr '\n' ' ')"
+              for pid in $DESCENDANT_PIDS; do kill -TERM "$pid" 2>/dev/null || true; done
+              sleep 5
+              for pid in $DESCENDANT_PIDS; do
+                if kill -0 "$pid" 2>/dev/null; then kill -KILL "$pid" 2>/dev/null || true; fi
+              done
+            }
             cleanup_bloom_worker_deploy() {
               rm -f "$BLOOM_BUILDER_DRAIN_FILE" "$NEXT_BRIDGE"
               rm -rf "$STAGING_DIR"
@@ -109,6 +151,8 @@ jobs:
             touch "$BLOOM_BUILDER_DRAIN_FILE"
             echo "Bloom Builder drain requested; waiting for active cycle to finish"
             DRAIN_DEADLINE=$(( $(date +%s) + 7200 ))
+            STALE_BUSY_PID=""
+            STALE_BUSY_SINCE=0
             while [ -e "$BLOOM_BUILDER_BUSY_FILE" ]; do
               BUSY_PID="$(head -n 1 "$BLOOM_BUILDER_BUSY_FILE" 2>/dev/null || true)"
               if [ -n "$BUSY_PID" ] && ! kill -0 "$BUSY_PID" 2>/dev/null; then
@@ -116,7 +160,37 @@ jobs:
                 rm -f "$BLOOM_BUILDER_BUSY_FILE"
                 break
               fi
-              if [ "$(date +%s)" -ge "$DRAIN_DEADLINE" ]; then
+
+              ACTIVE_LEASE="$(builder_active_lease_state)"
+              NOW="$(date +%s)"
+              if [ "$ACTIVE_LEASE" = "false" ] && [ -n "$BUSY_PID" ]; then
+                if [ "$STALE_BUSY_PID" != "$BUSY_PID" ]; then
+                  STALE_BUSY_PID="$BUSY_PID"
+                  STALE_BUSY_SINCE="$NOW"
+                  echo "Bloom Builder busy PID $BUSY_PID has no active lease; confirming before orphan recovery"
+                elif [ $(( NOW - STALE_BUSY_SINCE )) -ge "$STALE_BUSY_CONFIRM_SECONDS" ]; then
+                  echo "Confirmed orphan Bloom Builder cycle for PID $BUSY_PID; stopping descendants only"
+                  if ! terminate_builder_descendants "$BUSY_PID"; then
+                    echo "Orphan Bloom Builder cycle has no recoverable descendants; refusing to remove live busy marker"
+                    exit 1
+                  fi
+                  BUSY_CLEARED=false
+                  for _ in $(seq 1 30); do
+                    if [ ! -e "$BLOOM_BUILDER_BUSY_FILE" ]; then
+                      BUSY_CLEARED=true
+                      break
+                    fi
+                    sleep 2
+                  done
+                  [ "$BUSY_CLEARED" = "true" ] || { echo "Orphan descendants stopped but Builder busy marker did not clear"; exit 1; }
+                  break
+                fi
+              else
+                STALE_BUSY_PID=""
+                STALE_BUSY_SINCE=0
+              fi
+
+              if [ "$NOW" -ge "$DRAIN_DEADLINE" ]; then
                 echo "Timed out waiting for active Bloom Builder cycle to drain"
                 exit 1
               fi

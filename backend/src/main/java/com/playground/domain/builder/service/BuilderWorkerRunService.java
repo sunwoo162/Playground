@@ -55,6 +55,16 @@ public class BuilderWorkerRunService {
         return Optional.of(toClaimResponse(run));
     }
 
+    @Transactional(readOnly = true)
+    public boolean hasActiveLease(String workerId) {
+        String worker = requireWorkerId(workerId);
+        return runRepository.existsByWorkerIdAndStatusAndLeaseExpiresAtAfter(
+                worker,
+                "running",
+                LocalDateTime.now()
+        );
+    }
+
     @Transactional
     public BuilderWorkerDto.RunStateResponse heartbeat(Long runId, String workerId) {
         BuilderProjectRun run = requireLockedRun(runId);
