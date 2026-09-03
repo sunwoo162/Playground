@@ -92,14 +92,28 @@ const GOVERNANCE_ROLES: ExecutableAgentRole[] = [
 ];
 
 type LiveE2EImplementationPlan = {
+  repositoryName: string;
   tasks: Array<{ role: ExecutableAgentRole }>;
 };
+
+function expectedLiveE2ERepositoryName(request: string) {
+  const match = request.match(/Use the exact repository name\s+([a-z0-9-]+)/i);
+  if (!match?.[1]) {
+    throw new Error("Bloom live E2E PM repository contract is missing the exact repository name.");
+  }
+  return match[1];
+}
 
 export function validateLiveE2EImplementationPlan(
   request: string,
   plan: LiveE2EImplementationPlan,
 ) {
   if (!request.includes(LIVE_E2E_MARKER)) return;
+
+  const expectedRepositoryName = expectedLiveE2ERepositoryName(request);
+  if (plan.repositoryName !== expectedRepositoryName) {
+    throw new Error(`Bloom live E2E PM repository mismatch: expected=${expectedRepositoryName}, actual=${plan.repositoryName}`);
+  }
 
   const roles = new Set(plan.tasks.map((task) => task.role));
   const missingRoles = IMPLEMENTATION_ROLES.filter((role) => !roles.has(role));

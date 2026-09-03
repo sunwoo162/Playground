@@ -110,23 +110,41 @@ function main() {
   assert(request.request.includes(LIVE_E2E_MARKER), "E2E request must include Bloom marker");
   assert(!request.request.includes("LUNA-E2E"), "E2E request must not use the old Luna marker");
 
-  validateLiveE2EImplementationPlan(request.request, {
-    tasks: [{ role: "frontend" }, { role: "backend" }],
-  });
+  const validImplementationPlan = {
+    repositoryName: request.repositoryName,
+    tasks: [{ role: "frontend" as const }, { role: "backend" as const }],
+  };
+  validateLiveE2EImplementationPlan(request.request, validImplementationPlan);
+
+  let wrongRepositoryError = "";
+  try {
+    const wrongRepositoryPlan = {
+      repositoryName: "bloom-e2e-pulseboard",
+      tasks: [{ role: "frontend" as const }, { role: "backend" as const }],
+    };
+    validateLiveE2EImplementationPlan(request.request, wrongRepositoryPlan);
+  } catch (error) {
+    wrongRepositoryError = error instanceof Error ? error.message : String(error);
+  }
+  assert(wrongRepositoryError.includes(request.repositoryName), "Live E2E PM validation must reject a repository name that differs from the exact smoke request");
 
   let missingBackendError = "";
   try {
-    validateLiveE2EImplementationPlan(request.request, {
-      tasks: [{ role: "frontend" }, { role: "security" }],
-    });
+    const missingBackendPlan = {
+      repositoryName: request.repositoryName,
+      tasks: [{ role: "frontend" as const }, { role: "security" as const }],
+    };
+    validateLiveE2EImplementationPlan(request.request, missingBackendPlan);
   } catch (error) {
     missingBackendError = error instanceof Error ? error.message : String(error);
   }
   assert(missingBackendError.includes("backend"), "Live E2E PM validation must reject a plan without a backend role");
 
-  validateLiveE2EImplementationPlan("Build a normal frontend-only project", {
-    tasks: [{ role: "frontend" }],
-  });
+  const normalPlan = {
+    repositoryName: "normal-project",
+    tasks: [{ role: "frontend" as const }],
+  };
+  validateLiveE2EImplementationPlan("Build a normal frontend-only project", normalPlan);
 
   const completed = completedSnapshot();
   const completedAudit = auditLiveE2ESnapshot(completed, "completed");
