@@ -162,3 +162,7 @@ jobs:
             free -h || true
             echo "=== drain files ==="
             ls -l /tmp/bloom-builder-worker.drain /tmp/bloom-builder-worker.busy 2>/dev/null || true
+            if [ "$PROJECT_ID" = "55" ] && [ "$RUN_ID" = "55" ] && [ -n "$FRONTEND_TASK_ID" ]; then
+              export API_BASE TOKEN PROJECT_ID RUN_ID RUNTIME_ROOT WT PLAN_FILE
+              bash scripts/ops-reproduce-bloom-local-agent-first-write.sh
+            fi
