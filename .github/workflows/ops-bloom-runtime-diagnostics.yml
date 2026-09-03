@@ -76,7 +76,7 @@ jobs:
             NODE
             fi
             rm -f "$SNAPSHOT_FILE"
-            echo "=== builder50 process descendants ==="
+            echo "=== builder51 process descendants ==="
             python3 <<'PY'
             import os
             root=282008
@@ -99,17 +99,17 @@ jobs:
                     except Exception: cwd='?'
                     print(f'[desc] pid={child} ppid={pid} cwd={cwd} cmd={cmd[:700]}')
             PY
-            echo "=== targeted builder50 agent files ==="
-            find /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-50 -maxdepth 7 -type f -printf '%TY-%Tm-%TdT%TH:%TM:%TS %s %p\n' 2>/dev/null | sort | tail -80 || true
-            echo "=== builder50 BLOOM-001 plan ==="
+            echo "=== targeted builder51 agent files ==="
+            find /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-51 -maxdepth 7 -type f -printf '%TY-%Tm-%TdT%TH:%TM:%TS %s %p\n' 2>/dev/null | sort | tail -80 || true
+            echo "=== builder51 PULSEBOARD-101 plan ==="
             node <<'NODE'
             const fs=require('fs');
-            const plan=JSON.parse(fs.readFileSync('/home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-50/pm/pm-plan.json','utf8'));
-            const task=(plan.tasks||[]).find((x)=>x.id==='BLOOM-001');
+            const plan=JSON.parse(fs.readFileSync('/home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-51/pm/pm-plan.json','utf8'));
+            const task=(plan.tasks||[]).find((x)=>x.id==='PULSEBOARD-101');
             console.log(JSON.stringify(task,null,2));
             NODE
-            echo "=== builder50 frontend/src probe ==="
-            WT=/home/ubuntu/bloom-workspaces/.luna-worktrees/builder-50/BLOOM-001
+            echo "=== builder51 frontend/src probe ==="
+            WT=/home/ubuntu/bloom-workspaces/.luna-worktrees/builder-51/PULSEBOARD-101
             if [ -e "$WT/frontend/src" ]; then
               stat -c '[src-stat] type=%F size=%s mtime=%y' "$WT/frontend/src" || true
               if [ -f "$WT/frontend/src" ]; then
@@ -117,8 +117,8 @@ jobs:
                 sed -n '1,120p' "$WT/frontend/src"
               fi
             fi
-            echo "=== builder50 BLOOM-001 worktree status ==="
-            WT=/home/ubuntu/bloom-workspaces/.luna-worktrees/builder-50/BLOOM-001
+            echo "=== builder51 PULSEBOARD-101 worktree status ==="
+            WT=/home/ubuntu/bloom-workspaces/.luna-worktrees/builder-51/PULSEBOARD-101
             if [ -d "$WT" ]; then
               git -C "$WT" status --short || true
               echo "[diff-stat]"
@@ -126,17 +126,17 @@ jobs:
               echo "[recent-files]"
               find "$WT" -maxdepth 4 -type f -newermt '2026-09-03 03:37:00 UTC' -printf '%TY-%Tm-%TdT%TH:%TM:%TS %s %p\n' 2>/dev/null | sort | tail -120 || true
             fi
-            echo "=== builder50 runtime files ==="
-            find /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-50 -maxdepth 7 -type f -printf '%TY-%Tm-%TdT%TH:%TM:%TS %s %p\n' 2>/dev/null | sort | tail -120 || true
-            echo "=== builder50 tool-state summary ==="
-            du -sh /tmp/luna-agent-tools/builder-50 2>/dev/null || true
-            echo "=== builder50 local agent stderr ==="
-            STDERR50=/home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-50/agents/rose:frontend/BLOOM-001/local-agent.stderr.log
-            if [ -f "$STDERR50" ]; then cat "$STDERR50"; fi
-            echo "=== builder50 local agent streams ==="
+            echo "=== builder51 runtime files ==="
+            find /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-51 -maxdepth 7 -type f -printf '%TY-%Tm-%TdT%TH:%TM:%TS %s %p\n' 2>/dev/null | sort | tail -120 || true
+            echo "=== builder51 tool-state summary ==="
+            du -sh /tmp/luna-agent-tools/builder-51 2>/dev/null || true
+            echo "=== builder51 local agent stderr ==="
+            STDERR51=/home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-51/agents/rose:frontend/PULSEBOARD-101/local-agent.stderr.log
+            if [ -f "$STDERR51" ]; then cat "$STDERR51"; fi
+            echo "=== builder51 local agent streams ==="
             python3 <<'PY'
             import glob, json, os
-            root='/home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-50/agents'
+            root='/home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-51/agents'
             for path in sorted(glob.glob(root+'/*/*/local-agent-events.jsonl')):
                 rows=[]
                 with open(path,encoding='utf-8',errors='replace') as f:
