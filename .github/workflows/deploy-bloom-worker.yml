@@ -63,7 +63,7 @@ jobs:
           username: ubuntu
           password: ${{ secrets.SSH_PASSWORD }}
           source: "bloom-runtime/target/release/bloom-runtime-bridge"
-          target: "/home/ubuntu/bloombouquet/bloom-runtime/target/release/"
+          target: "/home/ubuntu/bloombouquet/.deploy/bloom-worker/${{ github.run_id }}/"
           strip_components: 3
 
       - name: Provision and start Bloom workers
@@ -90,6 +90,39 @@ jobs:
               exit 1
             fi
             echo "Bloom worker deployment lock acquired"
+
+            STAGING_DIR=/home/ubuntu/bloombouquet/.deploy/bloom-worker/${{ github.run_id }}
+            STAGED_BRIDGE="$STAGING_DIR/bloom-runtime-bridge"
+            LIVE_BRIDGE=/home/ubuntu/bloombouquet/bloom-runtime/target/release/bloom-runtime-bridge
+            NEXT_BRIDGE="$LIVE_BRIDGE.next-${{ github.run_id }}"
+            BLOOM_BUILDER_DRAIN_FILE=/tmp/bloom-builder-worker.drain
+            BLOOM_BUILDER_BUSY_FILE=/tmp/bloom-builder-worker.busy
+            cleanup_bloom_worker_deploy() {
+              rm -f "$BLOOM_BUILDER_DRAIN_FILE" "$NEXT_BRIDGE"
+              rm -rf "$STAGING_DIR"
+            }
+            trap cleanup_bloom_worker_deploy EXIT
+            trap 'exit 129' HUP
+            trap 'exit 130' INT
+            trap 'exit 143' TERM
+            test -f "$STAGED_BRIDGE" || { echo "Staged Bloom runtime bridge is missing"; exit 1; }
+            touch "$BLOOM_BUILDER_DRAIN_FILE"
+            echo "Bloom Builder drain requested; waiting for active cycle to finish"
+            DRAIN_DEADLINE=$(( $(date +%s) + 7200 ))
+            while [ -e "$BLOOM_BUILDER_BUSY_FILE" ]; do
+              BUSY_PID="$(head -n 1 "$BLOOM_BUILDER_BUSY_FILE" 2>/dev/null || true)"
+              if [ -n "$BUSY_PID" ] && ! kill -0 "$BUSY_PID" 2>/dev/null; then
+                echo "Removing stale Bloom Builder busy marker for PID $BUSY_PID"
+                rm -f "$BLOOM_BUILDER_BUSY_FILE"
+                break
+              fi
+              if [ "$(date +%s)" -ge "$DRAIN_DEADLINE" ]; then
+                echo "Timed out waiting for active Bloom Builder cycle to drain"
+                exit 1
+              fi
+              sleep 5
+            done
+            echo "Bloom Builder drain complete"
 
             BLOOM_SWAP_FILE=/swapfile
             if ! swapon --show=NAME --noheadings --raw | grep -Fxq "$BLOOM_SWAP_FILE"; then
@@ -140,10 +173,12 @@ jobs:
             pnpm install --frozen-lockfile
             pnpm run build:bloom-worker
             test -f /home/ubuntu/bloombouquet/.tmp/bloom-worker/bloomLocalAgentRuntime.js || { echo "Bloom Local Agent runner is missing"; exit 1; }
-            chmod 755 bloom-runtime/target/release/bloom-runtime-bridge
-            test -x bloom-runtime/target/release/bloom-runtime-bridge || { echo "Bloom runtime bridge is missing"; exit 1; }
-            BRIDGE_SMOKE_OUTPUT="$(printf '%s' '{}' | bloom-runtime/target/release/bloom-runtime-bridge 2>/dev/null || true)"
+            install -d "$(dirname "$LIVE_BRIDGE")"
+            install -m 755 "$STAGED_BRIDGE" "$NEXT_BRIDGE"
+            test -x "$NEXT_BRIDGE" || { echo "Bloom runtime bridge candidate is missing"; exit 1; }
+            BRIDGE_SMOKE_OUTPUT="$(printf '%s' '{}' | "$NEXT_BRIDGE" 2>/dev/null || true)"
             printf '%s' "$BRIDGE_SMOKE_OUTPUT" | grep -Fq '"ok":false' || { echo "Bloom Runtime bridge execution smoke failed"; exit 1; }
+            mv -f "$NEXT_BRIDGE" "$LIVE_BRIDGE"
             echo "Bloom Runtime bridge execution smoke OK"
 
             ENV_FILE=/home/ubuntu/bloombouquet/.env

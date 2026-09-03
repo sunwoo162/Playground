@@ -163,6 +163,33 @@ test('production Bloom worker serializes remote provision runs before touching t
   assert.notEqual(fetchMain, -1, 'remote provision must still refresh main');
   assert.ok(lockFd < fetchMain && lockWait < fetchMain, 'deployment lock must be acquired before touching the shared checkout');
 });
+test('production Bloom worker drains active Builder work before mutating live runtime files', () => {
+  const workflow = readBloomWorkerDeployWorkflow();
+  const stagedTransfer = workflow.indexOf('/home/ubuntu/bloombouquet/.deploy/bloom-worker/${{ github.run_id }}/');
+  const drainTouch = workflow.indexOf('touch "$BLOOM_BUILDER_DRAIN_FILE"');
+  const busyWait = workflow.indexOf('while [ -e "$BLOOM_BUILDER_BUSY_FILE" ]');
+  const fetchMain = workflow.indexOf('git fetch origin main');
+  const installNext = workflow.indexOf('install -m 755 "$STAGED_BRIDGE" "$NEXT_BRIDGE"');
+  const smokeNext = workflow.indexOf('BRIDGE_SMOKE_OUTPUT="$(printf');
+  const smokeNextBinary = workflow.indexOf('| "$NEXT_BRIDGE" 2>/dev/null');
+  const promoteBridge = workflow.indexOf('mv -f "$NEXT_BRIDGE" "$LIVE_BRIDGE"');
+
+  assert.notEqual(stagedTransfer, -1, 'runtime bridge must transfer into a staging directory');
+  assert.notEqual(drainTouch, -1, 'deployment must request Builder drain before live mutation');
+  assert.notEqual(busyWait, -1, 'deployment must wait until the active Builder cycle is no longer busy');
+  assert.notEqual(installNext, -1, 'staged runtime bridge must be copied to a next path after drain');
+  assert.notEqual(smokeNext, -1, 'next runtime bridge smoke command must exist');
+  assert.notEqual(smokeNextBinary, -1, 'next runtime bridge must be the binary under smoke');
+  assert.notEqual(promoteBridge, -1, 'verified next runtime bridge must be atomically promoted');
+  assert.ok(drainTouch < busyWait && busyWait < fetchMain, 'drain must complete before touching the shared checkout');
+  assert.ok(busyWait < installNext && installNext < smokeNext && smokeNext < promoteBridge, 'bridge promotion must happen only after idle and smoke verification');
+  assert.match(workflow, /trap cleanup_bloom_worker_deploy EXIT/);
+  assert.match(workflow, /trap 'exit 129' HUP/);
+  assert.match(workflow, /trap 'exit 130' INT/);
+  assert.match(workflow, /trap 'exit 143' TERM/);
+  assert.match(workflow, /rm -f "\$BLOOM_BUILDER_DRAIN_FILE"/);
+});
+
 test('production Bloom worker provisions emergency swap before starting memory-heavy local inference', () => {
   const workflow = readBloomWorkerDeployWorkflow();
 
