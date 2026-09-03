@@ -98,8 +98,8 @@ jobs:
                     except Exception: cwd='?'
                     print(f'[desc] pid={child} ppid={pid} cwd={cwd} cmd={cmd[:700]}')
             PY
-            echo "=== recent luna agent paths ==="
-            find /home/ubuntu/bloom-workspaces/.luna-runtime /home/ubuntu/bloom-workspaces/.luna-worktrees /tmp/luna-agent-tools -type f -newermt '2026-09-03 03:36:30 UTC' -printf '%TY-%Tm-%TdT%TH:%TM:%TS %s %p\n' 2>/dev/null | sort | tail -200 || true
+            echo "=== targeted builder50 agent files ==="
+            find /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-50 -maxdepth 7 -type f -printf '%TY-%Tm-%TdT%TH:%TM:%TS %s %p\n' 2>/dev/null | sort | tail -80 || true
             echo "=== builder50 BLOOM-001 plan ==="
             node <<'NODE'
             const fs=require('fs');
@@ -127,8 +127,8 @@ jobs:
             fi
             echo "=== builder50 runtime files ==="
             find /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-50 -maxdepth 7 -type f -printf '%TY-%Tm-%TdT%TH:%TM:%TS %s %p\n' 2>/dev/null | sort | tail -120 || true
-            echo "=== builder50 tool files ==="
-            find /tmp/luna-agent-tools/builder-50 -maxdepth 5 -type f -printf '%TY-%Tm-%TdT%TH:%TM:%TS %s %p\n' 2>/dev/null | sort | tail -120 || true
+            echo "=== builder50 tool-state summary ==="
+            du -sh /tmp/luna-agent-tools/builder-50 2>/dev/null || true
             echo "=== builder50 local agent streams ==="
             python3 <<'PY'
             import glob, json, os
@@ -151,22 +151,14 @@ jobs:
             fi
             echo "=== builder logs ==="
             pm2 logs bloom-builder-worker --lines 120 --nostream || true
-            echo "=== project 46 repository/worktree evidence ==="
-            echo "workspace_root"
-            find /home/ubuntu/bloom-workspaces/bloom-e2e-pulseboard -maxdepth 2 -mindepth 1 -printf '%y %p\n' 2>/dev/null | sort | head -120 || true
-            echo "writer_worktree"
-            find /home/ubuntu/bloom-workspaces/.luna-worktrees/builder-46/PULSEBOARD-101 -maxdepth 3 -mindepth 1 -printf '%y %p\n' 2>/dev/null | sort | head -160 || true
-            echo "agent_runtime"
-            find /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-46 -path '*PULSEBOARD-101*' -type f -printf '%p\n' 2>/dev/null | sort || true
-            EVENT_FILE="$(find /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-46 -path '*PULSEBOARD-101*' -name 'local-agent-events.jsonl' -type f 2>/dev/null | head -1)"
-            if [ -n "$EVENT_FILE" ]; then
-              echo "event_file=$EVENT_FILE"
-              cat "$EVENT_FILE"
+            echo "=== local llama process ==="
+            LLAMA_PID="$(pm2 pid bloom-evaluator-llm || true)"
+            echo "llama_pid=${LLAMA_PID}"
+            if [ -n "$LLAMA_PID" ] && [ "$LLAMA_PID" != "0" ]; then
+              ps -o pid,ppid,stat,etime,pcpu,pmem,rss,vsz,cmd -p "$LLAMA_PID" || true
             fi
-            STDERR_FILE="$(find /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-46 -path '*PULSEBOARD-101*' -name 'local-agent.stderr.log' -type f 2>/dev/null | head -1)"
-            if [ -n "$STDERR_FILE" ]; then
-              echo "stderr_file=$STDERR_FILE"
-              tail -80 "$STDERR_FILE"
-            fi
+            curl -fsS --max-time 3 http://127.0.0.1:8091/health || true
+            echo
+            pm2 logs bloom-evaluator-llm --lines 160 --nostream || true
             echo "=== drain files ==="
             ls -l /tmp/bloom-builder-worker.drain /tmp/bloom-builder-worker.busy 2>/dev/null || true
