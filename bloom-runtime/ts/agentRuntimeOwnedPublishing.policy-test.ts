@@ -98,6 +98,20 @@ assert(
   "dispatch must normalize safe publication-only blockers before Runtime publishes the writer result",
 );
 
+const runtimeBranchBlock = source.match(
+  /let branch = is_repository_writer\(&input\.role\)([\s\S]*?)if worktree\.exists\(\)/,
+)?.[0] ?? "";
+assert(
+  runtimeBranchBlock.includes("input.project_id") && runtimeBranchBlock.includes("input.task_slug"),
+  "writer branch names must include project identity as well as task identity so separate projects cannot collide",
+);
+const reconciliationBranchBlock = reconciliationSource.match(
+  /let branch = writer_role\(input\.role\.trim\(\)\)([\s\S]*?)if let Some\(branch_name\)/,
+)?.[0] ?? "";
+assert(
+  reconciliationBranchBlock.includes("input.project_id") && reconciliationBranchBlock.includes("input.task_slug"),
+  "interrupted writer reconciliation must derive the same project-scoped branch identity",
+);
 const noTrackBranchCreations = source.match(
   /"worktree", "add", "-b", branch_name\.as_str\(\), "--no-track"/g,
 ) ?? [];
