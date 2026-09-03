@@ -113,6 +113,18 @@ class BuilderWorkerRunServiceTest {
     }
 
     @Test
+    void activeLeaseUsesAuthoritativeUnexpiredWorkerLease() {
+        when(runRepository.existsByWorkerIdAndStatusAndLeaseExpiresAtAfter(
+                eq("worker-01"), eq("running"), any(LocalDateTime.class)
+        )).thenReturn(true);
+
+        assertTrue(service.hasActiveLease("worker-01"));
+        verify(runRepository).existsByWorkerIdAndStatusAndLeaseExpiresAtAfter(
+                eq("worker-01"), eq("running"), any(LocalDateTime.class)
+        );
+    }
+
+    @Test
     void heartbeatRejectsWorkerThatDoesNotOwnLease() {
         BuilderProjectRun run = run(11L, project(7L, "running"), "running", "worker-owner");
         when(runRepository.findByIdForUpdate(11L)).thenReturn(Optional.of(run));
