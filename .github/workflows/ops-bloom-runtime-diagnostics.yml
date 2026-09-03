@@ -76,76 +76,31 @@ jobs:
             NODE
             fi
             rm -f "$SNAPSHOT_FILE"
-            echo "=== builder51 process descendants ==="
-            python3 <<'PY'
-            import os
-            root=282008
-            children={}
-            for entry in os.listdir('/proc'):
-                if not entry.isdigit(): continue
-                try:
-                    stat=open(f'/proc/{entry}/stat',encoding='utf-8',errors='replace').read().split()
-                    ppid=int(stat[3]); children.setdefault(ppid,[]).append(int(entry))
-                except Exception: pass
-            stack=[root]; seen=set()
-            while stack:
-                pid=stack.pop(0)
-                for child in sorted(children.get(pid,[])):
-                    if child in seen: continue
-                    seen.add(child); stack.append(child)
-                    try: cmd=open(f'/proc/{child}/cmdline','rb').read().replace(b'\0',b' ').decode('utf-8','replace').strip()
-                    except Exception: cmd='?'
-                    try: cwd=os.readlink(f'/proc/{child}/cwd')
-                    except Exception: cwd='?'
-                    print(f'[desc] pid={child} ppid={pid} cwd={cwd} cmd={cmd[:700]}')
-            PY
-            echo "=== targeted builder51 agent files ==="
-            find /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-51 -maxdepth 7 -type f -printf '%TY-%Tm-%TdT%TH:%TM:%TS %s %p\n' 2>/dev/null | sort | tail -80 || true
-            echo "=== builder51 PULSEBOARD-101 plan ==="
-            node <<'NODE'
+            RUNTIME_ROOT="/home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-${PROJECT_ID}"
+            PLAN_FILE="$RUNTIME_ROOT/pm/pm-plan.json"
+            FRONTEND_TASK_ID=""
+            if [ -f "$PLAN_FILE" ]; then
+              FRONTEND_TASK_ID="$(node - "$PLAN_FILE" <<'NODE'
             const fs=require('fs');
-            const plan=JSON.parse(fs.readFileSync('/home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-51/pm/pm-plan.json','utf8'));
-            const task=(plan.tasks||[]).find((x)=>x.id==='PULSEBOARD-101');
-            console.log(JSON.stringify(task,null,2));
+            const plan=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+            const task=(plan.tasks||[]).find((x)=>x.role==='frontend');
+            if (task?.id) process.stdout.write(String(task.id));
             NODE
-            echo "=== builder51 frontend/src probe ==="
-            WT=/home/ubuntu/bloom-workspaces/.luna-worktrees/builder-51/PULSEBOARD-101
-            if [ -e "$WT/frontend/src" ]; then
-              stat -c '[src-stat] type=%F size=%s mtime=%y' "$WT/frontend/src" || true
-              if [ -f "$WT/frontend/src" ]; then
-                echo '[src-content]'
-                sed -n '1,120p' "$WT/frontend/src"
-              fi
+              )"
             fi
-            echo "=== builder51 PULSEBOARD-101 worktree status ==="
-            WT=/home/ubuntu/bloom-workspaces/.luna-worktrees/builder-51/PULSEBOARD-101
-            if [ -d "$WT" ]; then
-              git -C "$WT" status --short || true
-              echo "[diff-stat]"
-              git -C "$WT" diff --stat || true
-              echo "[recent-files]"
-              find "$WT" -maxdepth 4 -type f -newermt '2026-09-03 03:37:00 UTC' -printf '%TY-%Tm-%TdT%TH:%TM:%TS %s %p\n' 2>/dev/null | sort | tail -120 || true
+            echo "=== latest builder runtime project=${PROJECT_ID} frontendTask=${FRONTEND_TASK_ID:-none} ==="
+            find "$RUNTIME_ROOT" -maxdepth 7 -type f -printf '%TY-%Tm-%TdT%TH:%TM:%TS %s %p\n' 2>/dev/null | sort | tail -120 || true
+            if [ -n "$FRONTEND_TASK_ID" ]; then
+              WT="/home/ubuntu/bloom-workspaces/.luna-worktrees/builder-${PROJECT_ID}/${FRONTEND_TASK_ID}"
+              echo "=== frontend worktree $WT ==="
+              if [ -e "$WT/frontend/src" ]; then stat -c '[src-stat] type=%F size=%s mtime=%y' "$WT/frontend/src" || true; fi
+              echo "[frontend-files]"
+              find "$WT/frontend" -maxdepth 4 -type f -printf '%TY-%Tm-%TdT%TH:%TM:%TS %s %p\n' 2>/dev/null | sort | tail -120 || true
+              echo "[worktree-status]"
+              git -C "$WT" status --short 2>/dev/null || true
+              STDERR="$RUNTIME_ROOT/agents/rose:frontend/${FRONTEND_TASK_ID}/local-agent.stderr.log"
+              if [ -s "$STDERR" ]; then echo "[frontend-stderr]"; cat "$STDERR"; fi
             fi
-            echo "=== builder51 runtime files ==="
-            find /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-51 -maxdepth 7 -type f -printf '%TY-%Tm-%TdT%TH:%TM:%TS %s %p\n' 2>/dev/null | sort | tail -120 || true
-            echo "=== builder51 tool-state summary ==="
-            du -sh /tmp/luna-agent-tools/builder-51 2>/dev/null || true
-            echo "=== builder51 local agent stderr ==="
-            STDERR51=/home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-51/agents/rose:frontend/PULSEBOARD-101/local-agent.stderr.log
-            if [ -f "$STDERR51" ]; then cat "$STDERR51"; fi
-            echo "=== builder51 local agent streams ==="
-            python3 <<'PY'
-            import glob, json, os
-            root='/home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-51/agents'
-            for path in sorted(glob.glob(root+'/*/*/local-agent-events.jsonl')):
-                rows=[]
-                with open(path,encoding='utf-8',errors='replace') as f:
-                    for line in f:
-                        try: rows.append(json.loads(line))
-                        except Exception: pass
-                print('[agent-stream]', os.path.relpath(path,root), 'bytes='+str(os.path.getsize(path)), 'events='+str(len(rows)), 'last='+json.dumps(rows[-12:],ensure_ascii=False))
-            PY
-
             echo "=== builder process ==="
             BUILDER_PID="$(pm2 pid bloom-builder-worker || true)"
             echo "builder_pid=${BUILDER_PID}"
