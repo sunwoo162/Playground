@@ -85,5 +85,22 @@ jobs:
             fi
             echo "=== builder logs ==="
             pm2 logs bloom-builder-worker --lines 120 --nostream || true
+            echo "=== project 46 repository/worktree evidence ==="
+            echo "workspace_root"
+            find /home/ubuntu/bloom-workspaces/bloom-e2e-pulseboard -maxdepth 2 -mindepth 1 -printf '%y %p\n' 2>/dev/null | sort | head -120 || true
+            echo "writer_worktree"
+            find /home/ubuntu/bloom-workspaces/.luna-worktrees/builder-46/PULSEBOARD-101 -maxdepth 3 -mindepth 1 -printf '%y %p\n' 2>/dev/null | sort | head -160 || true
+            echo "agent_runtime"
+            find /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-46 -path '*PULSEBOARD-101*' -type f -printf '%p\n' 2>/dev/null | sort || true
+            EVENT_FILE="$(find /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-46 -path '*PULSEBOARD-101*' -name 'local-agent-events.jsonl' -type f 2>/dev/null | head -1)"
+            if [ -n "$EVENT_FILE" ]; then
+              echo "event_file=$EVENT_FILE"
+              cat "$EVENT_FILE"
+            fi
+            STDERR_FILE="$(find /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-46 -path '*PULSEBOARD-101*' -name 'local-agent.stderr.log' -type f 2>/dev/null | head -1)"
+            if [ -n "$STDERR_FILE" ]; then
+              echo "stderr_file=$STDERR_FILE"
+              tail -80 "$STDERR_FILE"
+            fi
             echo "=== drain files ==="
             ls -l /tmp/bloom-builder-worker.drain /tmp/bloom-builder-worker.busy 2>/dev/null || true
