@@ -80,6 +80,12 @@ jobs:
             PLAN_FILE="$RUNTIME_ROOT/pm/pm-plan.json"
             FRONTEND_TASK_ID=""
             if [ -f "$PLAN_FILE" ]; then
+              node - "$PLAN_FILE" <<'NODE'
+            const fs=require('fs');
+            const plan=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+            const task=(plan.tasks||[]).find((x)=>x.role==='frontend');
+            console.log('[plan-context] '+JSON.stringify({productSummary:plan.productSummary,architectureSummary:plan.architectureSummary,frontendTask:task}));
+            NODE
               FRONTEND_TASK_ID="$(node - "$PLAN_FILE" <<'NODE'
             const fs=require('fs');
             const plan=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
