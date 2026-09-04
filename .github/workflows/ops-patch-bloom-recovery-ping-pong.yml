@@ -1,0 +1,59 @@
+name: Ops Patch Bloom Recovery Ping Pong
+
+on:
+  push:
+    branches:
+      - ops/live-e2e-model-diagnostics
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fix branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/bloom-recovery-ping-pong
+          fetch-depth: 0
+
+      - name: Apply minimal recovery fix
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('bloom-runtime/ts/bloomLocalAgentRuntime.ts')
+          s = p.read_text()
+          old = '''      if (repeatedFailedActionCount >= 2) {
+            suppressedActionTurn = String(action.action);
+            forceToolTurn = true;
+            result.recovery = "RECOVERY_REQUIRED: This exact tool action has failed repeatedly. The next turn must use a different tool action to gather evidence or make progress before returning final.";
+          }
+          '''
+          new = '''      if (repeatedFailedActionCount >= 2) {
+            suppressedActionTurn = String(action.action);
+            let hasRepositoryChanges = false;
+            if (input.requireMutation === true) {
+              const repositoryStatus = await executeRun(worktree, { command: "git", args: ["status", "--porcelain"], cwd: "." });
+              hasRepositoryChanges = repositoryStatus.ok === true && Boolean(String(repositoryStatus.stdout ?? "").trim());
+            }
+            forceToolTurn = !hasRepositoryChanges;
+            result.recovery = hasRepositoryChanges
+              ? "RECOVERY_REQUIRED: This exact tool action has failed repeatedly. The next turn must use a different tool action or return final if the current repository changes satisfy the task."
+              : "RECOVERY_REQUIRED: This exact tool action has failed repeatedly. The next turn must use a different tool action to gather evidence or make progress before returning final.";
+          }
+          '''
+          if old not in s:
+              raise SystemExit('target recovery block not found')
+          p.write_text(s.replace(old, new, 1))
+          PY
+
+      - name: Commit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add bloom-runtime/ts/bloomLocalAgentRuntime.ts
+          git diff --cached --check
+          git commit -m "fix : allow final after recovery with changes"
+          git push origin HEAD:fix/bloom-recovery-ping-pong
