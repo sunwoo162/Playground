@@ -110,7 +110,8 @@ function validateObservations(
   if (publication !== null) {
     if (!publication.branchName?.trim() || !publication.commitSha?.trim()) {
       throw new Error("Bloom runtime publication branch and commit are required.");
-    }    const hasPrNumber = publication.pullRequestNumber !== null;
+    }
+    const hasPrNumber = publication.pullRequestNumber !== null;
     const hasPrUrl = publication.pullRequestUrl !== null;
     if (hasPrNumber !== hasPrUrl) {
       throw new Error("Bloom runtime publication PR number/url must appear together.");

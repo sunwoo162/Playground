@@ -27,7 +27,8 @@ export type RuntimeTaskRunResultLike = {
   sessionId: string;
   turnId: string;
   eventsPath: string;
-  stderrPath: string;  report: RuntimeTaskReportLike;
+  stderrPath: string;
+  report: RuntimeTaskReportLike;
   completionObservations?: RuntimeCompletionObservations | null;
 };
 
@@ -55,7 +56,8 @@ function applyResultMetadata(
     sessionId: result.sessionId,
     turnId: result.turnId,
     eventsPath: result.eventsPath,
-    stderrPath: result.stderrPath,    commitSha: hasRepositoryPublication ? result.report.commitSha : null,
+    stderrPath: result.stderrPath,
+    commitSha: hasRepositoryPublication ? result.report.commitSha : null,
     pullRequestNumber: hasRepositoryPublication ? result.report.pullRequestNumber : null,
     pullRequestUrl: hasRepositoryPublication ? result.report.pullRequestUrl : null,
     reviewedPullRequests: result.report.reviewedPullRequests,
@@ -84,7 +86,8 @@ export function applyRuntimeCompletionToTaskRun(
 
   const decision = evaluateRuntimeTaskCompletion({
     taskId: input.run.taskId,
-    role: input.run.role,    report: {
+    role: input.run.role,
+    report: {
       status: input.result.report.status,
       summary: input.result.report.summary,
       blockers: input.result.report.blockers,
