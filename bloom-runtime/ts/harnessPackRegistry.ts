@@ -35,7 +35,7 @@ export type HarnessPackResolution = {
   reason: string;
 };
 
-const BUG_FIX_INTENT = /\b(bug|fix|error|crash|failure|regression)\b|(?:버그|오류|에러|크래시|회귀|고쳐|고치)/i;
+const BUG_FIX_INTENT = /\b(bug|fix|crash|failure|regression)\b|(?:버그|오류|에러|크래시|회귀|고쳐|고치)/i;
 
 export function findHarnessPackById(id: string): HarnessPack | null {
   return HARNESS_PACKS.find((pack) => pack.id === id) ?? null;
