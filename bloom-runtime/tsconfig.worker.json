@@ -20,6 +20,7 @@
     "ts/bloomBouquetSeniorEvaluator.ts",
     "ts/bloomBouquetEvaluatorEvidence.ts",
     "ts/bloomBouquetLocalSeniorEvaluator.ts",
+    "ts/harnessPackPlanPolicy.ts",
     "ts/headlessBuilderExecutor.ts",
     "ts/schedulerObservability.ts",
     "ts/observedHeadlessBuilderExecutor.ts",

@@ -18,6 +18,8 @@
     "ts/harnessPackRegistry.policy-test.ts",
     "ts/harnessPackBinding.ts",
     "ts/harnessPackBinding.policy-test.ts",
+    "ts/harnessPackPlanPolicy.ts",
+    "ts/harnessPackPlanPolicy.policy-test.ts",
     "ts/harnessValidation.ts",
     "ts/harnessValidation.policy-test.ts",
     "ts/harnessRunArtifacts.ts",
