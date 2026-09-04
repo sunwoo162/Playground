@@ -480,10 +480,16 @@ export function beginAgentTasks(state: ProjectTeamsState, projectId: string, tas
     runtimeFailureSource: null,
     runtimeMessage: `독립 Agent ${roles.length}개 Task 실행 중`,
     taskRuns: currentProject.taskRuns.map((run) =>
-      run.taskId === result.taskId
-        ? applyRuntimeCompletionToTaskRun({
-            run, result, declaredDependencyPullRequests, completedAt: now,
-          })
+      selected.has(run.taskId) && run.status === "ready"
+        ? {
+            ...run,
+            status: "running" as const,
+            attempts: run.attempts + 1,
+            startedAt: now,
+            completedAt: null,
+            lastError: null,
+            blockers: [],
+          }
         : run,
     ),
   }));
@@ -508,28 +514,12 @@ export function completeAgentTask(
     ...currentProject,
     taskRuns: currentProject.taskRuns.map((run) =>
       run.taskId === result.taskId
-        ? {
-            ...run,
-            status: blocked ? "blocked" as const : "done" as const,
-            branchName: result.branchName,
-            worktreePath: result.worktreePath,
-            threadId: result.threadId,
-            sessionId: result.sessionId,
-            turnId: result.turnId,
-            eventsPath: result.eventsPath,
-            stderrPath: result.stderrPath,
-            commitSha: result.report.commitSha,
-            pullRequestNumber: result.report.pullRequestNumber,
-            pullRequestUrl: result.report.pullRequestUrl,
-            reviewedPullRequests: result.report.reviewedPullRequests,
-            summary: result.report.summary,
-            rationaleSummary: result.report.rationaleSummary,
-            evidence: result.report.evidence,
-            verification: result.report.verification,
-            blockers: result.report.blockers,
-            lastError: blocked ? result.report.blockers.join(" · ") || result.report.summary : null,
+        ? applyRuntimeCompletionToTaskRun({
+            run,
+            result,
+            declaredDependencyPullRequests,
             completedAt: now,
-          }
+          })
         : run,
     ),
   }));
