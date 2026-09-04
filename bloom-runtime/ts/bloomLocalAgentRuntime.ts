@@ -23,6 +23,7 @@ export type LocalAgentInput = {
   taskId: string;
   worktree: string;
   prompt: string;
+  requireMutation?: boolean;
   eventsPath?: string;
 };
 
@@ -574,7 +575,23 @@ export async function runLocalAgent(input: LocalAgentInput, options: LocalAgentO
     await appendAgentJournal(input.eventsPath, actionEvent);
     messages.push({ role: "assistant", content: JSON.stringify(action) });
     if (action.action === "final") {
-      return { sessionId, turnId, report: parseFinalReport(action.report), events };
+      const report = parseFinalReport(action.report);
+      if (input.requireMutation === true && report.status === "completed") {
+        const status = await executeRun(worktree, { command: "git", args: ["status", "--porcelain"], cwd: "." });
+        if (status.ok !== true) {
+          throw new Error(`Local agent could not verify repository writer progress: ${String(status.stderr ?? status.error ?? "git status failed")}`);
+        }
+        if (!String(status.stdout ?? "").trim()) {
+          const result = {
+            ok: false,
+            error: "Completed is not valid yet: this repository-writing task requires actual repository changes in the worktree. Inspect the repository, implement the assigned task, then return completed after a real Git diff exists.",
+          };
+          events.push({ step, toolResult: { ok: false, error: result.error } });
+          messages.push({ role: "user", content: `TOOL_RESULT ${JSON.stringify(result)}` });
+          continue;
+        }
+      }
+      return { sessionId, turnId, report, events };
     }
     let result: JsonObject;
     let rejectedWritePath: string | null = null;

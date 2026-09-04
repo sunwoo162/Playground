@@ -573,6 +573,7 @@ fn run_local_agent(
             "taskId": input.task_id,
             "worktree": worktree.to_string_lossy(),
             "prompt": agent_prompt(input, branch),
+            "requireMutation": is_repository_writer(&input.role),
             "eventsPath": events_path.to_string_lossy(),
         }),
     )
