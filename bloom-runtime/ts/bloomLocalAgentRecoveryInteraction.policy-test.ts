@@ -94,6 +94,7 @@ async function main() {
     assert.equal(calls, 6);
     const recoveryActions = schemaActions(bodies[5] ?? {});
     assert.ok(!recoveryActions.includes("read"), "the repeatedly failing read must remain suppressed for the recovery turn");
+    assert.ok(recoveryActions.includes("list"), "recovery must keep a safe alternate inspection action available");
     assert.ok(recoveryActions.includes("final"),
       "once real repository changes exist, repeated inspection failure must not remove final and force the writer back into a duplicate write");
     assert.equal(await fs.readFile(path.join(worktree, "backend", "src", "App.js"), "utf8"),
