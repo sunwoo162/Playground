@@ -601,6 +601,45 @@ async function testRepositoryWriterKeepsWriteSuppressedAfterDuplicateWriteInspec
   }
 }
 
+async function testRepositoryWriterTreatsIdenticalExistingContentAsNoProgress() {
+  const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-existing-content-write-"));
+  const existing = "export default function App(){ return null; }";
+  await fs.mkdir(path.join(worktree, "frontend", "src"), { recursive: true });
+  await fs.writeFile(path.join(worktree, "frontend", "src", "main.tsx"), existing, "utf8");
+  execFileSync("git", ["init"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["config", "user.email", "policy@example.com"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["config", "user.name", "Bloom Policy"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["add", "."], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["commit", "-m", "baseline"], { cwd: worktree, stdio: "ignore" });
+  let calls = 0;
+  const noOpWrite = JSON.stringify({ action: "write", path: "frontend/src/main.tsx", content: existing });
+  const realWrite = JSON.stringify({ action: "write", path: "frontend/src/main.tsx", content: "export default function App(){ return <main>Pulseboard</main>; }" });
+  const completed = '{"action":"final","report":{"status":"completed","summary":"done","rationaleSummary":"done","evidence":[],"verification":[],"commitSha":null,"pullRequestNumber":null,"pullRequestUrl":null,"reviewedPullRequests":[],"blockers":[]}}';
+  const fetchImpl: typeof fetch = async (_input, init) => {
+    const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+    const transcript = (body.messages as Array<{ content?: string }> | undefined)?.map((message) => message.content ?? "").join("\n") ?? "";
+    calls += 1;
+    const content = calls === 1
+      ? noOpWrite
+      : calls === 2
+        ? /already identical|no filesystem change|no repository change/i.test(transcript) ? realWrite : completed
+        : completed;
+    return streamingResponse([
+      `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`,
+      "data: [DONE]\n\n",
+    ]);
+  };
+  try {
+    const result = await runLocalAgent({
+      projectId: "policy", taskId: "WRITER-EXISTING-CONTENT-NOOP", worktree,
+      prompt: "replace the bootstrap placeholder with the Pulseboard UI", requireMutation: true,
+    }, { fetchImpl, maxSteps: 3 });
+    assert.equal(result.report.status, "completed");
+    assert.equal(calls, 3, "an identical existing-content write must be reported as no progress before the next turn");
+    assert.match(await fs.readFile(path.join(worktree, "frontend", "src", "main.tsx"), "utf8"), /Pulseboard/);
+  } finally { await fs.rm(worktree, { recursive: true, force: true }); }
+}
+
 async function testRepositoryWriterForcesDifferentActionAfterRepeatedFailedRead() {
   const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-failed-read-recovery-"));
   await fs.writeFile(path.join(worktree, "README.md"), "baseline\n", "utf8");
@@ -1070,6 +1109,7 @@ async function main() {
   await testLocalAgentRejectsImmediateDuplicateSuccessfulWrite();
   await testRepositoryWriterForcesDifferentActionAfterDuplicateSuccessfulWrite();
   await testRepositoryWriterKeepsWriteSuppressedAfterDuplicateWriteInspection();
+  await testRepositoryWriterTreatsIdenticalExistingContentAsNoProgress();
   await testRepositoryWriterForcesDifferentActionAfterRepeatedFailedRead();
   await testRepositoryWriterTreatsRuntimeOwnedGitMetadataReadsAsOneFailureClass();
   await testRepositoryWriterRejectsRuntimeOwnedGitMetadataWriteAndRecovers();
