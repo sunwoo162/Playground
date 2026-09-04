@@ -9,6 +9,7 @@ import {
   type HeadlessBuilderRuntime,
   type HeadlessBuilderSnapshotPayload,
 } from "./headlessBuilderExecutor";
+import { resolveHarnessPackBinding } from "./harnessPackBinding";
 import type { ProjectPlan, ProjectTaskRun } from "./types";
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -60,7 +61,8 @@ function doneRun(taskId: string, role: ProjectTaskRun["role"], pullRequestNumber
 }
 
 const payload: HeadlessBuilderSnapshotPayload = {
-  schemaVersion: 1,
+  schemaVersion: 2,
+  harnessPackBinding: resolveHarnessPackBinding({ intent: "Build and release automatically" }),
   runId: 50,
   projectId: 60,
   runtimeProjectId: "builder-60",
@@ -108,7 +110,7 @@ const payload: HeadlessBuilderSnapshotPayload = {
 };
 
 const snapshot: BuilderOrchestrationSnapshot = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   version: 7,
   phase: "building",
   payloadJson: JSON.stringify(payload),
