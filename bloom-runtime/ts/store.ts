@@ -1,4 +1,12 @@
 import { createInitialProjectTeamsState } from "./catalog";
+import { evaluateHarnessPackProjectCompletion } from "./harnessProjectCompletionGate";
+import {
+  legacyUnboundHarnessPackBinding,
+  resolveHarnessPackBinding,
+  validateHarnessPackBinding,
+  type HarnessPackBinding,
+} from "./harnessPackBinding";
+import { validateHarnessTaskCompletionRecord } from "./harnessTaskEvidence";
 import { createAgentRuntimeIdentity } from "./permissions";
 import {
   applyRuntimeCompletionToTaskRun,
@@ -87,6 +95,9 @@ function hydrateTaskRun(run: ProjectTaskRun): ProjectTaskRun {
     summary: run.summary ?? null,
     rationaleSummary: run.rationaleSummary ?? null,
     evidence: Array.isArray(run.evidence) ? run.evidence : [],
+    harnessCompletion: Object.prototype.hasOwnProperty.call(run, "harnessCompletion")
+      ? run.harnessCompletion === null ? null : validateHarnessTaskCompletionRecord(run.harnessCompletion)
+      : null,
     verification: Array.isArray(run.verification) ? run.verification : [],
     blockers: Array.isArray(run.blockers) ? run.blockers : [],
     lastError: run.lastError ?? null,
@@ -135,6 +146,9 @@ function hydrateState(state: ProjectTeamsState): ProjectTeamsState {
       deploymentPolicyId: project.deploymentPolicyId ?? "luna-apps-portal",
       plan: project.plan ?? null,
       taskRuns: Array.isArray(project.taskRuns) ? project.taskRuns.map(hydrateTaskRun) : [],
+      harnessPackBinding: Object.prototype.hasOwnProperty.call(project, "harnessPackBinding")
+        ? project.harnessPackBinding === null ? null : validateHarnessPackBinding(project.harnessPackBinding)
+        : legacyUnboundHarnessPackBinding("Legacy project predates live pack binding."),
       repositoryFullName: project.repositoryFullName ?? null,
       workspacePath: project.workspacePath ?? null,
       pmSessionId: project.pmSessionId ?? null,
@@ -250,6 +264,31 @@ function updateProject(
   };
 }
 
+export function bindProjectHarnessPack(
+  state: ProjectTeamsState,
+  projectId: string,
+  explicitPack?: string,
+): { state: ProjectTeamsState; binding: HarnessPackBinding } {
+  const project = state.projects.find((item) => item.id === projectId);
+  if (!project) throw new Error(`Bloom Harness project not found: ${projectId}`);
+  const hasBinding = Object.prototype.hasOwnProperty.call(project, "harnessPackBinding");
+  const existing = hasBinding ? project.harnessPackBinding : undefined;
+  const binding = existing !== null && existing !== undefined
+    ? validateHarnessPackBinding(existing)
+    : hasBinding
+      ? resolveHarnessPackBinding({ intent: project.request, explicitPack })
+      : legacyUnboundHarnessPackBinding("Legacy project predates live pack binding.");
+  const nextState = updateProject(state, projectId, (currentProject) => ({
+    ...currentProject,
+    harnessPackBinding: binding,
+    status: binding.status === "blocked" ? "blocked" : currentProject.status,
+    runtimeFailureSource: binding.status === "blocked" ? "harness" : currentProject.runtimeFailureSource,
+    runtimeMessage: binding.status === "blocked" ? binding.reason : currentProject.runtimeMessage,
+  }));
+  saveProjectTeamsState(nextState);
+  return { state: nextState, binding };
+}
+
 function taskPlanById(project: ProjectState, taskId: string) {
   return project.plan?.tasks.find((task) => task.id === taskId) ?? null;
 }
@@ -362,6 +401,7 @@ export function startProject(state: ProjectTeamsState, request: string): StartPr
     deploymentPolicyId: "luna-apps-portal",
     plan: null,
     taskRuns: [],
+    harnessPackBinding: null,
     repositoryFullName: null,
     workspacePath: null,
     pmSessionId: null,
@@ -532,16 +572,29 @@ export function completeAgentTask(
   const hasBlocked = updatedProject.taskRuns.some((run) => run.status === "blocked");
   const allDone = updatedProject.taskRuns.length > 0
     && updatedProject.taskRuns.every((run) => run.status === "done");
+  const packGate = allDone && !hasBlocked
+    ? updatedProject.harnessPackBinding === null
+      ? { ready: false, reasons: ["Bloom Harness pack binding was not resolved before task execution."] }
+      : evaluateHarnessPackProjectCompletion({
+          binding: updatedProject.harnessPackBinding
+            ?? legacyUnboundHarnessPackBinding("Legacy project predates live pack binding."),
+          taskRuns: updatedProject.taskRuns,
+        })
+    : null;
+  const packBlocked = Boolean(packGate && !packGate.ready);
+  const packReason = packGate?.reasons.join(" ") ?? "";
 
   nextState = updateProject(nextState, result.projectId, (currentProject) => ({
     ...currentProject,
-    status: hasBlocked ? "blocked" : allDone ? "review" : currentProject.status,
-    runtimeFailureSource: hasBlocked ? "agent" : null,
+    status: hasBlocked ? "blocked" : packBlocked ? "blocked" : allDone ? "review" : currentProject.status,
+    runtimeFailureSource: hasBlocked ? "agent" : packBlocked ? "harness" : null,
     runtimeMessage: hasBlocked
       ? "Agent Task가 막혔습니다 · 근거를 확인하고 재시도 또는 제품 결정을 진행해 주세요."
-      : allDone
-        ? "PM 계획의 모든 Agent Task 실행 완료 · PR 통합/merge gate 연결 대기"
-        : "Agent Task 완료 · dependency가 충족된 다음 Task 실행 준비",
+      : packBlocked
+        ? `Bloom Harness pack completion blocked · ${packReason}`
+        : allDone
+          ? "PM 계획의 모든 Agent Task 실행 완료 · PR 통합/merge gate 연결 대기"
+          : "Agent Task 완료 · dependency가 충족된 다음 Task 실행 준비",
   }));
 
   nextState = syncTeamAgentStatuses(nextState, result.projectId);

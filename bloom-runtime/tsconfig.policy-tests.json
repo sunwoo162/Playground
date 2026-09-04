@@ -36,6 +36,7 @@
     "ts/runtimeTaskCompletion.policy-test.ts",
     "ts/store.ts",
     "ts/storeCompletion.policy-test.ts",
+    "ts/storeHarnessPack.policy-test.ts",
     "ts/teamAllocation.ts",
     "ts/teamAllocation.policy-test.ts",
     "ts/intakeClarification.ts",
