@@ -135,7 +135,8 @@ jobs:
               if [ -s "$BACKEND_STDERR" ]; then echo "[backend-stderr]"; cat "$BACKEND_STDERR"; fi
               BACKEND_EVENTS="$RUNTIME_ROOT/agents/rose:backend/${BACKEND_TASK_ID}/local-agent-events.jsonl"
               if [ -s "$BACKEND_EVENTS" ]; then echo "[backend-events]"; cat "$BACKEND_EVENTS"; fi
-            fi            echo "=== builder process ==="
+            fi
+            echo "=== builder process ==="
             BUILDER_PID="$(pm2 pid bloom-builder-worker || true)"
             echo "builder_pid=${BUILDER_PID}"
             if [ -n "$BUILDER_PID" ] && [ "$BUILDER_PID" != "0" ]; then
