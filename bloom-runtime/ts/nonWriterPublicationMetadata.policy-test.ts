@@ -108,6 +108,10 @@ function completedResult(
       reviewedPullRequests: [],
       blockers: [],
     },
+    completionObservations: {
+      commands: [],
+      publication: null,
+    },
   };
 }
 
