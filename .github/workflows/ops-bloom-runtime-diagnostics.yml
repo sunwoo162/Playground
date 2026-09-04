@@ -110,6 +110,8 @@ jobs:
               if [ -f "$WT/README.md" ]; then echo "[readme-content]"; sed -n '1,180p' "$WT/README.md"; fi
               STDERR="$RUNTIME_ROOT/agents/rose:frontend/${FRONTEND_TASK_ID}/local-agent.stderr.log"
               if [ -s "$STDERR" ]; then echo "[frontend-stderr]"; cat "$STDERR"; fi
+              EVENTS="$RUNTIME_ROOT/agents/rose:frontend/${FRONTEND_TASK_ID}/local-agent-events.jsonl"
+              if [ -s "$EVENTS" ]; then echo "[frontend-events]"; cat "$EVENTS"; fi
             fi
             echo "=== builder process ==="
             BUILDER_PID="$(pm2 pid bloom-builder-worker || true)"
