@@ -24,6 +24,8 @@
     "ts/harnessCompletionGate.policy-test.ts",
     "ts/runtimeCompletionAdapter.ts",
     "ts/runtimeCompletionAdapter.policy-test.ts",
+    "ts/runtimeTaskCompletion.ts",
+    "ts/runtimeTaskCompletion.policy-test.ts",
     "ts/teamAllocation.ts",
     "ts/teamAllocation.policy-test.ts",
     "ts/intakeClarification.ts",

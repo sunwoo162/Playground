@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 import { getProjectEvolutionInstructions } from "./evolutionExperiments";
 import { prepareOrchestrationPlan } from "./orchestrationCore";
+import type { RuntimeCompletionObservations } from "./runtimeCompletionAdapter";
 import { seniorAgentContext } from "./seniorAgent";
 import { loadProjectTeamsState } from "./store";
 import type {
@@ -115,6 +116,7 @@ export type AgentTaskRunResult = {
   eventsPath: string;
   stderrPath: string;
   report: AgentTaskReport;
+  completionObservations?: RuntimeCompletionObservations | null;
 };
 
 export type FailureOwnerCandidate = {

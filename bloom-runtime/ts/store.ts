@@ -1,6 +1,10 @@
 import { createInitialProjectTeamsState } from "./catalog";
 import { createAgentRuntimeIdentity } from "./permissions";
-import type { AgentTaskRunResult } from "./runtime";
+import {
+  applyRuntimeCompletionToTaskRun,
+  declaredDependencyPullRequestsForTask,
+  type RuntimeTaskRunResultLike,
+} from "./runtimeTaskCompletion";
 import { selectIdleTeamForProject } from "./teamAllocation";
 import type {
   AgentDecision,
@@ -476,16 +480,10 @@ export function beginAgentTasks(state: ProjectTeamsState, projectId: string, tas
     runtimeFailureSource: null,
     runtimeMessage: `독립 Agent ${roles.length}개 Task 실행 중`,
     taskRuns: currentProject.taskRuns.map((run) =>
-      selected.has(run.taskId) && run.status === "ready"
-        ? {
-            ...run,
-            status: "running" as const,
-            attempts: run.attempts + 1,
-            startedAt: now,
-            completedAt: null,
-            lastError: null,
-            blockers: [],
-          }
+      run.taskId === result.taskId
+        ? applyRuntimeCompletionToTaskRun({
+            run, result, declaredDependencyPullRequests, completedAt: now,
+          })
         : run,
     ),
   }));
@@ -495,12 +493,17 @@ export function beginAgentTasks(state: ProjectTeamsState, projectId: string, tas
   return nextState;
 }
 
-export function completeAgentTask(state: ProjectTeamsState, result: AgentTaskRunResult) {
+export function completeAgentTask(
+  state: ProjectTeamsState,
+  result: RuntimeTaskRunResultLike & { projectId: string },
+) {
   const project = state.projects.find((item) => item.id === result.projectId);
   if (!project) return state;
 
   const now = new Date().toISOString();
-  const blocked = result.report.status === "blocked";
+  const declaredDependencyPullRequests = project.plan
+    ? declaredDependencyPullRequestsForTask(project.plan, project.taskRuns, result.taskId)
+    : [];
   let nextState = updateProject(state, result.projectId, (currentProject) => ({
     ...currentProject,
     taskRuns: currentProject.taskRuns.map((run) =>

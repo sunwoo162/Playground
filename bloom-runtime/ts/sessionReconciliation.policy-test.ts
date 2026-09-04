@@ -1,3 +1,6 @@
+import * as fs from "node:fs";
+import * as path from "node:path";
+
 import { classifyInterruptedTaskRecovery } from "./sessionReconciliationPolicy";
 import type { ProjectState, ProjectTaskRun } from "./types";
 
@@ -82,6 +85,35 @@ assert(
     },
   }, run).action === "block",
   "empty task slug must not reach the reconciliation runtime",
+);
+
+const storeSource = fs.readFileSync(path.resolve("bloom-runtime/ts/store.ts"), "utf8");
+assert(
+  storeSource.includes("applyRuntimeCompletionToTaskRun"),
+  "store completion must use the shared Harness task-completion helper",
+);
+assert(
+  storeSource.includes("declaredDependencyPullRequestsForTask"),
+  "store completion must validate review evidence against declared dependency PRs",
+);
+assert(
+  !storeSource.includes('from "./runtime"'),
+  "store must not depend on the Tauri runtime module for completion result types",
+);
+
+const runtimeSource = fs.readFileSync(path.resolve("bloom-runtime/ts/runtime.ts"), "utf8");
+assert(
+  runtimeSource.includes("completionObservations"),
+  "Tauri Agent task results must expose runtime-owned completion observations",
+);
+
+const reconciliationSource = fs.readFileSync(
+  path.resolve("bloom-runtime/ts/sessionReconciliation.ts"),
+  "utf8",
+);
+assert(
+  reconciliationSource.includes("completeAgentTask(state, result.result)"),
+  "startup recovery must pass recovered results through the shared store completion boundary",
 );
 
 console.log("sessionReconciliation.policy-test: PASS");
