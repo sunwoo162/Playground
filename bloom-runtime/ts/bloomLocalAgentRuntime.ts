@@ -339,63 +339,65 @@ function finalReportContract(): string {
 }
 
 function agentActionSchema(allowFinal = true): JsonObject {
-  const actions = ["list", "read", "write", "delete", "run"];
-  if (allowFinal) actions.push("final");
-  return {
+  const commandSchema = {
+    type: "string",
+    enum: ["pnpm", "npm", "yarn", "bun", "cargo", "git", "node", "./gradlew", "gradlew", "gradlew.bat", "./mvnw", "mvnw", "mvnw.cmd"],
+  };
+  const reportSchema = {
     type: "object",
     additionalProperties: false,
-    required: ["action"],
+    required: [
+      "status", "summary", "rationaleSummary", "evidence", "verification", "commitSha",
+      "pullRequestNumber", "pullRequestUrl", "reviewedPullRequests", "blockers",
+    ],
     properties: {
-      action: { type: "string", enum: actions },
-      path: { type: "string" },
-      content: { type: "string" },
-      command: { type: "string", enum: ["pnpm", "npm", "yarn", "bun", "cargo", "git", "node", "./gradlew", "gradlew", "gradlew.bat", "./mvnw", "mvnw", "mvnw.cmd"] },
-      args: { type: "array", items: { type: "string" } },
-      cwd: { type: "string" },
-      report: {
-        type: "object",
-        additionalProperties: false,
-        required: [
-          "status",
-          "summary",
-          "rationaleSummary",
-          "evidence",
-          "verification",
-          "commitSha",
-          "pullRequestNumber",
-          "pullRequestUrl",
-          "reviewedPullRequests",
-          "blockers",
-        ],
-        properties: {
-          status: { type: "string", enum: ["completed", "blocked"] },
-          summary: { type: "string" },
-          rationaleSummary: { type: "string" },
-          evidence: { type: "array", items: { type: "string" } },
-          verification: {
-            type: "array",
-            items: {
-              type: "object",
-              additionalProperties: false,
-              required: ["name", "status", "details"],
-              properties: {
-                name: { type: "string" },
-                status: { type: "string", enum: ["passed", "failed", "blocked", "not-run"] },
-                details: { type: "string" },
-              },
-            },
+      status: { type: "string", enum: ["completed", "blocked"] },
+      summary: { type: "string" },
+      rationaleSummary: { type: "string" },
+      evidence: { type: "array", items: { type: "string" } },
+      verification: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["name", "status", "details"],
+          properties: {
+            name: { type: "string" },
+            status: { type: "string", enum: ["passed", "failed", "blocked", "not-run"] },
+            details: { type: "string" },
           },
-          commitSha: { type: ["string", "null"] },
-          pullRequestNumber: { type: ["integer", "null"] },
-          pullRequestUrl: { type: ["string", "null"] },
-          reviewedPullRequests: { type: "array", items: { type: "integer" } },
-          blockers: { type: "array", items: { type: "string" } },
         },
       },
+      commitSha: { type: ["string", "null"] },
+      pullRequestNumber: { type: ["integer", "null"] },
+      pullRequestUrl: { type: ["string", "null"] },
+      reviewedPullRequests: { type: "array", items: { type: "integer" } },
+      blockers: { type: "array", items: { type: "string" } },
     },
   };
+  const actionBranch = (action: string, required: string[], properties: JsonObject): JsonObject => ({
+    type: "object",
+    additionalProperties: false,
+    required: ["action", ...required],
+    properties: {
+      action: { type: "string", enum: [action] },
+      ...properties,
+    },
+  });
+  const branches: JsonObject[] = [
+    actionBranch("list", ["path"], { path: { type: "string" } }),
+    actionBranch("read", ["path"], { path: { type: "string" } }),
+    actionBranch("write", ["path", "content"], { path: { type: "string" }, content: { type: "string" } }),
+    actionBranch("delete", ["path"], { path: { type: "string" } }),
+    actionBranch("run", ["command", "args"], {
+      command: commandSchema,
+      args: { type: "array", items: { type: "string" } },
+      cwd: { type: "string" },
+    }),
+  ];
+  if (allowFinal) branches.push(actionBranch("final", ["report"], { report: reportSchema }));
+  return { oneOf: branches };
 }
-
 function systemPrompt(): string {
   return [
     "You are Bloom's local implementation worker. You can only act through the JSON tool protocol below.",
