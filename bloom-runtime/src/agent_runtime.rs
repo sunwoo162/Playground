@@ -141,6 +141,31 @@ pub struct AgentTaskReport {
     pub blockers: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeCommandObservation {
+    pub step: u64,
+    pub command: String,
+    pub command_class: String,
+    pub ok: bool,
+    pub exit_code: Option<i32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimePublicationObservation {
+    pub branch_name: String,
+    pub commit_sha: String,
+    pub pull_request_number: Option<u64>,
+    pub pull_request_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeCompletionObservations {
+    pub commands: Vec<RuntimeCommandObservation>,
+    pub publication: Option<RuntimePublicationObservation>,
+}
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentTaskRunResult {
@@ -155,6 +180,7 @@ pub struct AgentTaskRunResult {
     pub turn_id: String,
     pub events_path: String,
     pub stderr_path: String,
+    pub completion_observations: Option<RuntimeCompletionObservations>,
     pub report: AgentTaskReport,
 }
 
@@ -890,6 +916,7 @@ fn dispatch_agent_task_blocking(input: AgentTaskRuntimeInput) -> Result<AgentTas
         turn_id,
         events_path,
         stderr_path,
+        completion_observations: None,
         report,
     })
 }

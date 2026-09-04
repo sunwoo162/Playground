@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use crate::agent_runtime::RuntimeCompletionObservations;
 use std::{
     fs::File,
     io::{BufRead, BufReader},
@@ -76,6 +77,7 @@ pub struct RecoveredAgentTaskRunResult {
     pub turn_id: String,
     pub events_path: String,
     pub stderr_path: String,
+    pub completion_observations: Option<RuntimeCompletionObservations>,
     pub report: AgentTaskReport,
 }
 
@@ -539,6 +541,7 @@ fn reconcile_interrupted_agent_task_blocking(
             turn_id,
             events_path: events_path.to_string_lossy().to_string(),
             stderr_path: stderr_path.to_string_lossy().to_string(),
+            completion_observations: None,
             report,
         }),
     })

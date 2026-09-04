@@ -162,6 +162,20 @@ function fakeRuntime(events: string[]) {
       reviewedPullRequests: WRITER_ROLES.has(input.role) ? [] : [...pullRequests],
       blockers: [],
     },
+    completionObservations: {
+      commands: input.role === "qa" || input.role === "test-automation"
+        ? [{ step: 1, command: "pnpm", commandClass: "test", ok: true, exitCode: 0 }]
+        : [],
+      publication: pullRequestNumber === null
+        ? null
+        : {
+            branchName: `agent/${input.teamId}/${input.role}/${input.taskSlug}`,
+            commitSha: `sha-${input.taskId}`,
+            pullRequestNumber,
+            pullRequestUrl: `https://github.com/example/repo/pull/${pullRequestNumber}`,
+          },
+    },
+
   });
 
   const runtime: HeadlessBuilderRuntime = {
@@ -470,6 +484,54 @@ async function testUnrecoverableRunningTaskBlocksWithoutRedispatch() {
   assert(phases.includes("blocked"), "unrecoverable task evidence must be durably snapshotted as blocked");
 }
 
+async function testMissingCompletionObservationsBlockBeforeIntegration() {
+  const events: string[] = [];
+  const runtime = fakeRuntime(events);
+  const originalDispatch = runtime.runtime.dispatchTask.bind(runtime.runtime);
+  runtime.runtime.dispatchTask = async (input) => {
+    const value = await originalDispatch(input);
+    return { ...value, completionObservations: null } as HeadlessAgentTaskRunResult;
+  };
+  const { client, phases } = fakeClient(null, events);
+
+  let rejected = false;
+  try {
+    await executor(runtime.runtime)(CLAIM, client);
+  } catch {
+    rejected = true;
+  }
+
+  assert(rejected, "completed headless tasks without runtime observations must block");
+  assert(!events.includes("merge"), "rejected headless completion must not reach merge");
+  assert(phases.includes("blocked"), "rejected headless completion must persist blocked state");
+}
+
+async function testRecoveredCompletionWithoutObservationsBlocks() {
+  const events: string[] = [];
+  const runtime = fakeRuntime(events);
+  const originalReconcile = runtime.runtime.reconcileTask.bind(runtime.runtime);
+  runtime.runtime.reconcileTask = async (input) => {
+    const recovered = await originalReconcile(input);
+    return recovered.result
+      ? { ...recovered, result: { ...recovered.result, completionObservations: null } as HeadlessAgentTaskRunResult }
+      : recovered;
+  };
+  const snapshot = runningSnapshot();
+  const claim = { ...CLAIM, orchestrationSnapshot: snapshot };
+  const { client, phases } = fakeClient(snapshot, events);
+
+  let rejected = false;
+  try {
+    await executor(runtime.runtime)(claim, client);
+  } catch {
+    rejected = true;
+  }
+
+  assert(rejected, "recovered completed tasks without runtime observations must block");
+  assert(!events.includes("merge"), "rejected recovered completion must not reach merge");
+  assert(phases.includes("blocked"), "rejected recovered completion must persist blocked state");
+}
+
 function testCopiedIntakeBlockerCatalogIsNonBlocking() {
   const copied = "a required credential/secret for a mandatory external service / legal/ownership authorization / an irreversible destructive target / a required external endpoint/dataset that the platform cannot provision";
   const normalized = normalizeBlockingMissingInputs([copied]);
@@ -485,6 +547,8 @@ async function run() {
   await testExecutorHonorsConfiguredParallelTaskLimit();
   await testInterruptedRunningTaskReconcilesBeforeAnyRedispatch();
   await testUnrecoverableRunningTaskBlocksWithoutRedispatch();
+  await testMissingCompletionObservationsBlockBeforeIntegration();
+  await testRecoveredCompletionWithoutObservationsBlocks();
   testCopiedIntakeBlockerCatalogIsNonBlocking();
   console.log("headlessBuilderExecutor policy tests passed");
 }

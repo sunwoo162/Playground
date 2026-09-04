@@ -1,5 +1,8 @@
 use serde_json::Value;
 use std::{
+    collections::BTreeMap,
+    fs::File,
+    io::{BufRead, BufReader},
     path::Path,
     process::{Command, Output},
 };
@@ -11,12 +14,20 @@ const ALLOWED_ROLES: &[&str] = &[
     "idea",
     "design-system",
     "designer",
+    "ux-research",
     "frontend",
     "backend",
+    "database",
+    "security",
+    "devops",
+    "accessibility",
+    "performance",
+    "api-integration",
     "data-marketing",
     "code-review",
     "reviewer",
     "qa",
+    "test-automation",
     "documentation",
     "debug-router",
     "user-a",
@@ -96,7 +107,7 @@ fn verify_writer_repository_evidence(
     branch: &str,
     reported_commit_sha: Option<&str>,
     reported_pull_request_number: Option<u64>,
-) -> Result<(), String> {
+) -> Result<agent_runtime::RuntimePublicationObservation, String> {
     let worktree = Path::new(worktree_path);
     if !worktree.exists() {
         return Err("Agent evidence gate가 worktree를 찾을 수 없습니다.".to_string());
@@ -170,9 +181,72 @@ fn verify_writer_repository_evidence(
         ));
     }
 
-    Ok(())
+    let pr_url = pr
+        .get("url")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "Agent PR URL을 확인할 수 없습니다.".to_string())?;
+
+    Ok(agent_runtime::RuntimePublicationObservation {
+        branch_name: branch.to_string(),
+        commit_sha: head_sha,
+        pull_request_number: Some(reported_pr),
+        pull_request_url: Some(pr_url.to_string()),
+    })
 }
 
+fn read_runtime_command_observations(
+    events_path: &Path,
+) -> Result<Vec<agent_runtime::RuntimeCommandObservation>, String> {
+    let file = File::open(events_path)
+        .map_err(|error| format!("Bloom completion journal open failed: {error}"))?;
+    let reader = BufReader::new(file);
+    let mut runs: BTreeMap<u64, (String, String)> = BTreeMap::new();
+    let mut results: BTreeMap<u64, (bool, Option<i32>)> = BTreeMap::new();
+
+    for (index, line) in reader.lines().enumerate() {
+        let line = line.map_err(|error| format!("Bloom completion journal read failed at line {}: {error}", index + 1))?;
+        if line.len() > 1024 * 1024 {
+            return Err(format!("Bloom completion journal line {} exceeds 1MB.", index + 1));
+        }
+        let value: Value = serde_json::from_str(&line)
+            .map_err(|error| format!("Bloom completion journal JSON invalid at line {}: {error}", index + 1))?;
+        let Some(step) = value.get("step").and_then(Value::as_u64) else { continue; };
+
+        if value.get("action").and_then(Value::as_str) == Some("run") {
+            let command = value.get("command").and_then(Value::as_str)
+                .filter(|value| !value.trim().is_empty())
+                .ok_or_else(|| format!("Bloom completion run action at step {step} is missing command."))?;
+            let command_class = value.get("commandClass").and_then(Value::as_str)
+                .filter(|value| matches!(*value, "test" | "build" | "lint" | "typecheck" | "install" | "other"))
+                .ok_or_else(|| format!("Bloom completion run action at step {step} has invalid commandClass."))?;
+            if runs.insert(step, (command.to_string(), command_class.to_string())).is_some() {
+                return Err(format!("Bloom completion journal contains duplicate run action for step {step}."));
+            }
+        }
+
+        if let Some(tool_result) = value.get("toolResult").and_then(Value::as_object) {
+            let ok = tool_result.get("ok").and_then(Value::as_bool)
+                .ok_or_else(|| format!("Bloom completion tool result at step {step} is missing ok."))?;
+            let exit_code = match tool_result.get("exitCode") {
+                None | Some(Value::Null) => None,
+                Some(raw) => Some(raw.as_i64()
+                    .and_then(|value| i32::try_from(value).ok())
+                    .ok_or_else(|| format!("Bloom completion tool result at step {step} has invalid exitCode."))?),
+            };
+            if results.insert(step, (ok, exit_code)).is_some() {
+                return Err(format!("Bloom completion journal contains duplicate tool result for step {step}."));
+            }
+        }
+    }
+
+    let mut observations = Vec::new();
+    for (step, (command, command_class)) in runs {
+        let (ok, exit_code) = results.get(&step).copied()
+            .ok_or_else(|| format!("Bloom completion run action at step {step} has no tool result."))?;
+        observations.push(agent_runtime::RuntimeCommandObservation { step, command, command_class, ok, exit_code });
+    }
+    Ok(observations)
+}
 fn validate_reconciliation_identity(team_id: &str, role: &str) -> Result<(), String> {
     if !ALLOWED_TEAMS.contains(&team_id) {
         return Err(format!("허용되지 않은 reconciliation Team ID입니다: {team_id}"));
@@ -189,18 +263,25 @@ pub async fn dispatch_agent_task(
 ) -> Result<agent_runtime::AgentTaskRunResult, String> {
     let repository_full_name = input.repository_full_name.clone();
     ensure_expected_origin(Path::new(input.workspace_path.trim()), &repository_full_name)?;
-    let result = agent_runtime::dispatch_agent_task(input).await?;
+    let mut result = agent_runtime::dispatch_agent_task(input).await?;
 
     if result.report.status == "completed" {
-        if let Some(branch) = result.branch_name.as_deref() {
-            verify_writer_repository_evidence(
+        let publication = if let Some(branch) = result.branch_name.as_deref() {
+            Some(verify_writer_repository_evidence(
                 &repository_full_name,
                 &result.worktree_path,
                 branch,
                 result.report.commit_sha.as_deref(),
                 result.report.pull_request_number,
-            )?;
-        }
+            )?)
+        } else {
+            None
+        };
+        let commands = read_runtime_command_observations(Path::new(&result.events_path))?;
+        result.completion_observations = Some(agent_runtime::RuntimeCompletionObservations {
+            commands,
+            publication,
+        });
     }
 
     Ok(result)
@@ -213,23 +294,94 @@ pub async fn reconcile_interrupted_agent_task(
     validate_reconciliation_identity(input.team_id.trim(), input.role.trim())?;
     let repository_full_name = input.repository_full_name.clone();
     ensure_expected_origin(Path::new(input.workspace_path.trim()), &repository_full_name)?;
-    let result = agent_reconciliation::reconcile_interrupted_agent_task(input).await?;
+    let mut result = agent_reconciliation::reconcile_interrupted_agent_task(input).await?;
 
     if result.outcome == "recovered" {
-        if let Some(recovered) = result.result.as_ref() {
+        if let Some(recovered) = result.result.as_mut() {
             if recovered.report.status == "completed" {
-                if let Some(branch) = recovered.branch_name.as_deref() {
-                    verify_writer_repository_evidence(
+                let publication = if let Some(branch) = recovered.branch_name.as_deref() {
+                    Some(verify_writer_repository_evidence(
                         &repository_full_name,
                         &recovered.worktree_path,
                         branch,
                         recovered.report.commit_sha.as_deref(),
                         recovered.report.pull_request_number,
-                    )?;
-                }
+                    )?)
+                } else {
+                    None
+                };
+                let commands = read_runtime_command_observations(Path::new(&recovered.events_path))?;
+                recovered.completion_observations = Some(agent_runtime::RuntimeCompletionObservations {
+                    commands,
+                    publication,
+                });
             }
         }
     }
 
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{fs, time::{SystemTime, UNIX_EPOCH}};
+
+    fn fixture_path(label: &str) -> std::path::PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        std::env::temp_dir().join(format!("bloom-{label}-{}-{nonce}.jsonl", std::process::id()))
+    }
+
+    #[test]
+    fn reconciliation_accepts_all_current_specialist_roles() {
+        for role in [
+            "ux-research", "database", "security", "devops", "accessibility",
+            "performance", "api-integration", "test-automation",
+        ] {
+            assert!(validate_reconciliation_identity("rose", role).is_ok(), "role must reconcile: {role}");
+        }
+        assert!(validate_reconciliation_identity("rose", "root").is_err());
+    }
+    #[test]
+    fn runtime_command_observations_pair_run_and_tool_events() {
+        let path = fixture_path("completion-observations");
+        fs::write(&path, concat!(
+            "{\"step\":4,\"action\":\"run\",\"command\":\"pnpm\",\"commandClass\":\"test\",\"cwd\":\".\",\"args\":[\"SECRET_TOKEN=ignored\"]}\n",
+            "{\"step\":4,\"toolResult\":{\"ok\":true,\"exitCode\":0}}\n",
+            "{\"step\":7,\"action\":\"run\",\"command\":\"cargo\",\"commandClass\":\"build\"}\n",
+            "{\"step\":7,\"toolResult\":{\"ok\":false,\"exitCode\":101}}\n",
+        )).expect("write fixture");
+
+        let observations = read_runtime_command_observations(&path).expect("parse observations");
+        fs::remove_file(&path).ok();
+
+        assert_eq!(observations.len(), 2);
+        assert_eq!(observations[0].step, 4);
+        assert_eq!(observations[0].command, "pnpm");
+        assert_eq!(observations[0].command_class, "test");
+        assert!(observations[0].ok);
+        assert_eq!(observations[0].exit_code, Some(0));
+        assert_eq!(observations[1].step, 7);
+        assert_eq!(observations[1].command, "cargo");
+        assert_eq!(observations[1].command_class, "build");
+        assert!(!observations[1].ok);
+        assert_eq!(observations[1].exit_code, Some(101));
+    }
+
+    #[test]
+    fn runtime_command_observations_reject_duplicate_run_records() {
+        let path = fixture_path("duplicate-completion-observations");
+        fs::write(&path, concat!(
+            "{\"step\":2,\"action\":\"run\",\"command\":\"pnpm\",\"commandClass\":\"test\"}\n",
+            "{\"step\":2,\"action\":\"run\",\"command\":\"npm\",\"commandClass\":\"test\"}\n",
+            "{\"step\":2,\"toolResult\":{\"ok\":true,\"exitCode\":0}}\n",
+        )).expect("write fixture");
+
+        let error = read_runtime_command_observations(&path).expect_err("duplicate action must fail closed");
+        fs::remove_file(&path).ok();
+        assert!(error.contains("duplicate") || error.contains("중복"), "unexpected error: {error}");
+    }
 }

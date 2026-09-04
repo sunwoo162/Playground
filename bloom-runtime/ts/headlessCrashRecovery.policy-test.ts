@@ -190,6 +190,20 @@ function fakeRuntime() {
         reviewedPullRequests,
         blockers: [],
       },
+      completionObservations: {
+        commands: input.role === "qa" || input.role === "test-automation"
+          ? [{ step: 1, command: "pnpm", commandClass: "test", ok: true, exitCode: 0 }]
+          : [],
+        publication: writer
+          ? {
+              branchName: branchName!,
+              commitSha: `sha-${input.taskId}`,
+              pullRequestNumber,
+              pullRequestUrl: `https://github.com/example/crash-recovery-test/pull/${pullRequestNumber}`,
+            }
+          : null,
+      },
+
     };
   };
 

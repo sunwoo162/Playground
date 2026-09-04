@@ -1,6 +1,10 @@
 import { createInitialProjectTeamsState } from "./catalog";
 import { createAgentRuntimeIdentity } from "./permissions";
-import type { AgentTaskRunResult } from "./runtime";
+import {
+  applyRuntimeCompletionToTaskRun,
+  declaredDependencyPullRequestsForTask,
+  type RuntimeTaskRunResultLike,
+} from "./runtimeTaskCompletion";
 import { selectIdleTeamForProject } from "./teamAllocation";
 import type {
   AgentDecision,
@@ -495,38 +499,27 @@ export function beginAgentTasks(state: ProjectTeamsState, projectId: string, tas
   return nextState;
 }
 
-export function completeAgentTask(state: ProjectTeamsState, result: AgentTaskRunResult) {
+export function completeAgentTask(
+  state: ProjectTeamsState,
+  result: RuntimeTaskRunResultLike & { projectId: string },
+) {
   const project = state.projects.find((item) => item.id === result.projectId);
   if (!project) return state;
 
   const now = new Date().toISOString();
-  const blocked = result.report.status === "blocked";
+  const declaredDependencyPullRequests = project.plan
+    ? declaredDependencyPullRequestsForTask(project.plan, project.taskRuns, result.taskId)
+    : [];
   let nextState = updateProject(state, result.projectId, (currentProject) => ({
     ...currentProject,
     taskRuns: currentProject.taskRuns.map((run) =>
       run.taskId === result.taskId
-        ? {
-            ...run,
-            status: blocked ? "blocked" as const : "done" as const,
-            branchName: result.branchName,
-            worktreePath: result.worktreePath,
-            threadId: result.threadId,
-            sessionId: result.sessionId,
-            turnId: result.turnId,
-            eventsPath: result.eventsPath,
-            stderrPath: result.stderrPath,
-            commitSha: result.report.commitSha,
-            pullRequestNumber: result.report.pullRequestNumber,
-            pullRequestUrl: result.report.pullRequestUrl,
-            reviewedPullRequests: result.report.reviewedPullRequests,
-            summary: result.report.summary,
-            rationaleSummary: result.report.rationaleSummary,
-            evidence: result.report.evidence,
-            verification: result.report.verification,
-            blockers: result.report.blockers,
-            lastError: blocked ? result.report.blockers.join(" · ") || result.report.summary : null,
+        ? applyRuntimeCompletionToTaskRun({
+            run,
+            result,
+            declaredDependencyPullRequests,
             completedAt: now,
-          }
+          })
         : run,
     ),
   }));
