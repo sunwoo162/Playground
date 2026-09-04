@@ -567,6 +567,7 @@ The PR body must include the pack binding lifecycle, PM repair behavior, legacy 
 - Pack inference uses canonical project request / Builder `claim.brief` only; title/platform/features do not participate in intent inference.
 - Schema-v1 Builder recovery migrates to durable legacy-unbound schema v2 before reconciliation and never re-runs pack inference.
 - Outer/payload Builder snapshot schema mismatches fail closed.
+- Persisted schema-v2 `blocked` pack bindings remain terminal across recovery and cannot resume intake/PM/reconcile/merge side effects.
 - Raw PM plans and prepared orchestration plans are both checked inside the semantic repair boundary.
 - Governance-only roles cannot satisfy the bug-fix implementation-writer stage.
 - Project pack completion reads only persisted `harnessCompletion` evidence; free-form Agent `evidence: string[]` is not promoted into trusted pack evidence.
@@ -580,3 +581,4 @@ The PR body must include the pack binding lifecycle, PM repair behavior, legacy 
 - `72a05f5` feat : enforce bloom pack state gates
 - `3b547fc` feat : repair bloom pack planning
 - `59c56bc` feat : enforce bloom packs headlessly
+- `f281fb2` fix : preserve blocked bloom pack recovery
