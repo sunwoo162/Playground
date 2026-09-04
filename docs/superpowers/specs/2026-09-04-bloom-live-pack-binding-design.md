@@ -72,7 +72,7 @@ A blocked explicit-pack resolution therefore becomes a durable Harness failure r
 
 ## Plan validation
 
-After PM produces a plan and after the existing deterministic preparation steps run, the prepared plan is validated against the bound pack.
+A bound pack is validated twice: first against the raw PM-owned plan before deterministic task injection, then again against the prepared plan after existing deterministic preparation. Raw validation prevents baseline-injected Data & Marketing/Documentation review tasks from silently satisfying pack responsibilities that PM omitted; prepared validation ensures deterministic transforms did not break the accepted pack topology.
 
 For `bug-fix`, validation checks that the plan can represent the pack workflow without requiring Runtime-generated tasks. At minimum it must contain the pack-required role coverage and a valid review/QA topology compatible with the existing orchestration rules.
 
@@ -107,8 +107,8 @@ Create shared pure TypeScript pack helpers used by desktop and headless executio
 
 Each runtime keeps ownership of its existing PM side effects and retry loop. Both callers pass the original request plus the stored `HarnessPackBinding` through the same planning context and validator, so policy stays identical without coupling the two runtimes.
 
-- Headless reuses the existing `planProjectWithRepair` retry boundary.
-- Desktop switches from the combined `start_project_runtime` path to the already-existing `plan_project_runtime` command followed by repository bootstrap only after the validated plan is accepted.
+- Headless reuses the existing `planProjectWithRepair` retry boundary. Each attempt validates the raw PM plan, applies deterministic preparation, then validates the prepared plan again.
+- Desktop switches from the combined `start_project_runtime` path to the already-existing `plan_project_runtime` command followed by raw pack validation, deterministic preparation, prepared pack validation, and repository bootstrap only after the plan is accepted.
 - Pack constraints are appended as internal PM planning context, not Product Owner requirements.
 - An invalid repaired plan fails before repository bootstrap or Agent dispatch.
 
