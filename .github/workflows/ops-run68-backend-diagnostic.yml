@@ -1,0 +1,43 @@
+name: Ops Run68 Backend Diagnostic
+
+on:
+  push:
+    branches:
+      - ops/live-e2e-model-diagnostics
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Require production SSH credential
+        env:
+          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+        run: test -n "$SSH_PASSWORD" || { echo "SSH_PASSWORD is required" >&2; exit 1; }
+
+      - name: Inspect run 68 backend journal
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          command_timeout: 5m
+          script: |
+            set -eu
+            ROOT=/home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-68
+            WT=/home/ubuntu/bloom-workspaces/.luna-worktrees/builder-68/PULSEBOARD-102
+            echo "[production-head]"
+            git -C /home/ubuntu/bloombouquet rev-parse HEAD
+            echo "[backend-worktree-status]"
+            git -C "$WT" status --short || true
+            echo "[backend-stderr]"
+            cat "$ROOT/agents/rose:backend/PULSEBOARD-102/local-agent.stderr.log" || true
+            echo "[backend-events]"
+            cat "$ROOT/agents/rose:backend/PULSEBOARD-102/local-agent-events.jsonl" || true
+            echo "[backend-files]"
+            find "$WT/api" -maxdepth 4 -type f -printf '%s %p\n' 2>/dev/null | sort || true
