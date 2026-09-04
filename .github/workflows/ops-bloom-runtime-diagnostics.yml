@@ -162,7 +162,15 @@ jobs:
             tail -n 500 /home/ubuntu/.pm2/pm2.log 2>/dev/null | grep -Ei 'bloom-evaluator-llm|max memory|memory|stopping app|restart|exceeded' | tail -n 160 || true
             echo "=== host memory ==="
             free -h || true
-            echo "=== drain files ==="
+            echo "=== deployed writer guard ==="
+            echo "production_head=$(git rev-parse HEAD)"
+            echo "[local-agent-require-mutation]"
+            grep -n -F 'input.requireMutation === true' /home/ubuntu/bloombouquet/.tmp/bloom-worker/bloomLocalAgentRuntime.js | head -5 || true
+            echo "[bridge-require-mutation]"
+            strings /home/ubuntu/bloombouquet/bloom-runtime/target/release/bloom-runtime-bridge | grep -F 'requireMutation' | head -5 || true
+            ACTIVE_LEASE="$(printf 'X-Builder-Worker-Token: %s\n' "$BUILDER_WORKER_TOKEN" | curl -fsS --max-time 20 -H @- 'http://127.0.0.1:8080/internal/builder/worker/runs/active-lease?workerId=bloom-builder-production')"
+            echo "active_lease=${ACTIVE_LEASE}"
+            test "$ACTIVE_LEASE" = "false" || { echo "active lease is not clean" >&2; exit 1; }            echo "=== drain files ==="
             ls -l /tmp/bloom-builder-worker.drain /tmp/bloom-builder-worker.busy 2>/dev/null || true
             if [ "$PROJECT_ID" = "55" ] && [ "$RUN_ID" = "55" ] && [ -n "$FRONTEND_TASK_ID" ]; then
               export API_BASE TOKEN PROJECT_ID RUN_ID RUNTIME_ROOT WT PLAN_FILE
