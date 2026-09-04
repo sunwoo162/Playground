@@ -33,6 +33,23 @@ jobs:
           command_timeout: 325m
           script: |
             set -euo pipefail
+            echo "=== RUN 64 API STATUS ==="
+            cd /home/ubuntu/bloombouquet
+            set -a
+            . /home/ubuntu/bloombouquet/.env
+            set +a
+            TOKEN="$(node - <<'NODE'
+            const jwt = require('jsonwebtoken');
+            process.stdout.write(jwt.sign({ id: 'bloom-run64-diagnostic', login: 'bloom-run64-diagnostic', name: 'Bloom Run64 Diagnostic', avatar_url: '', type: 'access' }, process.env.JWT_SECRET, { expiresIn: '5m' }));
+            NODE
+            )"
+            curl -sS --max-time 15 -H "Authorization: Bearer ${TOKEN}" http://127.0.0.1:3000/api/builder/projects/64/runs/64 || true
+            echo
+            echo "=== RUN 64 SNAPSHOT ==="
+            curl -sS --max-time 15 -H "Authorization: Bearer ${TOKEN}" http://127.0.0.1:3000/api/builder/projects/64/runs/64/snapshot || true
+            echo
+            echo "=== BUILDER WORKER TAIL ==="
+            pm2 logs bloom-builder-worker --lines 100 --nostream 2>&1 | tail -n 130 || true
             echo "=== BUILDER 64 RUNTIME FILES ==="
             find /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-64 -maxdepth 4 -type f -printf '%TY-%Tm-%TdT%TH:%TM:%TS %s %p\n' 2>/dev/null | sort || true
             echo "=== BUILDER 64 PM EVENTS ==="
