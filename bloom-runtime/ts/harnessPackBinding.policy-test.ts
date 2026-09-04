@@ -29,6 +29,8 @@ assert.equal(unbound.status, "unbound");
 assert.equal(unbound.source, "none");
 assert.equal(unbound.pack, null);
 assert.equal(resolveHarnessPackBinding({ intent: "화면 수정" }).status, "unbound");
+assert.equal(resolveHarnessPackBinding({ intent: "[BLOOM-E2E-SMOKE] Build a feedback board with loading/error/empty states and reproducible setup." }).status, "unbound",
+  "feature construction requests must not bind bug-fix only because they mention an error UI state");
 
 const unknown = resolveHarnessPackBinding({ intent: "x", explicitPack: "unknown" });
 assert.equal(unknown.status, "blocked");
