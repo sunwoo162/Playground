@@ -605,6 +605,68 @@ async function testRepositoryWriterForcesDifferentActionAfterRepeatedFailedRead(
   }
 }
 
+async function testRepositoryWriterRejectsRuntimeOwnedGitMetadataWriteAndRecovers() {
+  const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-git-metadata-write-"));
+  await fs.writeFile(path.join(worktree, "README.md"), "baseline\n", "utf8");
+  execFileSync("git", ["init"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["config", "user.email", "policy@example.com"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["config", "user.name", "Bloom Policy"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["add", "README.md"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["commit", "-m", "baseline"], { cwd: worktree, stdio: "ignore" });
+  const bodies: Array<Record<string, unknown>> = [];
+  let calls = 0;
+  const completed = '{"action":"final","report":{"status":"completed","summary":"done","rationaleSummary":"done","evidence":[],"verification":[],"commitSha":null,"pullRequestNumber":null,"pullRequestUrl":null,"reviewedPullRequests":[],"blockers":[]}}';
+  const gitMetadataWrite = '{"action":"write","path":".git/COMMIT_EDITMSG","content":"Implement the frontend for Pulseboard"}';
+  const fetchImpl: typeof fetch = async (_input, init) => {
+    const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+    bodies.push(body);
+    calls += 1;
+    const content = calls === 1
+      ? completed
+      : calls === 2
+        ? gitMetadataWrite
+        : calls === 3
+          ? '{"action":"list","path":"."}'
+          : calls === 4
+            ? '{"action":"write","path":"frontend/src/App.tsx","content":"export default function App(){ return null; }"}'
+            : completed;
+    return streamingResponse([
+      `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`,
+      "data: [DONE]\n\n",
+    ]);
+  };
+
+  try {
+    const result = await runLocalAgent({
+      projectId: "policy",
+      taskId: "WRITER-GIT-METADATA-RECOVERY",
+      worktree,
+      prompt: "implement the frontend; Luna Runtime owns git metadata",
+      requireMutation: true,
+    }, { fetchImpl, maxSteps: 5 });
+    assert.equal(result.report.status, "completed");
+    assert.equal(calls, 5);
+    const thirdFormat = bodies[2]?.response_format as Record<string, unknown> | undefined;
+    const thirdSchema = thirdFormat?.schema as Record<string, unknown> | undefined;
+    const thirdVariants = thirdSchema?.oneOf as Array<Record<string, unknown>> | undefined;
+    const thirdActions = thirdVariants?.map((variant) => {
+      const properties = variant.properties as Record<string, unknown> | undefined;
+      const action = properties?.action as Record<string, unknown> | undefined;
+      return Array.isArray(action?.enum) ? action.enum[0] : undefined;
+    });
+    assert.deepEqual(thirdActions, ["list", "read", "delete", "run"],
+      "after a writer targets runtime-owned .git metadata, the next turn must remove write and final so the model must recover through a different tool action");
+    const thirdMessages = bodies[2]?.messages as Array<{ content?: string }> | undefined;
+    const thirdContext = thirdMessages?.map((message) => message.content ?? "").join("\n") ?? "";
+    assert.match(thirdContext, /git metadata|runtime-owned|Luna Runtime/i,
+      "the rejected git metadata write must explain that repository metadata belongs to Luna Runtime");
+    assert.equal(await fs.readFile(path.join(worktree, "frontend", "src", "App.tsx"), "utf8"),
+      "export default function App(){ return null; }");
+  } finally {
+    await fs.rm(worktree, { recursive: true, force: true });
+  }
+}
+
 async function testLocalAgentFailsFastOnRepeatedRejectedWriteLoop() {
   const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-rejected-write-loop-"));
   let calls = 0;
@@ -786,6 +848,7 @@ async function main() {
   await testLocalAgentRejectsImmediateDuplicateSuccessfulWrite();
   await testRepositoryWriterForcesDifferentActionAfterDuplicateSuccessfulWrite();
   await testRepositoryWriterForcesDifferentActionAfterRepeatedFailedRead();
+  await testRepositoryWriterRejectsRuntimeOwnedGitMetadataWriteAndRecovers();
   await testLocalAgentFailsFastOnRepeatedRejectedWriteLoop();
   await testLocalAgentFailsFastWhenRejectedWriteChangesOnlyContent();
   await testLocalAgentTreatsMissingGreenfieldPathsAsCreatable();
