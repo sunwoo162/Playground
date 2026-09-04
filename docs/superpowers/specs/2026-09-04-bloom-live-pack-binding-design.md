@@ -54,6 +54,8 @@ The snapshot, not a later registry lookup, is authoritative for resumed executio
 
 Live runtime inputs may provide an optional `harnessPackId`. Existing callers omit it and remain backward compatible. Desktop `StartProjectRuntimeInput` and headless `BuilderWorkerClaim` accept the optional field; when absent, resolution uses request intent only. The Builder backend does not need to emit the field for this phase.
 
+The bug-fix intent matcher retains the existing English bug/fix/error/crash/failure/regression vocabulary and adds conservative Korean bug terms: `버그`, `오류`, `에러`, `크래시`, `회귀`, `고쳐`, and `고치`. Broad words such as `수정` do not infer bug-fix by themselves.
+
 ## Binding lifecycle
 
 Resolution runs exactly once for a fresh project immediately before PM planning.
@@ -63,6 +65,7 @@ Resolution runs exactly once for a fresh project immediately before PM planning.
 - Bound, unbound, and blocked outcomes are all persisted.
 - Resume/recovery validates the stored binding version and reuses it unchanged.
 - Recovery must never call `resolveHarnessPack()` for a project that already has a binding.
+- Legacy desktop projects or Builder snapshots that predate this field migrate once to an explicit `unbound` legacy binding; they are never re-inferred from the current registry.
 
 A blocked explicit-pack resolution therefore becomes a durable Harness failure rather than a transient parser error.
 
@@ -91,12 +94,12 @@ This keeps task ownership with PM and avoids a second hidden planner inside Harn
 The `bug-fix` pack stages are enforced by stable runtime semantics rather than task names or natural-language keyword matching:
 
 - `reproduce` + `root-cause`: a `debug-router` task is present.
-- `fix`: at least one repository-writing task other than `debug-router` is present.
+- `fix`: at least one repository-writing implementation task exists downstream of `debug-router`; mandatory governance writers (`data-marketing`, `documentation`) do not satisfy this stage.
 - `review`: `code-review` and `reviewer` tasks exist in valid downstream topology.
 - `qa`: a downstream `qa` task exists.
 - `regression-test`: final trusted `test` evidence is required by the pack completion gate.
 
-`BUG_FIX_PACK.requiredRoles` remains authoritative, while the additional non-router writer requirement represents the semantic `fix` stage that cannot be hard-coded to frontend/backend/etc.
+`BUG_FIX_PACK.requiredRoles` remains authoritative. The additional implementation-writer requirement represents the semantic `fix` stage without hard-coding frontend/backend, while excluding automatically injected governance work from falsely satisfying the pack.
 
 ## Planning execution
 
