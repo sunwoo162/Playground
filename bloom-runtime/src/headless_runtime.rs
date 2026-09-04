@@ -49,6 +49,13 @@ enum HeadlessRuntimeRequest {
         #[serde(rename = "workspaceRoot")]
         workspace_root: String,
     },
+    #[serde(rename = "bootstrapGreenfieldProject")]
+    BootstrapGreenfieldProject {
+        #[serde(rename = "repositoryFullName")] repository_full_name: String,
+        #[serde(rename = "workspacePath")] workspace_path: String,
+        #[serde(rename = "integrationBranch")] integration_branch: String,
+        #[serde(rename = "scaffoldProfile")] scaffold_profile: String,
+    },
     #[serde(rename = "startProject")]
     StartProject {
         organization: String,
@@ -194,6 +201,12 @@ async fn execute(request: HeadlessRuntimeRequest) -> HeadlessRuntimeResponse {
         ) {
             Ok(result) => success(result),
             Err(error) => failure(error),
+        },
+        HeadlessRuntimeRequest::BootstrapGreenfieldProject { repository_full_name, workspace_path, integration_branch, scaffold_profile } => {
+            match project_runtime::bootstrap_greenfield_project(repository_full_name, workspace_path, integration_branch, scaffold_profile) {
+                Ok(result) => success(result),
+                Err(error) => failure(error),
+            }
         },
         HeadlessRuntimeRequest::StartProject {
             organization,

@@ -208,6 +208,10 @@ function fakeRuntime(events: string[]) {
         integrationBranch: "develop",
       };
     },
+    async bootstrapGreenfieldProject(input) {
+      events.push("greenfield-bootstrap");
+      return { profile: input.scaffoldProfile, commitSha: input.scaffoldProfile === "none" ? null : "bootstrap-sha", generatedFiles: input.scaffoldProfile === "none" ? [] : ["package.json"] };
+    },
     async dispatchTask(input) {
       dispatchCalls.push(input.taskId);
       events.push(`dispatch:${input.taskId}`);
@@ -400,6 +404,25 @@ async function testFreshClaimPersistsEveryExternalSideEffectBoundary() {
   assert(runtime.maxActive === 2, "independent frontend/backend tasks should execute in the same two-task wave");
 }
 
+async function testGreenfieldBootstrapPersistsBeforeDispatch() {
+  const events: string[] = [];
+  const runtime = fakeRuntime(events);
+  runtime.runtime.planProject = async () => ({
+    plan: { ...BASE_PLAN, scaffoldProfile: "react-api-sqlite-monorepo-v1" } as ProjectPlan & { scaffoldProfile: string },
+    sessionId: "pm-session", eventsPath: "/tmp/pm-events.jsonl", outputPath: "/tmp/pm.json",
+  });
+  (runtime.runtime as unknown as Record<string, unknown>).bootstrapGreenfieldProject = async () => {
+    events.push("greenfield-bootstrap");
+    return { profile: "react-api-sqlite-monorepo-v1", commitSha: "bootstrap-sha", generatedFiles: ["package.json"] };
+  };
+  const { client, phases } = fakeClient(null, events);
+  await executor(runtime.runtime)(CLAIM, client);
+  assert(events.includes("greenfield-bootstrap"), "supported greenfield plans must invoke deterministic bootstrap before Agents");
+  assert(phases.includes("bootstrap"), "greenfield bootstrap evidence must have its own durable snapshot phase");
+  assert(events.indexOf("greenfield-bootstrap") < events.findIndex((event) => event.startsWith("dispatch:")), "bootstrap must complete before the first Agent dispatch");
+  assert(events.indexOf("save:bootstrap") < events.findIndex((event) => event.startsWith("dispatch:")), "bootstrap snapshot must persist before Agent dispatch");
+}
+
 async function testExecutorHonorsConfiguredParallelTaskLimit() {
   const events: string[] = [];
   const runtime = fakeRuntime(events);
@@ -458,6 +481,7 @@ function testCopiedIntakeBlockerCatalogIsNonBlocking() {
 
 async function run() {
   await testFreshClaimPersistsEveryExternalSideEffectBoundary();
+  await testGreenfieldBootstrapPersistsBeforeDispatch();
   await testExecutorHonorsConfiguredParallelTaskLimit();
   await testInterruptedRunningTaskReconcilesBeforeAnyRedispatch();
   await testUnrecoverableRunningTaskBlocksWithoutRedispatch();

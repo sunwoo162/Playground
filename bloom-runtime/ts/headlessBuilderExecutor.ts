@@ -24,6 +24,7 @@ import type {
   ProjectPlan,
   ProjectTaskPlan,
   ProjectTaskRun,
+  ScaffoldProfile,
   TeamId,
 } from "./types";
 
@@ -50,6 +51,12 @@ type ProjectRepositoryBootstrap = {
   clonedRepository: boolean;
   releaseBranch: string;
   integrationBranch: string;
+};
+
+type GreenfieldBootstrapEvidence = {
+  profile: ScaffoldProfile;
+  commitSha: string | null;
+  generatedFiles: string[];
 };
 
 type DependencyArtifact = {
@@ -152,6 +159,12 @@ export type HeadlessBuilderRuntime = {
     repository: string;
     workspaceRoot: string;
   }): Promise<ProjectRepositoryBootstrap>;
+  bootstrapGreenfieldProject?(input: {
+    repositoryFullName: string;
+    workspacePath: string;
+    integrationBranch: string;
+    scaffoldProfile: ScaffoldProfile;
+  }): Promise<GreenfieldBootstrapEvidence>;
   dispatchTask(input: HeadlessAgentTaskRuntimeInput): Promise<HeadlessAgentTaskRunResult>;
   reconcileTask(input: {
     projectId: string;
@@ -191,6 +204,7 @@ export type HeadlessBuilderSnapshotPayload = {
   pm: PersistedPmEvidence | null;
   plan: ProjectPlan | null;
   repository: ProjectRepositoryBootstrap | null;
+  bootstrap?: GreenfieldBootstrapEvidence | null;
   taskRuns: ProjectTaskRun[];
   integrationPullRequestNumbers: number[];
   integration: MergeProjectPullRequestsResult | null;
@@ -236,6 +250,7 @@ function freshPayload(claim: BuilderWorkerClaim): HeadlessBuilderSnapshotPayload
     pm: null,
     plan: null,
     repository: null,
+    bootstrap: null,
     taskRuns: [],
     integrationPullRequestNumbers: [],
     integration: null,
@@ -275,6 +290,7 @@ function parseSnapshot(
     throw new Error("Builder orchestration snapshot identity 또는 필수 필드가 손상되었습니다.");
   }
 
+  payload.bootstrap ??= null;
   payload.release ??= null;
   return payload as HeadlessBuilderSnapshotPayload;
 }
@@ -563,19 +579,22 @@ export function createHeadlessBuilderExecutor(
     }
 
     if (!payload.repository) {
-      payload.repository = await options.runtime.bootstrapRepository({
-        organization,
-        repository: payload.plan.repositoryName,
-        workspaceRoot,
-      });
-      ensureTaskRunsMatchPlan(payload, options.teamId);
-      await persist("building");
-    } else if (payload.taskRuns.length === 0) {
-      ensureTaskRunsMatchPlan(payload, options.teamId);
-      await persist("building");
-    } else {
-      ensureTaskRunsMatchPlan(payload, options.teamId);
+      payload.repository = await options.runtime.bootstrapRepository({ organization, repository: payload.plan.repositoryName, workspaceRoot });
     }
+    if (!payload.bootstrap && payload.taskRuns.length === 0) {
+      const scaffoldProfile = payload.plan.scaffoldProfile ?? "none";
+      if (!options.runtime.bootstrapGreenfieldProject) {
+        if (scaffoldProfile !== "none") throw new Error(`Greenfield bootstrap Runtime is required for scaffold profile: ${scaffoldProfile}`);
+        payload.bootstrap = { profile: "none", commitSha: null, generatedFiles: [] };
+      } else {
+        payload.bootstrap = await options.runtime.bootstrapGreenfieldProject({ repositoryFullName: payload.repository.repository, workspacePath: payload.repository.workspacePath, integrationBranch: payload.repository.integrationBranch, scaffoldProfile });
+      }
+      await persist("bootstrap");
+    }
+    if (payload.taskRuns.length === 0) {
+      ensureTaskRunsMatchPlan(payload, options.teamId);
+      await persist("building");
+    } else { ensureTaskRunsMatchPlan(payload, options.teamId); }
 
     const running = payload.taskRuns.filter((run) => run.status === "running");
     if (running.length > 0) {

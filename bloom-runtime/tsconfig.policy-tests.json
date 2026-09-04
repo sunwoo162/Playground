@@ -31,6 +31,7 @@
     "ts/pmPlanningRepair.policy-test.ts",
     "ts/githubOwnerBootstrap.policy-test.ts",
     "ts/githubEmptyRepositoryBootstrap.policy-test.ts",
+    "ts/greenfieldBootstrap.policy-test.ts",
     "ts/productionGhCredentials.policy-test.ts",
     "ts/productionBrowserRuntime.policy-test.ts",
     "ts/localEvaluatorMemory.policy-test.ts",

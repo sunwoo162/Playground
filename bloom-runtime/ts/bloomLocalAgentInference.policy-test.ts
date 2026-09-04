@@ -372,6 +372,22 @@ async function testLocalAgentTreatsMissingGreenfieldPathsAsCreatable() {
   }
 }
 
+async function testFailedLocalAgentPersistsActionJournal() {
+  const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-journal-"));
+  const eventsPath = path.join(worktree, "local-agent-events.jsonl");
+  const invalidWrite = '{"action":"write","path":"frontend/src","content":"# copied task spec"}';
+  const fetchImpl: typeof fetch = async () => streamingResponse([`data: ${JSON.stringify({ choices: [{ delta: { content: invalidWrite } }] })}\n\n`, "data: [DONE]\n\n"]);
+  try {
+    await assert.rejects(runLocalAgent({ projectId: "policy", taskId: "GREENFIELD-JOURNAL", worktree, prompt: "implement a frontend", eventsPath } as Parameters<typeof runLocalAgent>[0] & { eventsPath: string }, { fetchImpl, maxSteps: 8 }), /stalled/i);
+    const journal = await fs.readFile(eventsPath, "utf8");
+    assert.match(journal, /"action":"write"/, "failed runs must preserve the attempted action");
+    assert.match(journal, /"path":"frontend\/src"/, "journal must preserve the sanitized write path");
+    assert.match(journal, /"ok":false/, "journal must preserve the first failed tool result");
+    assert.match(journal, /directory|regular file|file path/i, "journal must preserve the corrective tool error");
+    assert.doesNotMatch(journal, /copied task spec/, "journal must not persist write contents");
+  } finally { await fs.rm(worktree, { recursive: true, force: true }); }
+}
+
 async function testLocalAgentRejectsDirectoryLikeWriteTargetsAndRecovers() {
   const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-write-target-"));
   const bodies: Array<Record<string, unknown>> = [];
@@ -417,6 +433,7 @@ async function main() {
   await testLocalAgentFailsFastOnRepeatedRejectedWriteLoop();
   await testLocalAgentFailsFastWhenRejectedWriteChangesOnlyContent();
   await testLocalAgentTreatsMissingGreenfieldPathsAsCreatable();
+  await testFailedLocalAgentPersistsActionJournal();
   await testLocalAgentRejectsDirectoryLikeWriteTargetsAndRecovers();
   console.log("Bloom local Agent inference transport policy tests passed");
 }

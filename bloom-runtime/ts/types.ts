@@ -107,6 +107,8 @@ export type ProjectIntakeRecord = ProjectIntakeAnalysis & {
   createdAt: string;
 };
 
+export type ScaffoldProfile = "none" | "react-api-sqlite-monorepo-v1";
+
 export type TechnologyDecision = {
   area: string;
   choice: string;
@@ -129,6 +131,7 @@ export type ProjectPlan = {
   productSummary: string;
   architectureSummary: string;
   needsAuth: boolean;
+  scaffoldProfile?: ScaffoldProfile;
   technologyDecisions: TechnologyDecision[];
   tasks: ProjectTaskPlan[];
 };
