@@ -664,6 +664,28 @@ async function testBoundProjectMissingPackEvidenceBlocksBeforeMerge() {
   assert(!events.includes("merge"), "missing pack evidence must block before merge");
 }
 
+async function testRecoveredBlockedBindingStopsBeforeSideEffects() {
+  const events: string[] = [];
+  const runtime = fakeRuntime(events);
+  const current = runningSnapshot();
+  const payload = JSON.parse(current.payloadJson) as HeadlessBuilderSnapshotPayload;
+  payload.harnessPackBinding = resolveHarnessPackBinding({ intent: "x", explicitPack: "unknown" });
+  payload.intake = null; payload.pm = null; payload.plan = null; payload.repository = null;
+  payload.bootstrap = null; payload.taskRuns = []; payload.integration = null; payload.release = null;
+  payload.integrationPullRequestNumbers = []; payload.blockedReason = "Unknown Bloom Harness pack: unknown";
+  const blockedSnapshot: BuilderOrchestrationSnapshot = {
+    ...current, phase: "blocked", payloadJson: JSON.stringify(payload),
+  };
+  const claim: BuilderWorkerClaim = { ...CLAIM, harnessPackId: "unknown", orchestrationSnapshot: blockedSnapshot };
+  const { client } = fakeClient(blockedSnapshot, events);
+  let rejection = "";
+  try { await executor(runtime.runtime)(claim, client); }
+  catch (error) { rejection = error instanceof Error ? error.message : String(error); }
+  assert(/Harness pack binding rejected|Unknown Bloom Harness pack/i.test(rejection), "persisted blocked pack binding must remain terminal");
+  assert(!events.includes("intake") && !events.includes("pm") && !events.includes("bootstrap"), "persisted blocked binding must stop before PM/repository side effects");
+  assert(!events.some((event) => event.startsWith("dispatch:") || event.startsWith("reconcile:")) && !events.includes("merge"), "persisted blocked binding must stop before Agent/recovery/merge side effects");
+}
+
 async function testSnapshotSchemaMismatchFailsClosed() {
   const events: string[] = [];
   const runtime = fakeRuntime(events);
@@ -679,6 +701,7 @@ async function testSnapshotSchemaMismatchFailsClosed() {
 }
 
 async function run() {
+  await testRecoveredBlockedBindingStopsBeforeSideEffects();
   await testSnapshotSchemaMismatchFailsClosed();
   await testFreshBugFixPersistsBindingBeforeIntake();
   await testUnknownExplicitPackBlocksBeforeSideEffects();
