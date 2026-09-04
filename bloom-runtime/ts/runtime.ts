@@ -1,10 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import { getProjectEvolutionInstructions } from "./evolutionExperiments";
+import { assertHarnessPackPlan } from "./harnessPackPlanPolicy";
+import { runPmPlanningWithRepair } from "./pmPlanningPolicy";
 import { prepareOrchestrationPlan } from "./orchestrationCore";
 import type { RuntimeCompletionObservations } from "./runtimeCompletionAdapter";
 import { seniorAgentContext } from "./seniorAgent";
-import { loadProjectTeamsState } from "./store";
+import { bindProjectHarnessPack, loadProjectTeamsState } from "./store";
 import type {
   AgentTaskVerification,
   FailureRouteDecision,
@@ -58,6 +60,7 @@ export type StartProjectRuntimeInput = {
   teamId: TeamId;
   teamName: string;
   request: string;
+  harnessPackId?: string;
 };
 
 export type DependencyArtifact = {
@@ -274,19 +277,57 @@ export async function bootstrapProjectRepository(input: BootstrapProjectReposito
 }
 
 export async function startProjectRuntime(input: StartProjectRuntimeInput) {
-  const preparedInput = withPmEvolutionExperiment(withSeniorPmStandard(input));
-  const result = await invoke<StartProjectRuntimeResult>(
-    "start_project_runtime",
-    preparedInput,
+  const state = loadProjectTeamsState();
+  const project = state.projects.find((item) => item.id === input.projectId);
+  if (!project) {
+    throw new Error(`Bloom project state is missing: ${input.projectId}`);
+  }
+  const bindingResult = bindProjectHarnessPack(
+    state,
+    input.projectId,
+    input.harnessPackId,
   );
-  const plan = prepareOrchestrationPlan(result.pm.plan);
-  return {
-    ...result,
-    pm: {
-      ...result.pm,
-      plan,
+  const binding = bindingResult.binding;
+  if (binding.status === "blocked") {
+    throw new Error(`Bloom Harness pack binding rejected: ${binding.reason}`);
+  }
+
+  const preflight = await checkProjectRuntime(input.organization);
+  if (!preflight.gitAvailable || !preflight.ghAvailable || !preflight.ghAuthenticated) {
+    throw new Error("Git/GitHub CLI Runtime is not ready.");
+  }
+  if (!preflight.organizationAccessible) {
+    throw new Error(`GitHub CLI cannot access organization ${input.organization}.`);
+  }
+  if (!preflight.localInferenceAvailable) {
+    throw new Error(preflight.message);
+  }
+
+  const preparedInput = withPmEvolutionExperiment(withSeniorPmStandard(input));
+  const pm = await runPmPlanningWithRepair({
+    request: preparedInput.request,
+    binding,
+    planOnce: (request) => invoke<PmCodexRunResult>("plan_project_runtime", {
+      organization: preparedInput.organization,
+      workspaceRoot: preparedInput.workspaceRoot,
+      projectId: preparedInput.projectId,
+      teamId: preparedInput.teamId,
+      teamName: preparedInput.teamName,
+      request,
+    }),
+    prepareAndValidate(value) {
+      assertHarnessPackPlan(binding, value.plan);
+      const plan = prepareOrchestrationPlan(value.plan);
+      assertHarnessPackPlan(binding, plan);
+      return { ...value, plan };
     },
-  };
+  });
+  const repository = await bootstrapProjectRepository({
+    organization: preparedInput.organization,
+    repository: pm.plan.repositoryName,
+    workspaceRoot: preparedInput.workspaceRoot,
+  });
+  return { pm, repository };
 }
 
 export async function dispatchAgentTask(input: AgentTaskRuntimeInput) {

@@ -40,6 +40,13 @@
     "ts/lunaProductionDelivery.ts",
     "ts/e2eSmoke.ts",
     "ts/bloomLocalAgentRuntime.ts",
-    "ts/lunaReviewPackage.ts"
+    "ts/lunaReviewPackage.ts",
+    "ts/pmPlanningPolicy.ts",
+    "ts/harnessPackBinding.ts",
+    "ts/harnessPackRegistry.ts",
+    "ts/harnessContracts.ts",
+    "ts/harnessValidation.ts",
+    "ts/planTopology.ts",
+    "ts/types.ts"
   ]
 }
