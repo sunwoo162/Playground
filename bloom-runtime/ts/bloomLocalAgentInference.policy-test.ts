@@ -482,30 +482,59 @@ async function testLocalAgentRejectsImmediateDuplicateSuccessfulWrite() {
   }
 }
 
-async function testLocalAgentFailsFastOnRepeatedSuccessfulWriteLoop() {
-  const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-stalled-write-"));
+async function testRepositoryWriterForcesDifferentActionAfterDuplicateSuccessfulWrite() {
+  const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-duplicate-recovery-"));
+  await fs.writeFile(path.join(worktree, "README.md"), "baseline\n", "utf8");
+  execFileSync("git", ["init"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["config", "user.email", "policy@example.com"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["config", "user.name", "Bloom Policy"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["add", "README.md"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["commit", "-m", "baseline"], { cwd: worktree, stdio: "ignore" });
+  const bodies: Array<Record<string, unknown>> = [];
   let calls = 0;
   const duplicateWrite = '{"action":"write","path":"frontend/src/main.tsx","content":"export default function App(){ return null; }"}';
-  const fetchImpl: typeof fetch = async () => {
+  const completed = '{"action":"final","report":{"status":"completed","summary":"done","rationaleSummary":"done","evidence":[],"verification":[],"commitSha":null,"pullRequestNumber":null,"pullRequestUrl":null,"reviewedPullRequests":[],"blockers":[]}}';
+  const fetchImpl: typeof fetch = async (_input, init) => {
+    const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+    bodies.push(body);
     calls += 1;
+    const responseFormat = body.response_format as Record<string, unknown> | undefined;
+    const schema = responseFormat?.schema as Record<string, unknown> | undefined;
+    const variants = schema?.oneOf as Array<Record<string, unknown>> | undefined;
+    const actions = variants?.map((variant) => {
+      const properties = variant.properties as Record<string, unknown> | undefined;
+      const action = properties?.action as Record<string, unknown> | undefined;
+      return Array.isArray(action?.enum) ? action.enum[0] : undefined;
+    }) ?? [];
+    const content = calls <= 2 || actions.includes("write") ? duplicateWrite : completed;
     return streamingResponse([
-      `data: ${JSON.stringify({ choices: [{ delta: { content: duplicateWrite } }] })}\n\n`,
+      `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`,
       "data: [DONE]\n\n",
     ]);
   };
 
   try {
-    await assert.rejects(
-      runLocalAgent({
-        projectId: "policy",
-        taskId: "GREENFIELD-STALLED",
-        worktree,
-        prompt: "implement a real frontend in this empty repository",
-      }, { fetchImpl, maxSteps: 64 }),
-      /stalled.*identical.*write|repeated.*write.*progress/i,
-      "a model that ignores duplicate-write correction must fail fast instead of consuming the full 64-step budget",
-    );
-    assert.ok(calls <= 4, `duplicate-write stall detection must stop within four model turns; got ${calls}`);
+    const result = await runLocalAgent({
+      projectId: "policy",
+      taskId: "WRITER-DUPLICATE-RECOVERY",
+      worktree,
+      prompt: "implement the frontend",
+      requireMutation: true,
+    }, { fetchImpl, maxSteps: 4 });
+    assert.equal(result.report.status, "completed");
+    assert.equal(calls, 3, "a successful duplicate write must force a different action on the next model turn instead of stalling");
+    const thirdFormat = bodies[2]?.response_format as Record<string, unknown> | undefined;
+    const thirdSchema = thirdFormat?.schema as Record<string, unknown> | undefined;
+    const thirdVariants = thirdSchema?.oneOf as Array<Record<string, unknown>> | undefined;
+    const thirdActions = thirdVariants?.map((variant) => {
+      const properties = variant.properties as Record<string, unknown> | undefined;
+      const action = properties?.action as Record<string, unknown> | undefined;
+      return Array.isArray(action?.enum) ? action.enum[0] : undefined;
+    });
+    assert.deepEqual(thirdActions, ["list", "read", "delete", "run", "final"],
+      "the turn after a duplicate successful write must temporarily remove write while preserving inspection, verification, and final actions");
+    assert.equal(await fs.readFile(path.join(worktree, "frontend", "src", "main.tsx"), "utf8"),
+      "export default function App(){ return null; }");
   } finally {
     await fs.rm(worktree, { recursive: true, force: true });
   }
@@ -690,7 +719,7 @@ async function main() {
   await testRepositoryWriterRequiresFailedToolEvidenceForBlockedFinal();
   await testRepositoryWriterForcesToolTurnAfterNoopFinal();
   await testLocalAgentRejectsImmediateDuplicateSuccessfulWrite();
-  await testLocalAgentFailsFastOnRepeatedSuccessfulWriteLoop();
+  await testRepositoryWriterForcesDifferentActionAfterDuplicateSuccessfulWrite();
   await testLocalAgentFailsFastOnRepeatedRejectedWriteLoop();
   await testLocalAgentFailsFastWhenRejectedWriteChangesOnlyContent();
   await testLocalAgentTreatsMissingGreenfieldPathsAsCreatable();

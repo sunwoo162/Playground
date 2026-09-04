@@ -356,7 +356,7 @@ function finalReportContract(): string {
   });
 }
 
-function agentActionSchema(allowFinal = true): JsonObject {
+function agentActionSchema(allowFinal = true, allowWrite = true): JsonObject {
   const commandSchema = {
     type: "string",
     enum: ["pnpm", "npm", "yarn", "bun", "cargo", "git", "node", "./gradlew", "gradlew", "gradlew.bat", "./mvnw", "mvnw", "mvnw.cmd"],
@@ -405,14 +405,18 @@ function agentActionSchema(allowFinal = true): JsonObject {
   const branches: JsonObject[] = [
     actionBranch("list", ["path"], { path: { type: "string" } }),
     actionBranch("read", ["path"], { path: { type: "string" } }),
-    actionBranch("write", ["path", "content"], { path: { type: "string" }, content: { type: "string" } }),
+  ];
+  if (allowWrite) {
+    branches.push(actionBranch("write", ["path", "content"], { path: { type: "string" }, content: { type: "string" } }));
+  }
+  branches.push(
     actionBranch("delete", ["path"], { path: { type: "string" } }),
     actionBranch("run", ["command", "args"], {
       command: commandSchema,
       args: { type: "array", items: { type: "string" } },
       cwd: { type: "string" },
     }),
-  ];
+  );
   if (allowFinal) branches.push(actionBranch("final", ["report"], { report: reportSchema }));
   return { oneOf: branches };
 }
@@ -604,10 +608,12 @@ export async function runLocalAgent(input: LocalAgentInput, options: LocalAgentO
     { role: "user", content: input.prompt },
   ];
   let forceToolTurn = false;
+  let suppressWriteTurn = false;
   for (let step = 1; step <= maxSteps; step += 1) {
-    const actionSchema = agentActionSchema(!forceToolTurn);
+    const actionSchema = agentActionSchema(!forceToolTurn, !suppressWriteTurn);
     const action = await callModel(endpoint, model, boundedAgentMessages(messages), fetchImpl, actionSchema);
     if (action.action !== "final") forceToolTurn = false;
+    if (suppressWriteTurn) suppressWriteTurn = false;
     const actionEvent = { step, ...sanitizedAgentAction(action) };
     events.push(actionEvent);
     await appendAgentJournal(input.eventsPath, actionEvent);
@@ -670,6 +676,7 @@ export async function runLocalAgent(input: LocalAgentInput, options: LocalAgentO
       }
       result = { ok: false, error: rejectedWriteError };
     } else if (writeSignature && attemptedWriteSignatures.has(writeSignature)) {
+      const duplicateSucceeded = successfulWriteSignatures.has(writeSignature);
       const rejectionCount = (duplicateWriteRejections.get(writeSignature) ?? 0) + 1;
       duplicateWriteRejections.set(writeSignature, rejectionCount);
       if (rejectionCount >= MAX_DUPLICATE_WRITE_REJECTIONS) {
@@ -677,9 +684,10 @@ export async function runLocalAgent(input: LocalAgentInput, options: LocalAgentO
           `Local agent stalled after repeating an identical write ${rejectionCount} times without progress.`,
         );
       }
+      if (duplicateSucceeded) suppressWriteTurn = true;
       result = {
         ok: false,
-        error: successfulWriteSignatures.has(writeSignature)
+        error: duplicateSucceeded
           ? "This identical write already succeeded and makes no new progress. Choose a different action or return final if the task is complete."
           : "This identical write already failed and makes no new progress. Choose a different file path or action.",
       };
