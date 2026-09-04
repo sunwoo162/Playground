@@ -21,7 +21,9 @@
 - Preserve branch/commit/PR/report fields for audit even when Harness completion is rejected.
 - Existing merge gate stays in place as a second defense.
 
----### Task 1: Safe Local Agent command observations
+---
+
+### Task 1: Safe Local Agent command observations
 
 **Files:**
 - Modify: `bloom-runtime/ts/bloomLocalAgentRuntime.ts`
@@ -32,27 +34,29 @@
 - Produces journal action records with `step`, `action:"run"`, `command`, `commandClass`, and optional validated relative `cwd`; never raw argv.
 - Later Rust parsing pairs these action records with the existing same-step `toolResult` record.
 
-- [ ] **Step 1: Write failing classification/journal tests**
+- [x] **Step 1: Write failing classification/journal tests**
 
 Add assertions covering `pnpm test`, `pnpm run test:bloom-runtime`, `npm run build`, `cargo test`, `cargo build`, `pnpm lint`, `pnpm typecheck`, and `node script.js => other`. Run the Local Agent with a mocked model response containing a secret-looking arg and assert the persisted/action event does not contain that arg.
 
-- [ ] **Step 2: Run focused test and verify RED**
+- [x] **Step 2: Run focused test and verify RED**
 
 Run: `pnpm --dir apps/desktop exec tsc -p ../../bloom-runtime/tsconfig.policy-tests.json && node ../../.tmp/bloom-policy-tests/bloomLocalAgentRuntime.policy-test.js`
 
 Expected: FAIL because safe command classification fields/functions do not exist.
 
-- [ ] **Step 3: Implement minimal safe classification**
+- [x] **Step 3: Implement minimal safe classification**
 
 Use only allow-listed executable basename plus safe subcommand/`run` target tokens. Persist `command` basename and `commandClass`; do not persist `args`, stdout, stderr, environment values, or arbitrary command text.
 
-- [ ] **Step 4: Run focused test and verify GREEN**
+- [x] **Step 4: Run focused test and verify GREEN**
 
 Run the same command and require exit code 0.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
-`git add bloom-runtime/ts/bloomLocalAgentRuntime.ts bloom-runtime/ts/bloomLocalAgentRuntime.policy-test.ts && git commit -m "feat : journal bloom command observations"`### Task 2: Rust completion observation transport
+`git add bloom-runtime/ts/bloomLocalAgentRuntime.ts bloom-runtime/ts/bloomLocalAgentRuntime.policy-test.ts && git commit -m "feat : journal bloom command observations"`
+
+### Task 2: Rust completion observation transport
 
 **Files:**
 - Modify: `bloom-runtime/src/agent_runtime.rs`
@@ -65,31 +69,33 @@ Run the same command and require exit code 0.
 - Produces `commands: RuntimeCommandObservation[]` where each item has `step`, `command`, `commandClass`, `ok`, `exitCode`.
 - Produces optional verified `publication` with `branchName`, `commitSha`, `pullRequestNumber`, `pullRequestUrl` after existing repository/PR verification succeeds.
 
-- [ ] **Step 1: Write failing Rust parser tests**
+- [x] **Step 1: Write failing Rust parser tests**
 
 Create temp JSONL fixtures with paired run/tool records. Assert same-step pairing, sorted command observations, malformed duplicate run records rejected, and raw `args` fields ignored even if present.
 
-- [ ] **Step 2: Run focused Rust test and verify RED**
+- [x] **Step 2: Run focused Rust test and verify RED**
 
 Run: `cargo test --manifest-path bloom-runtime/Cargo.toml agent_evidence_runtime::tests -- --nocapture`
 
 Expected: FAIL because completion observation parser/DTO does not exist.
 
-- [ ] **Step 3: Implement DTO and journal parser**
+- [x] **Step 3: Implement DTO and journal parser**
 
 Add serializable observation structs and a parser that reads each JSONL line, records only safe `run` action metadata, pairs it with one `toolResult` by `step`, and rejects contradictory duplicates for completed results.
 
-- [ ] **Step 4: Attach verified publication metadata**
+- [x] **Step 4: Attach verified publication metadata**
 
 After `verify_writer_repository_evidence()` succeeds, populate publication from the already verified result. Non-writers get `publication: null`. Completed normal and recovered results receive `completionObservations`; blocked results may omit it.
 
-- [ ] **Step 5: Run Rust test and `cargo check` GREEN**
+- [x] **Step 5: Run Rust test and `cargo check` GREEN**
 
 Run: `cargo test --manifest-path bloom-runtime/Cargo.toml agent_evidence_runtime::tests -- --nocapture` and `cargo check --manifest-path bloom-runtime/Cargo.toml`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
-`git add bloom-runtime/src/agent_runtime.rs bloom-runtime/src/agent_reconciliation.rs bloom-runtime/src/agent_evidence_runtime.rs && git commit -m "feat : expose bloom completion observations"`### Task 3: Pure Runtime Completion Adapter
+`git add bloom-runtime/src/agent_runtime.rs bloom-runtime/src/agent_reconciliation.rs bloom-runtime/src/agent_evidence_runtime.rs && git commit -m "feat : expose bloom completion observations"`
+
+### Task 3: Pure Runtime Completion Adapter
 
 **Files:**
 - Create: `bloom-runtime/ts/runtimeCompletionAdapter.ts`
@@ -101,31 +107,33 @@ Run: `cargo test --manifest-path bloom-runtime/Cargo.toml agent_evidence_runtime
 - Produces `RuntimeHarnessCompletionPacket { result, evidence, requiredEvidence }`.
 - Produces `evaluateRuntimeTaskCompletion(input) -> { accepted, packet, gate, rejectionReason }` and always invokes `evaluateHarnessCompletion()`.
 
-- [ ] **Step 1: Write failing adapter tests**
+- [x] **Step 1: Write failing adapter tests**
 
 Cover: writer claim without publication rejected; verified publication satisfies `file-change`; QA `verification: passed` without observed test rejected; latest failed test invalidates earlier pass; later successful test restores evidence; reviewer dependency PR accepted; unrelated PR rejected; `test-automation` requires both `file-change` and `test`; missing observations on `completed` fails closed.
 
-- [ ] **Step 2: Run focused test and verify RED**
+- [x] **Step 2: Run focused test and verify RED**
 
 Run: `pnpm --dir apps/desktop exec tsc -p ../../bloom-runtime/tsconfig.policy-tests.json && node ../../.tmp/bloom-policy-tests/runtimeCompletionAdapter.policy-test.js`
 
 Expected: FAIL because `runtimeCompletionAdapter` does not exist.
 
-- [ ] **Step 3: Implement role baseline and deterministic evidence IDs**
+- [x] **Step 3: Implement role baseline and deterministic evidence IDs**
 
 Use `REPOSITORY_WRITER_ROLES` for `file-change`; add `review` for `code-review`/`reviewer`; add `test` for `qa`/`test-automation`. Create command IDs as `<taskId>:command:<step>`, test/build IDs with their latest successful step, file-change ID from verified commit SHA, GitHub ID from verified PR number, and review ID from sorted dependency-validated PR numbers.
 
-- [ ] **Step 4: Normalize the Harness result**
+- [x] **Step 4: Normalize the Harness result**
 
 Legacy `completed` maps to candidate `done`; legacy blocked maps to `blocked`. `summary` and blockers remain descriptive; `changedFiles`, `risks`, and `nextActions` stay empty; `commandsExecuted` contains only normalized command/class labels; `evidenceIds` comes only from adapter-created evidence.
 
-- [ ] **Step 5: Run focused test GREEN**
+- [x] **Step 5: Run focused test GREEN**
 
 Run the same focused command and require exit code 0.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
-`git add bloom-runtime/ts/runtimeCompletionAdapter.ts bloom-runtime/ts/runtimeCompletionAdapter.policy-test.ts bloom-runtime/tsconfig.policy-tests.json && git commit -m "feat : adapt bloom runtime completion evidence"`### Task 4: Enforce Gate in project-state completion and startup recovery
+`git add bloom-runtime/ts/runtimeCompletionAdapter.ts bloom-runtime/ts/runtimeCompletionAdapter.policy-test.ts bloom-runtime/tsconfig.policy-tests.json && git commit -m "feat : adapt bloom runtime completion evidence"`
+
+### Task 4: Enforce Gate in project-state completion and startup recovery
 
 **Files:**
 - Modify: `bloom-runtime/ts/runtime.ts`
@@ -139,27 +147,29 @@ Run the same focused command and require exit code 0.
 - `completeAgentTask()` derives declared dependency PRs from the current plan/taskRuns and calls `evaluateRuntimeTaskCompletion()` before assigning `done`.
 - Startup recovery continues calling `completeAgentTask()`, so recovered completions cannot bypass the Gate.
 
-- [ ] **Step 1: Write failing state-transition tests**
+- [x] **Step 1: Write failing state-transition tests**
 
 Add fixtures where a writer returns legacy `completed` with no observations and assert the stored task is `blocked`, `lastError` contains a deterministic Harness rejection, and a dependent task remains `pending`. Add a valid publication fixture and assert `done` unlocks the dependency. Add recovered-result versions of both cases.
 
-- [ ] **Step 2: Run focused policy test and verify RED**
+- [x] **Step 2: Run focused policy test and verify RED**
 
 Run: `pnpm --dir apps/desktop exec tsc -p ../../bloom-runtime/tsconfig.policy-tests.json && node ../../.tmp/bloom-policy-tests/sessionReconciliation.policy-test.js`
 
 Expected: FAIL because legacy completion still becomes `done` without Harness evidence.
 
-- [ ] **Step 3: Wire `completeAgentTask()` through the adapter**
+- [x] **Step 3: Wire `completeAgentTask()` through the adapter**
 
 Preserve report/branch/PR fields. For rejected `completed` results, write `status:"blocked"`, preserve output arrays, set deterministic `lastError`, then refresh dependency readiness. Legacy blocked results remain blocked without fabricated evidence.
 
-- [ ] **Step 4: Verify normal and recovered project-state paths GREEN**
+- [x] **Step 4: Verify normal and recovered project-state paths GREEN**
 
 Run the focused reconciliation test plus `node ../../.tmp/bloom-policy-tests/orchestrationCore.policy-test.js`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
-`git add bloom-runtime/ts/runtime.ts bloom-runtime/ts/store.ts bloom-runtime/ts/sessionReconciliation.ts bloom-runtime/ts/sessionReconciliation.policy-test.ts bloom-runtime/ts/orchestrationCore.policy-test.ts && git commit -m "feat : gate bloom project task completion"`### Task 5: Enforce Gate in headless normal dispatch and crash recovery
+`git add bloom-runtime/ts/runtime.ts bloom-runtime/ts/store.ts bloom-runtime/ts/sessionReconciliation.ts bloom-runtime/ts/sessionReconciliation.policy-test.ts bloom-runtime/ts/orchestrationCore.policy-test.ts && git commit -m "feat : gate bloom project task completion"`
+
+### Task 5: Enforce Gate in headless normal dispatch and crash recovery
 
 **Files:**
 - Modify: `bloom-runtime/ts/headlessBuilderExecutor.ts`
@@ -171,31 +181,33 @@ Run the focused reconciliation test plus `node ../../.tmp/bloom-policy-tests/orc
 - `applyTaskResult()` receives plan/run context sufficient to derive declared dependency PRs and calls the same `evaluateRuntimeTaskCompletion()` as project-state completion.
 - Both `dispatchTask()` results and `reconcileTask()` recovered results pass through the same `applyTaskResult()` function.
 
-- [ ] **Step 1: Write failing headless completion tests**
+- [x] **Step 1: Write failing headless completion tests**
 
 Add a writer completion with a PR/commit but no observations and assert Builder blocks before dependency execution/integration. Add a QA result with Agent-declared passed verification but no successful test observation and assert blocked. Add valid writer and QA observations and assert orchestration progresses.
 
-- [ ] **Step 2: Write failing crash-recovery tests**
+- [x] **Step 2: Write failing crash-recovery tests**
 
 Return `outcome:"recovered"` with an otherwise completed writer but missing observations; assert the recovered task becomes blocked and the Builder does not call merge. Add a valid recovered publication observation and assert recovery proceeds.
 
-- [ ] **Step 3: Run focused headless tests and verify RED**
+- [x] **Step 3: Run focused headless tests and verify RED**
 
 Run compiled `headlessBuilderExecutor.policy-test.js` and `headlessCrashRecovery.policy-test.js`.
 
 Expected: FAIL because `applyTaskResult()` still trusts legacy `completed`.
 
-- [ ] **Step 4: Wire the shared adapter into `applyTaskResult()`**
+- [x] **Step 4: Wire the shared adapter into `applyTaskResult()`**
 
 Derive dependency PRs from the current plan/taskRuns, preserve result metadata on rejection, set `lastError` to the adapter rejection, and let the existing readiness/blocked checks stop downstream work and integration.
 
-- [ ] **Step 5: Run both focused tests GREEN**
+- [x] **Step 5: Run both focused tests GREEN**
 
 Recompile policy tests, then run both focused files and require exit code 0.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
-`git add bloom-runtime/ts/headlessBuilderExecutor.ts bloom-runtime/ts/headlessBuilderExecutor.policy-test.ts bloom-runtime/ts/headlessCrashRecovery.policy-test.ts && git commit -m "feat : gate bloom headless completion"`### Task 6: Full regression, Linux parity, and implementation record
+`git add bloom-runtime/ts/headlessBuilderExecutor.ts bloom-runtime/ts/headlessBuilderExecutor.policy-test.ts bloom-runtime/ts/headlessCrashRecovery.policy-test.ts && git commit -m "feat : gate bloom headless completion"`
+
+### Task 6: Full regression, Linux parity, and implementation record
 
 **Files:**
 - Modify: `docs/superpowers/plans/2026-09-04-bloom-runtime-completion-adapter.md` execution notes only.
@@ -203,26 +215,48 @@ Recompile policy tests, then run both focused files and require exit code 0.
 **Interfaces:**
 - No new runtime API. This task proves the complete enforcement chain is stable.
 
-- [ ] **Step 1: Run Windows policy regression with known baseline exclusions**
+- [x] **Step 1: Run Windows policy regression with known baseline exclusions**
 
 Compile policy tests, run all except `lunaServerRuntime.policy-test.js` and `lunaStaticRelease.policy-test.js`, and require zero failures.
 
-- [ ] **Step 2: Run native Linux policy suite**
+- [x] **Step 2: Run native Linux policy suite**
 
 Using native Linux Node 22 under WSL, compile `bloom-runtime/tsconfig.policy-tests.json` and run `node bloom-runtime/run-policy-tests.cjs`; require the full suite to pass including both platform-sensitive Luna tests.
 
-- [ ] **Step 3: Run worker/Rust/diff verification**
+- [x] **Step 3: Run worker/Rust/diff verification**
 
 Run `pnpm run build:bloom-worker`, `cargo check --manifest-path bloom-runtime/Cargo.toml`, and `git diff --check`.
 
-- [ ] **Step 4: Verify enforcement scenarios explicitly**
+- [x] **Step 4: Verify enforcement scenarios explicitly**
 
 Confirm tests prove: free-form Agent claims cannot satisfy `file-change`/`test`; invalid review targets are blocked; rejected upstream completion does not unlock dependencies; normal and recovered results use the same Gate; merge is never called from a rejected headless run.
 
-- [ ] **Step 5: Record execution evidence**
+- [x] **Step 5: Record execution evidence**
 
 Append exact RED/GREEN commands, policy-test counts, known Windows baseline notes, Linux full-suite result, worker build result, Rust check result, and final commit list to this plan.
 
 - [ ] **Step 6: Final commit and push**
 
 `git add docs/superpowers/plans/2026-09-04-bloom-runtime-completion-adapter.md && git commit -m "docs : record bloom completion adapter verification" && git push -u origin feat/bloom-runtime-completion-adapter`
+
+## Execution Record
+
+- Rebased implementation onto `origin/main` at `ebc81d7`, including PR #220 writer blocker evidence, PR #221 required tool arguments, and PR #222 local llama memory headroom changes.
+- TDD RED/GREEN covered safe command journaling, Rust observation transport, pure Runtime Completion Adapter, project-state enforcement, transitive review PR validation, and headless normal/recovery enforcement.
+- Focused verification commands: `bloomLocalAgentRuntime.policy-test.js`, `cargo test --manifest-path bloom-runtime/Cargo.toml agent_evidence_runtime::tests -- --nocapture`, `runtimeCompletionAdapter.policy-test.js`, `runtimeTaskCompletion.policy-test.js`, `sessionReconciliation.policy-test.js`, `orchestrationCore.policy-test.js`, `headlessBuilderExecutor.policy-test.js`, and `headlessCrashRecovery.policy-test.js`.
+- Windows policy regression: 64/64 PASS with the pre-existing platform-sensitive `lunaServerRuntime` and `lunaStaticRelease` tests excluded.
+- Native Linux Node `v22.23.2`: full Bloom policy suite PASS, 66/66, including both platform-sensitive Luna tests.
+- `pnpm run build:bloom-worker`: PASS.
+- `cargo check --manifest-path bloom-runtime/Cargo.toml`: PASS; existing unused-code warnings remain unchanged in scope.
+- `git diff --check`: PASS.
+- Regression migration: `nonWriterPublicationMetadata.policy-test` now supplies runtime-owned empty observations for the non-writer idea fixture while still proving fake commit metadata is discarded.
+
+### Implementation commits
+
+- `29b0561` feat : journal bloom command observations
+- `46fc07f` feat : expose bloom completion observations
+- `8ea4902` feat : adapt bloom runtime completion evidence
+- `f493830` feat : gate bloom project task completion
+- `038db7a` fix : validate transitive bloom review evidence
+- `80c3cf8` feat : gate bloom headless completion
+- `b3cdd79` test : update bloom completion fixture
