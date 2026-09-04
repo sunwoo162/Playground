@@ -39,9 +39,10 @@ jobs:
               found=1
               echo "--- ${file} ---"
               tail -n 240 "$file" || true
-            done < <(find /home/ubuntu -type f \( -path '*/.luna-runtime/projects/63/agents/*/PULSEBOARD-101/local-agent-events.jsonl' -o -path '*/.luna-runtime/projects/63/agents/*/PULSEBOARD-101/local-agent.stderr.log' \) -print 2>/dev/null)
+            done < <(find /home/ubuntu/bloom-workspaces -type f \( -path '*/.luna-runtime/projects/builder-63/agents/*/PULSEBOARD-101/local-agent-events.jsonl' -o -path '*/.luna-runtime/projects/builder-63/agents/*/PULSEBOARD-101/local-agent.stderr.log' \) -print 2>/dev/null)
             if [ "$found" -eq 0 ]; then
               echo "No run 63 PULSEBOARD-101 journal files found"
             fi
             echo "=== RUN 63 RUNTIME DIRECTORIES ==="
-            find /home/ubuntu -type d -path '*/.luna-runtime/projects/63/agents/*/PULSEBOARD-101' -print 2>/dev/null || true
+            find /home/ubuntu/bloom-workspaces -type d -path '*/.luna-runtime/projects/builder-63/agents/*/PULSEBOARD-101' -print 2>/dev/null || true
+
