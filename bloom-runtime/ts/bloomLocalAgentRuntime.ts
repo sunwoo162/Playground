@@ -144,12 +144,18 @@ const DIRECTORY_LIKE_WRITE_BASENAMES = new Set([
   "tests", "types", "utils",
 ]);
 
-function validateWriteTarget(value: unknown): string {
+function validateFilesystemToolTarget(value: unknown, operation: "read" | "list" | "delete" | "write"): string {
   const normalized = validateRelativePath(value);
-  const segments = normalized.split("/");
-  if (segments[0]?.toLowerCase() === ".git") {
-    throw new Error("Git metadata paths are runtime-owned by Luna Runtime and cannot be written by Local Agent.");
+  if (normalized.split("/")[0]?.toLowerCase() === ".git") {
+    const suffix = operation === "write" ? "written" : "accessed";
+    throw new Error(`Git metadata paths are runtime-owned by Luna Runtime and cannot be ${suffix} by Local Agent.`);
   }
+  return normalized;
+}
+
+function validateWriteTarget(value: unknown): string {
+  const normalized = validateFilesystemToolTarget(value, "write");
+  const segments = normalized.split("/");
   const basename = segments.pop()?.toLowerCase() ?? "";
   if (DIRECTORY_LIKE_WRITE_BASENAMES.has(basename)) {
     throw new Error(`Write target looks like a directory path: ${normalized}. Write an actual regular file inside that directory instead.`);
@@ -502,12 +508,12 @@ function failedActionFingerprint(action: JsonObject): string | null {
 async function executeAction(root: string, action: JsonObject): Promise<JsonObject> {
   switch (action.action) {
     case "list": {
-      const target = resolveInside(root, action.path ?? ".");
+      const target = resolveInside(root, validateFilesystemToolTarget(action.path ?? ".", "list"));
       const entries = await fs.readdir(target, { withFileTypes: true });
       return { ok: true, entries: entries.slice(0, 500).map((entry) => ({ name: entry.name, directory: entry.isDirectory() })) };
     }
     case "read": {
-      const target = resolveInside(root, action.path);
+      const target = resolveInside(root, validateFilesystemToolTarget(action.path, "read"));
       const stat = await fs.stat(target);
       if (!stat.isFile() || stat.size > MAX_FILE_BYTES) throw new Error("File is missing, not regular, or exceeds 1MB.");
       return { ok: true, content: await fs.readFile(target, "utf8") };
@@ -522,7 +528,7 @@ async function executeAction(root: string, action: JsonObject): Promise<JsonObje
       return { ok: true, bytes: Buffer.byteLength(action.content, "utf8") };
     }
     case "delete": {
-      const relative = validateRelativePath(action.path);
+      const relative = validateFilesystemToolTarget(action.path, "delete");
       if (relative === ".") throw new Error("The worktree root cannot be deleted.");
       await fs.rm(resolveInside(root, relative), { recursive: true, force: true });
       return { ok: true };
@@ -706,7 +712,8 @@ export async function runLocalAgent(input: LocalAgentInput, options: LocalAgentO
           `Local agent stalled after repeating an identical write ${rejectionCount} times without progress.`,
         );
       }
-      if (duplicateSucceeded) suppressWriteTurn = true;
+      suppressWriteTurn = true;
+      if (!duplicateSucceeded) forceToolTurn = true;
       result = {
         ok: false,
         error: duplicateSucceeded
