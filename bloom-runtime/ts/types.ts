@@ -1,3 +1,5 @@
+import type { HarnessTaskCompletionRecord } from "./harnessTaskEvidence";
+
 export type TeamId = "rose" | "lily" | "tulip" | "sunflower" | "cherry-blossom";
 
 export type TeamStatus = "idle" | "reserved" | "working" | "retrospective" | "evolving";
@@ -170,6 +172,7 @@ export type ProjectTaskRun = {
   summary: string | null;
   rationaleSummary: string | null;
   evidence: string[];
+  harnessCompletion?: HarnessTaskCompletionRecord | null;
   verification: AgentTaskVerification[];
   blockers: string[];
   lastError: string | null;
