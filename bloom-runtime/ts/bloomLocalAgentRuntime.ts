@@ -126,6 +126,9 @@ export function resolveLocalEndpoint(raw?: string): URL {
 export function validateRelativePath(value: unknown): string {
   if (typeof value !== "string" || !value.trim()) throw new Error("Tool path is required.");
   const normalized = value.replace(/\\/g, "/").trim();
+  if (normalized === "relative/path" || normalized === "relative/file") {
+    throw new Error("Tool path is a protocol placeholder; use an actual worktree-relative path.");
+  }
   if (path.isAbsolute(normalized) || normalized === ".." || normalized.startsWith("../")
       || normalized.includes("/../") || normalized.includes("\0")) {
     throw new Error("Tool path must stay inside the task worktree.");
@@ -343,7 +346,7 @@ function agentActionSchema(): JsonObject {
       action: { type: "string", enum: ["list", "read", "write", "delete", "run", "final"] },
       path: { type: "string" },
       content: { type: "string" },
-      command: { type: "string" },
+      command: { type: "string", enum: ["pnpm", "npm", "yarn", "bun", "cargo", "git", "node", "./gradlew", "gradlew", "gradlew.bat", "./mvnw", "mvnw", "mvnw.cmd"] },
       args: { type: "array", items: { type: "string" } },
       cwd: { type: "string" },
       report: {
