@@ -367,6 +367,16 @@ async function testLocalAgentTreatsMissingGreenfieldPathsAsCreatable() {
       "Local Agent must not use write with directory paths such as frontend/src");
     assert.match(system, /readme|documentation/i,
       "implementation guidance must distinguish product source work from README-style documentation");
+    assert.doesNotMatch(system, /relative\/(?:path|file)|full file content|pnpm\|npm\|yarn\|bun/i,
+      "Local Agent tool examples must not expose abstract placeholder values that a small model can copy as real actions");
+    assert.doesNotMatch(system, /\{\"action\":\"(?:list|read|write|delete|run)\"/,
+      "Local Agent prompt must not expose copyable JSON action examples to the small model");
+    assert.match(system, /start.*(?:inspect|list).*worktree.*root|first.*action.*list.*root/i,
+      "Local Agent must begin by inspecting the worktree root before guessing task paths");
+    assert.match(system, /list.*path.*[\"']\.['\"]|path.*[\"']\.['\"].*list/i,
+      "Local Agent root-inspection guidance must name the safe dot path explicitly");
+    assert.match(system, /command.*exactly one.*allowed|never.*(?:alternatives|pipe).*command/i,
+      "Local Agent run guidance must prohibit copying an alternatives expression into command");
   } finally {
     await fs.rm(worktree, { recursive: true, force: true });
   }
