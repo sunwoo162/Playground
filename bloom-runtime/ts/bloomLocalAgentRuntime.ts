@@ -356,7 +356,7 @@ function finalReportContract(): string {
   });
 }
 
-function agentActionSchema(allowFinal = true, allowWrite = true): JsonObject {
+function agentActionSchema(allowFinal = true, allowWrite = true, suppressedAction: string | null = null): JsonObject {
   const commandSchema = {
     type: "string",
     enum: ["pnpm", "npm", "yarn", "bun", "cargo", "git", "node", "./gradlew", "gradlew", "gradlew.bat", "./mvnw", "mvnw", "mvnw.cmd"],
@@ -402,21 +402,20 @@ function agentActionSchema(allowFinal = true, allowWrite = true): JsonObject {
       ...properties,
     },
   });
-  const branches: JsonObject[] = [
-    actionBranch("list", ["path"], { path: { type: "string" } }),
-    actionBranch("read", ["path"], { path: { type: "string" } }),
-  ];
-  if (allowWrite) {
+  const branches: JsonObject[] = [];
+  if (suppressedAction !== "list") branches.push(actionBranch("list", ["path"], { path: { type: "string" } }));
+  if (suppressedAction !== "read") branches.push(actionBranch("read", ["path"], { path: { type: "string" } }));
+  if (allowWrite && suppressedAction !== "write") {
     branches.push(actionBranch("write", ["path", "content"], { path: { type: "string" }, content: { type: "string" } }));
   }
-  branches.push(
-    actionBranch("delete", ["path"], { path: { type: "string" } }),
-    actionBranch("run", ["command", "args"], {
+  if (suppressedAction !== "delete") branches.push(actionBranch("delete", ["path"], { path: { type: "string" } }));
+  if (suppressedAction !== "run") {
+    branches.push(actionBranch("run", ["command", "args"], {
       command: commandSchema,
       args: { type: "array", items: { type: "string" } },
       cwd: { type: "string" },
-    }),
-  );
+    }));
+  }
   if (allowFinal) branches.push(actionBranch("final", ["report"], { report: reportSchema }));
   return { oneOf: branches };
 }
@@ -483,6 +482,17 @@ async function executeRun(root: string, action: JsonObject): Promise<JsonObject>
     stdout: result.stdout.toString("utf8"),
     stderr: result.stderr.toString("utf8"),
   };
+}
+
+function failedActionFingerprint(action: JsonObject): string | null {
+  const kind = typeof action.action === "string" ? action.action : "";
+  if (kind === "list" || kind === "read" || kind === "delete") {
+    return `${kind}:${String(action.path ?? "")}`;
+  }
+  if (kind === "run") {
+    return `run:${String(action.command ?? "")}:${JSON.stringify(action.args ?? [])}:${String(action.cwd ?? "")}`;
+  }
+  return null;
 }
 
 async function executeAction(root: string, action: JsonObject): Promise<JsonObject> {
@@ -609,11 +619,15 @@ export async function runLocalAgent(input: LocalAgentInput, options: LocalAgentO
   ];
   let forceToolTurn = false;
   let suppressWriteTurn = false;
+  let suppressedActionTurn: string | null = null;
+  let repeatedFailedActionFingerprint: string | null = null;
+  let repeatedFailedActionCount = 0;
   for (let step = 1; step <= maxSteps; step += 1) {
-    const actionSchema = agentActionSchema(!forceToolTurn, !suppressWriteTurn);
+    const actionSchema = agentActionSchema(!forceToolTurn, !suppressWriteTurn, suppressedActionTurn);
     const action = await callModel(endpoint, model, boundedAgentMessages(messages), fetchImpl, actionSchema);
     if (action.action !== "final") forceToolTurn = false;
     if (suppressWriteTurn) suppressWriteTurn = false;
+    if (suppressedActionTurn) suppressedActionTurn = null;
     const actionEvent = { step, ...sanitizedAgentAction(action) };
     events.push(actionEvent);
     await appendAgentJournal(input.eventsPath, actionEvent);
@@ -700,6 +714,22 @@ export async function runLocalAgent(input: LocalAgentInput, options: LocalAgentO
       if (result.ok !== true) observedNonFinalToolFailure = true;
       if (writeSignature) attemptedWriteSignatures.add(writeSignature);
       if (writeSignature && result.ok === true) successfulWriteSignatures.add(writeSignature);
+    }
+    const failedFingerprint = action.action !== "write" && result.ok !== true ? failedActionFingerprint(action) : null;
+    if (failedFingerprint) {
+      if (failedFingerprint === repeatedFailedActionFingerprint) repeatedFailedActionCount += 1;
+      else {
+        repeatedFailedActionFingerprint = failedFingerprint;
+        repeatedFailedActionCount = 1;
+      }
+      if (repeatedFailedActionCount >= 2) {
+        suppressedActionTurn = String(action.action);
+        forceToolTurn = true;
+        result.recovery = "RECOVERY_REQUIRED: This exact tool action has failed repeatedly. The next turn must use a different tool action to gather evidence or make progress before returning final.";
+      }
+    } else if (result.ok === true) {
+      repeatedFailedActionFingerprint = null;
+      repeatedFailedActionCount = 0;
     }
     const toolEvent = { step, toolResult: { ok: result.ok === true, exitCode: result.exitCode, error: result.error } };
     events.push(toolEvent);

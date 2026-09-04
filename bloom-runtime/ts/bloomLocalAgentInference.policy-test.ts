@@ -540,6 +540,71 @@ async function testRepositoryWriterForcesDifferentActionAfterDuplicateSuccessful
   }
 }
 
+async function testRepositoryWriterForcesDifferentActionAfterRepeatedFailedRead() {
+  const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-failed-read-recovery-"));
+  await fs.writeFile(path.join(worktree, "README.md"), "baseline\n", "utf8");
+  execFileSync("git", ["init"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["config", "user.email", "policy@example.com"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["config", "user.name", "Bloom Policy"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["add", "README.md"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["commit", "-m", "baseline"], { cwd: worktree, stdio: "ignore" });
+  const bodies: Array<Record<string, unknown>> = [];
+  let calls = 0;
+  const repeatedRead = '{"action":"read","path":"agent/rose/backend/builder-66-backend-pulseboard/.git/diff"}';
+  const completed = '{"action":"final","report":{"status":"completed","summary":"done","rationaleSummary":"done","evidence":[],"verification":[],"commitSha":null,"pullRequestNumber":null,"pullRequestUrl":null,"reviewedPullRequests":[],"blockers":[]}}';
+  const fetchImpl: typeof fetch = async (_input, init) => {
+    const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+    bodies.push(body);
+    calls += 1;
+    const responseFormat = body.response_format as Record<string, unknown> | undefined;
+    const schema = responseFormat?.schema as Record<string, unknown> | undefined;
+    const variants = schema?.oneOf as Array<Record<string, unknown>> | undefined;
+    const actions = variants?.map((variant) => {
+      const properties = variant.properties as Record<string, unknown> | undefined;
+      const action = properties?.action as Record<string, unknown> | undefined;
+      return Array.isArray(action?.enum) ? action.enum[0] : undefined;
+    }) ?? [];
+    const content = calls === 1
+      ? completed
+      : calls <= 3
+        ? repeatedRead
+        : calls === 4
+          ? actions.includes("read")
+            ? repeatedRead
+            : '{"action":"write","path":"api/src/server.ts","content":"export const ready = true;"}'
+          : completed;
+    return streamingResponse([
+      `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`,
+      "data: [DONE]\n\n",
+    ]);
+  };
+
+  try {
+    const result = await runLocalAgent({
+      projectId: "policy",
+      taskId: "WRITER-FAILED-READ-RECOVERY",
+      worktree,
+      prompt: "implement the backend",
+      requireMutation: true,
+    }, { fetchImpl, maxSteps: 5 });
+    assert.equal(result.report.status, "completed");
+    assert.equal(calls, 5, "a repeated failed read must force a different tool action before the writer can finish");
+    const fourthFormat = bodies[3]?.response_format as Record<string, unknown> | undefined;
+    const fourthSchema = fourthFormat?.schema as Record<string, unknown> | undefined;
+    const fourthVariants = fourthSchema?.oneOf as Array<Record<string, unknown>> | undefined;
+    const fourthActions = fourthVariants?.map((variant) => {
+      const properties = variant.properties as Record<string, unknown> | undefined;
+      const action = properties?.action as Record<string, unknown> | undefined;
+      return Array.isArray(action?.enum) ? action.enum[0] : undefined;
+    });
+    assert.deepEqual(fourthActions, ["list", "write", "delete", "run"],
+      "after the same read fails twice, the next schema must temporarily remove read and final so the model must gather different evidence or make progress");
+    assert.equal(await fs.readFile(path.join(worktree, "api", "src", "server.ts"), "utf8"), "export const ready = true;");
+  } finally {
+    await fs.rm(worktree, { recursive: true, force: true });
+  }
+}
+
 async function testLocalAgentFailsFastOnRepeatedRejectedWriteLoop() {
   const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-rejected-write-loop-"));
   let calls = 0;
@@ -720,6 +785,7 @@ async function main() {
   await testRepositoryWriterForcesToolTurnAfterNoopFinal();
   await testLocalAgentRejectsImmediateDuplicateSuccessfulWrite();
   await testRepositoryWriterForcesDifferentActionAfterDuplicateSuccessfulWrite();
+  await testRepositoryWriterForcesDifferentActionAfterRepeatedFailedRead();
   await testLocalAgentFailsFastOnRepeatedRejectedWriteLoop();
   await testLocalAgentFailsFastWhenRejectedWriteChangesOnlyContent();
   await testLocalAgentTreatsMissingGreenfieldPathsAsCreatable();
