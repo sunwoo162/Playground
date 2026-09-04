@@ -171,6 +171,10 @@ jobs:
             grep -n -F 'input.requireMutation === true' /home/ubuntu/bloombouquet/.tmp/bloom-worker/bloomLocalAgentRuntime.js | head -5 || true
             echo "[local-agent-force-tool-turn]"
             grep -n -F 'forceToolTurn' /home/ubuntu/bloombouquet/.tmp/bloom-worker/bloomLocalAgentRuntime.js | head -8 || true
+            echo "[local-agent-action-schema]"
+            grep -n -F 'actionBranch("read", ["path"]' /home/ubuntu/bloombouquet/.tmp/bloom-worker/bloomLocalAgentRuntime.js | head -3 || true
+            grep -n -F 'actionBranch("write", ["path", "content"]' /home/ubuntu/bloombouquet/.tmp/bloom-worker/bloomLocalAgentRuntime.js | head -3 || true
+            grep -n -F 'oneOf: branches' /home/ubuntu/bloombouquet/.tmp/bloom-worker/bloomLocalAgentRuntime.js | head -3 || true
             echo "[bridge-require-mutation]"
             grep -a -o -F 'requireMutation' /home/ubuntu/bloombouquet/bloom-runtime/target/release/bloom-runtime-bridge | head -5 || true
             ACTIVE_LEASE="$(printf 'X-Builder-Worker-Token: %s\n' "$BUILDER_WORKER_TOKEN" | curl -fsS --max-time 20 -H @- 'http://127.0.0.1:8080/internal/builder/worker/runs/active-lease?workerId=bloom-builder-production')"
