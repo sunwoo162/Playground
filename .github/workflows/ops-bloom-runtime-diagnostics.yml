@@ -1,4 +1,4 @@
-name: Ops Bloom Runtime Diagnostics
+﻿name: Ops Bloom Runtime Diagnostics
 
 on:
   push:
@@ -85,6 +85,7 @@ jobs:
             const plan=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
             const task=(plan.tasks||[]).find((x)=>x.role==='frontend');
             console.log('[plan-context] '+JSON.stringify({productSummary:plan.productSummary,architectureSummary:plan.architectureSummary,frontendTask:task}));
+console.log('[plan-dag] '+JSON.stringify((plan.tasks||[]).map((x)=>({id:x.id,role:x.role,dependsOn:x.dependsOn||[],taskSlug:x.taskSlug,title:x.title}))));
             NODE
               FRONTEND_TASK_ID="$(node - "$PLAN_FILE" <<'NODE'
             const fs=require('fs');
