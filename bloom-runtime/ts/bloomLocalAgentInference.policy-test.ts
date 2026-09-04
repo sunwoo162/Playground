@@ -605,6 +605,76 @@ async function testRepositoryWriterForcesDifferentActionAfterRepeatedFailedRead(
   }
 }
 
+async function testRepositoryWriterTreatsRuntimeOwnedGitMetadataReadsAsOneFailureClass() {
+  const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-git-metadata-read-recovery-"));
+  await fs.writeFile(path.join(worktree, "README.md"), "baseline\n", "utf8");
+  execFileSync("git", ["init"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["config", "user.email", "policy@example.com"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["config", "user.name", "Bloom Policy"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["add", "README.md"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["commit", "-m", "baseline"], { cwd: worktree, stdio: "ignore" });
+  const bodies: Array<Record<string, unknown>> = [];
+  let calls = 0;
+  const completed = '{"action":"final","report":{"status":"completed","summary":"done","rationaleSummary":"done","evidence":[],"verification":[],"commitSha":null,"pullRequestNumber":null,"pullRequestUrl":null,"reviewedPullRequests":[],"blockers":[]}}';
+  const gitMetadataReads = [
+    '{"action":"read","path":".git/hooks/pre-receive"}',
+    '{"action":"read","path":".git/hooks/post-receive"}',
+  ];
+  const fetchImpl: typeof fetch = async (_input, init) => {
+    const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+    bodies.push(body);
+    calls += 1;
+    const responseFormat = body.response_format as Record<string, unknown> | undefined;
+    const schema = responseFormat?.schema as Record<string, unknown> | undefined;
+    const variants = schema?.oneOf as Array<Record<string, unknown>> | undefined;
+    const actions = variants?.map((variant) => {
+      const properties = variant.properties as Record<string, unknown> | undefined;
+      const action = properties?.action as Record<string, unknown> | undefined;
+      return Array.isArray(action?.enum) ? action.enum[0] : undefined;
+    }) ?? [];
+    const content = calls === 1
+      ? completed
+      : calls === 2
+        ? gitMetadataReads[0]
+        : calls === 3
+          ? gitMetadataReads[1]
+          : calls === 4
+            ? actions.includes("read")
+              ? gitMetadataReads[0]
+              : '{"action":"write","path":"frontend/src/App.tsx","content":"export default function App(){ return null; }"}'
+            : completed;
+    return streamingResponse([
+      `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`,
+      "data: [DONE]\n\n",
+    ]);
+  };
+
+  try {
+    const result = await runLocalAgent({
+      projectId: "policy",
+      taskId: "WRITER-GIT-METADATA-READ-RECOVERY",
+      worktree,
+      prompt: "implement the frontend",
+      requireMutation: true,
+    }, { fetchImpl, maxSteps: 5 });
+    assert.equal(result.report.status, "completed");
+    assert.equal(calls, 5);
+    const fourthFormat = bodies[3]?.response_format as Record<string, unknown> | undefined;
+    const fourthSchema = fourthFormat?.schema as Record<string, unknown> | undefined;
+    const fourthVariants = fourthSchema?.oneOf as Array<Record<string, unknown>> | undefined;
+    const fourthActions = fourthVariants?.map((variant) => {
+      const properties = variant.properties as Record<string, unknown> | undefined;
+      const action = properties?.action as Record<string, unknown> | undefined;
+      return Array.isArray(action?.enum) ? action.enum[0] : undefined;
+    });
+    assert.deepEqual(fourthActions, ["list", "write", "delete", "run"],
+      "different runtime-owned .git read paths must count as one repeated failure class and temporarily remove read and final");
+    assert.equal(await fs.readFile(path.join(worktree, "frontend", "src", "App.tsx"), "utf8"),
+      "export default function App(){ return null; }");
+  } finally {
+    await fs.rm(worktree, { recursive: true, force: true });
+  }
+}
 async function testRepositoryWriterRejectsRuntimeOwnedGitMetadataWriteAndRecovers() {
   const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-git-metadata-write-"));
   await fs.writeFile(path.join(worktree, "README.md"), "baseline\n", "utf8");
@@ -939,6 +1009,7 @@ async function main() {
   await testLocalAgentRejectsImmediateDuplicateSuccessfulWrite();
   await testRepositoryWriterForcesDifferentActionAfterDuplicateSuccessfulWrite();
   await testRepositoryWriterForcesDifferentActionAfterRepeatedFailedRead();
+  await testRepositoryWriterTreatsRuntimeOwnedGitMetadataReadsAsOneFailureClass();
   await testRepositoryWriterRejectsRuntimeOwnedGitMetadataWriteAndRecovers();
   await testRepositoryWriterForcesDifferentActionAfterDuplicateFailedWrite();
   await testLocalAgentRejectsRuntimeOwnedGitMetadataFilesystemActions();
