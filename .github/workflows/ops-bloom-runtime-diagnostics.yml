@@ -193,6 +193,10 @@ jobs:
             grep -n -F 'forceToolTurn' /home/ubuntu/bloombouquet/.tmp/bloom-worker/bloomLocalAgentRuntime.js | head -8 || true
             echo "[local-agent-suppress-write-turn]"
             grep -n -F 'suppressWriteTurn' /home/ubuntu/bloombouquet/.tmp/bloom-worker/bloomLocalAgentRuntime.js | head -8 || true
+            echo "[local-agent-repeated-failure-recovery]"
+            grep -n -F 'failedActionFingerprint' /home/ubuntu/bloombouquet/.tmp/bloom-worker/bloomLocalAgentRuntime.js | head -8 || true
+            grep -n -F 'suppressedActionTurn' /home/ubuntu/bloombouquet/.tmp/bloom-worker/bloomLocalAgentRuntime.js | head -8 || true
+            grep -n -F 'RECOVERY_REQUIRED: This exact tool action has failed repeatedly.' /home/ubuntu/bloombouquet/.tmp/bloom-worker/bloomLocalAgentRuntime.js | head -4 || true
             echo "[local-agent-action-schema]"
             grep -n -F 'actionBranch("read", ["path"]' /home/ubuntu/bloombouquet/.tmp/bloom-worker/bloomLocalAgentRuntime.js | head -3 || true
             grep -n -F 'actionBranch("write", ["path", "content"]' /home/ubuntu/bloombouquet/.tmp/bloom-worker/bloomLocalAgentRuntime.js | head -3 || true
