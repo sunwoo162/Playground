@@ -8,6 +8,7 @@ import {
   validateHarnessAgentResult,
   validateHarnessEvidence,
 } from "./harnessValidation";
+import type { HarnessRunArtifactBundle } from "./harnessRunArtifacts";
 
 const EVIDENCE_KIND_SET = new Set<string>(HARNESS_EVIDENCE_KINDS);
 
@@ -118,4 +119,34 @@ export function assertHarnessCompletion(
   throw new Error(
     `Bloom Harness completion rejected: missing required evidence kinds: ${evaluation.missingEvidenceKinds.join(", ")}.`,
   );
+}
+
+export function evaluateHarnessRunCompletion(
+  bundle: HarnessRunArtifactBundle,
+  requiredEvidence: readonly string[],
+): HarnessCompletionGateResult {
+  const result = bundle.snapshots.result;
+  if (result === undefined) {
+    throw new Error(`Bloom Harness run result snapshot is missing for ${bundle.runId}.`);
+  }
+  return evaluateHarnessCompletion({
+    requiredEvidence,
+    result,
+    evidence: bundle.evidence,
+  });
+}
+
+export function assertHarnessRunCompletion(
+  bundle: HarnessRunArtifactBundle,
+  requiredEvidence: readonly string[],
+): HarnessAgentResult {
+  const result = bundle.snapshots.result;
+  if (result === undefined) {
+    throw new Error(`Bloom Harness run result snapshot is missing for ${bundle.runId}.`);
+  }
+  return assertHarnessCompletion({
+    requiredEvidence,
+    result,
+    evidence: bundle.evidence,
+  });
 }

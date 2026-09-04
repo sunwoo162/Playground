@@ -1,9 +1,15 @@
 import * as assert from "node:assert/strict";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 
 import {
   assertHarnessCompletion,
+  assertHarnessRunCompletion,
   evaluateHarnessCompletion,
+  evaluateHarnessRunCompletion,
 } from "./harnessCompletionGate";
+import { createHarnessRunArtifactStore } from "./harnessRunArtifacts";
 
 function doneResult(evidenceIds: string[]) {
   return {
@@ -100,4 +106,53 @@ assert.throws(
   /required evidence/i,
 );
 
+
+const runRoot = fs.mkdtempSync(`${os.tmpdir()}${path.sep}bloom-completion-gate-`);
+const runStore = createHarnessRunArtifactStore(runRoot, "run-ready");
+runStore.writeSnapshot("result", doneResult(["test-1"]));
+runStore.appendEvidence({
+  version: 1,
+  id: "test-1",
+  kind: "test",
+  summary: "persisted regression passed",
+});
+const runBundle = runStore.readRun();
+const persistedReady = evaluateHarnessRunCompletion(runBundle, ["test"]);
+assert.equal(persistedReady.ready, true);
+assert.equal(
+  assertHarnessRunCompletion(runBundle, ["test"]).status,
+  "done",
+);
+const missingResultStore = createHarnessRunArtifactStore(runRoot, "run-missing-result");
+assert.throws(
+  () => evaluateHarnessRunCompletion(missingResultStore.readRun(), ["test"]),
+  /result snapshot.*missing|missing.*result snapshot/i,
+);
+
+const missingEvidenceStore = createHarnessRunArtifactStore(runRoot, "run-missing-evidence");
+missingEvidenceStore.writeSnapshot("result", doneResult(["test-1", "ghost-1"]));
+missingEvidenceStore.appendEvidence({
+  version: 1,
+  id: "test-1",
+  kind: "test",
+  summary: "persisted regression passed",
+});
+const persistedMissing = evaluateHarnessRunCompletion(
+  missingEvidenceStore.readRun(),
+  ["test"],
+);
+assert.equal(persistedMissing.ready, false);
+assert.deepEqual(persistedMissing.missingEvidenceIds, ["ghost-1"]);
+const unreferencedStore = createHarnessRunArtifactStore(runRoot, "run-unreferenced");
+unreferencedStore.writeSnapshot("result", doneResult(["test-1"]));
+unreferencedStore.appendEvidence({ version: 1, id: "test-1", kind: "test", summary: "passed" });
+unreferencedStore.appendEvidence({ version: 1, id: "review-1", kind: "review", summary: "approved" });
+const persistedUnreferenced = evaluateHarnessRunCompletion(
+  unreferencedStore.readRun(),
+  ["review"],
+);
+assert.equal(persistedUnreferenced.ready, false);
+assert.deepEqual(persistedUnreferenced.missingEvidenceKinds, ["review"]);
+
+fs.rmSync(runRoot, { recursive: true, force: true });
 console.log("PASS  Bloom Harness evidence completion gate scenarios passed.");
