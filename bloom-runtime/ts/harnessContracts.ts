@@ -29,7 +29,7 @@ export type HarnessAgentEnvelope = {
   role: AgentRole;
   permissions: AgentPermission[];
   acceptanceCriteria: string[];
-  requiredEvidence: string[];
+  requiredEvidence: HarnessEvidenceKind[];
 };
 
 export type HarnessAgentResult = {
@@ -44,14 +44,17 @@ export type HarnessAgentResult = {
   nextActions: string[];
 };
 
-export type HarnessEvidenceKind =
-  | "command"
-  | "test"
-  | "build"
-  | "file-change"
-  | "review"
-  | "github"
-  | "deployment";
+export const HARNESS_EVIDENCE_KINDS = [
+  "command",
+  "test",
+  "build",
+  "file-change",
+  "review",
+  "github",
+  "deployment",
+] as const;
+
+export type HarnessEvidenceKind = (typeof HARNESS_EVIDENCE_KINDS)[number];
 
 export type HarnessEvidence = {
   version: 1;

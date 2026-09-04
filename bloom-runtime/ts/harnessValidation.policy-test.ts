@@ -71,4 +71,38 @@ assert.throws(
   /acceptanceCriteria/,
 );
 
+assert.throws(
+  () => validateHarnessAgentEnvelope({
+    version: 1,
+    objective: "Escalate privileges",
+    role: "root",
+    permissions: ["repository:read"],
+    acceptanceCriteria: [],
+    requiredEvidence: ["test"],
+  }),
+  /role/,
+);
+assert.throws(
+  () => validateHarnessAgentEnvelope({
+    version: 1,
+    objective: "Fix it",
+    role: "frontend",
+    permissions: ["repository:read", "root:write"],
+    acceptanceCriteria: [],
+    requiredEvidence: ["test"],
+  }),
+  /permissions/,
+);
+assert.throws(
+  () => validateHarnessAgentEnvelope({
+    version: 1,
+    objective: "Fix it",
+    role: "frontend",
+    permissions: ["repository:read"],
+    acceptanceCriteria: [],
+    requiredEvidence: ["made-up-evidence"],
+  }),
+  /requiredEvidence/,
+);
+
 console.log("PASS  Bloom Harness agent and evidence validation scenarios passed.");
