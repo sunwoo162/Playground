@@ -667,6 +667,97 @@ async function testRepositoryWriterRejectsRuntimeOwnedGitMetadataWriteAndRecover
   }
 }
 
+async function testLocalAgentRejectsRuntimeOwnedGitMetadataFilesystemActions() {
+  const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-git-metadata-fs-"));
+  await fs.writeFile(path.join(worktree, "README.md"), "baseline\n", "utf8");
+  execFileSync("git", ["init"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["config", "user.email", "policy@example.com"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["config", "user.name", "Bloom Policy"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["add", "README.md"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["commit", "-m", "baseline"], { cwd: worktree, stdio: "ignore" });
+  let calls = 0;
+  const completed = '{"action":"final","report":{"status":"completed","summary":"done","rationaleSummary":"done","evidence":[],"verification":[],"commitSha":null,"pullRequestNumber":null,"pullRequestUrl":null,"reviewedPullRequests":[],"blockers":[]}}';
+  const actions = [
+    '{"action":"read","path":".git/HEAD"}',
+    '{"action":"list","path":".git"}',
+    '{"action":"delete","path":".git"}',
+    completed,
+  ];
+  const fetchImpl: typeof fetch = async () => {
+    const content = actions[calls++] ?? completed;
+    return streamingResponse([
+      `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`,
+      "data: [DONE]\n\n",
+    ]);
+  };
+  try {
+    const result = await runLocalAgent({ projectId: "policy", taskId: "GIT-METADATA-FS", worktree, prompt: "inspect repository metadata" }, { fetchImpl, maxSteps: 4 });
+    assert.equal(result.report.status, "completed");
+    const toolResults = result.events.filter((event) => "toolResult" in event) as Array<{ toolResult: Record<string, unknown> }>;
+    assert.equal(toolResults.length, 3);
+    for (const event of toolResults) {
+      assert.equal(event.toolResult.ok, false, "Local Agent filesystem tools must not access runtime-owned .git metadata");
+      assert.match(String(event.toolResult.error ?? ""), /git metadata|runtime-owned|Luna Runtime/i);
+    }
+    const gitStat = await fs.stat(path.join(worktree, ".git"));
+    assert.ok(gitStat.isDirectory(), "rejecting delete .git must preserve repository metadata");
+  } finally {
+    await fs.rm(worktree, { recursive: true, force: true });
+  }
+}
+
+async function testRepositoryWriterForcesDifferentActionAfterDuplicateFailedWrite() {
+  const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-failed-write-recovery-"));
+  await fs.writeFile(path.join(worktree, "README.md"), "baseline\n", "utf8");
+  await fs.writeFile(path.join(worktree, "locked-parent"), "file\n", "utf8");
+  execFileSync("git", ["init"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["config", "user.email", "policy@example.com"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["config", "user.name", "Bloom Policy"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["add", "README.md", "locked-parent"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["commit", "-m", "baseline"], { cwd: worktree, stdio: "ignore" });
+  const bodies: Array<Record<string, unknown>> = [];
+  let calls = 0;
+  const badWrite = '{"action":"write","path":"locked-parent/child.ts","content":"export const bad = true;"}';
+  const completed = '{"action":"final","report":{"status":"completed","summary":"done","rationaleSummary":"done","evidence":[],"verification":[],"commitSha":null,"pullRequestNumber":null,"pullRequestUrl":null,"reviewedPullRequests":[],"blockers":[]}}';
+  const fetchImpl: typeof fetch = async (_input, init) => {
+    const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+    bodies.push(body);
+    calls += 1;
+    const schema = ((body.response_format as Record<string, unknown> | undefined)?.schema ?? {}) as Record<string, unknown>;
+    const variants = schema.oneOf as Array<Record<string, unknown>> | undefined;
+    const actions = variants?.map((variant) => {
+      const properties = variant.properties as Record<string, unknown> | undefined;
+      const action = properties?.action as Record<string, unknown> | undefined;
+      return Array.isArray(action?.enum) ? action.enum[0] : undefined;
+    }) ?? [];
+    const content = calls <= 2 ? badWrite
+      : calls === 3 ? (actions.includes("write") ? badWrite : '{"action":"list","path":"."}')
+      : calls === 4 ? '{"action":"write","path":"api/src/server.ts","content":"export const ready = true;"}'
+      : completed;
+    return streamingResponse([
+      `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`,
+      "data: [DONE]\n\n",
+    ]);
+  };
+  try {
+    const result = await runLocalAgent({ projectId: "policy", taskId: "FAILED-WRITE-RECOVERY", worktree, prompt: "implement backend", requireMutation: true }, { fetchImpl, maxSteps: 5 });
+    assert.equal(result.report.status, "completed");
+    assert.equal(calls, 5);
+    const thirdSchema = ((bodies[2]?.response_format as Record<string, unknown> | undefined)?.schema ?? {}) as Record<string, unknown>;
+    const thirdVariants = thirdSchema.oneOf as Array<Record<string, unknown>> | undefined;
+    const thirdActions = thirdVariants?.map((variant) => {
+      const properties = variant.properties as Record<string, unknown> | undefined;
+      const action = properties?.action as Record<string, unknown> | undefined;
+      return Array.isArray(action?.enum) ? action.enum[0] : undefined;
+    });
+    assert.deepEqual(thirdActions, ["list", "read", "delete", "run"],
+      "after an identical failed write repeats, the next turn must remove write and final so the model must recover through a different tool action");
+    assert.equal(await fs.readFile(path.join(worktree, "api", "src", "server.ts"), "utf8"), "export const ready = true;");
+  } finally {
+    await fs.rm(worktree, { recursive: true, force: true });
+  }
+}
+
 async function testLocalAgentFailsFastOnRepeatedRejectedWriteLoop() {
   const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-rejected-write-loop-"));
   let calls = 0;
@@ -849,6 +940,8 @@ async function main() {
   await testRepositoryWriterForcesDifferentActionAfterDuplicateSuccessfulWrite();
   await testRepositoryWriterForcesDifferentActionAfterRepeatedFailedRead();
   await testRepositoryWriterRejectsRuntimeOwnedGitMetadataWriteAndRecovers();
+  await testRepositoryWriterForcesDifferentActionAfterDuplicateFailedWrite();
+  await testLocalAgentRejectsRuntimeOwnedGitMetadataFilesystemActions();
   await testLocalAgentFailsFastOnRepeatedRejectedWriteLoop();
   await testLocalAgentFailsFastWhenRejectedWriteChangesOnlyContent();
   await testLocalAgentTreatsMissingGreenfieldPathsAsCreatable();
