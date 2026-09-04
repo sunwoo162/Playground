@@ -540,6 +540,67 @@ async function testRepositoryWriterForcesDifferentActionAfterDuplicateSuccessful
   }
 }
 
+async function testRepositoryWriterKeepsWriteSuppressedAfterDuplicateWriteInspection() {
+  const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-duplicate-read-ping-pong-"));
+  await fs.writeFile(path.join(worktree, "README.md"), "baseline\n", "utf8");
+  execFileSync("git", ["init"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["config", "user.email", "policy@example.com"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["config", "user.name", "Bloom Policy"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["add", "README.md"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["commit", "-m", "baseline"], { cwd: worktree, stdio: "ignore" });
+  const bodies: Array<Record<string, unknown>> = [];
+  let calls = 0;
+  const duplicateWrite = '{"action":"write","path":"frontend/src/main.tsx","content":"export default function App(){ return null; }"}';
+  const inspectRead = '{"action":"read","path":"frontend/src/main.tsx"}';
+  const completed = '{"action":"final","report":{"status":"completed","summary":"done","rationaleSummary":"done","evidence":[],"verification":[],"commitSha":null,"pullRequestNumber":null,"pullRequestUrl":null,"reviewedPullRequests":[],"blockers":[]}}';
+  const fetchImpl: typeof fetch = async (_input, init) => {
+    const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+    bodies.push(body);
+    calls += 1;
+    const responseFormat = body.response_format as Record<string, unknown> | undefined;
+    const schema = responseFormat?.schema as Record<string, unknown> | undefined;
+    const variants = schema?.oneOf as Array<Record<string, unknown>> | undefined;
+    const actions = variants?.map((variant) => {
+      const properties = variant.properties as Record<string, unknown> | undefined;
+      const action = properties?.action as Record<string, unknown> | undefined;
+      return Array.isArray(action?.enum) ? action.enum[0] : undefined;
+    }) ?? [];
+    const content = calls === 1 || calls === 3
+      ? duplicateWrite
+      : calls === 2 || calls === 4
+        ? inspectRead
+        : actions.includes("write") ? duplicateWrite : completed;
+    return streamingResponse([
+      `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`,
+      "data: [DONE]\n\n",
+    ]);
+  };
+
+  try {
+    const result = await runLocalAgent({
+      projectId: "policy",
+      taskId: "WRITER-DUPLICATE-READ-PING-PONG",
+      worktree,
+      prompt: "implement the frontend",
+      requireMutation: true,
+    }, { fetchImpl, maxSteps: 6 });
+    assert.equal(result.report.status, "completed");
+    assert.equal(calls, 5, "a successful inspection must not reopen the identical write immediately");
+    const fifthFormat = bodies[4]?.response_format as Record<string, unknown> | undefined;
+    const fifthSchema = fifthFormat?.schema as Record<string, unknown> | undefined;
+    const fifthVariants = fifthSchema?.oneOf as Array<Record<string, unknown>> | undefined;
+    const fifthActions = fifthVariants?.map((variant) => {
+      const properties = variant.properties as Record<string, unknown> | undefined;
+      const action = properties?.action as Record<string, unknown> | undefined;
+      return Array.isArray(action?.enum) ? action.enum[0] : undefined;
+    });
+    assert.deepEqual(fifthActions, ["list", "read", "delete", "run", "final"],
+      "read-only inspection after a duplicate successful write must keep write suppressed until real progress or final");
+  } finally {
+    await fs.rm(worktree, { recursive: true, force: true });
+  }
+}
+
 async function testRepositoryWriterForcesDifferentActionAfterRepeatedFailedRead() {
   const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-failed-read-recovery-"));
   await fs.writeFile(path.join(worktree, "README.md"), "baseline\n", "utf8");
@@ -1008,6 +1069,7 @@ async function main() {
   await testRepositoryWriterForcesToolTurnAfterNoopFinal();
   await testLocalAgentRejectsImmediateDuplicateSuccessfulWrite();
   await testRepositoryWriterForcesDifferentActionAfterDuplicateSuccessfulWrite();
+  await testRepositoryWriterKeepsWriteSuppressedAfterDuplicateWriteInspection();
   await testRepositoryWriterForcesDifferentActionAfterRepeatedFailedRead();
   await testRepositoryWriterTreatsRuntimeOwnedGitMetadataReadsAsOneFailureClass();
   await testRepositoryWriterRejectsRuntimeOwnedGitMetadataWriteAndRecovers();

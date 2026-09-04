@@ -632,6 +632,7 @@ export async function runLocalAgent(input: LocalAgentInput, options: LocalAgentO
   ];
   let forceToolTurn = false;
   let suppressWriteTurn = false;
+  let duplicateSuccessfulWriteRecovery = false;
   let suppressedActionTurn: string | null = null;
   let repeatedFailedActionFingerprint: string | null = null;
   let repeatedFailedActionCount = 0;
@@ -716,6 +717,7 @@ export async function runLocalAgent(input: LocalAgentInput, options: LocalAgentO
         );
       }
       suppressWriteTurn = true;
+      if (duplicateSucceeded) duplicateSuccessfulWriteRecovery = true;
       if (!duplicateSucceeded) forceToolTurn = true;
       result = {
         ok: false,
@@ -732,6 +734,11 @@ export async function runLocalAgent(input: LocalAgentInput, options: LocalAgentO
       if (result.ok !== true) observedNonFinalToolFailure = true;
       if (writeSignature) attemptedWriteSignatures.add(writeSignature);
       if (writeSignature && result.ok === true) successfulWriteSignatures.add(writeSignature);
+    }
+    if (duplicateSuccessfulWriteRecovery && action.action !== "write") {
+      const madeRecoveryProgress = result.ok === true && (action.action === "run" || action.action === "delete");
+      if (madeRecoveryProgress) duplicateSuccessfulWriteRecovery = false;
+      else suppressWriteTurn = true;
     }
     const failedFingerprint = action.action !== "write" && result.ok !== true ? failedActionFingerprint(action, result) : null;
     if (failedFingerprint) {
