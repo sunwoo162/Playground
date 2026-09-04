@@ -35,14 +35,15 @@ export type HarnessPackResolution = {
   reason: string;
 };
 
-const BUG_FIX_INTENT = /\b(bug|fix|crash|failure|regression)\b|(?:버그|오류|에러|크래시|회귀|고쳐|고치)/i;
+const BUG_FIX_DIRECT_INTENT = /\b(bug|fix|crash|failure|regression)\b|(?:버그|오류|에러|크래시|회귀|고쳐|고치)/i;
+const ENGLISH_ERROR_REPAIR_INTENT = /\b(?:handle|resolve|repair|debug|investigate|troubleshoot)\b[^/.\n!?]{0,80}\berror\b(?!\s+(?:states?|handling)\b|\s*[/,]\s*[^/,\s]+\s+states?\b)/i;
 
 export function findHarnessPackById(id: string): HarnessPack | null {
   return HARNESS_PACKS.find((pack) => pack.id === id) ?? null;
 }
 
 export function inferHarnessPack(intent: string): HarnessPackResolution | null {
-  if (!BUG_FIX_INTENT.test(intent)) return null;
+  if (!BUG_FIX_DIRECT_INTENT.test(intent) && !ENGLISH_ERROR_REPAIR_INTENT.test(intent)) return null;
   return {
     pack: BUG_FIX_PACK,
     reason: "Selected from bug-fix intent keywords.",
