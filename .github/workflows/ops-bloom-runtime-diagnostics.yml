@@ -116,7 +116,26 @@ jobs:
               EVENTS="$RUNTIME_ROOT/agents/rose:frontend/${FRONTEND_TASK_ID}/local-agent-events.jsonl"
               if [ -s "$EVENTS" ]; then echo "[frontend-events]"; cat "$EVENTS"; fi
             fi
-            echo "=== builder process ==="
+            BACKEND_TASK_ID=""
+            if [ -f "$PLAN_FILE" ]; then
+              BACKEND_TASK_ID="$(node - "$PLAN_FILE" <<'NODE'
+            const fs=require('fs');
+            const plan=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+            const task=(plan.tasks||[]).find((x)=>x.role==='backend');
+            if (task?.id) process.stdout.write(String(task.id));
+            NODE
+              )"
+            fi
+            if [ -n "$BACKEND_TASK_ID" ]; then
+              echo "=== backend task ${BACKEND_TASK_ID} ==="
+              BACKEND_WT="/home/ubuntu/bloom-workspaces/.luna-worktrees/builder-${PROJECT_ID}/${BACKEND_TASK_ID}"
+              echo "[backend-worktree-status]"
+              git -C "$BACKEND_WT" status --short 2>/dev/null || true
+              BACKEND_STDERR="$RUNTIME_ROOT/agents/rose:backend/${BACKEND_TASK_ID}/local-agent.stderr.log"
+              if [ -s "$BACKEND_STDERR" ]; then echo "[backend-stderr]"; cat "$BACKEND_STDERR"; fi
+              BACKEND_EVENTS="$RUNTIME_ROOT/agents/rose:backend/${BACKEND_TASK_ID}/local-agent-events.jsonl"
+              if [ -s "$BACKEND_EVENTS" ]; then echo "[backend-events]"; cat "$BACKEND_EVENTS"; fi
+            fi            echo "=== builder process ==="
             BUILDER_PID="$(pm2 pid bloom-builder-worker || true)"
             echo "builder_pid=${BUILDER_PID}"
             if [ -n "$BUILDER_PID" ] && [ "$BUILDER_PID" != "0" ]; then
