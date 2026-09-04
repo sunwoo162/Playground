@@ -1,6 +1,9 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+import type { HarnessEvidence } from "./harnessContracts";
+import { validateHarnessEvidence } from "./harnessValidation";
+
 export type HarnessRunSnapshotName =
   | "request"
   | "manifest"
@@ -10,6 +13,12 @@ export type HarnessRunSnapshotName =
   | "review"
   | "qa"
   | "result";
+
+export type HarnessRunEvent = {
+  type: string;
+  at: string;
+  [key: string]: unknown;
+};
 
 const SNAPSHOT_FILES: Record<HarnessRunSnapshotName, string> = {
   request: "request.json",
@@ -23,27 +32,29 @@ const SNAPSHOT_FILES: Record<HarnessRunSnapshotName, string> = {
 };
 
 const RUN_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 function assertRunId(runId: string): void {
   if (!RUN_ID_PATTERN.test(runId) || runId === "." || runId === "..") {
     throw new Error(`Bloom Harness run id is invalid: ${runId}`);
   }
 }
 
-function serializeJson(value: unknown, label: string): string {
+function serializeJson(value: unknown, label: string, pretty = true): string {
   try {
-    const serialized = JSON.stringify(value, null, 2);
+    const serialized = JSON.stringify(value, null, pretty ? 2 : undefined);
     if (serialized === undefined) {
       throw new Error(`${label} is not JSON-serializable`);
     }
-    return `${serialized}\n`;
+    return serialized;
   } catch (error) {
-    if (error instanceof Error && error.message.includes("not JSON-serializable")) {
-      throw error;
-    }
+    if (error instanceof Error && error.message.includes("not JSON-serializable")) throw error;
     throw new Error(`Bloom Harness ${label} could not be serialized as JSON.`);
   }
 }
-
 function writeOnce(filePath: string, content: string): void {
   try {
     fs.writeFileSync(filePath, content, { encoding: "utf8", flag: "wx" });
@@ -54,11 +65,48 @@ function writeOnce(filePath: string, content: string): void {
     throw error;
   }
 }
+
+function replaceFileAtomically(filePath: string, content: string): void {
+  const tempPath = `${filePath}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  try {
+    fs.writeFileSync(tempPath, content, { encoding: "utf8", flag: "wx" });
+    fs.renameSync(tempPath, filePath);
+  } finally {
+    if (fs.existsSync(tempPath)) fs.rmSync(tempPath, { force: true });
+  }
+}
+
+function readEvidenceArray(filePath: string): HarnessEvidence[] {
+  if (!fs.existsSync(filePath)) return [];
+  try {
+    const parsed = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    if (!Array.isArray(parsed)) throw new Error("evidence root is not an array");
+    return parsed.map((item) => validateHarnessEvidence(item));
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`Bloom Harness stored evidence is corrupt at ${filePath}: ${detail}`);
+  }
+}
+function validateRunEvent(event: unknown): HarnessRunEvent {
+  if (!isRecord(event)) {
+    throw new Error("Bloom Harness run event must be an object.");
+  }
+  if (typeof event.type !== "string" || event.type.trim() === "") {
+    throw new Error("Bloom Harness run event type must be a non-empty string.");
+  }
+  if (typeof event.at !== "string" || event.at.trim() === "") {
+    throw new Error("Bloom Harness run event at must be a non-empty string.");
+  }
+  return event as HarnessRunEvent;
+}
+
 export type HarnessRunArtifactStore = {
   runId: string;
   runDir: string;
   writeSnapshot(name: HarnessRunSnapshotName, value: unknown): void;
   writeRetrospective(markdown: string): void;
+  appendEvent(event: HarnessRunEvent): void;
+  appendEvidence(evidence: HarnessEvidence): void;
 };
 
 export function createHarnessRunArtifactStore(
@@ -79,10 +127,27 @@ export function createHarnessRunArtifactStore(
     runDir,
     writeSnapshot(name, value) {
       const filePath = path.join(runDir, SNAPSHOT_FILES[name]);
-      writeOnce(filePath, serializeJson(value, `${name} snapshot`));
+      writeOnce(filePath, `${serializeJson(value, `${name} snapshot`)}\n`);
     },
     writeRetrospective(markdown) {
       writeOnce(path.join(runDir, "retrospective.md"), markdown);
+    },
+    appendEvent(event) {
+      const validated = validateRunEvent(event);
+      const line = `${serializeJson(validated, "run event", false)}\n`;
+      fs.appendFileSync(path.join(runDir, "events.jsonl"), line, "utf8");
+    },
+    appendEvidence(evidence) {
+      const validated = validateHarnessEvidence(evidence);
+      const filePath = path.join(runDir, "evidence.json");
+      const existing = readEvidenceArray(filePath);
+      if (existing.some((item) => item.id === validated.id)) {
+        throw new Error(`Bloom Harness evidence id already exists: ${validated.id}`);
+      }
+      replaceFileAtomically(
+        filePath,
+        `${serializeJson([...existing, validated], "evidence array")}\n`,
+      );
     },
   };
 }
