@@ -338,13 +338,15 @@ function finalReportContract(): string {
   });
 }
 
-function agentActionSchema(): JsonObject {
+function agentActionSchema(allowFinal = true): JsonObject {
+  const actions = ["list", "read", "write", "delete", "run"];
+  if (allowFinal) actions.push("final");
   return {
     type: "object",
     additionalProperties: false,
     required: ["action"],
     properties: {
-      action: { type: "string", enum: ["list", "read", "write", "delete", "run", "final"] },
+      action: { type: "string", enum: actions },
       path: { type: "string" },
       content: { type: "string" },
       command: { type: "string", enum: ["pnpm", "npm", "yarn", "bun", "cargo", "git", "node", "./gradlew", "gradlew", "gradlew.bat", "./mvnw", "mvnw", "mvnw.cmd"] },
@@ -567,9 +569,11 @@ export async function runLocalAgent(input: LocalAgentInput, options: LocalAgentO
     { role: "system", content: systemPrompt() },
     { role: "user", content: input.prompt },
   ];
-  const actionSchema = agentActionSchema();
+  let forceToolTurn = false;
   for (let step = 1; step <= maxSteps; step += 1) {
+    const actionSchema = agentActionSchema(!forceToolTurn);
     const action = await callModel(endpoint, model, boundedAgentMessages(messages), fetchImpl, actionSchema);
+    if (action.action !== "final") forceToolTurn = false;
     const actionEvent = { step, ...sanitizedAgentAction(action) };
     events.push(actionEvent);
     await appendAgentJournal(input.eventsPath, actionEvent);
@@ -597,6 +601,7 @@ export async function runLocalAgent(input: LocalAgentInput, options: LocalAgentO
           };
           events.push({ step, toolResult: { ok: false, error: result.error } });
           messages.push({ role: "user", content: `TOOL_RESULT ${JSON.stringify(result)}` });
+          forceToolTurn = true;
           continue;
         }
       }
