@@ -213,7 +213,7 @@ async function testLocalAgentUsesServerActionSchema() {
   }
 }
 
-async function testRepositoryWriterRejectsCompletedFinalWithoutChangesAndRecovers() {
+async function testRepositoryWriterRejectsEmptyBlockedFinalBypassAndRecovers() {
   const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-writer-noop-final-"));
   await fs.writeFile(path.join(worktree, "README.md"), "baseline\n", "utf8");
   execFileSync("git", ["init"], { cwd: worktree, stdio: "ignore" });
@@ -224,14 +224,17 @@ async function testRepositoryWriterRejectsCompletedFinalWithoutChangesAndRecover
   const bodies: Array<Record<string, unknown>> = [];
   let calls = 0;
   const final = '{"action":"final","report":{"status":"completed","summary":"done","rationaleSummary":"done","evidence":[],"verification":[],"commitSha":null,"pullRequestNumber":null,"pullRequestUrl":null,"reviewedPullRequests":[],"blockers":[]}}';
+  const emptyBlocked = '{"action":"final","report":{"status":"blocked","summary":"blocked","rationaleSummary":"blocked","evidence":[],"verification":[],"commitSha":null,"pullRequestNumber":null,"pullRequestUrl":null,"reviewedPullRequests":[],"blockers":[]}}';
   const fetchImpl: typeof fetch = async (_input, init) => {
     bodies.push(JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>);
     calls += 1;
     const content = calls === 1
       ? final
       : calls === 2
-        ? '{"action":"write","path":"frontend/src/App.tsx","content":"export default function App(){ return null; }"}'
-        : final;
+        ? emptyBlocked
+        : calls === 3
+          ? '{"action":"write","path":"frontend/src/App.tsx","content":"export default function App(){ return null; }"}'
+          : final;
     return streamingResponse([
       `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`,
       "data: [DONE]\n\n",
@@ -246,15 +249,46 @@ async function testRepositoryWriterRejectsCompletedFinalWithoutChangesAndRecover
       prompt: "implement the frontend",
       requireMutation: true,
     } as Parameters<typeof runLocalAgent>[0] & { requireMutation: boolean };
-    const result = await runLocalAgent(input, { fetchImpl, maxSteps: 3 });
+    const result = await runLocalAgent(input, { fetchImpl, maxSteps: 4 });
     assert.equal(result.report.status, "completed");
-    assert.equal(calls, 3, "a writer completed-final with no repository diff must be rejected so the model gets another turn");
+    assert.equal(calls, 4, "a writer must not bypass the no-op guard by switching to blocked with no concrete blockers");
     assert.equal(await fs.readFile(path.join(worktree, "frontend", "src", "App.tsx"), "utf8"),
       "export default function App(){ return null; }");
     const secondMessages = bodies[1]?.messages as Array<{ content?: string }> | undefined;
     const secondContext = secondMessages?.map((message) => message.content ?? "").join("\n") ?? "";
     assert.match(secondContext, /completed.*(?:repository|worktree).*(?:change|diff)|(?:change|diff).*required.*completed/i,
       "premature writer final must return corrective evidence that an actual repository diff is required");
+    const thirdMessages = bodies[2]?.messages as Array<{ content?: string }> | undefined;
+    const thirdContext = thirdMessages?.map((message) => message.content ?? "").join("\n") ?? "";
+    assert.match(thirdContext, /blocked.*blocker|blocker.*blocked/i,
+      "an empty blocked final must be rejected with corrective blocker evidence");
+  } finally {
+    await fs.rm(worktree, { recursive: true, force: true });
+  }
+}
+async function testRepositoryWriterRejectsBlankBlockedFinalAndPreservesConcreteBlocker() {
+  const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-writer-blank-blocker-"));
+  await fs.writeFile(path.join(worktree, "README.md"), "baseline\n", "utf8");
+  execFileSync("git", ["init"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["config", "user.email", "policy@example.com"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["config", "user.name", "Bloom Policy"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["add", "README.md"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["commit", "-m", "baseline"], { cwd: worktree, stdio: "ignore" });
+  let calls = 0;
+  const blankBlocked = '{"action":"final","report":{"status":"blocked","summary":"blocked","rationaleSummary":"blocked","evidence":[],"verification":[],"commitSha":null,"pullRequestNumber":null,"pullRequestUrl":null,"reviewedPullRequests":[],"blockers":["   "]}}';
+  const concreteBlocked = '{"action":"final","report":{"status":"blocked","summary":"blocked","rationaleSummary":"blocked","evidence":[],"verification":[],"commitSha":null,"pullRequestNumber":null,"pullRequestUrl":null,"reviewedPullRequests":[],"blockers":["dependency unavailable"]}}';
+  const fetchImpl: typeof fetch = async () => {
+    calls += 1;
+    const content = calls === 1 ? blankBlocked : concreteBlocked;
+    return streamingResponse([
+      `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`,
+      "data: [DONE]\n\n",
+    ]);
+  };
+  try {
+    const result = await runLocalAgent({ projectId: "policy", taskId: "WRITER-BLANK-BLOCKER", worktree, prompt: "implement", requireMutation: true }, { fetchImpl, maxSteps: 2 });
+    assert.equal(calls, 2, "a blank blocker must be rejected so the model gets another turn");
+    assert.deepEqual(result.report.blockers, ["dependency unavailable"], "a concrete writer blocker must remain a valid blocked final");
   } finally {
     await fs.rm(worktree, { recursive: true, force: true });
   }
@@ -495,7 +529,8 @@ async function main() {
   await testStructuredInferenceUsesServerSchema();
   await testLocalAgentBoundsToolHistoryBeforeModelCalls();
   await testLocalAgentUsesServerActionSchema();
-  await testRepositoryWriterRejectsCompletedFinalWithoutChangesAndRecovers();
+  await testRepositoryWriterRejectsEmptyBlockedFinalBypassAndRecovers();
+  await testRepositoryWriterRejectsBlankBlockedFinalAndPreservesConcreteBlocker();
   await testLocalAgentRejectsImmediateDuplicateSuccessfulWrite();
   await testLocalAgentFailsFastOnRepeatedSuccessfulWriteLoop();
   await testLocalAgentFailsFastOnRepeatedRejectedWriteLoop();
