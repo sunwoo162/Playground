@@ -2,8 +2,15 @@ import * as assert from "node:assert/strict";
 
 import {
   BUG_FIX_PACK,
+  findHarnessPackById,
+  inferHarnessPack,
   resolveHarnessPack,
 } from "./harnessPackRegistry";
+
+assert.equal(findHarnessPackById("bug-fix")?.id, "bug-fix");
+assert.equal(findHarnessPackById("unknown"), null);
+assert.equal(inferHarnessPack("로그인 오류")?.pack.id, "bug-fix");
+assert.equal(inferHarnessPack("화면 수정"), null);
 
 const explicit = resolveHarnessPack({
   explicitPack: "bug-fix",
