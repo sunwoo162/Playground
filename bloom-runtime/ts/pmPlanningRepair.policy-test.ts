@@ -19,6 +19,14 @@ assert(
   "PM request must explicitly require unique task IDs and task slugs",
 );
 assert(
+  workerSource.includes("data-marketing -> documentation -> code-review -> reviewer -> qa"),
+  "PM request must explicitly state the mandatory marketing review dependency chain",
+);
+assert(
+  workerSource.includes('"after" means a transitive dependsOn path, not task array order'),
+  "PM request must define governance ordering as a dependency path instead of array order",
+);
+assert(
   workerSource.includes("const MAX_PM_PLAN_ATTEMPTS = 2;"),
   "PM planning must allow exactly one repair attempt after the initial plan",
 );
