@@ -14,6 +14,11 @@ import {
 } from "./orchestrationCore";
 import { seniorAgentContext } from "./seniorAgent";
 import {
+  applyRuntimeCompletionToTaskRun,
+  declaredDependencyPullRequestsForTask,
+} from "./runtimeTaskCompletion";
+import type { RuntimeCompletionObservations } from "./runtimeCompletionAdapter";
+import {
   lunaVisualStylePlanningContext,
   lunaVisualStyleTaskContext,
 } from "./lunaVisualStyle";
@@ -115,6 +120,7 @@ export type HeadlessAgentTaskRunResult = {
   eventsPath: string;
   stderrPath: string;
   report: AgentTaskReport;
+  completionObservations?: RuntimeCompletionObservations | null;
 };
 
 export type ReconcileInterruptedAgentTaskResult = {
@@ -411,36 +417,23 @@ function buildTaskInput(
 }
 
 function applyTaskResult(
+  plan: ProjectPlan,
+  taskRuns: readonly ProjectTaskRun[],
   run: ProjectTaskRun,
   result: HeadlessAgentTaskRunResult,
   completedAt: string,
 ): ProjectTaskRun {
-  const completed = result.report.status === "completed";
-  const hasRepositoryPublication = Boolean(result.branchName?.trim());
-  return {
-    ...run,
-    status: completed ? "done" : "blocked",
-    branchName: result.branchName,
-    worktreePath: result.worktreePath,
-    threadId: result.threadId,
-    sessionId: result.sessionId,
-    turnId: result.turnId,
-    eventsPath: result.eventsPath,
-    stderrPath: result.stderrPath,
-    commitSha: hasRepositoryPublication ? result.report.commitSha : null,
-    pullRequestNumber: hasRepositoryPublication ? result.report.pullRequestNumber : null,
-    pullRequestUrl: hasRepositoryPublication ? result.report.pullRequestUrl : null,
-    reviewedPullRequests: result.report.reviewedPullRequests,
-    summary: result.report.summary,
-    rationaleSummary: result.report.rationaleSummary,
-    evidence: result.report.evidence,
-    verification: result.report.verification,
-    blockers: result.report.blockers,
-    lastError: completed ? null : result.report.blockers.join(" · ") || "Agent가 blocked 결과를 반환했습니다.",
+  return applyRuntimeCompletionToTaskRun({
+    run,
+    result,
+    declaredDependencyPullRequests: declaredDependencyPullRequestsForTask(
+      plan,
+      taskRuns,
+      run.taskId,
+    ),
     completedAt,
-  };
+  });
 }
-
 function blockedTask(run: ProjectTaskRun, reason: string, completedAt: string): ProjectTaskRun {
   return {
     ...run,
@@ -613,7 +606,7 @@ export function createHeadlessBuilderExecutor(
         });
         const index = payload.taskRuns.findIndex((run) => run.taskId === interrupted.taskId);
         if (reconciliation.outcome === "recovered" && reconciliation.result) {
-          payload.taskRuns[index] = applyTaskResult(interrupted, reconciliation.result, now());
+          payload.taskRuns[index] = applyTaskResult(payload.plan, payload.taskRuns, interrupted, reconciliation.result, now());
         } else if (reconciliation.outcome === "retryable") {
           payload.taskRuns[index] = retryInterruptedTask(
             interrupted,
@@ -669,7 +662,7 @@ export function createHeadlessBuilderExecutor(
         const result = settled[index];
         const taskIndex = payload.taskRuns.findIndex((item) => item.taskId === run.taskId);
         if (result.status === "fulfilled") {
-          payload.taskRuns[taskIndex] = applyTaskResult(run, result.value, now());
+          payload.taskRuns[taskIndex] = applyTaskResult(payload.plan, payload.taskRuns, run, result.value, now());
         } else {
           payload.taskRuns[taskIndex] = blockedTask(
             run,
