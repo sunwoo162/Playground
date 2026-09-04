@@ -45,7 +45,13 @@ jobs:
             )"
             curl -sS --max-time 15 -H "Authorization: Bearer ${TOKEN}" http://127.0.0.1:3000/api/builder/projects/65/runs/65 || true
             echo
-            echo "=== RUN 65 SNAPSHOT ==="
+            echo "=== RUN 65 AUTHORITATIVE LEASE ==="
+            test -n "${BUILDER_WORKER_TOKEN:-}" || { echo "BUILDER_WORKER_TOKEN missing" >&2; exit 1; }
+            curl -fsS --max-time 15 -H "X-Builder-Worker-Token: ${BUILDER_WORKER_TOKEN}" "http://127.0.0.1:8080/internal/builder/worker/runs/active-lease?workerId=bloom-builder-production" || true
+            echo
+            echo "=== RUN 65 INTERNAL SNAPSHOT ==="
+            curl -sS -w "\nHTTP %{http_code}\n" --max-time 15 -H "X-Builder-Worker-Token: ${BUILDER_WORKER_TOKEN}" "http://127.0.0.1:8080/internal/builder/worker/runs/65/snapshot?workerId=bloom-builder-production" || true
+            echo "=== RUN 65 USER SNAPSHOT ==="
             curl -sS --max-time 15 -H "Authorization: Bearer ${TOKEN}" http://127.0.0.1:3000/api/builder/projects/65/runs/65/snapshot || true
             echo
             echo "=== BUILDER WORKER TAIL ==="
