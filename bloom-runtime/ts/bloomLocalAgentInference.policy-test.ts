@@ -205,7 +205,7 @@ async function testLocalAgentUsesServerActionSchema() {
     assert.deepEqual(action?.enum, ["list", "read", "write", "delete", "run", "final"],
       "the Agent action schema must constrain the protocol to the six supported actions");
     const command = properties?.command as Record<string, unknown> | undefined;
-    assert.deepEqual(command?.enum, ["pnpm", "npm", "yarn", "bun", "cargo", "git", "node", "./gradlew", "gradlew", "./mvnw", "mvnw"],
+    assert.deepEqual(command?.enum, ["pnpm", "npm", "yarn", "bun", "cargo", "git", "node", "./gradlew", "gradlew", "gradlew.bat", "./mvnw", "mvnw", "mvnw.cmd"],
       "the run command schema must constrain command to real allowed executables");
   } finally {
     await fs.rm(worktree, { recursive: true, force: true });
