@@ -3,7 +3,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { requestLocalModel, runLocalAgent, runLocalStructuredInference } from "./bloomLocalAgentRuntime";
+import { requestLocalModel, runLocalAgent, runLocalStructuredInference, validateRelativePath } from "./bloomLocalAgentRuntime";
 
 const encoder = new TextEncoder();
 
@@ -204,6 +204,9 @@ async function testLocalAgentUsesServerActionSchema() {
     const action = properties?.action as Record<string, unknown> | undefined;
     assert.deepEqual(action?.enum, ["list", "read", "write", "delete", "run", "final"],
       "the Agent action schema must constrain the protocol to the six supported actions");
+    const command = properties?.command as Record<string, unknown> | undefined;
+    assert.deepEqual(command?.enum, ["pnpm", "npm", "yarn", "bun", "cargo", "git", "node", "./gradlew", "gradlew", "./mvnw", "mvnw"],
+      "the run command schema must constrain command to real allowed executables");
   } finally {
     await fs.rm(worktree, { recursive: true, force: true });
   }
@@ -382,6 +385,13 @@ async function testLocalAgentTreatsMissingGreenfieldPathsAsCreatable() {
   }
 }
 
+async function testLocalAgentRejectsLiteralProtocolPlaceholders() {
+  assert.throws(() => validateRelativePath("relative/path"), /placeholder|actual.*path/i,
+    "runtime must reject the literal path placeholder emitted in production run #56");
+  assert.throws(() => validateRelativePath("relative/file"), /placeholder|actual.*path/i,
+    "runtime must reject the literal file placeholder from the legacy protocol contract");
+}
+
 async function testFailedLocalAgentPersistsActionJournal() {
   const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-journal-"));
   const eventsPath = path.join(worktree, "local-agent-events.jsonl");
@@ -443,6 +453,7 @@ async function main() {
   await testLocalAgentFailsFastOnRepeatedRejectedWriteLoop();
   await testLocalAgentFailsFastWhenRejectedWriteChangesOnlyContent();
   await testLocalAgentTreatsMissingGreenfieldPathsAsCreatable();
+  await testLocalAgentRejectsLiteralProtocolPlaceholders();
   await testFailedLocalAgentPersistsActionJournal();
   await testLocalAgentRejectsDirectoryLikeWriteTargetsAndRecovers();
   console.log("Bloom local Agent inference transport policy tests passed");
