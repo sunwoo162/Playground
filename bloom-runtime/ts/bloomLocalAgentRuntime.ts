@@ -576,6 +576,15 @@ export async function runLocalAgent(input: LocalAgentInput, options: LocalAgentO
     messages.push({ role: "assistant", content: JSON.stringify(action) });
     if (action.action === "final") {
       const report = parseFinalReport(action.report);
+      if (input.requireMutation === true && report.status === "blocked" && Array.isArray(report.blockers) && report.blockers.length === 0) {
+        const result = {
+          ok: false,
+          error: "Blocked is not valid yet for this repository-writing task without a concrete blocker. Inspect the repository and use tool results to identify a real blocker, or implement the assigned task before returning completed.",
+        };
+        events.push({ step, toolResult: { ok: false, error: result.error } });
+        messages.push({ role: "user", content: `TOOL_RESULT ${JSON.stringify(result)}` });
+        continue;
+      }
       if (input.requireMutation === true && report.status === "completed") {
         const status = await executeRun(worktree, { command: "git", args: ["status", "--porcelain"], cwd: "." });
         if (status.ok !== true) {
