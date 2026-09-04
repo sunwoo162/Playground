@@ -526,6 +526,14 @@ async function executeAction(root: string, action: JsonObject): Promise<JsonObje
         throw new Error("Write content must be a string no larger than 1MB.");
       }
       const target = resolveInside(root, validateWriteTarget(action.path));
+      try {
+        const existing = await fs.readFile(target, "utf8");
+        if (existing === action.content) {
+          return { ok: false, error: "Write skipped because the target already has identical content and would make no repository change." };
+        }
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      }
       await fs.mkdir(path.dirname(target), { recursive: true });
       await fs.writeFile(target, action.content, "utf8");
       return { ok: true, bytes: Buffer.byteLength(action.content, "utf8") };
