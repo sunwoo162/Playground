@@ -535,6 +535,9 @@ export function createHeadlessBuilderExecutor(
     } else if (migratedLegacy) {
       await persist("binding");
     }
+    if (persisted && payload.harnessPackBinding.status === "blocked") {
+      throw new Error(`Bloom Harness pack binding rejected: ${payload.harnessPackBinding.reason}`);
+    }
 
     if (!payload.intake) {
       const intake = await options.runtime.analyzeIntake({
