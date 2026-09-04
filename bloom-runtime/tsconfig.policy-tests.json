@@ -20,6 +20,8 @@
     "ts/harnessValidation.policy-test.ts",
     "ts/harnessRunArtifacts.ts",
     "ts/harnessRunArtifacts.policy-test.ts",
+    "ts/harnessCompletionGate.ts",
+    "ts/harnessCompletionGate.policy-test.ts",
     "ts/teamAllocation.ts",
     "ts/teamAllocation.policy-test.ts",
     "ts/intakeClarification.ts",
