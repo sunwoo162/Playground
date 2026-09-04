@@ -10,6 +10,8 @@
   },
   "include": [
     "ts/types.ts",
+    "ts/harnessContracts.ts",
+    "ts/harnessContracts.policy-test.ts",
     "ts/teamAllocation.ts",
     "ts/teamAllocation.policy-test.ts",
     "ts/intakeClarification.ts",
