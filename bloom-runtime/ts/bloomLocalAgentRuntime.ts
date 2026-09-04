@@ -732,8 +732,15 @@ export async function runLocalAgent(input: LocalAgentInput, options: LocalAgentO
       }
       if (repeatedFailedActionCount >= 2) {
         suppressedActionTurn = String(action.action);
-        forceToolTurn = true;
-        result.recovery = "RECOVERY_REQUIRED: This exact tool action has failed repeatedly. The next turn must use a different tool action to gather evidence or make progress before returning final.";
+        let hasRepositoryChanges = false;
+        if (input.requireMutation === true) {
+          const repositoryStatus = await executeRun(worktree, { command: "git", args: ["status", "--porcelain"], cwd: "." });
+          hasRepositoryChanges = repositoryStatus.ok === true && Boolean(String(repositoryStatus.stdout ?? "").trim());
+        }
+        forceToolTurn = !hasRepositoryChanges;
+        result.recovery = hasRepositoryChanges
+          ? "RECOVERY_REQUIRED: This exact tool action has failed repeatedly. The next turn must use a different tool action or return final if the current repository changes satisfy the task."
+          : "RECOVERY_REQUIRED: This exact tool action has failed repeatedly. The next turn must use a different tool action to gather evidence or make progress before returning final.";
       }
     } else if (result.ok === true) {
       repeatedFailedActionFingerprint = null;
