@@ -44,6 +44,33 @@ function assertRunId(runId: string): void {
   }
 }
 
+function ensureSafeDirectory(parentDir: string, name: string, label: string): string {
+  const directory = path.join(parentDir, name);
+  if (fs.existsSync(directory)) {
+    const stat = fs.lstatSync(directory);
+    if (stat.isSymbolicLink()) {
+      throw new Error(`Bloom Harness ${label} must not be a symbolic link: ${directory}`);
+    }
+    if (!stat.isDirectory()) {
+      throw new Error(`Bloom Harness ${label} must be a directory: ${directory}`);
+    }
+  } else {
+    fs.mkdirSync(directory);
+  }
+  return fs.realpathSync(directory);
+}
+
+function assertSafeArtifactFile(filePath: string, label: string): void {
+  if (!fs.existsSync(filePath)) return;
+  const stat = fs.lstatSync(filePath);
+  if (stat.isSymbolicLink()) {
+    throw new Error(`Bloom Harness ${label} must not be a symbolic link: ${filePath}`);
+  }
+  if (!stat.isFile()) {
+    throw new Error(`Bloom Harness ${label} must be a regular file: ${filePath}`);
+  }
+}
+
 function serializeJson(value: unknown, label: string, pretty = true): string {
   try {
     const serialized = JSON.stringify(value, null, pretty ? 2 : undefined);
@@ -57,6 +84,7 @@ function serializeJson(value: unknown, label: string, pretty = true): string {
   }
 }
 function writeOnce(filePath: string, content: string): void {
+  assertSafeArtifactFile(filePath, "artifact file");
   try {
     fs.writeFileSync(filePath, content, { encoding: "utf8", flag: "wx" });
   } catch (error) {
@@ -68,6 +96,7 @@ function writeOnce(filePath: string, content: string): void {
 }
 
 function replaceFileAtomically(filePath: string, content: string): void {
+  assertSafeArtifactFile(filePath, "artifact file");
   const tempPath = `${filePath}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   try {
     fs.writeFileSync(tempPath, content, { encoding: "utf8", flag: "wx" });
@@ -78,6 +107,7 @@ function replaceFileAtomically(filePath: string, content: string): void {
 }
 
 function readEvidenceArray(filePath: string): HarnessEvidence[] {
+  assertSafeArtifactFile(filePath, "evidence artifact");
   if (!fs.existsSync(filePath)) return [];
   try {
     const parsed = JSON.parse(fs.readFileSync(filePath, "utf8"));
@@ -111,6 +141,7 @@ export type HarnessRunArtifactBundle = {
 };
 
 function readJsonArtifact(filePath: string): unknown | undefined {
+  assertSafeArtifactFile(filePath, "JSON artifact");
   if (!fs.existsSync(filePath)) return undefined;
   try {
     return JSON.parse(fs.readFileSync(filePath, "utf8"));
@@ -121,6 +152,7 @@ function readJsonArtifact(filePath: string): unknown | undefined {
 }
 
 function readEvents(filePath: string): HarnessRunEvent[] {
+  assertSafeArtifactFile(filePath, "event artifact");
   if (!fs.existsSync(filePath)) return [];
   const lines = fs.readFileSync(filePath, "utf8").split(/\r?\n/).filter((line) => line.trim() !== "");
   return lines.map((line, index) => {
@@ -149,12 +181,13 @@ export function createHarnessRunArtifactStore(
 ): HarnessRunArtifactStore {
   assertRunId(runId);
 
-  const runsRoot = path.resolve(repoRoot, ".bloom", "runs");
-  const runDir = path.resolve(runsRoot, runId);
+  const repoRootReal = fs.realpathSync(path.resolve(repoRoot));
+  const bloomRoot = ensureSafeDirectory(repoRootReal, ".bloom", ".bloom directory");
+  const runsRoot = ensureSafeDirectory(bloomRoot, "runs", "runs directory");
+  const runDir = ensureSafeDirectory(runsRoot, runId, "run directory");
   if (!runDir.startsWith(`${runsRoot}${path.sep}`)) {
     throw new Error(`Bloom Harness run id escapes runs root: ${runId}`);
   }
-  fs.mkdirSync(runDir, { recursive: true });
 
   return {
     runId,
@@ -169,7 +202,9 @@ export function createHarnessRunArtifactStore(
     appendEvent(event) {
       const validated = validateRunEvent(event);
       const line = `${serializeJson(validated, "run event", false)}\n`;
-      fs.appendFileSync(path.join(runDir, "events.jsonl"), line, "utf8");
+      const filePath = path.join(runDir, "events.jsonl");
+      assertSafeArtifactFile(filePath, "event artifact");
+      fs.appendFileSync(filePath, line, "utf8");
     },
     appendEvidence(evidence) {
       const validated = validateHarnessEvidence(evidence);
@@ -190,6 +225,7 @@ export function createHarnessRunArtifactStore(
         if (value !== undefined) snapshots[name] = value;
       }
       const retrospectivePath = path.join(runDir, "retrospective.md");
+      assertSafeArtifactFile(retrospectivePath, "retrospective artifact");
       return {
         runId,
         runDir,

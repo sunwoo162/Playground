@@ -39,6 +39,33 @@ for (const invalidRunId of ["../escape", "..", ".", "run/escape", "run\\escape",
   );
 }
 
+const symlinkRoot = makeRoot();
+const externalRoot = makeRoot();
+fs.symlinkSync(
+  externalRoot,
+  path.join(symlinkRoot, ".bloom"),
+  process.platform === "win32" ? "junction" : "dir",
+);
+assert.throws(
+  () => createHarnessRunArtifactStore(symlinkRoot, "run-symlink"),
+  /symbolic link|symlink|runs root/i,
+);
+fs.rmSync(symlinkRoot, { recursive: true, force: true });
+fs.rmSync(externalRoot, { recursive: true, force: true });
+
+if (process.platform !== "win32") {
+  const fileLinkStore = createHarnessRunArtifactStore(root, "run-file-link");
+  const externalEvents = path.join(makeRoot(), "outside-events.jsonl");
+  fs.writeFileSync(externalEvents, "sentinel\n", "utf8");
+  fs.symlinkSync(externalEvents, path.join(fileLinkStore.runDir, "events.jsonl"), "file");
+  assert.throws(
+    () => fileLinkStore.appendEvent({ type: "escape", at: "2026-09-04T00:00:00Z" }),
+    /symbolic link|symlink/i,
+  );
+  assert.equal(fs.readFileSync(externalEvents, "utf8"), "sentinel\n");
+  fs.rmSync(path.dirname(externalEvents), { recursive: true, force: true });
+}
+
 store.appendEvent({ type: "run.started", at: "2026-09-04T00:00:00Z" });
 store.appendEvent({ type: "plan.created", at: "2026-09-04T00:00:01Z" });
 const eventsPath = path.join(root, ".bloom", "runs", "run-001", "events.jsonl");

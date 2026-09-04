@@ -163,3 +163,5 @@ git push -u origin feat/bloom-run-artifact-store
 - Windows host: 61 policy tests passed after excluding the two known path/symlink-only baseline cases.
 - Native Linux Node 22.23.2: full Bloom policy suite passed 63/63.
 - `pnpm run build:bloom-worker` and `git diff --check` passed.
+- PR #215 pre-merge review found a repository symlink/junction escape: `.bloom`, `runs`, and run directories now reject symbolic links.
+- A Linux RED→GREEN regression test also proves mutable artifact files such as `events.jsonl` cannot be symlinked outside the run directory.
