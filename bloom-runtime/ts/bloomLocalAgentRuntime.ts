@@ -146,7 +146,11 @@ const DIRECTORY_LIKE_WRITE_BASENAMES = new Set([
 
 function validateWriteTarget(value: unknown): string {
   const normalized = validateRelativePath(value);
-  const basename = normalized.split("/").pop()?.toLowerCase() ?? "";
+  const segments = normalized.split("/");
+  if (segments[0]?.toLowerCase() === ".git") {
+    throw new Error("Git metadata paths are runtime-owned by Luna Runtime and cannot be written by Local Agent.");
+  }
+  const basename = segments.pop()?.toLowerCase() ?? "";
   if (DIRECTORY_LIKE_WRITE_BASENAMES.has(basename)) {
     throw new Error(`Write target looks like a directory path: ${normalized}. Write an actual regular file inside that directory instead.`);
   }
@@ -683,6 +687,10 @@ export async function runLocalAgent(input: LocalAgentInput, options: LocalAgentO
     if (rejectedWritePath && rejectedWriteError) {
       const rejectionCount = (rejectedWritePathAttempts.get(rejectedWritePath) ?? 0) + 1;
       rejectedWritePathAttempts.set(rejectedWritePath, rejectionCount);
+      if (rejectedWriteError.includes("Git metadata paths are runtime-owned")) {
+        suppressWriteTurn = true;
+        forceToolTurn = true;
+      }
       if (rejectionCount >= MAX_DUPLICATE_WRITE_REJECTIONS) {
         throw new Error(
           `Local agent stalled after repeating failed write path ${rejectedWritePath} ${rejectionCount} times without progress.`,
