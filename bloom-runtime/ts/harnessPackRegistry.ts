@@ -35,17 +35,26 @@ export type HarnessPackResolution = {
   reason: string;
 };
 
-const BUG_FIX_INTENT = /\b(bug|fix|error|crash|failure|regression)\b|(?:버그|오류|에러|크래시|회귀|고쳐|고치)/i;
+const BUG_FIX_REPAIR_ACTION = /\b(fix|repair|resolve|debug)\b|(?:고쳐|고치|수정해|수정하|해결해|해결하)/i;
+const BUG_FIX_SYMPTOM = /\b(bug|error|crash|failure|regression)\b|(?:버그|오류|에러|크래시|회귀)/i;
+const FEATURE_CONSTRUCTION_INTENT = /^(?:\[[^\]\r\n]{1,80}\]\s*)?(?:please\s+)?(?:build|create|implement|add|ship|develop|design)\b/i;
 
 export function findHarnessPackById(id: string): HarnessPack | null {
   return HARNESS_PACKS.find((pack) => pack.id === id) ?? null;
 }
 
 export function inferHarnessPack(intent: string): HarnessPackResolution | null {
-  if (!BUG_FIX_INTENT.test(intent)) return null;
+  const normalized = intent.trim();
+  if (BUG_FIX_REPAIR_ACTION.test(normalized)) {
+    return {
+      pack: BUG_FIX_PACK,
+      reason: "Selected from explicit bug-fix repair intent.",
+    };
+  }
+  if (!BUG_FIX_SYMPTOM.test(normalized) || FEATURE_CONSTRUCTION_INTENT.test(normalized)) return null;
   return {
     pack: BUG_FIX_PACK,
-    reason: "Selected from bug-fix intent keywords.",
+    reason: "Selected from bug-fix symptom intent.",
   };
 }
 export function resolveHarnessPack(
