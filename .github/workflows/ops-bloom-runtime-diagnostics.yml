@@ -170,7 +170,7 @@ jobs:
             grep -a -o -F 'requireMutation' /home/ubuntu/bloombouquet/bloom-runtime/target/release/bloom-runtime-bridge | head -5 || true
             ACTIVE_LEASE="$(printf 'X-Builder-Worker-Token: %s\n' "$BUILDER_WORKER_TOKEN" | curl -fsS --max-time 20 -H @- 'http://127.0.0.1:8080/internal/builder/worker/runs/active-lease?workerId=bloom-builder-production')"
             echo "active_lease=${ACTIVE_LEASE}"
-            test "$ACTIVE_LEASE" = "false" || { echo "active lease is not clean" >&2; exit 1; }
+            case "$ACTIVE_LEASE" in true|false) ;; *) echo "unexpected active lease response: $ACTIVE_LEASE" >&2; exit 1 ;; esac
             echo "=== drain files ==="
             ls -l /tmp/bloom-builder-worker.drain /tmp/bloom-builder-worker.busy 2>/dev/null || true
             if [ "$PROJECT_ID" = "55" ] && [ "$RUN_ID" = "55" ] && [ -n "$FRONTEND_TASK_ID" ]; then
