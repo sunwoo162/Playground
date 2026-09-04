@@ -24,6 +24,16 @@ for (const intent of [
   assert.equal(inferred.status, "bound", intent);
   assert.equal(inferred.source, "intent", intent);
 }
+const featureErrorStates = resolveHarnessPackBinding({
+  intent: "Build a responsive accessible UI with loading/error/empty states and reproducible setup.",
+});
+assert.equal(featureErrorStates.status, "unbound",
+  "feature requirements that mention an error state must not be inferred as bug-fix work");
+assert.equal(featureErrorStates.source, "none");
+
+const repairError = resolveHarnessPackBinding({ intent: "Fix login error" });
+assert.equal(repairError.status, "bound", "action-oriented error repair must still select bug-fix");
+assert.equal(repairError.pack?.id, "bug-fix");
 const unbound = resolveHarnessPackBinding({ intent: "Add profile page" });
 assert.equal(unbound.status, "unbound");
 assert.equal(unbound.source, "none");
