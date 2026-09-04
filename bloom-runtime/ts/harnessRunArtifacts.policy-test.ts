@@ -72,5 +72,23 @@ assert.throws(
   /evidence kind/,
 );
 
+const restored = store.readRun();
+assert.equal(restored.runId, "run-001");
+assert.deepEqual(restored.snapshots.request, { objective: "Fix login" });
+assert.equal(restored.events[0]?.type, "run.started");
+assert.equal(restored.evidence[0]?.id, "test-1");
+assert.match(restored.retrospective ?? "", /Retrospective/);
+
+const emptyStore = createHarnessRunArtifactStore(root, "run-empty");
+const empty = emptyStore.readRun();
+assert.deepEqual(empty.snapshots, {});
+assert.deepEqual(empty.events, []);
+assert.deepEqual(empty.evidence, []);
+assert.equal(empty.retrospective, undefined);
+
+const corruptStore = createHarnessRunArtifactStore(root, "run-corrupt");
+fs.writeFileSync(path.join(corruptStore.runDir, "request.json"), "{bad json", "utf8");
+assert.throws(() => corruptStore.readRun(), /request\.json/);
+
 fs.rmSync(root, { recursive: true, force: true });
 console.log("PASS  Bloom Harness run artifact scenarios passed.");

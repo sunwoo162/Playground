@@ -32,6 +32,7 @@ const SNAPSHOT_FILES: Record<HarnessRunSnapshotName, string> = {
 };
 
 const RUN_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+const SNAPSHOT_NAMES = Object.keys(SNAPSHOT_FILES) as HarnessRunSnapshotName[];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -100,6 +101,38 @@ function validateRunEvent(event: unknown): HarnessRunEvent {
   return event as HarnessRunEvent;
 }
 
+export type HarnessRunArtifactBundle = {
+  runId: string;
+  runDir: string;
+  snapshots: Partial<Record<HarnessRunSnapshotName, unknown>>;
+  events: HarnessRunEvent[];
+  evidence: HarnessEvidence[];
+  retrospective?: string;
+};
+
+function readJsonArtifact(filePath: string): unknown | undefined {
+  if (!fs.existsSync(filePath)) return undefined;
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf8"));
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`Bloom Harness stored artifact is corrupt at ${filePath}: ${detail}`);
+  }
+}
+
+function readEvents(filePath: string): HarnessRunEvent[] {
+  if (!fs.existsSync(filePath)) return [];
+  const lines = fs.readFileSync(filePath, "utf8").split(/\r?\n/).filter((line) => line.trim() !== "");
+  return lines.map((line, index) => {
+    try {
+      return validateRunEvent(JSON.parse(line));
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new Error(`Bloom Harness stored event is corrupt at ${filePath}:${index + 1}: ${detail}`);
+    }
+  });
+}
+
 export type HarnessRunArtifactStore = {
   runId: string;
   runDir: string;
@@ -107,6 +140,7 @@ export type HarnessRunArtifactStore = {
   writeRetrospective(markdown: string): void;
   appendEvent(event: HarnessRunEvent): void;
   appendEvidence(evidence: HarnessEvidence): void;
+  readRun(): HarnessRunArtifactBundle;
 };
 
 export function createHarnessRunArtifactStore(
@@ -148,6 +182,24 @@ export function createHarnessRunArtifactStore(
         filePath,
         `${serializeJson([...existing, validated], "evidence array")}\n`,
       );
+    },
+    readRun() {
+      const snapshots: Partial<Record<HarnessRunSnapshotName, unknown>> = {};
+      for (const name of SNAPSHOT_NAMES) {
+        const value = readJsonArtifact(path.join(runDir, SNAPSHOT_FILES[name]));
+        if (value !== undefined) snapshots[name] = value;
+      }
+      const retrospectivePath = path.join(runDir, "retrospective.md");
+      return {
+        runId,
+        runDir,
+        snapshots,
+        events: readEvents(path.join(runDir, "events.jsonl")),
+        evidence: readEvidenceArray(path.join(runDir, "evidence.json")),
+        retrospective: fs.existsSync(retrospectivePath)
+          ? fs.readFileSync(retrospectivePath, "utf8")
+          : undefined,
+      };
     },
   };
 }
