@@ -201,11 +201,21 @@ async function testLocalAgentUsesServerActionSchema() {
     assert.equal(responseFormat?.type, "json_object");
     const schema = responseFormat?.schema as Record<string, unknown> | undefined;
     assert.ok(schema, "normal Local Agent turns must pass an action JSON schema to llama.cpp instead of relying on unconstrained json_object output");
-    const properties = schema.properties as Record<string, unknown> | undefined;
-    const action = properties?.action as Record<string, unknown> | undefined;
-    assert.deepEqual(action?.enum, ["list", "read", "write", "delete", "run", "final"],
+    const variants = schema.oneOf as Array<Record<string, unknown>> | undefined;
+    const actionNames = variants?.map((variant) => {
+      const properties = variant.properties as Record<string, unknown> | undefined;
+      const action = properties?.action as Record<string, unknown> | undefined;
+      return Array.isArray(action?.enum) ? action.enum[0] : undefined;
+    });
+    assert.deepEqual(actionNames, ["list", "read", "write", "delete", "run", "final"],
       "the Agent action schema must constrain the protocol to the six supported actions");
-    const command = properties?.command as Record<string, unknown> | undefined;
+    const runVariant = variants?.find((variant) => {
+      const properties = variant.properties as Record<string, unknown> | undefined;
+      const action = properties?.action as Record<string, unknown> | undefined;
+      return Array.isArray(action?.enum) && action.enum[0] === "run";
+    });
+    const runProperties = runVariant?.properties as Record<string, unknown> | undefined;
+    const command = runProperties?.command as Record<string, unknown> | undefined;
     assert.deepEqual(command?.enum, ["pnpm", "npm", "yarn", "bun", "cargo", "git", "node", "./gradlew", "gradlew", "gradlew.bat", "./mvnw", "mvnw", "mvnw.cmd"],
       "the run command schema must constrain command to real allowed executables");
   } finally {
@@ -213,6 +223,44 @@ async function testLocalAgentUsesServerActionSchema() {
   }
 }
 
+async function testLocalAgentActionSchemaRequiresFieldsPerAction() {
+  const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-action-fields-"));
+  let body: Record<string, unknown> | null = null;
+  const fetchImpl: typeof fetch = async (_input, init) => {
+    body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+    return streamingResponse([
+      'data: {"choices":[{"delta":{"content":"{\\"action\\":\\"final\\",\\"report\\":{\\"status\\":\\"completed\\",\\"summary\\":\\"done\\",\\"rationaleSummary\\":\\"done\\",\\"evidence\\":[],\\"verification\\":[],\\"commitSha\\":null,\\"pullRequestNumber\\":null,\\"pullRequestUrl\\":null,\\"reviewedPullRequests\\":[],\\"blockers\\":[]}}"}}]}\n\n',
+      'data: [DONE]\n\n',
+    ]);
+  };
+
+  try {
+    await runLocalAgent({ projectId: "policy", taskId: "ACTION-FIELDS", worktree, prompt: "finish" }, { fetchImpl, maxSteps: 1 });
+    const responseFormat = (body as Record<string, unknown> | null)?.response_format as Record<string, unknown> | undefined;
+    const schema = responseFormat?.schema as Record<string, unknown> | undefined;
+    const variants = schema?.oneOf as Array<Record<string, unknown>> | undefined;
+    assert.equal(variants?.length, 6, "the action grammar must use one self-contained schema branch per action");
+
+    const requiredFor = (name: string) => {
+      const variant = variants?.find((candidate) => {
+        const properties = candidate.properties as Record<string, unknown> | undefined;
+        const action = properties?.action as Record<string, unknown> | undefined;
+        return Array.isArray(action?.enum) && action.enum.length === 1 && action.enum[0] === name;
+      });
+      assert.ok(variant, `missing action schema branch for ${name}`);
+      return variant.required as string[];
+    };
+
+    assert.deepEqual(requiredFor("list"), ["action", "path"]);
+    assert.deepEqual(requiredFor("read"), ["action", "path"]);
+    assert.deepEqual(requiredFor("write"), ["action", "path", "content"]);
+    assert.deepEqual(requiredFor("delete"), ["action", "path"]);
+    assert.deepEqual(requiredFor("run"), ["action", "command", "args"]);
+    assert.deepEqual(requiredFor("final"), ["action", "report"]);
+  } finally {
+    await fs.rm(worktree, { recursive: true, force: true });
+  }
+}
 async function testRepositoryWriterRejectsEmptyBlockedFinalBypassAndRecovers() {
   const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-writer-noop-final-"));
   await fs.writeFile(path.join(worktree, "README.md"), "baseline\n", "utf8");
@@ -331,9 +379,13 @@ async function testRepositoryWriterRequiresFailedToolEvidenceForBlockedFinal() {
     assert.equal(await fs.readFile(path.join(worktree, "frontend", "src", "App.tsx"), "utf8"), "export default function App(){ return null; }");
     const thirdFormat = bodies[2]?.response_format as Record<string, unknown> | undefined;
     const thirdSchema = thirdFormat?.schema as Record<string, unknown> | undefined;
-    const thirdProperties = thirdSchema?.properties as Record<string, unknown> | undefined;
-    const thirdAction = thirdProperties?.action as Record<string, unknown> | undefined;
-    assert.deepEqual(thirdAction?.enum, ["list", "read", "write", "delete", "run"],
+    const thirdVariants = thirdSchema?.oneOf as Array<Record<string, unknown>> | undefined;
+    const thirdActions = thirdVariants?.map((variant) => {
+      const properties = variant.properties as Record<string, unknown> | undefined;
+      const action = properties?.action as Record<string, unknown> | undefined;
+      return Array.isArray(action?.enum) ? action.enum[0] : undefined;
+    });
+    assert.deepEqual(thirdActions, ["list", "read", "write", "delete", "run"],
       "rejecting an unobserved blocked final must force the next turn to use a real tool");
     const thirdMessages = bodies[2]?.messages as Array<{ content?: string }> | undefined;
     const thirdContext = thirdMessages?.map((message) => message.content ?? "").join("\n") ?? "";
@@ -378,16 +430,19 @@ async function testRepositoryWriterForcesToolTurnAfterNoopFinal() {
     }, { fetchImpl, maxSteps: 3 });
     assert.equal(result.report.status, "completed");
     assert.equal(calls, 3);
-    const actionEnum = (index: number) => {
+    const actionNames = (index: number) => {
       const format = bodies[index]?.response_format as Record<string, unknown> | undefined;
       const schema = format?.schema as Record<string, unknown> | undefined;
-      const properties = schema?.properties as Record<string, unknown> | undefined;
-      const action = properties?.action as Record<string, unknown> | undefined;
-      return action?.enum;
+      const variants = schema?.oneOf as Array<Record<string, unknown>> | undefined;
+      return variants?.map((variant) => {
+        const properties = variant.properties as Record<string, unknown> | undefined;
+        const action = properties?.action as Record<string, unknown> | undefined;
+        return Array.isArray(action?.enum) ? action.enum[0] : undefined;
+      });
     };
-    assert.deepEqual(actionEnum(1), ["list", "read", "write", "delete", "run"],
+    assert.deepEqual(actionNames(1), ["list", "read", "write", "delete", "run"],
       "the turn immediately after a rejected no-op writer final must remove final from the server schema");
-    assert.deepEqual(actionEnum(2), ["list", "read", "write", "delete", "run", "final"],
+    assert.deepEqual(actionNames(2), ["list", "read", "write", "delete", "run", "final"],
       "final must be restored after the writer performs one real tool action");
   } finally {
     await fs.rm(worktree, { recursive: true, force: true });
@@ -629,6 +684,7 @@ async function main() {
   await testStructuredInferenceUsesServerSchema();
   await testLocalAgentBoundsToolHistoryBeforeModelCalls();
   await testLocalAgentUsesServerActionSchema();
+  await testLocalAgentActionSchemaRequiresFieldsPerAction();
   await testRepositoryWriterRejectsEmptyBlockedFinalBypassAndRecovers();
   await testRepositoryWriterRejectsBlankBlockedFinalAndPreservesConcreteBlocker();
   await testRepositoryWriterRequiresFailedToolEvidenceForBlockedFinal();
