@@ -1,9 +1,9 @@
-name: Ops Abort Bloom E2E 52
+name: Ops Abort Bloom E2E 57
 
 on:
   push:
     branches:
-      - ops/e2e52-abort
+      - ops/e2e57-abort
 
 permissions:
   contents: read
@@ -46,18 +46,18 @@ jobs:
             )"
             RUN_JSON="$(curl -fsS --max-time 20 \
               -H "Authorization: Bearer ${USER_TOKEN}" \
-              http://127.0.0.1:3000/api/builder/projects/52/runs/52)"
+              http://127.0.0.1:3000/api/builder/projects/57/runs/57)"
             STATUS="$(printf '%s' "$RUN_JSON" | node -e '
               const r=JSON.parse(require("fs").readFileSync(0,"utf8"));
-              if (Number(r.id)!==52 || Number(r.projectId)!==52 || r.workerId!=="bloom-builder-production") process.exit(3);
+              if (Number(r.id)!==57 || Number(r.projectId)!==57 || r.workerId!=="bloom-builder-production") process.exit(3);
               process.stdout.write(String(r.status));
             ')"
-            echo "guard_ok project=52 run=52 status=${STATUS} worker=bloom-builder-production"
+            echo "guard_ok project=57 run=57 status=${STATUS} worker=bloom-builder-production"
             if [ "$STATUS" = "running" ]; then
-              FAIL_BODY='{"workerId":"bloom-builder-production","failureReason":"Live E2E 52 intentionally superseded by Local Agent write-target guard fix."}'
+              FAIL_BODY='{"workerId":"bloom-builder-production","failureReason":"Live E2E 57 intentionally superseded by Local Agent write-target guard fix."}'
               printf 'X-Builder-Worker-Token: %s\n' "$BUILDER_WORKER_TOKEN" | curl -fsS --max-time 20 \
                 -H @- -H 'Content-Type: application/json' \
-                -X POST http://127.0.0.1:8080/internal/builder/worker/runs/52/fail \
+                -X POST http://127.0.0.1:8080/internal/builder/worker/runs/57/fail \
                 --data "$FAIL_BODY" >/dev/null
             elif [ "$STATUS" != "failed" ] && [ "$STATUS" != "completed" ]; then
               echo "unexpected run status: $STATUS" >&2
@@ -66,4 +66,4 @@ jobs:
             ACTIVE="$(printf 'X-Builder-Worker-Token: %s\n' "$BUILDER_WORKER_TOKEN" | curl -fsS --max-time 20 \
               -H @- 'http://127.0.0.1:8080/internal/builder/worker/runs/active-lease?workerId=bloom-builder-production')"
             test "$ACTIVE" = "false" || { echo "active lease remained true" >&2; exit 1; }
-            echo "run52_terminal_and_lease_cleared"
+            echo "run57_terminal_and_lease_cleared"
