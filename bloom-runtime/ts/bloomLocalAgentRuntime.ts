@@ -565,6 +565,7 @@ export async function runLocalAgent(input: LocalAgentInput, options: LocalAgentO
   const successfulWriteSignatures = new Set<string>();
   const duplicateWriteRejections = new Map<string, number>();
   const rejectedWritePathAttempts = new Map<string, number>();
+  let observedNonFinalToolFailure = false;
   const messages: ModelMessage[] = [
     { role: "system", content: systemPrompt() },
     { role: "user", content: input.prompt },
@@ -580,13 +581,18 @@ export async function runLocalAgent(input: LocalAgentInput, options: LocalAgentO
     messages.push({ role: "assistant", content: JSON.stringify(action) });
     if (action.action === "final") {
       const report = parseFinalReport(action.report);
-      if (input.requireMutation === true && report.status === "blocked" && Array.isArray(report.blockers) && !report.blockers.some((blocker) => typeof blocker === "string" && blocker.trim().length > 0)) {
+      const hasConcreteBlocker = Array.isArray(report.blockers)
+        && report.blockers.some((blocker) => typeof blocker === "string" && blocker.trim().length > 0);
+      if (input.requireMutation === true && report.status === "blocked" && (!hasConcreteBlocker || !observedNonFinalToolFailure)) {
         const result = {
           ok: false,
-          error: "Blocked is not valid yet for this repository-writing task without a concrete blocker. Inspect the repository and use tool results to identify a real blocker, or implement the assigned task before returning completed.",
+          error: hasConcreteBlocker
+            ? "Blocked is not valid yet for this repository-writing task because no real non-final tool failure has produced blocker evidence. Inspect the repository and attempt the relevant work or verification first."
+            : "Blocked is not valid yet for this repository-writing task without a concrete blocker. Inspect the repository and use tool results to identify a real blocker, or implement the assigned task before returning completed.",
         };
         events.push({ step, toolResult: { ok: false, error: result.error } });
         messages.push({ role: "user", content: `TOOL_RESULT ${JSON.stringify(result)}` });
+        forceToolTurn = true;
         continue;
       }
       if (input.requireMutation === true && report.status === "completed") {
@@ -650,6 +656,7 @@ export async function runLocalAgent(input: LocalAgentInput, options: LocalAgentO
       } catch (error) {
         result = { ok: false, error: error instanceof Error ? error.message : String(error) };
       }
+      if (result.ok !== true) observedNonFinalToolFailure = true;
       if (writeSignature) attemptedWriteSignatures.add(writeSignature);
       if (writeSignature && result.ok === true) successfulWriteSignatures.add(writeSignature);
     }
