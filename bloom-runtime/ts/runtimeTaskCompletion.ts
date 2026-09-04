@@ -2,6 +2,7 @@ import {
   evaluateRuntimeTaskCompletion,
   type RuntimeCompletionObservations,
 } from "./runtimeCompletionAdapter";
+import { validateHarnessTaskCompletionRecord, type HarnessTaskCompletionRecord } from "./harnessTaskEvidence";
 import type { AgentTaskVerification, ProjectPlan, ProjectTaskRun } from "./types";
 
 export type RuntimeTaskReportLike = {
@@ -44,6 +45,7 @@ function applyResultMetadata(
   result: RuntimeTaskRunResultLike,
   status: ProjectTaskRun["status"],
   lastError: string | null,
+  harnessCompletion: HarnessTaskCompletionRecord | null,
   completedAt: string,
 ): ProjectTaskRun {
   const hasRepositoryPublication = Boolean(result.branchName?.trim());
@@ -64,6 +66,7 @@ function applyResultMetadata(
     summary: result.report.summary,
     rationaleSummary: result.report.rationaleSummary,
     evidence: result.report.evidence,
+    harnessCompletion,
     verification: result.report.verification,
     blockers: result.report.blockers,
     lastError,
@@ -74,16 +77,6 @@ function applyResultMetadata(
 export function applyRuntimeCompletionToTaskRun(
   input: ApplyRuntimeCompletionInput,
 ): ProjectTaskRun {
-  if (input.result.report.status === "blocked") {
-    return applyResultMetadata(
-      input.run,
-      input.result,
-      "blocked",
-      input.result.report.blockers.join(" · ") || input.result.report.summary,
-      input.completedAt,
-    );
-  }
-
   const decision = evaluateRuntimeTaskCompletion({
     taskId: input.run.taskId,
     role: input.run.role,
@@ -96,12 +89,31 @@ export function applyRuntimeCompletionToTaskRun(
     completionObservations: input.result.completionObservations,
     declaredDependencyPullRequests: input.declaredDependencyPullRequests,
   });
+  const harnessCompletion = validateHarnessTaskCompletionRecord({
+    version: 1,
+    accepted: decision.accepted,
+    evidence: decision.packet.evidence,
+    requiredEvidence: decision.packet.requiredEvidence,
+    rejectionReason: decision.accepted ? null : decision.rejectionReason,
+  });
+
+  if (input.result.report.status === "blocked") {
+    return applyResultMetadata(
+      input.run,
+      input.result,
+      "blocked",
+      input.result.report.blockers.join(" · ") || input.result.report.summary,
+      harnessCompletion,
+      input.completedAt,
+    );
+  }
 
   return applyResultMetadata(
     input.run,
     input.result,
     decision.accepted ? "done" : "blocked",
     decision.accepted ? null : decision.rejectionReason,
+    harnessCompletion,
     input.completedAt,
   );
 }

@@ -111,6 +111,11 @@ const validWriter = applyRuntimeCompletionToTaskRun({
 });
 assert(validWriter.status === "done", "verified writer publication must allow done");
 assert(validWriter.lastError === null, "accepted completion must clear lastError");
+assert(validWriter.harnessCompletion?.accepted === true, "accepted writer must persist Harness completion");
+assert(
+  validWriter.harnessCompletion?.evidence.some((item) => item.kind === "file-change") === true,
+  "writer record must persist file-change evidence",
+);
 const plan: ProjectPlan = {
   projectName: "Completion Gate",
   repositoryName: "completion-gate",

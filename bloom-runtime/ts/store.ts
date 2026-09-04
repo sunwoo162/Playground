@@ -60,6 +60,7 @@ function emptyTaskRun(task: ProjectPlan["tasks"][number], teamId: TeamId): Proje
     summary: null,
     rationaleSummary: null,
     evidence: [],
+    harnessCompletion: null,
     verification: [],
     blockers: [],
     lastError: null,
@@ -601,6 +602,7 @@ export function retryBlockedAgentTasks(state: ProjectTeamsState, projectId: stri
         status: "ready" as const,
         lastError: null,
         blockers: [],
+        harnessCompletion: null,
         completedAt: null,
       };
     }),
