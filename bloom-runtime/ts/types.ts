@@ -2,55 +2,60 @@ export type TeamId = "rose" | "lily" | "tulip" | "sunflower" | "cherry-blossom";
 
 export type TeamStatus = "idle" | "reserved" | "working" | "retrospective" | "evolving";
 
-export type AgentRole =
-  | "idea"
-  | "pm"
-  | "design-system"
-  | "designer"
-  | "ux-research"
-  | "frontend"
-  | "backend"
-  | "database"
-  | "security"
-  | "devops"
-  | "accessibility"
-  | "performance"
-  | "api-integration"
-  | "data-marketing"
-  | "code-review"
-  | "reviewer"
-  | "qa"
-  | "test-automation"
-  | "documentation"
-  | "debug-router"
-  | "user-a"
-  | "user-b"
-  | "process-evaluator";
+export const AGENT_ROLES = [
+  "idea",
+  "pm",
+  "design-system",
+  "designer",
+  "ux-research",
+  "frontend",
+  "backend",
+  "database",
+  "security",
+  "devops",
+  "accessibility",
+  "performance",
+  "api-integration",
+  "data-marketing",
+  "code-review",
+  "reviewer",
+  "qa",
+  "test-automation",
+  "documentation",
+  "debug-router",
+  "user-a",
+  "user-b",
+  "process-evaluator",
+] as const;
 
+export type AgentRole = (typeof AGENT_ROLES)[number];
 export type ExecutableAgentRole = Exclude<AgentRole, "pm">;
 
-export type AgentPermission =
-  | "repository:read"
-  | "repository:create"
-  | "repository:write"
-  | "branch:create"
-  | "worktree:create"
-  | "command:run"
-  | "dependency:install"
-  | "test:run"
-  | "build:run"
-  | "browser:use"
-  | "figma:read"
-  | "commit:create"
-  | "push"
-  | "issue:create"
-  | "issue:update"
-  | "pull-request:create"
-  | "pull-request:update"
-  | "pull-request:review"
-  | "pull-request:merge"
-  | "deployment:prepare"
-  | "deployment:publish";
+export const AGENT_PERMISSION_VALUES = [
+  "repository:read",
+  "repository:create",
+  "repository:write",
+  "branch:create",
+  "worktree:create",
+  "command:run",
+  "dependency:install",
+  "test:run",
+  "build:run",
+  "browser:use",
+  "figma:read",
+  "commit:create",
+  "push",
+  "issue:create",
+  "issue:update",
+  "pull-request:create",
+  "pull-request:update",
+  "pull-request:review",
+  "pull-request:merge",
+  "deployment:prepare",
+  "deployment:publish",
+] as const;
+
+export type AgentPermission = (typeof AGENT_PERMISSION_VALUES)[number];
 
 export type AgentStatus = "idle" | "ready" | "working" | "blocked" | "review" | "done";
 
