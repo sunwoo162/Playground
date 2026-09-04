@@ -78,7 +78,7 @@ export type HarnessPackBinding = {
 };
 ```
 
-- [ ] **Step 1: Write failing resolution/binding tests**
+- [x] **Step 1: Write failing resolution/binding tests**
 ```ts
 const explicit = resolveHarnessPackBinding({ intent: "ship feature", explicitPack: "bug-fix" });
 assert.equal(explicit.status, "bound");
@@ -98,22 +98,22 @@ assert.equal(legacyUnboundHarnessPackBinding("legacy").status, "unbound");
 assert.throws(() => validateHarnessPackBinding({ version: 2 }), /version|Unsupported/);
 ```
 
-- [ ] **Step 2: Run focused tests and verify RED**
+- [x] **Step 2: Run focused tests and verify RED**
 
 Run: `pnpm --dir apps/desktop exec tsc -p ../../bloom-runtime/tsconfig.policy-tests.json && node .tmp/bloom-policy-tests/harnessPackBinding.policy-test.js`
 
 Expected: FAIL because `harnessPackBinding.ts` and new registry helpers do not exist.
 
-- [ ] **Step 3: Implement registry helpers and binding contract**
+- [x] **Step 3: Implement registry helpers and binding contract**
 
 Preserve `resolveHarnessPack()` behavior for existing callers. Extend the intent matcher only with `버그|오류|에러|크래시|회귀|고쳐|고치`; do not infer from broad `수정` alone. Copy pack arrays into the binding snapshot so later registry mutation cannot mutate persisted bindings.
-- [ ] **Step 4: Run focused tests and verify GREEN**
+- [x] **Step 4: Run focused tests and verify GREEN**
 
 Run the same compile + `harnessPackRegistry.policy-test.js` + `harnessPackBinding.policy-test.js` commands.
 
 Expected: PASS; old throwing resolver tests remain unchanged.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add bloom-runtime/ts/harnessPackRegistry.ts bloom-runtime/ts/harnessPackRegistry.policy-test.ts bloom-runtime/ts/harnessPackBinding.ts bloom-runtime/ts/harnessPackBinding.policy-test.ts bloom-runtime/tsconfig.policy-tests.json
@@ -136,7 +136,7 @@ git commit -m "feat : bind bloom harness packs"
 - Produces: `evaluateHarnessPackPlan(binding, plan): { ready: boolean; reasons: string[] }`.
 - Produces: `assertHarnessPackPlan(binding, plan): ProjectPlan`.
 - Error prefix: `Bloom Harness pack plan rejected:` so PM repair can classify it deterministically.
-- [ ] **Step 1: Write failing semantic plan tests**
+- [x] **Step 1: Write failing semantic plan tests**
 
 ```ts
 function task(id: string, role: ProjectTaskPlan["role"], dependsOn: string[]): ProjectTaskPlan {
@@ -163,22 +163,22 @@ assert.match(harnessPackPlanningContext(binding), /bug-fix/);
 assert.equal(harnessPackPlanningContext(resolveHarnessPackBinding({ intent: "Add profile" })), "");
 ```
 
-- [ ] **Step 2: Run focused test and verify RED**
+- [x] **Step 2: Run focused test and verify RED**
 
 Run: `pnpm --dir apps/desktop exec tsc -p ../../bloom-runtime/tsconfig.policy-tests.json && node .tmp/bloom-policy-tests/harnessPackPlanPolicy.policy-test.js`
 
 Expected: FAIL because the plan-policy module is missing.
 
-- [ ] **Step 3: Implement semantic mapping**
+- [x] **Step 3: Implement semantic mapping**
 
 Use all `BUG_FIX_PACK.requiredRoles`, then require at least one writer from `REPOSITORY_WRITER_ROLES` excluding `debug-router`, `data-marketing`, and `documentation` that transitively depends on a `debug-router`. Require downstream `code-review -> reviewer -> qa` for that fix writer. `unbound` returns ready; `blocked` returns a deterministic reason.
-- [ ] **Step 4: Verify GREEN and worker compilation**
+- [x] **Step 4: Verify GREEN and worker compilation**
 
 Run the focused policy test, then `pnpm run build:bloom-worker`.
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add bloom-runtime/ts/harnessPackPlanPolicy.ts bloom-runtime/ts/harnessPackPlanPolicy.policy-test.ts bloom-runtime/tsconfig.policy-tests.json bloom-runtime/tsconfig.worker.json
@@ -214,7 +214,7 @@ export type HarnessTaskCompletionRecord = {
 - Produces: `validateHarnessTaskCompletionRecord(value)`.
 - Adds: `ProjectTaskRun.harnessCompletion?: HarnessTaskCompletionRecord | null`.
 - Produces: `evaluateHarnessPackProjectCompletion({ binding, taskRuns })`.
-- [ ] **Step 1: Write failing persistence and aggregate-gate tests**
+- [x] **Step 1: Write failing persistence and aggregate-gate tests**
 
 ```ts
 // Extend the existing validWriter case in runtimeTaskCompletion.policy-test.ts:
@@ -248,24 +248,24 @@ assert(legacyGate.missingEvidenceKinds.includes("test"));
 
 Also assert invalid/duplicate structured evidence fails closed and a bound `done` run without a valid `harnessCompletion` record cannot satisfy the gate.
 
-- [ ] **Step 2: Run focused tests and verify RED**
+- [x] **Step 2: Run focused tests and verify RED**
 
 Expected: missing persisted record/project gate APIs.
 
-- [ ] **Step 3: Implement record validation and persistence**
+- [x] **Step 3: Implement record validation and persistence**
 
 `applyRuntimeCompletionToTaskRun()` stores a validated record from the Runtime Completion Adapter decision. `emptyTaskRun()`, headless `initialTaskRun()`, and `retryInterruptedTask()` initialize/reset the field to `null`; `retryBlockedAgentTasks()` also clears it before a new attempt. Rejected decisions retain their structured record for audit but never count as accepted evidence.
-- [ ] **Step 4: Implement project pack gate**
+- [x] **Step 4: Implement project pack gate**
 
 For `unbound`, return ready. For `blocked`, return not-ready with the binding reason. For `bound`, validate every `done` task's persisted Harness record, collect evidence only from accepted records, then call `evaluateHarnessCompletion()` with a synthetic project `done` result referencing exactly those evidence ids and the pack snapshot's `requiredEvidence`.
 
-- [ ] **Step 5: Verify GREEN**
+- [x] **Step 5: Verify GREEN**
 
 Run the four focused policy tests: task evidence, project gate, runtime completion adapter, and runtime task completion.
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add bloom-runtime/ts/harnessTaskEvidence.ts bloom-runtime/ts/harnessTaskEvidence.policy-test.ts bloom-runtime/ts/harnessProjectCompletionGate.ts bloom-runtime/ts/harnessProjectCompletionGate.policy-test.ts bloom-runtime/ts/types.ts bloom-runtime/ts/runtimeTaskCompletion.ts bloom-runtime/ts/runtimeTaskCompletion.policy-test.ts bloom-runtime/tsconfig.policy-tests.json
@@ -287,7 +287,7 @@ git commit -m "feat : persist bloom harness task evidence"
 - Adds: `ProjectState.harnessPackBinding?: HarnessPackBinding | null`.
 - Produces: `bindProjectHarnessPack(state, projectId, explicitPack?): { state: ProjectTeamsState; binding: HarnessPackBinding }`.
 
-- [ ] **Step 1: Write failing store lifecycle tests**
+- [x] **Step 1: Write failing store lifecycle tests**
 
 ```ts
 const started = startProject(createInitialProjectTeamsState(), "로그인 버그 고쳐");
@@ -303,24 +303,24 @@ assert.deepEqual(rebound.binding, bound.binding); // immutable after first resol
 
 Add tests that an unknown explicit pack blocks with `runtimeFailureSource === "harness"`, a legacy project missing the property hydrates to `unbound` without inference, and a bound all-done project with an incomplete pack gate remains `blocked` instead of entering `review`.
 
-- [ ] **Step 2: Run focused store tests and verify RED**
+- [x] **Step 2: Run focused store tests and verify RED**
 
 Expected: missing binding state/helper and missing Harness project-completion enforcement.
 
-- [ ] **Step 3: Implement lifecycle/hydration**
+- [x] **Step 3: Implement lifecycle/hydration**
 
 Fresh projects store `harnessPackBinding: null`. Hydration distinguishes an absent legacy property from explicit `null`; absent becomes `legacyUnboundHarnessPackBinding("Legacy project predates live pack binding.")`. Existing valid bindings are validated, not re-resolved. `hydrateTaskRun()` validates a present `harnessCompletion` record, preserves explicit `null`, and defaults an absent legacy task record to `null`; malformed structured records fail closed instead of being trusted.
-- [ ] **Step 4: Enforce the desktop project gate**
+- [x] **Step 4: Enforce the desktop project gate**
 
 After `completeAgentTask()` refreshes dependencies, keep the existing task-level blocked behavior first. When `allDone` is true, evaluate the stored binding against persisted Harness task records. Only a ready pack gate may transition the project to `review`; otherwise set project status `blocked`, `runtimeFailureSource: "harness"`, and a reason that names the missing pack evidence.
 
-- [ ] **Step 5: Verify GREEN**
+- [x] **Step 5: Verify GREEN**
 
 Run: `storeHarnessPack.policy-test.js`, `storeCompletion.policy-test.js`, and `sessionReconciliation.policy-test.js` after policy compilation.
 
 Expected: PASS, including the existing ready→running regression test.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add bloom-runtime/ts/types.ts bloom-runtime/ts/store.ts bloom-runtime/ts/storeHarnessPack.policy-test.ts bloom-runtime/ts/storeCompletion.policy-test.ts bloom-runtime/tsconfig.policy-tests.json
@@ -346,7 +346,7 @@ git commit -m "feat : enforce bloom pack state gates"
 - Produces: `runPmPlanningWithRepair<T>({ request, binding, planOnce, prepareAndValidate }): Promise<T>`.
 - Extends: `StartProjectRuntimeInput` with optional `harnessPackId?: string`.
 
-- [ ] **Step 1: Write failing shared repair-policy tests**
+- [x] **Step 1: Write failing shared repair-policy tests**
 
 ```ts
 const binding = resolveHarnessPackBinding({ intent: "로그인 버그 고쳐" });
@@ -379,15 +379,15 @@ assert.match(capturedRequests[1], /previous PM plan failed/i);
 ```
 
 Also assert a non-semantic runtime error is not retried and an unbound request receives no pack context.
-- [ ] **Step 2: Run the shared repair test and verify RED**
+- [x] **Step 2: Run the shared repair test and verify RED**
 
 Expected: `pmPlanningPolicy.ts` is missing.
 
-- [ ] **Step 3: Implement the shared bounded retry loop**
+- [x] **Step 3: Implement the shared bounded retry loop**
 
 `buildPmPlanningRequest()` appends the pack context as internal Harness policy, keeps the existing uniqueness invariant, and adds the prior semantic validation message only on retry. `isSemanticPmPlanError()` keeps the current worker markers and adds `Bloom Harness pack plan rejected:`. `runPmPlanningWithRepair()` performs exactly two attempts and retries only classified semantic errors.
 
-- [ ] **Step 4: Switch desktop runtime to plan-only then bootstrap**
+- [x] **Step 4: Switch desktop runtime to plan-only then bootstrap**
 
 `startProjectRuntime()` must:
 
@@ -401,16 +401,16 @@ Expected: `pmPlanningPolicy.ts` is missing.
 
 `startProjectRuntimeWithIntake()` keeps appending intake context to the PM request; pack resolution still uses the stored pristine project request.
 
-- [ ] **Step 5: Add source-policy assertions for side-effect order**
+- [x] **Step 5: Add source-policy assertions for side-effect order**
 
 Update `pmPlanningRepair.policy-test.ts` so it proves desktop no longer invokes `start_project_runtime`, invokes `plan_project_runtime`, validates the raw Pack before `prepareOrchestrationPlan()`, validates the prepared Pack afterward, and reaches `bootstrap_project_repository` only after both validations. Both desktop/worker paths must use `runPmPlanningWithRepair()`.
-- [ ] **Step 6: Verify GREEN**
+- [x] **Step 6: Verify GREEN**
 
 Run `pmPlanningPolicy.policy-test.js`, `pmPlanningRepair.policy-test.js`, `pnpm --dir apps/desktop build`, and `pnpm run build:bloom-worker`.
 
 Expected: PASS; repository bootstrap is unreachable until plan/pack validation succeeds.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add bloom-runtime/ts/pmPlanningPolicy.ts bloom-runtime/ts/pmPlanningPolicy.policy-test.ts bloom-runtime/ts/runtime.ts bloom-runtime/ts/intakePlanning.ts bloom-runtime/ts/pmPlanningRepair.policy-test.ts bloom-runtime/tsconfig.policy-tests.json bloom-runtime/tsconfig.worker.json
@@ -437,7 +437,7 @@ git commit -m "feat : repair bloom pack planning"
 - Schema-v2 snapshots must contain a valid binding or fail closed.
 - Extends `HeadlessBuilderRuntime.planProject()` input with `harnessPackBinding`.
 
-- [ ] **Step 1: Write failing headless binding/recovery tests**
+- [x] **Step 1: Write failing headless binding/recovery tests**
 
 Add cases that prove:
 
@@ -454,35 +454,35 @@ const unknown = { ...CLAIM, harnessPackId: "unknown" };
 
 Use a dedicated valid bug-fix fixture with `debug-router -> frontend -> code-review -> reviewer -> qa`; do not reuse the generic BASE_PLAN for a bound bug-fix test. Assert event ordering: `save:binding` precedes `intake`, and legacy migration save precedes `reconcile:*`.
 
-- [ ] **Step 2: Write failing pre-merge project-gate test**
+- [x] **Step 2: Write failing pre-merge project-gate test**
 
 Create an all-done bound snapshot whose persisted trusted task evidence is missing `test`; assert the executor persists `blocked` and `mergePullRequests()` is never called.
-- [ ] **Step 3: Run headless tests and verify RED**
+- [x] **Step 3: Run headless tests and verify RED**
 
 Run policy compilation, `headlessBuilderExecutor.policy-test.js`, and `headlessCrashRecovery.policy-test.js`.
 
 Expected: missing binding/schema/gate behavior.
 
-- [ ] **Step 4: Implement snapshot binding and migration**
+- [x] **Step 4: Implement snapshot binding and migration**
 
 `freshPayload()` resolves once from the claim request plus optional explicit pack id. Before intake, the executor immediately persists a `binding` (or `blocked`) snapshot so a crash cannot trigger re-resolution. `parseSnapshot()` accepts schema 1 only as a one-way legacy-unbound migration; the executor persists the upgraded schema-2 snapshot before reconciliation or any other recovery side effect. Every schema-2 binding is validated with `validateHarnessPackBinding()`.
 
 A fresh `blocked` binding calls `failBlocked()` before intake. A recovered payload never calls `resolveHarnessPackBinding()`.
 
-- [ ] **Step 5: Wire shared PM repair inside the worker bridge**
+- [x] **Step 5: Wire shared PM repair inside the worker bridge**
 
 In `bloom-worker/run.js`, import `runPmPlanningWithRepair` and `assertHarnessPackPlan` from compiled worker modules. Remove the duplicated retry constants/helper implementations. Each bridge attempt asserts the immutable pack against the raw PM plan, applies existing orchestration/E2E preparation, then asserts the prepared plan again inside the same retry boundary.
 
-- [ ] **Step 6: Enforce project pack gate before merge**
+- [x] **Step 6: Enforce project pack gate before merge**
 
 After the task loop reports `allDone`, call `evaluateHarnessPackProjectCompletion()` before `evaluateProjectMergeGate()`. A non-ready pack gate calls `failBlocked("Bloom Harness pack completion rejected: ...")`; no integration/merge/release side effect may occur.
 
-- [ ] **Step 7: Verify GREEN**
+- [x] **Step 7: Verify GREEN**
 
 Run headless executor, crash recovery, PM planning repair, scheduler observability, worker build, and `node --check bloom-worker/run.js`.
 
 Expected: PASS for fresh bound/unbound, legacy recovery, blocked explicit pack, valid bug-fix, and missing-pack-evidence cases.
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add bloom-runtime/ts/builderWorkerAdapter.ts bloom-runtime/ts/headlessBuilderExecutor.ts bloom-runtime/ts/headlessBuilderExecutor.policy-test.ts bloom-runtime/ts/headlessCrashRecovery.policy-test.ts bloom-worker/run.js bloom-runtime/ts/pmPlanningRepair.policy-test.ts bloom-runtime/tsconfig.worker.json
@@ -498,18 +498,18 @@ git commit -m "feat : enforce bloom packs headlessly"
 **Files:**
 - Modify: `docs/superpowers/plans/2026-09-04-bloom-live-pack-binding.md` execution record only.
 
-- [ ] **Step 1: Run focused security/behavior regression set**
+- [x] **Step 1: Run focused security/behavior regression set**
 
 Run the new binding, plan policy, task evidence, project gate, store, PM repair, headless executor, and crash-recovery policy tests. Also rerun `runtimeCompletionAdapter.policy-test.js`, `runtimeTaskCompletion.policy-test.js`, `orchestrationCore.policy-test.js`, and `sessionReconciliation.policy-test.js`.
 
-- [ ] **Step 2: Run Windows policy regression**
+- [x] **Step 2: Run Windows policy regression**
 
 Run all Bloom policy tests except the two known platform-sensitive Luna tests (`lunaServerRuntime`, `lunaStaticRelease`) if they still reproduce the existing Windows-only baseline. Record the exact new PASS count.
 
-- [ ] **Step 3: Run native Linux full policy suite**
+- [x] **Step 3: Run native Linux full policy suite**
 
 Use Node `v22.23.2` and run every compiled Bloom policy test, including the two Luna tests. Record the exact PASS count; no exclusions are allowed on Linux.
-- [ ] **Step 4: Run build/runtime verification**
+- [x] **Step 4: Run build/runtime verification**
 
 Run:
 
@@ -522,7 +522,7 @@ git diff --check
 
 Expected: all commands PASS; existing Rust unused-code warnings may remain if unchanged in scope.
 
-- [ ] **Step 5: Review the branch against Harness trust boundaries**
+- [x] **Step 5: Review the branch against Harness trust boundaries**
 
 Confirm all of the following from the final diff:
 
@@ -534,7 +534,7 @@ Confirm all of the following from the final diff:
 - schema-v1 Builder recovery migrates to unbound rather than inferring a current pack;
 - plan validation occurs inside both PM repair boundaries.
 
-- [ ] **Step 6: Record exact verification evidence and commit**
+- [x] **Step 6: Record exact verification evidence and commit**
 
 Append RED/GREEN commands, Windows/Linux policy counts, build results, review findings, base SHA, and implementation commit list to this plan, then:
 
@@ -549,3 +549,34 @@ Push the implementation branch, open a PR to `main`, inspect changed files for c
 Suggested PR title: `feat : bind live bloom harness packs`
 
 The PR body must include the pack binding lifecycle, PM repair behavior, legacy migration rule, trusted evidence gate, exact local/Linux verification counts, and any review-discovered fixes.
+
+## Execution Record — 2026-09-04
+
+- Base verified against: `origin/main` at `c08721a5bb83`.
+- Focused Harness/runtime regression: **15/15 PASS**.
+- Windows compiled Bloom policy regression: **72 PASS / 0 FAIL**, excluding the unchanged Windows-only baselines `lunaServerRuntime.policy-test.js` and `lunaStaticRelease.policy-test.js`.
+- Native Linux policy regression: **74/74 PASS** on Node `v22.23.2`, with no exclusions.
+- `pnpm --dir apps/desktop build`: PASS.
+- `pnpm run build:bloom-worker`: PASS.
+- `cargo check --manifest-path bloom-runtime/Cargo.toml`: PASS; existing unused-code warnings remain outside this scope.
+- `git diff --check origin/main...HEAD`: PASS.
+
+### TDD / review findings
+
+- Fresh bindings are persisted before intake; unknown explicit packs block before PM/repository/Agent side effects.
+- Pack inference uses canonical project request / Builder `claim.brief` only; title/platform/features do not participate in intent inference.
+- Schema-v1 Builder recovery migrates to durable legacy-unbound schema v2 before reconciliation and never re-runs pack inference.
+- Outer/payload Builder snapshot schema mismatches fail closed.
+- Raw PM plans and prepared orchestration plans are both checked inside the semantic repair boundary.
+- Governance-only roles cannot satisfy the bug-fix implementation-writer stage.
+- Project pack completion reads only persisted `harnessCompletion` evidence; free-form Agent `evidence: string[]` is not promoted into trusted pack evidence.
+- Desktop cannot enter `review`, and headless cannot reach merge, until the project pack evidence gate passes.
+
+### Implementation commits
+
+- `4bbb746` feat : bind bloom harness packs
+- `76ee467` feat : validate bloom pack plans
+- `b286400` feat : persist bloom harness task evidence
+- `72a05f5` feat : enforce bloom pack state gates
+- `3b547fc` feat : repair bloom pack planning
+- `59c56bc` feat : enforce bloom packs headlessly
