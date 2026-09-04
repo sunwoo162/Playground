@@ -279,16 +279,66 @@ async function testRepositoryWriterRejectsBlankBlockedFinalAndPreservesConcreteB
   const concreteBlocked = '{"action":"final","report":{"status":"blocked","summary":"blocked","rationaleSummary":"blocked","evidence":[],"verification":[],"commitSha":null,"pullRequestNumber":null,"pullRequestUrl":null,"reviewedPullRequests":[],"blockers":["dependency unavailable"]}}';
   const fetchImpl: typeof fetch = async () => {
     calls += 1;
-    const content = calls === 1 ? blankBlocked : concreteBlocked;
+    const content = calls === 1
+      ? blankBlocked
+      : calls === 2
+        ? '{"action":"read","path":"missing-dependency.txt"}'
+        : concreteBlocked;
     return streamingResponse([
       `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`,
       "data: [DONE]\n\n",
     ]);
   };
   try {
-    const result = await runLocalAgent({ projectId: "policy", taskId: "WRITER-BLANK-BLOCKER", worktree, prompt: "implement", requireMutation: true }, { fetchImpl, maxSteps: 2 });
-    assert.equal(calls, 2, "a blank blocker must be rejected so the model gets another turn");
+    const result = await runLocalAgent({ projectId: "policy", taskId: "WRITER-BLANK-BLOCKER", worktree, prompt: "implement", requireMutation: true }, { fetchImpl, maxSteps: 3 });
+    assert.equal(calls, 3, "a concrete blocker is valid only after an actual non-final tool failure has been observed");
     assert.deepEqual(result.report.blockers, ["dependency unavailable"], "a concrete writer blocker must remain a valid blocked final");
+  } finally {
+    await fs.rm(worktree, { recursive: true, force: true });
+  }
+}
+async function testRepositoryWriterRequiresFailedToolEvidenceForBlockedFinal() {
+  const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-writer-blocker-evidence-"));
+  await fs.writeFile(path.join(worktree, "README.md"), "baseline\n", "utf8");
+  execFileSync("git", ["init"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["config", "user.email", "policy@example.com"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["config", "user.name", "Bloom Policy"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["add", "README.md"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["commit", "-m", "baseline"], { cwd: worktree, stdio: "ignore" });
+  const bodies: Array<Record<string, unknown>> = [];
+  let calls = 0;
+  const blocked = '{"action":"final","report":{"status":"blocked","summary":"not complete","rationaleSummary":"not complete","evidence":[],"verification":[],"commitSha":null,"pullRequestNumber":null,"pullRequestUrl":null,"reviewedPullRequests":[],"blockers":["The frontend code has not been written or tested."]}}';
+  const completed = '{"action":"final","report":{"status":"completed","summary":"done","rationaleSummary":"done","evidence":[],"verification":[],"commitSha":null,"pullRequestNumber":null,"pullRequestUrl":null,"reviewedPullRequests":[],"blockers":[]}}';
+  const fetchImpl: typeof fetch = async (_input, init) => {
+    bodies.push(JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>);
+    calls += 1;
+    const content = calls === 1
+      ? '{"action":"list","path":"."}'
+      : calls === 2
+        ? blocked
+        : calls === 3
+          ? '{"action":"write","path":"frontend/src/App.tsx","content":"export default function App(){ return null; }"}'
+          : completed;
+    return streamingResponse([
+      `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`,
+      "data: [DONE]\n\n",
+    ]);
+  };
+  try {
+    const result = await runLocalAgent({ projectId: "policy", taskId: "WRITER-BLOCKER-EVIDENCE", worktree, prompt: "implement the frontend", requireMutation: true }, { fetchImpl, maxSteps: 4 });
+    assert.equal(result.report.status, "completed");
+    assert.equal(calls, 4, "a successful inspection alone must not justify a blocked writer final");
+    assert.equal(await fs.readFile(path.join(worktree, "frontend", "src", "App.tsx"), "utf8"), "export default function App(){ return null; }");
+    const thirdFormat = bodies[2]?.response_format as Record<string, unknown> | undefined;
+    const thirdSchema = thirdFormat?.schema as Record<string, unknown> | undefined;
+    const thirdProperties = thirdSchema?.properties as Record<string, unknown> | undefined;
+    const thirdAction = thirdProperties?.action as Record<string, unknown> | undefined;
+    assert.deepEqual(thirdAction?.enum, ["list", "read", "write", "delete", "run"],
+      "rejecting an unobserved blocked final must force the next turn to use a real tool");
+    const thirdMessages = bodies[2]?.messages as Array<{ content?: string }> | undefined;
+    const thirdContext = thirdMessages?.map((message) => message.content ?? "").join("\n") ?? "";
+    assert.match(thirdContext, /blocked.*(?:tool|evidence|failure)|(?:tool|evidence|failure).*blocked/i,
+      "the model must receive corrective evidence that blocked requires an observed failed tool result");
   } finally {
     await fs.rm(worktree, { recursive: true, force: true });
   }
@@ -581,6 +631,7 @@ async function main() {
   await testLocalAgentUsesServerActionSchema();
   await testRepositoryWriterRejectsEmptyBlockedFinalBypassAndRecovers();
   await testRepositoryWriterRejectsBlankBlockedFinalAndPreservesConcreteBlocker();
+  await testRepositoryWriterRequiresFailedToolEvidenceForBlockedFinal();
   await testRepositoryWriterForcesToolTurnAfterNoopFinal();
   await testLocalAgentRejectsImmediateDuplicateSuccessfulWrite();
   await testLocalAgentFailsFastOnRepeatedSuccessfulWriteLoop();
