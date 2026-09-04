@@ -33,7 +33,7 @@ jobs:
           command_timeout: 325m
           script: |
             set -euo pipefail
-            echo "=== RUN 64 API STATUS ==="
+            echo "=== RUN 65 API STATUS ==="
             cd /home/ubuntu/bloombouquet
             set -a
             . /home/ubuntu/bloombouquet/.env
@@ -43,26 +43,26 @@ jobs:
             process.stdout.write(jwt.sign({ id: 'bloom-run64-diagnostic', login: 'bloom-run64-diagnostic', name: 'Bloom Run64 Diagnostic', avatar_url: '', type: 'access' }, process.env.JWT_SECRET, { expiresIn: '5m' }));
             NODE
             )"
-            curl -sS --max-time 15 -H "Authorization: Bearer ${TOKEN}" http://127.0.0.1:3000/api/builder/projects/64/runs/64 || true
+            curl -sS --max-time 15 -H "Authorization: Bearer ${TOKEN}" http://127.0.0.1:3000/api/builder/projects/65/runs/65 || true
             echo
-            echo "=== RUN 64 SNAPSHOT ==="
-            curl -sS --max-time 15 -H "Authorization: Bearer ${TOKEN}" http://127.0.0.1:3000/api/builder/projects/64/runs/64/snapshot || true
+            echo "=== RUN 65 SNAPSHOT ==="
+            curl -sS --max-time 15 -H "Authorization: Bearer ${TOKEN}" http://127.0.0.1:3000/api/builder/projects/65/runs/65/snapshot || true
             echo
             echo "=== BUILDER WORKER TAIL ==="
             pm2 logs bloom-builder-worker --lines 100 --nostream 2>&1 | tail -n 130 || true
             echo "=== BUILDER 64 RUNTIME FILES ==="
-            find /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-64 -maxdepth 4 -type f -printf '%TY-%Tm-%TdT%TH:%TM:%TS %s %p\n' 2>/dev/null | sort || true
+            find /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-65 -maxdepth 4 -type f -printf '%TY-%Tm-%TdT%TH:%TM:%TS %s %p\n' 2>/dev/null | sort || true
             echo "=== BUILDER 64 PM EVENTS ==="
-            tail -n 80 /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-64/pm/pm-events.jsonl 2>/dev/null || true
+            tail -n 80 /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-65/pm/pm-events.jsonl 2>/dev/null || true
             echo "=== RUN 63 AGENT JOURNALS ==="
             found=0
             while IFS= read -r file; do
               found=1
               echo "--- ${file} ---"
               tail -n 240 "$file" || true
-            done < <(find /home/ubuntu/bloom-workspaces -type f \( -path '*/.luna-runtime/projects/builder-64/agents/*/PULSEBOARD-101/local-agent-events.jsonl' -o -path '*/.luna-runtime/projects/builder-64/agents/*/PULSEBOARD-101/local-agent.stderr.log' \) -print 2>/dev/null)
+            done < <(find /home/ubuntu/bloom-workspaces -type f \( -path '*/.luna-runtime/projects/builder-65/agents/*/PULSEBOARD-101/local-agent-events.jsonl' -o -path '*/.luna-runtime/projects/builder-65/agents/*/PULSEBOARD-101/local-agent.stderr.log' \) -print 2>/dev/null)
             if [ "$found" -eq 0 ]; then
               echo "No run 63 PULSEBOARD-101 journal files found"
             fi
             echo "=== RUN 63 RUNTIME DIRECTORIES ==="
-            find /home/ubuntu/bloom-workspaces -type d -path '*/.luna-runtime/projects/builder-64/agents/*/PULSEBOARD-101' -print 2>/dev/null || true
+            find /home/ubuntu/bloom-workspaces -type d -path '*/.luna-runtime/projects/builder-65/agents/*/PULSEBOARD-101' -print 2>/dev/null || true
