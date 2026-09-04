@@ -197,6 +197,9 @@ jobs:
             grep -n -F 'failedActionFingerprint' /home/ubuntu/bloombouquet/.tmp/bloom-worker/bloomLocalAgentRuntime.js | head -8 || true
             grep -n -F 'suppressedActionTurn' /home/ubuntu/bloombouquet/.tmp/bloom-worker/bloomLocalAgentRuntime.js | head -8 || true
             grep -n -F 'RECOVERY_REQUIRED: This exact tool action has failed repeatedly.' /home/ubuntu/bloombouquet/.tmp/bloom-worker/bloomLocalAgentRuntime.js | head -4 || true
+            echo "[local-agent-git-metadata-fs-guard]"
+            grep -n -F 'function validateFilesystemToolTarget' /home/ubuntu/bloombouquet/.tmp/bloom-worker/bloomLocalAgentRuntime.js | head -4 || true
+            grep -n -F 'if (!duplicateSucceeded)' /home/ubuntu/bloombouquet/.tmp/bloom-worker/bloomLocalAgentRuntime.js | head -4 || true
             echo "[local-agent-action-schema]"
             grep -n -F 'actionBranch("read", ["path"]' /home/ubuntu/bloombouquet/.tmp/bloom-worker/bloomLocalAgentRuntime.js | head -3 || true
             grep -n -F 'actionBranch("write", ["path", "content"]' /home/ubuntu/bloombouquet/.tmp/bloom-worker/bloomLocalAgentRuntime.js | head -3 || true
