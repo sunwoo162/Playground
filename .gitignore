@@ -8,3 +8,4 @@ dist/
 bin/
 obj/
 apps/site-macro-native-bridge/com.playground.site_macro_bridge.json
+.worktrees/
