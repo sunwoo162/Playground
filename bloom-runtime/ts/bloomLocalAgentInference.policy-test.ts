@@ -293,6 +293,56 @@ async function testRepositoryWriterRejectsBlankBlockedFinalAndPreservesConcreteB
     await fs.rm(worktree, { recursive: true, force: true });
   }
 }
+async function testRepositoryWriterForcesToolTurnAfterNoopFinal() {
+  const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-writer-force-tool-"));
+  await fs.writeFile(path.join(worktree, "README.md"), "baseline\n", "utf8");
+  execFileSync("git", ["init"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["config", "user.email", "policy@example.com"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["config", "user.name", "Bloom Policy"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["add", "README.md"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["commit", "-m", "baseline"], { cwd: worktree, stdio: "ignore" });
+  const bodies: Array<Record<string, unknown>> = [];
+  let calls = 0;
+  const completed = '{"action":"final","report":{"status":"completed","summary":"done","rationaleSummary":"done","evidence":[],"verification":[],"commitSha":null,"pullRequestNumber":null,"pullRequestUrl":null,"reviewedPullRequests":[],"blockers":[]}}';
+  const fetchImpl: typeof fetch = async (_input, init) => {
+    bodies.push(JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>);
+    calls += 1;
+    const content = calls === 1
+      ? completed
+      : calls === 2
+        ? '{"action":"write","path":"frontend/src/App.tsx","content":"export default function App(){ return null; }"}'
+        : completed;
+    return streamingResponse([
+      `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`,
+      "data: [DONE]\n\n",
+    ]);
+  };
+
+  try {
+    const result = await runLocalAgent({
+      projectId: "policy",
+      taskId: "WRITER-FORCE-TOOL",
+      worktree,
+      prompt: "implement the frontend",
+      requireMutation: true,
+    }, { fetchImpl, maxSteps: 3 });
+    assert.equal(result.report.status, "completed");
+    assert.equal(calls, 3);
+    const actionEnum = (index: number) => {
+      const format = bodies[index]?.response_format as Record<string, unknown> | undefined;
+      const schema = format?.schema as Record<string, unknown> | undefined;
+      const properties = schema?.properties as Record<string, unknown> | undefined;
+      const action = properties?.action as Record<string, unknown> | undefined;
+      return action?.enum;
+    };
+    assert.deepEqual(actionEnum(1), ["list", "read", "write", "delete", "run"],
+      "the turn immediately after a rejected no-op writer final must remove final from the server schema");
+    assert.deepEqual(actionEnum(2), ["list", "read", "write", "delete", "run", "final"],
+      "final must be restored after the writer performs one real tool action");
+  } finally {
+    await fs.rm(worktree, { recursive: true, force: true });
+  }
+}
 async function testLocalAgentRejectsImmediateDuplicateSuccessfulWrite() {
   const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-duplicate-write-"));
   const bodies: Array<Record<string, unknown>> = [];
@@ -531,6 +581,7 @@ async function main() {
   await testLocalAgentUsesServerActionSchema();
   await testRepositoryWriterRejectsEmptyBlockedFinalBypassAndRecovers();
   await testRepositoryWriterRejectsBlankBlockedFinalAndPreservesConcreteBlocker();
+  await testRepositoryWriterForcesToolTurnAfterNoopFinal();
   await testLocalAgentRejectsImmediateDuplicateSuccessfulWrite();
   await testLocalAgentFailsFastOnRepeatedSuccessfulWriteLoop();
   await testLocalAgentFailsFastOnRepeatedRejectedWriteLoop();
