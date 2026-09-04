@@ -1,4 +1,5 @@
 import * as assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -212,6 +213,52 @@ async function testLocalAgentUsesServerActionSchema() {
   }
 }
 
+async function testRepositoryWriterRejectsCompletedFinalWithoutChangesAndRecovers() {
+  const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-writer-noop-final-"));
+  await fs.writeFile(path.join(worktree, "README.md"), "baseline\n", "utf8");
+  execFileSync("git", ["init"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["config", "user.email", "policy@example.com"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["config", "user.name", "Bloom Policy"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["add", "README.md"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["commit", "-m", "baseline"], { cwd: worktree, stdio: "ignore" });
+  const bodies: Array<Record<string, unknown>> = [];
+  let calls = 0;
+  const final = '{"action":"final","report":{"status":"completed","summary":"done","rationaleSummary":"done","evidence":[],"verification":[],"commitSha":null,"pullRequestNumber":null,"pullRequestUrl":null,"reviewedPullRequests":[],"blockers":[]}}';
+  const fetchImpl: typeof fetch = async (_input, init) => {
+    bodies.push(JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>);
+    calls += 1;
+    const content = calls === 1
+      ? final
+      : calls === 2
+        ? '{"action":"write","path":"frontend/src/App.tsx","content":"export default function App(){ return null; }"}'
+        : final;
+    return streamingResponse([
+      `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`,
+      "data: [DONE]\n\n",
+    ]);
+  };
+
+  try {
+    const input = {
+      projectId: "policy",
+      taskId: "WRITER-NOOP-FINAL",
+      worktree,
+      prompt: "implement the frontend",
+      requireMutation: true,
+    } as Parameters<typeof runLocalAgent>[0] & { requireMutation: boolean };
+    const result = await runLocalAgent(input, { fetchImpl, maxSteps: 3 });
+    assert.equal(result.report.status, "completed");
+    assert.equal(calls, 3, "a writer completed-final with no repository diff must be rejected so the model gets another turn");
+    assert.equal(await fs.readFile(path.join(worktree, "frontend", "src", "App.tsx"), "utf8"),
+      "export default function App(){ return null; }");
+    const secondMessages = bodies[1]?.messages as Array<{ content?: string }> | undefined;
+    const secondContext = secondMessages?.map((message) => message.content ?? "").join("\n") ?? "";
+    assert.match(secondContext, /completed.*(?:repository|worktree).*(?:change|diff)|(?:change|diff).*required.*completed/i,
+      "premature writer final must return corrective evidence that an actual repository diff is required");
+  } finally {
+    await fs.rm(worktree, { recursive: true, force: true });
+  }
+}
 async function testLocalAgentRejectsImmediateDuplicateSuccessfulWrite() {
   const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-duplicate-write-"));
   const bodies: Array<Record<string, unknown>> = [];
@@ -448,6 +495,7 @@ async function main() {
   await testStructuredInferenceUsesServerSchema();
   await testLocalAgentBoundsToolHistoryBeforeModelCalls();
   await testLocalAgentUsesServerActionSchema();
+  await testRepositoryWriterRejectsCompletedFinalWithoutChangesAndRecovers();
   await testLocalAgentRejectsImmediateDuplicateSuccessfulWrite();
   await testLocalAgentFailsFastOnRepeatedSuccessfulWriteLoop();
   await testLocalAgentFailsFastOnRepeatedRejectedWriteLoop();

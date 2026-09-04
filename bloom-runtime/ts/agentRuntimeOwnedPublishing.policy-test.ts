@@ -37,6 +37,10 @@ assert(
 );
 
 assert(
+  source.includes('"requireMutation": is_repository_writer(&input.role)'),
+  "Rust Agent Runtime must tell the Local Agent when a repository-writing task requires a real worktree mutation before completed",
+);
+assert(
   source.includes('.env("PNPM_HOME", &pnpm_home)'),
   "agent tooling must redirect pnpm state into a writable task-scoped directory",
 );
