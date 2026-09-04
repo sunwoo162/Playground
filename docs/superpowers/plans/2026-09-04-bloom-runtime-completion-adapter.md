@@ -235,7 +235,7 @@ Confirm tests prove: free-form Agent claims cannot satisfy `file-change`/`test`;
 
 Append exact RED/GREEN commands, policy-test counts, known Windows baseline notes, Linux full-suite result, worker build result, Rust check result, and final commit list to this plan.
 
-- [ ] **Step 6: Final commit and push**
+- [x] **Step 6: Final commit and push**
 
 `git add docs/superpowers/plans/2026-09-04-bloom-runtime-completion-adapter.md && git commit -m "docs : record bloom completion adapter verification" && git push -u origin feat/bloom-runtime-completion-adapter`
 
@@ -243,13 +243,14 @@ Append exact RED/GREEN commands, policy-test counts, known Windows baseline note
 
 - Rebased implementation onto `origin/main` at `ebc81d7`, including PR #220 writer blocker evidence, PR #221 required tool arguments, and PR #222 local llama memory headroom changes.
 - TDD RED/GREEN covered safe command journaling, Rust observation transport, pure Runtime Completion Adapter, project-state enforcement, transitive review PR validation, and headless normal/recovery enforcement.
-- Focused verification commands: `bloomLocalAgentRuntime.policy-test.js`, `cargo test --manifest-path bloom-runtime/Cargo.toml agent_evidence_runtime::tests -- --nocapture`, `runtimeCompletionAdapter.policy-test.js`, `runtimeTaskCompletion.policy-test.js`, `sessionReconciliation.policy-test.js`, `orchestrationCore.policy-test.js`, `headlessBuilderExecutor.policy-test.js`, and `headlessCrashRecovery.policy-test.js`.
-- Windows policy regression: 64/64 PASS with the pre-existing platform-sensitive `lunaServerRuntime` and `lunaStaticRelease` tests excluded.
-- Native Linux Node `v22.23.2`: full Bloom policy suite PASS, 66/66, including both platform-sensitive Luna tests.
+- Focused verification commands: `bloomLocalAgentRuntime.policy-test.js`, `cargo test --manifest-path bloom-runtime/Cargo.toml agent_evidence_runtime::tests -- --nocapture`, `runtimeCompletionAdapter.policy-test.js`, `runtimeTaskCompletion.policy-test.js`, `sessionReconciliation.policy-test.js`, `orchestrationCore.policy-test.js`, `headlessBuilderExecutor.policy-test.js`, `headlessCrashRecovery.policy-test.js`, and `storeCompletion.policy-test.js`.
+- Windows policy regression: 65/65 PASS with the pre-existing platform-sensitive `lunaServerRuntime` and `lunaStaticRelease` tests excluded.
+- Native Linux Node `v22.23.2`: full Bloom policy suite PASS, 67/67, including both platform-sensitive Luna tests.
 - `pnpm run build:bloom-worker`: PASS.
 - `cargo check --manifest-path bloom-runtime/Cargo.toml`: PASS; existing unused-code warnings remain unchanged in scope.
 - `git diff --check`: PASS.
 - Regression migration: `nonWriterPublicationMetadata.policy-test` now supplies runtime-owned empty observations for the non-writer idea fixture while still proving fake commit metadata is discarded.
+- PR #223 review found a Task 4 scripted replacement had overwritten `beginAgentTasks()` while leaving legacy completion mapping in `completeAgentTask()`; RED compilation exposed undefined completion variables, then `storeCompletion.policy-test` permanently covered ready-to-running and gated completion behavior.
 
 ### Implementation commits
 
@@ -260,3 +261,5 @@ Append exact RED/GREEN commands, policy-test counts, known Windows baseline note
 - `038db7a` fix : validate transitive bloom review evidence
 - `80c3cf8` feat : gate bloom headless completion
 - `b3cdd79` test : update bloom completion fixture
+- `1e5751a` style : normalize bloom completion formatting
+- `6a8e3e3` fix : preserve gated bloom task start flow
