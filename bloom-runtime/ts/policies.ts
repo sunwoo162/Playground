@@ -1,28 +1,9 @@
-import type { AgentPermission } from "./types";
+import {
+  AGENT_PERMISSION_VALUES,
+  type AgentPermission,
+} from "./types";
 
-export const AGENT_PERMISSIONS: AgentPermission[] = [
-  "repository:read",
-  "repository:create",
-  "repository:write",
-  "branch:create",
-  "worktree:create",
-  "command:run",
-  "dependency:install",
-  "test:run",
-  "build:run",
-  "browser:use",
-  "figma:read",
-  "commit:create",
-  "push",
-  "issue:create",
-  "issue:update",
-  "pull-request:create",
-  "pull-request:update",
-  "pull-request:review",
-  "pull-request:merge",
-  "deployment:prepare",
-  "deployment:publish",
-];
+export const AGENT_PERMISSIONS: AgentPermission[] = [...AGENT_PERMISSION_VALUES];
 
 export const SENIOR_AGENT_POLICY = {
   id: "senior-10-plus" as const,
