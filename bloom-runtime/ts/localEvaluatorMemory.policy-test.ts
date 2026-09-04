@@ -17,8 +17,8 @@ assert(/--max-memory-restart\s+"\$\{LLAMA_MAX_MEMORY_RESTART_MB\}M"/.test(setupS
 
 const limitMiB = Number(match[1]);
 assert(
-  limitMiB >= 3800,
-  `production local llama memory guard must stay above the 3437 MiB long-run Agent inference peak with restart headroom; found ${limitMiB}M`,
+  limitMiB >= 4200,
+  `production local llama memory guard must stay above the 3886 MiB long-run Agent inference peak with restart headroom; found ${limitMiB}M`,
 );
 
 const healthyFastPathStart = setupScript.indexOf("if pm2 describe bloom-evaluator-llm");

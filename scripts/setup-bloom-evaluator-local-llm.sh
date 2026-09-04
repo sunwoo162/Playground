@@ -38,7 +38,7 @@ fi
 chmod +x "$ROOT_DIR/bloom-worker/start-local-evaluator-llm.sh"
 
 HEALTH_URL="http://127.0.0.1:${BLOOM_LOCAL_EVALUATOR_PORT:-8091}/health"
-LLAMA_MAX_MEMORY_RESTART_MB=3800
+LLAMA_MAX_MEMORY_RESTART_MB=4200
 LLAMA_MAX_MEMORY_RESTART_BYTES=$((LLAMA_MAX_MEMORY_RESTART_MB * 1024 * 1024))
 
 current_llm_max_memory_restart_bytes() {
