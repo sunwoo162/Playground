@@ -1,3 +1,6 @@
+import type { HarnessPackBinding } from "./harnessPackBinding";
+import type { HarnessTaskCompletionRecord } from "./harnessTaskEvidence";
+
 export type TeamId = "rose" | "lily" | "tulip" | "sunflower" | "cherry-blossom";
 
 export type TeamStatus = "idle" | "reserved" | "working" | "retrospective" | "evolving";
@@ -72,7 +75,7 @@ export type ProjectStatus =
   | "completed"
   | "blocked";
 
-export type RuntimeFailureSource = "pm" | "agent";
+export type RuntimeFailureSource = "pm" | "agent" | "harness";
 
 export type ProjectIntakeComplexity = "small" | "medium" | "large";
 export type ProjectIntakeRiskFlag =
@@ -170,6 +173,7 @@ export type ProjectTaskRun = {
   summary: string | null;
   rationaleSummary: string | null;
   evidence: string[];
+  harnessCompletion?: HarnessTaskCompletionRecord | null;
   verification: AgentTaskVerification[];
   blockers: string[];
   lastError: string | null;
@@ -380,6 +384,7 @@ export type ProjectState = {
   deploymentPolicyId: "luna-apps-portal";
   plan: ProjectPlan | null;
   taskRuns: ProjectTaskRun[];
+  harnessPackBinding?: HarnessPackBinding | null;
   failureRoutes?: FailureRouteRecord[];
   replans?: ProjectReplanRecord[];
   replanAttempts?: Record<string, number>;

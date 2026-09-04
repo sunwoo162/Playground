@@ -20,6 +20,7 @@
     "ts/bloomBouquetSeniorEvaluator.ts",
     "ts/bloomBouquetEvaluatorEvidence.ts",
     "ts/bloomBouquetLocalSeniorEvaluator.ts",
+    "ts/harnessPackPlanPolicy.ts",
     "ts/headlessBuilderExecutor.ts",
     "ts/schedulerObservability.ts",
     "ts/observedHeadlessBuilderExecutor.ts",
@@ -39,6 +40,13 @@
     "ts/lunaProductionDelivery.ts",
     "ts/e2eSmoke.ts",
     "ts/bloomLocalAgentRuntime.ts",
-    "ts/lunaReviewPackage.ts"
+    "ts/lunaReviewPackage.ts",
+    "ts/pmPlanningPolicy.ts",
+    "ts/harnessPackBinding.ts",
+    "ts/harnessPackRegistry.ts",
+    "ts/harnessContracts.ts",
+    "ts/harnessValidation.ts",
+    "ts/planTopology.ts",
+    "ts/types.ts"
   ]
 }

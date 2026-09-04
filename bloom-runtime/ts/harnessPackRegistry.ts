@@ -24,6 +24,7 @@ export const BUG_FIX_PACK = {
   requiredEvidence: ["test", "file-change", "review"],
 } as const satisfies HarnessPack;
 
+const HARNESS_PACKS: readonly HarnessPack[] = [BUG_FIX_PACK];
 export type ResolveHarnessPackInput = {
   explicitPack?: string;
   intent: string;
@@ -34,27 +35,35 @@ export type HarnessPackResolution = {
   reason: string;
 };
 
-const BUG_FIX_INTENT = /\b(bug|fix|error|crash|failure|regression)\b/i;
+const BUG_FIX_INTENT = /\b(bug|fix|error|crash|failure|regression)\b|(?:버그|오류|에러|크래시|회귀|고쳐|고치)/i;
 
+export function findHarnessPackById(id: string): HarnessPack | null {
+  return HARNESS_PACKS.find((pack) => pack.id === id) ?? null;
+}
+
+export function inferHarnessPack(intent: string): HarnessPackResolution | null {
+  if (!BUG_FIX_INTENT.test(intent)) return null;
+  return {
+    pack: BUG_FIX_PACK,
+    reason: "Selected from bug-fix intent keywords.",
+  };
+}
 export function resolveHarnessPack(
   input: ResolveHarnessPackInput,
 ): HarnessPackResolution {
   if (input.explicitPack !== undefined) {
-    if (input.explicitPack !== BUG_FIX_PACK.id) {
+    const pack = findHarnessPackById(input.explicitPack);
+    if (!pack) {
       throw new Error(`Unknown Bloom Harness pack: ${input.explicitPack}`);
     }
     return {
-      pack: BUG_FIX_PACK,
+      pack,
       reason: "Selected from explicit pack request.",
     };
   }
 
-  if (BUG_FIX_INTENT.test(input.intent)) {
-    return {
-      pack: BUG_FIX_PACK,
-      reason: "Selected from bug-fix intent keywords.",
-    };
-  }
+  const inferred = inferHarnessPack(input.intent);
+  if (inferred) return inferred;
 
   throw new Error(`No Bloom Harness pack matched intent: ${input.intent}`);
 }

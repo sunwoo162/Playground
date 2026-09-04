@@ -12,6 +12,7 @@ import {
   type HeadlessBuilderRuntime,
   type HeadlessBuilderSnapshotPayload,
 } from "./headlessBuilderExecutor";
+import { resolveHarnessPackBinding } from "./harnessPackBinding";
 import {
   prepareOrchestrationPlan,
   refreshOrchestrationReadiness,
@@ -347,6 +348,7 @@ function runningSnapshot(): BuilderOrchestrationSnapshot {
 
   const payload: HeadlessBuilderSnapshotPayload = {
     schemaVersion: HEADLESS_BUILDER_SNAPSHOT_SCHEMA_VERSION,
+    harnessPackBinding: resolveHarnessPackBinding({ intent: "Build dashboard" }),
     runId: CLAIM.runId,
     projectId: CLAIM.projectId,
     runtimeProjectId: `builder-${CLAIM.projectId}`,
@@ -541,7 +543,170 @@ function testCopiedIntakeBlockerCatalogIsNonBlocking() {
   assert(concrete.length === 1, "a concrete missing production credential must remain blocking");
 }
 
+
+const VALID_BUG_FIX_PLAN: ProjectPlan = {
+  projectName: "Bug Fix",
+  repositoryName: "bug-fix",
+  productSummary: "bug fix",
+  architectureSummary: "debug then fix then review",
+  needsAuth: false,
+  technologyDecisions: [],
+  tasks: [
+    { id: "DBG", title: "Debug", role: "debug-router", taskSlug: "debug", summary: "debug", dependsOn: [], acceptanceCriteria: ["root cause"] },
+    { id: "FE", title: "Fix", role: "frontend", taskSlug: "fix", summary: "fix", dependsOn: ["DBG"], acceptanceCriteria: ["fixed"] },
+    { id: "CR", title: "Code review", role: "code-review", taskSlug: "code-review", summary: "review", dependsOn: ["FE"], acceptanceCriteria: ["reviewed"] },
+    { id: "REV", title: "Reviewer", role: "reviewer", taskSlug: "reviewer", summary: "review", dependsOn: ["CR"], acceptanceCriteria: ["approved"] },
+    { id: "QA", title: "QA", role: "qa", taskSlug: "qa", summary: "test", dependsOn: ["REV"], acceptanceCriteria: ["tested"] },
+  ],
+};
+
+async function testFreshBugFixPersistsBindingBeforeIntake() {
+  const events: string[] = [];
+  const runtime = fakeRuntime(events);
+  runtime.runtime.planProject = async (input) => {
+    assert(input.harnessPackBinding.packId === "bug-fix", "bound pack must reach PM runtime");
+    return { plan: VALID_BUG_FIX_PLAN, sessionId: "pm-bug", eventsPath: "/tmp/pm-bug.jsonl", outputPath: "/tmp/pm-bug.json" };
+  };
+  const { client, phases } = fakeClient(null, events);
+  const bugClaim: BuilderWorkerClaim = { ...CLAIM, brief: "Fix login crash", harnessPackId: null };
+  await executor(runtime.runtime)(bugClaim, client);
+  assert(phases.includes("binding"), "fresh run must persist pack binding");
+  assert(events.indexOf("save:binding") < events.indexOf("intake"), "pack binding must persist before intake");
+}
+
+async function testUnknownExplicitPackBlocksBeforeSideEffects() {
+  const events: string[] = [];
+  const runtime = fakeRuntime(events);
+  const { client, phases } = fakeClient(null, events);
+  const unknown: BuilderWorkerClaim = { ...CLAIM, harnessPackId: "unknown" };
+  let rejected = false;
+  try { await executor(runtime.runtime)(unknown, client); }
+  catch (error) { rejected = error instanceof Error && /pack|unknown/i.test(error.message); }
+  assert(rejected, "unknown explicit pack must fail closed");
+  assert(phases.includes("blocked"), "unknown explicit pack must persist blocked snapshot");
+  assert(!events.includes("intake"), "unknown explicit pack must block before intake");
+  assert(!events.includes("pm"), "unknown explicit pack must block before PM");
+  assert(!events.includes("bootstrap"), "unknown explicit pack must block before repository bootstrap");
+  assert(!events.some((event) => event.startsWith("dispatch:")), "unknown explicit pack must block before Agent dispatch");
+}
+
+function schemaV1RunningSnapshot(): BuilderOrchestrationSnapshot {
+  const current = runningSnapshot();
+  const payload = JSON.parse(current.payloadJson) as Record<string, unknown>;
+  delete payload.harnessPackBinding;
+  payload.schemaVersion = 1;
+  return { ...current, schemaVersion: 1, phase: "building", payloadJson: JSON.stringify(payload) };
+}
+
+async function testSchemaV1RecoveryPersistsLegacyBindingBeforeReconcile() {
+  const events: string[] = [];
+  const runtime = fakeRuntime(events);
+  const legacy = schemaV1RunningSnapshot();
+  const claim: BuilderWorkerClaim = { ...CLAIM, brief: "Fix login crash", orchestrationSnapshot: legacy };
+  const { client, phases } = fakeClient(legacy, events);
+  await executor(runtime.runtime)(claim, client);
+  assert(phases.includes("binding"), "schema-v1 recovery must persist migrated binding");
+  assert(events.indexOf("save:binding") < events.indexOf("reconcile:FE-001"), "legacy binding migration must persist before reconciliation");
+}
+
+function boundMissingTestSnapshot(): BuilderOrchestrationSnapshot {
+  const binding = resolveHarnessPackBinding({ intent: "Fix login crash" });
+  const prs = new Map([["DBG", 301], ["FE", 302]]);
+  const taskRuns: ProjectTaskRun[] = VALID_BUG_FIX_PLAN.tasks.map((task, index) => {
+    const pr = prs.get(task.id) ?? null;
+    const reviewRole = task.role === "code-review" || task.role === "reviewer";
+    const evidence = pr !== null
+      ? [{ version: 1 as const, id: `file-${index}`, kind: "file-change" as const, summary: "changed" }]
+      : reviewRole
+        ? [{ version: 1 as const, id: `review-${index}`, kind: "review" as const, summary: "reviewed" }]
+        : [];
+    return {
+      taskId: task.id, role: task.role, agentId: `rose:${task.role}`, status: "done", attempts: 1,
+      branchName: pr === null ? null : `agent/rose/${task.role}/${task.taskSlug}`, worktreePath: null,
+      threadId: null, sessionId: null, turnId: null, eventsPath: null, stderrPath: null,
+      commitSha: pr === null ? null : `sha-${task.id}`, pullRequestNumber: pr,
+      pullRequestUrl: pr === null ? null : `https://github.com/example/bug-fix/pull/${pr}`,
+      reviewedPullRequests: ["code-review", "reviewer", "qa"].includes(task.role) ? [301, 302] : [],
+      summary: "done", rationaleSummary: "done", evidence: [],
+      harnessCompletion: { version: 1, accepted: true, evidence, requiredEvidence: [], rejectionReason: null },
+      verification: [{ name: "policy", status: "passed", details: "passed" }], blockers: [], lastError: null,
+      startedAt: "2026-09-04T00:00:00Z", completedAt: "2026-09-04T00:01:00Z",
+    };
+  });
+
+  const payload: HeadlessBuilderSnapshotPayload = {
+    schemaVersion: 2,
+    runId: CLAIM.runId, projectId: CLAIM.projectId,
+    runtimeProjectId: `builder-${CLAIM.projectId}`, intakeId: `builder-run-${CLAIM.runId}`,
+    request: "Project title: Headless Builder Test\nFix login crash",
+    harnessPackBinding: binding,
+    intake: { analysis: { summary: "done", primaryUser: "user", primaryJob: "job", complexity: "medium", requiredRoles: ["frontend"], criticalRoles: ["frontend"], needsAuth: false, userFacing: true, externalDependencies: [], riskFlags: [], assumptions: [], missingInputs: [], rationaleSummary: "done" }, sessionId: "intake", eventsPath: "/tmp/intake", outputPath: "/tmp/intake.json" },
+    pm: { sessionId: "pm", eventsPath: "/tmp/pm", outputPath: "/tmp/pm.json" },
+    plan: VALID_BUG_FIX_PLAN,
+    repository: { repository: "example/bug-fix", workspacePath: "/tmp/bug-fix", createdRepository: true, clonedRepository: true, releaseBranch: "main", integrationBranch: "develop" },
+    bootstrap: { profile: "none", commitSha: null, generatedFiles: [] }, taskRuns,
+    integrationPullRequestNumbers: [], integration: null, release: null, blockedReason: null,
+  };
+  return { schemaVersion: 2, version: 9, phase: "building", payloadJson: JSON.stringify(payload), updatedByWorkerId: "worker-old", updatedAt: "2026-09-04T00:01:00Z" };
+}
+
+async function testBoundProjectMissingPackEvidenceBlocksBeforeMerge() {
+  const events: string[] = [];
+  const runtime = fakeRuntime(events);
+  const snapshot = boundMissingTestSnapshot();
+  const claim: BuilderWorkerClaim = { ...CLAIM, brief: "Fix login crash", orchestrationSnapshot: snapshot };
+  const { client, phases } = fakeClient(snapshot, events);
+  let rejected = false;
+  try { await executor(runtime.runtime)(claim, client); }
+  catch (error) { rejected = error instanceof Error && /Harness|evidence|completion/i.test(error.message); }
+  assert(rejected, "bound project missing pack test evidence must block before merge");
+  assert(phases.includes("blocked"), "missing pack evidence must persist blocked snapshot");
+  assert(!events.includes("merge"), "missing pack evidence must block before merge");
+}
+
+async function testRecoveredBlockedBindingStopsBeforeSideEffects() {
+  const events: string[] = [];
+  const runtime = fakeRuntime(events);
+  const current = runningSnapshot();
+  const payload = JSON.parse(current.payloadJson) as HeadlessBuilderSnapshotPayload;
+  payload.harnessPackBinding = resolveHarnessPackBinding({ intent: "x", explicitPack: "unknown" });
+  payload.intake = null; payload.pm = null; payload.plan = null; payload.repository = null;
+  payload.bootstrap = null; payload.taskRuns = []; payload.integration = null; payload.release = null;
+  payload.integrationPullRequestNumbers = []; payload.blockedReason = "Unknown Bloom Harness pack: unknown";
+  const blockedSnapshot: BuilderOrchestrationSnapshot = {
+    ...current, phase: "blocked", payloadJson: JSON.stringify(payload),
+  };
+  const claim: BuilderWorkerClaim = { ...CLAIM, harnessPackId: "unknown", orchestrationSnapshot: blockedSnapshot };
+  const { client } = fakeClient(blockedSnapshot, events);
+  let rejection = "";
+  try { await executor(runtime.runtime)(claim, client); }
+  catch (error) { rejection = error instanceof Error ? error.message : String(error); }
+  assert(/Harness pack binding rejected|Unknown Bloom Harness pack/i.test(rejection), "persisted blocked pack binding must remain terminal");
+  assert(!events.includes("intake") && !events.includes("pm") && !events.includes("bootstrap"), "persisted blocked binding must stop before PM/repository side effects");
+  assert(!events.some((event) => event.startsWith("dispatch:") || event.startsWith("reconcile:")) && !events.includes("merge"), "persisted blocked binding must stop before Agent/recovery/merge side effects");
+}
+
+async function testSnapshotSchemaMismatchFailsClosed() {
+  const events: string[] = [];
+  const runtime = fakeRuntime(events);
+  const current = runningSnapshot();
+  const mismatched: BuilderOrchestrationSnapshot = { ...current, schemaVersion: 1 };
+  const claim: BuilderWorkerClaim = { ...CLAIM, orchestrationSnapshot: mismatched };
+  const { client } = fakeClient(mismatched, events);
+  let rejection = "";
+  try { await executor(runtime.runtime)(claim, client); }
+  catch (error) { rejection = error instanceof Error ? error.message : String(error); }
+  assert(/schema/i.test(rejection) && /mismatch|손상|일치/i.test(rejection), "snapshot outer/payload schema mismatch must fail with a schema-specific reason");
+  assert(runtime.reconcileCalls.length === 0, "schema mismatch must block before recovery side effects");
+}
+
 async function run() {
+  await testRecoveredBlockedBindingStopsBeforeSideEffects();
+  await testSnapshotSchemaMismatchFailsClosed();
+  await testFreshBugFixPersistsBindingBeforeIntake();
+  await testUnknownExplicitPackBlocksBeforeSideEffects();
+  await testSchemaV1RecoveryPersistsLegacyBindingBeforeReconcile();
+  await testBoundProjectMissingPackEvidenceBlocksBeforeMerge();
   await testFreshClaimPersistsEveryExternalSideEffectBoundary();
   await testGreenfieldBootstrapPersistsBeforeDispatch();
   await testExecutorHonorsConfiguredParallelTaskLimit();

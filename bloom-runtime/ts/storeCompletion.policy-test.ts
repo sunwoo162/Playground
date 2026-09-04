@@ -87,6 +87,7 @@ const started = beginAgentTasks(state("ready"), "PROJECT-STORE-GATE", ["DEV-001"
 const startedRun = started.projects[0]?.taskRuns[0];
 assert(startedRun?.status === "running", "beginAgentTasks must move a ready task to running");
 assert(startedRun.attempts === 1, "beginAgentTasks must increment attempts once");
+assert(startedRun.harnessCompletion == null, "new running attempts must not inherit trusted Harness completion evidence");
 const completedResult = {
   projectId: "PROJECT-STORE-GATE",
   taskId: "DEV-001",
@@ -132,5 +133,6 @@ const accepted = completeAgentTask(state("running"), {
 const acceptedRun = accepted.projects[0]?.taskRuns[0];
 assert(acceptedRun?.status === "done", "store must accept runtime-verified writer publication");
 assert(acceptedRun.commitSha === "abc123", "accepted store completion must preserve commit metadata");
+assert(acceptedRun.harnessCompletion?.accepted === true, "accepted store completion must persist trusted Harness evidence");
 
 console.log("store completion policy tests passed");
