@@ -96,6 +96,9 @@ jobs:
             fi
             echo "=== latest builder runtime project=${PROJECT_ID} frontendTask=${FRONTEND_TASK_ID:-none} ==="
             find "$RUNTIME_ROOT" -maxdepth 7 -type f -printf '%TY-%Tm-%TdT%TH:%TM:%TS %s %p\n' 2>/dev/null | sort | tail -120 || true
+            PM_EVENTS="$RUNTIME_ROOT/pm/pm-events.jsonl"
+            if [ -s "$PM_EVENTS" ]; then echo "[pm-events]"; cat "$PM_EVENTS"; fi
+            for f in "$RUNTIME_ROOT"/pm/*stderr* "$RUNTIME_ROOT"/pm/*log*; do [ -f "$f" ] || continue; echo "[pm-log] $f"; tail -80 "$f"; done
             if [ -n "$FRONTEND_TASK_ID" ]; then
               WT="/home/ubuntu/bloom-workspaces/.luna-worktrees/builder-${PROJECT_ID}/${FRONTEND_TASK_ID}"
               echo "=== frontend worktree $WT ==="
