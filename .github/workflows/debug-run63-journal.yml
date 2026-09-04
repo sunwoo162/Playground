@@ -1,0 +1,47 @@
+name: Debug Bloom Run 63 Journal
+
+on:
+  push:
+    branches:
+      - debug/live-e2e-run63-journal
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bloom-live-e2e
+  cancel-in-progress: false
+
+jobs:
+  live-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - name: Require production SSH credential
+        env:
+          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+        run: |
+          test -n "$SSH_PASSWORD" || { echo "SSH_PASSWORD is required" >&2; exit 1; }
+
+      - name: Inspect failed run 63 agent journal
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          command_timeout: 325m
+          script: |
+            set -euo pipefail
+            echo "=== RUN 63 AGENT JOURNALS ==="
+            found=0
+            while IFS= read -r file; do
+              found=1
+              echo "--- ${file} ---"
+              tail -n 240 "$file" || true
+            done < <(find /home/ubuntu -type f \( -path '*/.luna-runtime/projects/63/agents/*/PULSEBOARD-101/local-agent-events.jsonl' -o -path '*/.luna-runtime/projects/63/agents/*/PULSEBOARD-101/local-agent.stderr.log' \) -print 2>/dev/null)
+            if [ "$found" -eq 0 ]; then
+              echo "No run 63 PULSEBOARD-101 journal files found"
+            fi
+            echo "=== RUN 63 RUNTIME DIRECTORIES ==="
+            find /home/ubuntu -type d -path '*/.luna-runtime/projects/63/agents/*/PULSEBOARD-101' -print 2>/dev/null || true
