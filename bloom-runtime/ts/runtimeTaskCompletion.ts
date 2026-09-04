@@ -110,9 +110,20 @@ export function declaredDependencyPullRequestsForTask(
 ): number[] {
   const task = plan.tasks.find((item) => item.id === taskId);
   if (!task) throw new Error(`Bloom runtime completion task is missing from plan: ${taskId}`);
+  const tasksById = new Map(plan.tasks.map((item) => [item.id, item] as const));
   const runsById = new Map(taskRuns.map((run) => [run.taskId, run] as const));
-  return [...new Set(task.dependsOn
-    .map((dependencyId) => runsById.get(dependencyId)?.pullRequestNumber ?? null)
-    .filter((number): number is number => number !== null))]
-    .sort((a, b) => a - b);
+  const visited = new Set<string>();
+  const stack = [...task.dependsOn];
+  const pullRequests: number[] = [];
+
+  while (stack.length > 0) {
+    const dependencyId = stack.pop();
+    if (!dependencyId || visited.has(dependencyId)) continue;
+    visited.add(dependencyId);
+    const pullRequestNumber = runsById.get(dependencyId)?.pullRequestNumber ?? null;
+    if (pullRequestNumber !== null) pullRequests.push(pullRequestNumber);
+    stack.push(...(tasksById.get(dependencyId)?.dependsOn ?? []));
+  }
+
+  return [...new Set(pullRequests)].sort((a, b) => a - b);
 }

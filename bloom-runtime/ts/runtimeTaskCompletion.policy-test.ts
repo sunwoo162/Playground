@@ -138,14 +138,46 @@ const plan: ProjectPlan = {
       acceptanceCriteria: [],
     },
   ],
-};const dependencyPrs = declaredDependencyPullRequestsForTask(
+};
+
+const dependencyPrs = declaredDependencyPullRequestsForTask(
   plan,
   [{ ...validWriter, pullRequestNumber: 12 }, taskRun("DEV-002", "backend", "pending")],
   "DEV-002",
 );
 assert(
   dependencyPrs.length === 1 && dependencyPrs[0] === 12,
-  "declared dependency PRs must come from direct task dependencies",
+  "declared dependency PRs must include direct task dependencies",
+);
+
+const transitivePlan: ProjectPlan = {
+  ...plan,
+  tasks: [
+    plan.tasks[0],
+    { ...plan.tasks[1], id: "CR-001", role: "code-review", dependsOn: ["DEV-001"] },
+    {
+      id: "REV-001",
+      title: "Reviewer",
+      role: "reviewer",
+      taskSlug: "reviewer",
+      summary: "review",
+      dependsOn: ["CR-001"],
+      acceptanceCriteria: [],
+    },
+  ],
+};
+const transitivePrs = declaredDependencyPullRequestsForTask(
+  transitivePlan,
+  [
+    { ...validWriter, pullRequestNumber: 12 },
+    taskRun("CR-001", "code-review", "done"),
+    taskRun("REV-001", "reviewer", "running"),
+  ],
+  "REV-001",
+);
+assert(
+  transitivePrs.length === 1 && transitivePrs[0] === 12,
+  "declared dependency PRs must include transitive upstream writer PRs",
 );
 
 const refreshedAfterReject = refreshOrchestrationReadiness(plan, [
@@ -178,7 +210,8 @@ const qaAccepted = applyRuntimeCompletionToTaskRun({
       commands: [{ step: 7, command: "pnpm", commandClass: "test", ok: true, exitCode: 0 }],
       publication: null,
     },
-  },  declaredDependencyPullRequests: [],
+  },
+  declaredDependencyPullRequests: [],
   completedAt,
 });
 assert(qaAccepted.status === "done", "QA with successful runtime-observed test must be done");
