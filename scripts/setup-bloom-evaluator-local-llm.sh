@@ -38,11 +38,29 @@ fi
 chmod +x "$ROOT_DIR/bloom-worker/start-local-evaluator-llm.sh"
 
 HEALTH_URL="http://127.0.0.1:${BLOOM_LOCAL_EVALUATOR_PORT:-8091}/health"
+LLAMA_MAX_MEMORY_RESTART_MB=3800
+LLAMA_MAX_MEMORY_RESTART_BYTES=$((LLAMA_MAX_MEMORY_RESTART_MB * 1024 * 1024))
+
+current_llm_max_memory_restart_bytes() {
+  pm2 jlist 2>/dev/null | node -e '
+    const fs = require("fs");
+    const apps = JSON.parse(fs.readFileSync(0, "utf8") || "[]");
+    const app = apps.find((entry) => entry?.name === "bloom-evaluator-llm");
+    const value = app?.pm2_env?.max_memory_restart;
+    if (typeof value === "number" && Number.isFinite(value)) process.stdout.write(String(value));
+    else if (typeof value === "string" && /^\d+$/.test(value)) process.stdout.write(value);
+  ' 2>/dev/null || true
+}
+
 if pm2 describe bloom-evaluator-llm >/dev/null 2>&1 \
   && curl --fail --silent --show-error --max-time 3 "$HEALTH_URL" >/dev/null 2>&1; then
-  pm2 save >/dev/null
-  echo "[bloom-evaluator-local] existing local evaluator model is healthy; keeping it"
-  exit 0
+  CURRENT_LLM_MAX_MEMORY_RESTART_BYTES="$(current_llm_max_memory_restart_bytes)"
+  if [ "$CURRENT_LLM_MAX_MEMORY_RESTART_BYTES" = "$LLAMA_MAX_MEMORY_RESTART_BYTES" ]; then
+    pm2 save >/dev/null
+    echo "[bloom-evaluator-local] existing local evaluator model is healthy and configured; keeping it"
+    exit 0
+  fi
+  echo "[bloom-evaluator-local] local evaluator PM2 memory guard drift detected; restarting with ${LLAMA_MAX_MEMORY_RESTART_MB}M"
 fi
 
 delete_stale_llm() {
@@ -100,7 +118,7 @@ delete_stale_llm
 BLOOM_LLAMA_BIN="$LLAMA_BIN" pm2 start "$ROOT_DIR/bloom-worker/start-local-evaluator-llm.sh" \
   --name bloom-evaluator-llm \
   --interpreter bash \
-  --max-memory-restart 3800M \
+  --max-memory-restart "${LLAMA_MAX_MEMORY_RESTART_MB}M" \
   --kill-timeout 7200000
 
 echo "[bloom-evaluator-local] waiting for local model health"

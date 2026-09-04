@@ -47,8 +47,12 @@ assert(
   "healthy local evaluator LLM must be reused before any PM2 delete is attempted",
 );
 assert(
-  evaluatorSetup.includes("existing local evaluator model is healthy; keeping it"),
-  "healthy local evaluator LLM must stay online across worker-only deploys",
+  evaluatorSetup.includes("existing local evaluator model is healthy and configured; keeping it"),
+  "healthy local evaluator LLM with matching PM2 configuration must stay online across worker-only deploys",
+);
+assert(
+  evaluatorSetup.includes("local evaluator PM2 memory guard drift detected"),
+  "healthy local evaluator LLM may be recreated only when its applied PM2 memory guard has drifted from the deployed configuration",
 );
 assert(
   evaluatorSetup.includes("pm2 delete bloom-evaluator-llm >/dev/null 2>&1 &"),
