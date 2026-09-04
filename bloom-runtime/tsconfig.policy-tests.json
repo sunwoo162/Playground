@@ -119,6 +119,8 @@
     "ts/bloomLocalAgentRuntime.policy-test.ts",
     "ts/bloomLocalAgentInference.policy-test.ts",
     "ts/bloomLocalAgentRecoveryInteraction.policy-test.ts",
-    "ts/codexFreeRuntime.policy-test.ts"
+    "ts/codexFreeRuntime.policy-test.ts",
+    "ts/pmPlanningPolicy.ts",
+    "ts/pmPlanningPolicy.policy-test.ts"
   ]
 }
