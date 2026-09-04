@@ -266,6 +266,33 @@ async function testRepositoryWriterRejectsEmptyBlockedFinalBypassAndRecovers() {
     await fs.rm(worktree, { recursive: true, force: true });
   }
 }
+async function testRepositoryWriterRejectsBlankBlockedFinalAndPreservesConcreteBlocker() {
+  const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-writer-blank-blocker-"));
+  await fs.writeFile(path.join(worktree, "README.md"), "baseline\n", "utf8");
+  execFileSync("git", ["init"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["config", "user.email", "policy@example.com"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["config", "user.name", "Bloom Policy"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["add", "README.md"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["commit", "-m", "baseline"], { cwd: worktree, stdio: "ignore" });
+  let calls = 0;
+  const blankBlocked = '{"action":"final","report":{"status":"blocked","summary":"blocked","rationaleSummary":"blocked","evidence":[],"verification":[],"commitSha":null,"pullRequestNumber":null,"pullRequestUrl":null,"reviewedPullRequests":[],"blockers":["   "]}}';
+  const concreteBlocked = '{"action":"final","report":{"status":"blocked","summary":"blocked","rationaleSummary":"blocked","evidence":[],"verification":[],"commitSha":null,"pullRequestNumber":null,"pullRequestUrl":null,"reviewedPullRequests":[],"blockers":["dependency unavailable"]}}';
+  const fetchImpl: typeof fetch = async () => {
+    calls += 1;
+    const content = calls === 1 ? blankBlocked : concreteBlocked;
+    return streamingResponse([
+      `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`,
+      "data: [DONE]\n\n",
+    ]);
+  };
+  try {
+    const result = await runLocalAgent({ projectId: "policy", taskId: "WRITER-BLANK-BLOCKER", worktree, prompt: "implement", requireMutation: true }, { fetchImpl, maxSteps: 2 });
+    assert.equal(calls, 2, "a blank blocker must be rejected so the model gets another turn");
+    assert.deepEqual(result.report.blockers, ["dependency unavailable"], "a concrete writer blocker must remain a valid blocked final");
+  } finally {
+    await fs.rm(worktree, { recursive: true, force: true });
+  }
+}
 async function testLocalAgentRejectsImmediateDuplicateSuccessfulWrite() {
   const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-duplicate-write-"));
   const bodies: Array<Record<string, unknown>> = [];
@@ -503,6 +530,7 @@ async function main() {
   await testLocalAgentBoundsToolHistoryBeforeModelCalls();
   await testLocalAgentUsesServerActionSchema();
   await testRepositoryWriterRejectsEmptyBlockedFinalBypassAndRecovers();
+  await testRepositoryWriterRejectsBlankBlockedFinalAndPreservesConcreteBlocker();
   await testLocalAgentRejectsImmediateDuplicateSuccessfulWrite();
   await testLocalAgentFailsFastOnRepeatedSuccessfulWriteLoop();
   await testLocalAgentFailsFastOnRepeatedRejectedWriteLoop();
