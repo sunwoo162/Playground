@@ -1,4 +1,4 @@
-﻿name: Ops Abort Bloom E2E 59
+name: Ops Abort Bloom E2E 59
 
 on:
   push:
@@ -19,7 +19,7 @@ jobs:
         run: test -n "$SSH_PASSWORD" || { echo "SSH_PASSWORD is required" >&2; exit 1; }
 
       - name: Fail only the guarded E2E run
-        uses: appleboy/ssh-action@029f5b4aeeeb59fdfe1410a5d17f967dacf36262
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262
         with:
           host: ssh.gsmsv.site
           port: 24136
@@ -67,4 +67,3 @@ jobs:
               -H @- 'http://127.0.0.1:8080/internal/builder/worker/runs/active-lease?workerId=bloom-builder-production')"
             test "$ACTIVE" = "false" || { echo "active lease remained true" >&2; exit 1; }
             echo "run59_terminal_and_lease_cleared"
-
