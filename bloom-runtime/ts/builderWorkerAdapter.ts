@@ -30,6 +30,7 @@ export type BuilderWorkerClaim = {
   repositoryFullName: string | null;
   previewUrl: string | null;
   orchestrationSnapshot: BuilderOrchestrationSnapshot | null;
+  harnessPackId?: string | null;
 };
 
 export type BuilderWorkerRunState = {

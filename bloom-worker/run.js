@@ -13,11 +13,11 @@ const { runBloomBouquetEvaluatorOnce } = require("../.tmp/bloom-worker/bloomBouq
 const { createLocalSeniorEvaluatorRunner } = require("../.tmp/bloom-worker/bloomBouquetLocalSeniorEvaluator.js");
 const { createLunaProductionDeliveryHook } = require("../.tmp/bloom-worker/lunaProductionDelivery.js");
 const { prepareOrchestrationPlan } = require("../.tmp/bloom-worker/orchestrationCore.js");
+const { runPmPlanningWithRepair } = require("../.tmp/bloom-worker/pmPlanningPolicy.js");
+const { assertHarnessPackPlan } = require("../.tmp/bloom-worker/harnessPackPlanPolicy.js");
 const { enforceLiveE2ERepositoryName, enforceLiveE2EScaffoldProfile, validateLiveE2EImplementationPlan } = require("../.tmp/bloom-worker/e2eSmoke.js");
 
 const MAX_BRIDGE_OUTPUT_BYTES = 16 * 1024 * 1024;
-const MAX_PM_PLAN_ATTEMPTS = 2;
-const PM_PLAN_UNIQUENESS_CONTRACT = "Task IDs and taskSlug values must each be unique across the plan.";
 const TEAM_NAMES = new Map([
   ["rose", "장미"],
   ["lily", "백합"],
@@ -83,42 +83,6 @@ function parseBridgeResponse(stdout, stderr, exitCode) {
   return response.result;
 }
 
-function errorMessage(error) {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function isSemanticPmPlanError(error) {
-  const message = errorMessage(error);
-  return [
-    "PM repository",
-    "PM 계획",
-    "PM Task DAG",
-    "필수 구현 Agent role",
-    "제품 마케팅/문서화 DAG",
-    "Task ID",
-    "taskSlug",
-    "허용되지 않은 Agent role",
-    "acceptance criteria",
-    "dependency",
-    "자기 자신",
-  ].some((marker) => message.includes(marker));
-}
-
-function buildPmPlanningRequest(request, validationError = "") {
-  const sections = [
-    request,
-    `Bloom PM planning invariant:\n- ${PM_PLAN_UNIQUENESS_CONTRACT}`,
-  ];
-  if (validationError) {
-    sections.push(
-      "The previous PM plan failed Bloom semantic validation:\n"
-      + `${validationError}\n`
-      + "Return a corrected complete project plan. Preserve the original product requirements and review topology, fix the reported semantic violation, and return only schema-valid planning JSON.",
-    );
-  }
-  return sections.join("\n\n");
-}
-
 function createRuntimeBridge(binaryPath) {
   if (!fs.existsSync(binaryPath)) {
     throw new Error(
@@ -181,28 +145,22 @@ function createRuntimeBridge(binaryPath) {
   });
 
   const planProjectWithRepair = async (input) => {
-    let validationError = "";
-    for (let attempt = 1; attempt <= MAX_PM_PLAN_ATTEMPTS; attempt += 1) {
-      try {
-        const result = await call({
-          command: "planProject",
-          ...input,
-          request: buildPmPlanningRequest(input.request, validationError),
-        });
+    const bridgeInput = { ...input };
+    delete bridgeInput.harnessPackBinding;
+    return runPmPlanningWithRepair({
+      request: input.request,
+      binding: input.harnessPackBinding,
+      planOnce: (request) => call({ command: "planProject", ...bridgeInput, request }),
+      prepareAndValidate(result) {
+        assertHarnessPackPlan(input.harnessPackBinding, result.plan);
         result.plan = prepareOrchestrationPlan(result.plan);
         result.plan = enforceLiveE2ERepositoryName(input.request, result.plan);
         result.plan = enforceLiveE2EScaffoldProfile(input.request, result.plan);
         validateLiveE2EImplementationPlan(input.request, result.plan);
+        assertHarnessPackPlan(input.harnessPackBinding, result.plan);
         return result;
-      } catch (error) {
-        if (attempt >= MAX_PM_PLAN_ATTEMPTS || !isSemanticPmPlanError(error)) {
-          throw error;
-        }
-        validationError = errorMessage(error);
-        console.warn(`[bloom-worker] PM plan semantic validation failed; repairing once: ${validationError}`);
-      }
-    }
-    throw new Error("PM planning repair exhausted unexpectedly.");
+      },
+    });
   };
 
   return {

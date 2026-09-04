@@ -5,6 +5,14 @@ import type {
   BuilderWorkerExecutor,
   BuilderOrchestrationSnapshot,
 } from "./builderWorkerAdapter";
+import { evaluateHarnessPackProjectCompletion } from "./harnessProjectCompletionGate";
+import {
+  legacyUnboundHarnessPackBinding,
+  resolveHarnessPackBinding,
+  validateHarnessPackBinding,
+  type HarnessPackBinding,
+} from "./harnessPackBinding";
+import { assertHarnessPackPlan } from "./harnessPackPlanPolicy";
 import { evaluateProjectMergeGate } from "./mergeGate";
 import {
   prepareOrchestrationPlan,
@@ -33,7 +41,7 @@ import type {
   TeamId,
 } from "./types";
 
-export const HEADLESS_BUILDER_SNAPSHOT_SCHEMA_VERSION = 1;
+export const HEADLESS_BUILDER_SNAPSHOT_SCHEMA_VERSION = 2;
 
 type IntakeResult = {
   analysis: ProjectIntakeAnalysis;
@@ -159,6 +167,7 @@ export type HeadlessBuilderRuntime = {
     teamId: TeamId;
     teamName: string;
     request: string;
+    harnessPackBinding: HarnessPackBinding;
   }): Promise<PmResult>;
   bootstrapRepository(input: {
     organization: string;
@@ -200,7 +209,8 @@ type PersistedPmEvidence = {
 };
 
 export type HeadlessBuilderSnapshotPayload = {
-  schemaVersion: 1;
+  schemaVersion: 2;
+  harnessPackBinding: HarnessPackBinding;
   runId: number;
   projectId: number;
   runtimeProjectId: string;
@@ -245,60 +255,45 @@ function buildClaimRequest(claim: BuilderWorkerClaim) {
 }
 
 function freshPayload(claim: BuilderWorkerClaim): HeadlessBuilderSnapshotPayload {
+  const request = buildClaimRequest(claim);
   return {
     schemaVersion: HEADLESS_BUILDER_SNAPSHOT_SCHEMA_VERSION,
-    runId: claim.runId,
-    projectId: claim.projectId,
-    runtimeProjectId: `builder-${claim.projectId}`,
-    intakeId: `builder-run-${claim.runId}`,
-    request: buildClaimRequest(claim),
-    intake: null,
-    pm: null,
-    plan: null,
-    repository: null,
-    bootstrap: null,
-    taskRuns: [],
-    integrationPullRequestNumbers: [],
-    integration: null,
-    release: null,
-    blockedReason: null,
+    harnessPackBinding: resolveHarnessPackBinding({ intent: claim.brief.trim(), explicitPack: claim.harnessPackId ?? undefined }),
+    runId: claim.runId, projectId: claim.projectId,
+    runtimeProjectId: `builder-${claim.projectId}`, intakeId: `builder-run-${claim.runId}`,
+    request, intake: null, pm: null, plan: null, repository: null, bootstrap: null,
+    taskRuns: [], integrationPullRequestNumbers: [], integration: null, release: null, blockedReason: null,
   };
 }
 
 function parseSnapshot(
   claim: BuilderWorkerClaim,
   snapshot: BuilderOrchestrationSnapshot,
-): HeadlessBuilderSnapshotPayload {
-  if (snapshot.schemaVersion !== HEADLESS_BUILDER_SNAPSHOT_SCHEMA_VERSION) {
+): { payload: HeadlessBuilderSnapshotPayload; migratedLegacy: boolean } {
+  if (snapshot.schemaVersion !== 1 && snapshot.schemaVersion !== HEADLESS_BUILDER_SNAPSHOT_SCHEMA_VERSION) {
     throw new Error(`지원하지 않는 Builder orchestration snapshot schema입니다: ${snapshot.schemaVersion}`);
   }
-
   let parsed: unknown;
-  try {
-    parsed = JSON.parse(snapshot.payloadJson);
-  } catch (error) {
-    throw new Error(`Builder orchestration snapshot JSON 파싱 실패: ${errorMessage(error)}`);
-  }
-
-  if (!parsed || typeof parsed !== "object") {
-    throw new Error("Builder orchestration snapshot payload가 객체가 아닙니다.");
-  }
-
-  const payload = parsed as Partial<HeadlessBuilderSnapshotPayload>;
-  if (payload.schemaVersion !== HEADLESS_BUILDER_SNAPSHOT_SCHEMA_VERSION
-    || payload.runId !== claim.runId
-    || payload.projectId !== claim.projectId
-    || typeof payload.runtimeProjectId !== "string"
-    || typeof payload.intakeId !== "string"
-    || typeof payload.request !== "string"
-    || !Array.isArray(payload.taskRuns)
+  try { parsed = JSON.parse(snapshot.payloadJson); }
+  catch (error) { throw new Error(`Builder orchestration snapshot JSON 파싱 실패: ${errorMessage(error)}`); }
+  if (!parsed || typeof parsed !== "object") throw new Error("Builder orchestration snapshot payload가 객체가 아닙니다.");
+  const payload = parsed as Partial<Omit<HeadlessBuilderSnapshotPayload, "schemaVersion" | "harnessPackBinding">> & { schemaVersion?: number; harnessPackBinding?: unknown };
+  if ((payload.schemaVersion !== 1 && payload.schemaVersion !== HEADLESS_BUILDER_SNAPSHOT_SCHEMA_VERSION)
+    || payload.runId !== claim.runId || payload.projectId !== claim.projectId
+    || typeof payload.runtimeProjectId !== "string" || typeof payload.intakeId !== "string"
+    || typeof payload.request !== "string" || !Array.isArray(payload.taskRuns)
     || !Array.isArray(payload.integrationPullRequestNumbers)) {
     throw new Error("Builder orchestration snapshot identity 또는 필수 필드가 손상되었습니다.");
   }
-
-  payload.bootstrap ??= null;
-  payload.release ??= null;
-  return payload as HeadlessBuilderSnapshotPayload;
+  if (snapshot.schemaVersion !== payload.schemaVersion) {
+    throw new Error(`Builder orchestration snapshot schema mismatch: outer=${snapshot.schemaVersion}, payload=${String(payload.schemaVersion)}.`);
+  }
+  const migratedLegacy = snapshot.schemaVersion === 1 || payload.schemaVersion === 1;
+  const harnessPackBinding = migratedLegacy
+    ? legacyUnboundHarnessPackBinding("Legacy Builder snapshot predates live pack binding.")
+    : validateHarnessPackBinding(payload.harnessPackBinding);
+  return { payload: { ...payload, schemaVersion: HEADLESS_BUILDER_SNAPSHOT_SCHEMA_VERSION, harnessPackBinding,
+    bootstrap: payload.bootstrap ?? null, release: payload.release ?? null } as HeadlessBuilderSnapshotPayload, migratedLegacy };
 }
 
 const NON_BLOCKING_MISSING_INPUT_SENTINELS = new Set([
@@ -512,7 +507,9 @@ export function createHeadlessBuilderExecutor(
     const persisted = claim.orchestrationSnapshot
       ?? await client.loadSnapshot(claim.runId, claim.workerId);
     let snapshotVersion = persisted?.version ?? 0;
-    const payload = persisted ? parseSnapshot(claim, persisted) : freshPayload(claim);
+    const parsedSnapshot = persisted ? parseSnapshot(claim, persisted) : null;
+    const payload = parsedSnapshot?.payload ?? freshPayload(claim);
+    const migratedLegacy = parsedSnapshot?.migratedLegacy ?? false;
 
     const persist = async (phase: string) => {
       const saved = await client.saveSnapshot(claim.runId, claim.workerId, {
@@ -529,6 +526,15 @@ export function createHeadlessBuilderExecutor(
       await persist("blocked");
       throw new Error(reason);
     };
+
+    if (!persisted) {
+      if (payload.harnessPackBinding.status === "blocked") {
+        await failBlocked(`Bloom Harness pack binding rejected: ${payload.harnessPackBinding.reason}`);
+      }
+      await persist("binding");
+    } else if (migratedLegacy) {
+      await persist("binding");
+    }
 
     if (!payload.intake) {
       const intake = await options.runtime.analyzeIntake({
@@ -559,11 +565,14 @@ export function createHeadlessBuilderExecutor(
         teamId: options.teamId,
         teamName,
         request: planningRequest,
+        harnessPackBinding: payload.harnessPackBinding,
       });
       const rawPlan = claim.authRequired && !pm.plan.needsAuth
         ? { ...pm.plan, needsAuth: true }
         : pm.plan;
+      assertHarnessPackPlan(payload.harnessPackBinding, rawPlan);
       payload.plan = prepareOrchestrationPlan(rawPlan);
+      assertHarnessPackPlan(payload.harnessPackBinding, payload.plan);
       payload.pm = {
         sessionId: pm.sessionId,
         eventsPath: pm.eventsPath,
@@ -680,6 +689,14 @@ export function createHeadlessBuilderExecutor(
       if (waveSummary.hasBlocked) {
         throw new Error("Agent task wave 중 blocked 또는 Runtime 실패가 발생했습니다.");
       }
+    }
+
+    const packGate = evaluateHarnessPackProjectCompletion({
+      binding: payload.harnessPackBinding,
+      taskRuns: payload.taskRuns,
+    });
+    if (!packGate.ready) {
+      await failBlocked(`Bloom Harness pack completion rejected: ${packGate.reasons.join(" · ")}`);
     }
 
     const gate = evaluateProjectMergeGate({

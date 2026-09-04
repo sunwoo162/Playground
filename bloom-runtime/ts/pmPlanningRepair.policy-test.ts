@@ -9,6 +9,10 @@ const workerSource = fs.readFileSync(
   path.resolve(__dirname, "../../bloom-worker/run.js"),
   "utf8",
 );
+const pmPolicySource = fs.readFileSync(
+  path.resolve(__dirname, "../../bloom-runtime/ts/pmPlanningPolicy.ts"),
+  "utf8",
+);
 const runtimeSource = fs.readFileSync(
   path.resolve(__dirname, "../../bloom-runtime/src/project_runtime.rs"),
   "utf8",
@@ -18,18 +22,18 @@ const desktopRuntimeSource = fs.readFileSync(
   "utf8",
 );
 
-assert(
-  workerSource.includes("Task IDs and taskSlug values must each be unique across the plan."),
-  "PM request must explicitly require unique task IDs and task slugs",
-);
-assert(
-  workerSource.includes("const MAX_PM_PLAN_ATTEMPTS = 2;"),
-  "PM planning must allow exactly one repair attempt after the initial plan",
-);
-assert(
-  workerSource.includes("The previous PM plan failed Bloom semantic validation"),
-  "PM repair request must feed the semantic validation failure back to Codex",
-);
+assert(pmPolicySource.includes("Task IDs and taskSlug values must each be unique across the plan."), "shared PM request must require unique task IDs/slugs");
+assert(pmPolicySource.includes("MAX_PM_PLAN_ATTEMPTS = 2"), "shared PM policy must allow exactly one repair attempt");
+assert(pmPolicySource.includes("The previous PM plan failed Bloom semantic validation"), "shared PM repair must feed semantic failure back to PM");
+assert(!workerSource.includes("const MAX_PM_PLAN_ATTEMPTS = 2;"), "worker must not duplicate PM retry count");
+assert(!workerSource.includes("function isSemanticPmPlanError"), "worker must not duplicate PM semantic classifier");
+assert(!workerSource.includes("function buildPmPlanningRequest"), "worker must not duplicate PM request builder");
+assert(workerSource.includes("runPmPlanningWithRepair"), "worker must use shared PM repair policy");
+assert(workerSource.includes("assertHarnessPackPlan(input.harnessPackBinding, result.plan)"), "worker must validate PM plans against immutable pack");
+const workerRawPackIndex = workerSource.indexOf("assertHarnessPackPlan(input.harnessPackBinding, result.plan)");
+const workerPrepareIndex = workerSource.indexOf("result.plan = prepareOrchestrationPlan(result.plan)");
+const workerPreparedPackIndex = workerSource.lastIndexOf("assertHarnessPackPlan(input.harnessPackBinding, result.plan)");
+assert(workerRawPackIndex >= 0 && workerRawPackIndex < workerPrepareIndex && workerPrepareIndex < workerPreparedPackIndex, "worker PM repair must validate raw pack -> prepare -> prepared pack");
 assert(
   workerSource.includes("planProjectWithRepair"),
   "production Runtime bridge must route PM planning through the repair wrapper",
@@ -39,7 +43,7 @@ assert(
   "production PM repair wrapper must run the final orchestration-plan topology preparation before accepting a plan",
 );
 assert(
-  workerSource.includes("PM Task DAG"),
+  pmPolicySource.includes("PM Task DAG"),
   "review-topology validation failures must be classified as repairable PM semantic errors",
 );
 assert(
@@ -47,7 +51,7 @@ assert(
   "production PM repair wrapper must validate required Live E2E implementation roles",
 );
 assert(
-  workerSource.includes("필수 구현 Agent role"),
+  pmPolicySource.includes("필수 구현 Agent role"),
   "missing Live E2E implementation roles must be classified as a repairable PM semantic error",
 );
 assert(
