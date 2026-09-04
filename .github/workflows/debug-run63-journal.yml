@@ -33,6 +33,10 @@ jobs:
           command_timeout: 325m
           script: |
             set -euo pipefail
+            echo "=== BUILDER 64 RUNTIME FILES ==="
+            find /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-64 -maxdepth 4 -type f -printf '%TY-%Tm-%TdT%TH:%TM:%TS %s %p\n' 2>/dev/null | sort || true
+            echo "=== BUILDER 64 PM EVENTS ==="
+            tail -n 80 /home/ubuntu/bloom-workspaces/.luna-runtime/projects/builder-64/pm/pm-events.jsonl 2>/dev/null || true
             echo "=== RUN 63 AGENT JOURNALS ==="
             found=0
             while IFS= read -r file; do
