@@ -172,6 +172,24 @@ function sanitizedEnv(): NodeJS.ProcessEnv {
   return result;
 }
 
+export type RuntimeCommandClass = "test" | "build" | "lint" | "typecheck" | "install" | "other";
+
+function normalizedCommandTarget(args: string[]): string {
+  const first = (args[0] ?? "").trim().toLowerCase();
+  if (first === "run") return (args[1] ?? "").trim().toLowerCase();
+  return first;
+}
+
+export function classifyRuntimeCommand(command: string, args: string[]): RuntimeCommandClass {
+  const name = command.replace(/\\/g, "/").split("/").pop()?.toLowerCase() ?? "";
+  const target = normalizedCommandTarget(args);
+  if (target === "test" || target.startsWith("test:")) return "test";
+  if (target === "build" || target.startsWith("build:")) return "build";
+  if (target === "lint" || target.startsWith("lint:")) return "lint";
+  if (target === "typecheck" || target.startsWith("typecheck:") || (name === "cargo" && target === "check")) return "typecheck";
+  if (target === "install") return "install";
+  return "other";
+}
 export function isAllowedCommand(command: string, args: string[]): boolean {
   const name = command.replace(/\\/g, "/").split("/").pop()?.toLowerCase() ?? "";
   if (name === "git") {
@@ -542,6 +560,19 @@ function sanitizedAgentAction(action: JsonObject): JsonObject {
   if (kind === "write" && typeof action.content === "string") {
     event.contentBytes = Buffer.byteLength(action.content, "utf8");
     event.contentSha256 = createHash("sha256").update(action.content).digest("hex");
+  }
+  if (kind === "run" && typeof action.command === "string") {
+    const args = Array.isArray(action.args) && action.args.every((item) => typeof item === "string")
+      ? action.args as string[] : [];
+    event.command = action.command.replace(/\\/g, "/").split("/").pop()?.toLowerCase() ?? action.command;
+    event.commandClass = classifyRuntimeCommand(action.command, args);
+    if (typeof action.cwd === "string") {
+      try {
+        event.cwd = validateRelativePath(action.cwd);
+      } catch {
+        // Invalid cwd will be rejected by execution; omit it from the journal.
+      }
+    }
   }
   return event;
 }
