@@ -346,7 +346,7 @@ function agentActionSchema(): JsonObject {
       action: { type: "string", enum: ["list", "read", "write", "delete", "run", "final"] },
       path: { type: "string" },
       content: { type: "string" },
-      command: { type: "string", enum: ["pnpm", "npm", "yarn", "bun", "cargo", "git", "node", "./gradlew", "gradlew", "./mvnw", "mvnw"] },
+      command: { type: "string", enum: ["pnpm", "npm", "yarn", "bun", "cargo", "git", "node", "./gradlew", "gradlew", "gradlew.bat", "./mvnw", "mvnw", "mvnw.cmd"] },
       args: { type: "array", items: { type: "string" } },
       cwd: { type: "string" },
       report: {
