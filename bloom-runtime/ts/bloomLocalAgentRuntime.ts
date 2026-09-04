@@ -494,8 +494,11 @@ async function executeRun(root: string, action: JsonObject): Promise<JsonObject>
   };
 }
 
-function failedActionFingerprint(action: JsonObject): string | null {
+function failedActionFingerprint(action: JsonObject, result: JsonObject): string | null {
   const kind = typeof action.action === "string" ? action.action : "";
+  if (typeof result.error === "string" && result.error.includes("Git metadata paths are runtime-owned")) {
+    return `${kind}:runtime-owned-git-metadata`;
+  }
   if (kind === "list" || kind === "read" || kind === "delete") {
     return `${kind}:${String(action.path ?? "")}`;
   }
@@ -730,7 +733,7 @@ export async function runLocalAgent(input: LocalAgentInput, options: LocalAgentO
       if (writeSignature) attemptedWriteSignatures.add(writeSignature);
       if (writeSignature && result.ok === true) successfulWriteSignatures.add(writeSignature);
     }
-    const failedFingerprint = action.action !== "write" && result.ok !== true ? failedActionFingerprint(action) : null;
+    const failedFingerprint = action.action !== "write" && result.ok !== true ? failedActionFingerprint(action, result) : null;
     if (failedFingerprint) {
       if (failedFingerprint === repeatedFailedActionFingerprint) repeatedFailedActionCount += 1;
       else {
