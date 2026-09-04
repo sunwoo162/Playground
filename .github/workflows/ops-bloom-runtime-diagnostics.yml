@@ -171,6 +171,8 @@ jobs:
             grep -n -F 'input.requireMutation === true' /home/ubuntu/bloombouquet/.tmp/bloom-worker/bloomLocalAgentRuntime.js | head -5 || true
             echo "[local-agent-force-tool-turn]"
             grep -n -F 'forceToolTurn' /home/ubuntu/bloombouquet/.tmp/bloom-worker/bloomLocalAgentRuntime.js | head -8 || true
+            echo "[local-agent-suppress-write-turn]"
+            grep -n -F 'suppressWriteTurn' /home/ubuntu/bloombouquet/.tmp/bloom-worker/bloomLocalAgentRuntime.js | head -8 || true
             echo "[local-agent-action-schema]"
             grep -n -F 'actionBranch("read", ["path"]' /home/ubuntu/bloombouquet/.tmp/bloom-worker/bloomLocalAgentRuntime.js | head -3 || true
             grep -n -F 'actionBranch("write", ["path", "content"]' /home/ubuntu/bloombouquet/.tmp/bloom-worker/bloomLocalAgentRuntime.js | head -3 || true
