@@ -11,6 +11,7 @@ const MAX_FILE_BYTES = 1024 * 1024;
 const MAX_AGENT_HISTORY_BYTES = 8 * 1024;
 const MAX_AGENT_HISTORY_MESSAGE_BYTES = 4 * 1024;
 const MAX_DUPLICATE_WRITE_REJECTIONS = 3;
+const MAX_WRITER_NO_PROGRESS_TOOL_TURNS = 4;
 const DEFAULT_MAX_STEPS = 64;
 const DEFAULT_TIMEOUT_MS = 2 * 60 * 1000;
 
@@ -366,7 +367,7 @@ function finalReportContract(): string {
   });
 }
 
-function agentActionSchema(allowFinal = true, allowWrite = true, suppressedAction: string | null = null, allowFilesystem = true): JsonObject {
+function agentActionSchema(allowFinal = true, allowWrite = true, suppressedAction: string | null = null, allowFilesystem = true, mutationOnly = false): JsonObject {
   const commandSchema = {
     type: "string",
     enum: ["pnpm", "npm", "yarn", "bun", "cargo", "git", "node", "./gradlew", "gradlew", "gradlew.bat", "./mvnw", "mvnw", "mvnw.cmd"],
@@ -413,20 +414,20 @@ function agentActionSchema(allowFinal = true, allowWrite = true, suppressedActio
     },
   });
   const branches: JsonObject[] = [];
-  if (allowFilesystem && suppressedAction !== "list") branches.push(actionBranch("list", ["path"], { path: { type: "string" } }));
-  if (allowFilesystem && suppressedAction !== "read") branches.push(actionBranch("read", ["path"], { path: { type: "string" } }));
+  if (allowFilesystem && !mutationOnly && suppressedAction !== "list") branches.push(actionBranch("list", ["path"], { path: { type: "string" } }));
+  if (allowFilesystem && !mutationOnly && suppressedAction !== "read") branches.push(actionBranch("read", ["path"], { path: { type: "string" } }));
   if (allowFilesystem && allowWrite && suppressedAction !== "write") {
     branches.push(actionBranch("write", ["path", "content"], { path: { type: "string" }, content: { type: "string" } }));
   }
   if (allowFilesystem && suppressedAction !== "delete") branches.push(actionBranch("delete", ["path"], { path: { type: "string" } }));
-  if (suppressedAction !== "run") {
+  if (!mutationOnly && suppressedAction !== "run") {
     branches.push(actionBranch("run", ["command", "args"], {
       command: commandSchema,
       args: { type: "array", items: { type: "string" } },
       cwd: { type: "string" },
     }));
   }
-  if (allowFinal) branches.push(actionBranch("final", ["report"], { report: reportSchema }));
+  if (allowFinal && !mutationOnly) branches.push(actionBranch("final", ["report"], { report: reportSchema }));
   return { oneOf: branches };
 }
 function systemPrompt(): string {
@@ -647,13 +648,17 @@ export async function runLocalAgent(input: LocalAgentInput, options: LocalAgentO
   let repeatedSuccessfulInspectionFingerprint: string | null = null;
   let repeatedSuccessfulInspectionCount = 0;
   let suppressFilesystemTurn = false;
+  let forceMutationTurn = false;
+  let writerNoProgressToolTurns = 0;
   const runtimeOwnedGitMetadataFailureActions = new Set<string>();
   for (let step = 1; step <= maxSteps; step += 1) {
-    const actionSchema = agentActionSchema(!forceToolTurn, !suppressWriteTurn, suppressedActionTurn, !suppressFilesystemTurn);
+    const mutationOnlyTurn = forceMutationTurn && !suppressFilesystemTurn;
+    const actionSchema = agentActionSchema(!forceToolTurn, !suppressWriteTurn, suppressedActionTurn, !suppressFilesystemTurn, mutationOnlyTurn);
     const action = await callModel(endpoint, model, boundedAgentMessages(messages), fetchImpl, actionSchema);
     if (action.action !== "final") forceToolTurn = false;
     if (suppressWriteTurn) suppressWriteTurn = false;
     if (suppressFilesystemTurn) suppressFilesystemTurn = false;
+    if (mutationOnlyTurn) forceMutationTurn = false;
     if (suppressedActionTurn) suppressedActionTurn = null;
     const actionEvent = { step, ...sanitizedAgentAction(action) };
     events.push(actionEvent);
@@ -813,6 +818,24 @@ export async function runLocalAgent(input: LocalAgentInput, options: LocalAgentO
     } else if (result.ok === true) {
       repeatedFailedActionFingerprint = null;
       repeatedFailedActionCount = 0;
+    }
+    if (input.requireMutation === true) {
+      const repositoryStatus = await executeRun(worktree, { command: "git", args: ["status", "--porcelain"], cwd: "." });
+      if (repositoryStatus.ok !== true) {
+        throw new Error(`Local agent could not verify repository writer progress: ${String(repositoryStatus.stderr ?? repositoryStatus.error ?? "git status failed")}`);
+      }
+      const hasRepositoryChanges = Boolean(String(repositoryStatus.stdout ?? "").trim());
+      if (hasRepositoryChanges) {
+        writerNoProgressToolTurns = 0;
+        forceMutationTurn = false;
+      } else {
+        writerNoProgressToolTurns += 1;
+        if (writerNoProgressToolTurns >= MAX_WRITER_NO_PROGRESS_TOOL_TURNS) {
+          forceMutationTurn = true;
+          forceToolTurn = true;
+          result.recovery = "RECOVERY_REQUIRED: This repository-writing task has spent multiple tool turns without creating any Git diff. The next turn must mutate a task-owned regular file by writing or deleting it before inspection or final can resume.";
+        }
+      }
     }
     const toolEvent = { step, toolResult: { ok: result.ok === true, exitCode: result.exitCode, error: result.error } };
     events.push(toolEvent);
