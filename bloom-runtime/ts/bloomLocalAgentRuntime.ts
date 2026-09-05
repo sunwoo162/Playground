@@ -644,6 +644,8 @@ export async function runLocalAgent(input: LocalAgentInput, options: LocalAgentO
   let suppressedActionTurn: string | null = null;
   let repeatedFailedActionFingerprint: string | null = null;
   let repeatedFailedActionCount = 0;
+  let repeatedSuccessfulInspectionFingerprint: string | null = null;
+  let repeatedSuccessfulInspectionCount = 0;
   for (let step = 1; step <= maxSteps; step += 1) {
     const actionSchema = agentActionSchema(!forceToolTurn, !suppressWriteTurn, suppressedActionTurn);
     const action = await callModel(endpoint, model, boundedAgentMessages(messages), fetchImpl, actionSchema);
@@ -747,6 +749,31 @@ export async function runLocalAgent(input: LocalAgentInput, options: LocalAgentO
       const madeRecoveryProgress = result.ok === true && (action.action === "run" || action.action === "delete");
       if (madeRecoveryProgress) duplicateSuccessfulWriteRecovery = false;
       else suppressWriteTurn = true;
+    }
+    const successfulInspectionFingerprint = result.ok === true && (action.action === "read" || action.action === "list")
+      ? `${String(action.action)}:${String(action.path ?? "")}`
+      : null;
+    if (successfulInspectionFingerprint) {
+      if (successfulInspectionFingerprint === repeatedSuccessfulInspectionFingerprint) repeatedSuccessfulInspectionCount += 1;
+      else {
+        repeatedSuccessfulInspectionFingerprint = successfulInspectionFingerprint;
+        repeatedSuccessfulInspectionCount = 1;
+      }
+      if (repeatedSuccessfulInspectionCount >= 2) {
+        suppressedActionTurn = String(action.action);
+        let hasRepositoryChanges = false;
+        if (input.requireMutation === true) {
+          const repositoryStatus = await executeRun(worktree, { command: "git", args: ["status", "--porcelain"], cwd: "." });
+          hasRepositoryChanges = repositoryStatus.ok === true && Boolean(String(repositoryStatus.stdout ?? "").trim());
+        }
+        forceToolTurn = !hasRepositoryChanges;
+        result.recovery = hasRepositoryChanges
+          ? "RECOVERY_REQUIRED: This identical successful inspection has repeated without new progress. The next turn must use a different tool action or return final if the current repository changes satisfy the task."
+          : "RECOVERY_REQUIRED: This identical successful inspection has repeated without new progress. The next turn must use a different tool action to make progress before returning final.";
+      }
+    } else {
+      repeatedSuccessfulInspectionFingerprint = null;
+      repeatedSuccessfulInspectionCount = 0;
     }
     const failedFingerprint = action.action !== "write" && result.ok !== true ? failedActionFingerprint(action, result) : null;
     if (failedFingerprint) {
