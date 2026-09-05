@@ -366,7 +366,7 @@ function finalReportContract(): string {
   });
 }
 
-function agentActionSchema(allowFinal = true, allowWrite = true, suppressedAction: string | null = null): JsonObject {
+function agentActionSchema(allowFinal = true, allowWrite = true, suppressedAction: string | null = null, allowFilesystem = true): JsonObject {
   const commandSchema = {
     type: "string",
     enum: ["pnpm", "npm", "yarn", "bun", "cargo", "git", "node", "./gradlew", "gradlew", "gradlew.bat", "./mvnw", "mvnw", "mvnw.cmd"],
@@ -413,12 +413,12 @@ function agentActionSchema(allowFinal = true, allowWrite = true, suppressedActio
     },
   });
   const branches: JsonObject[] = [];
-  if (suppressedAction !== "list") branches.push(actionBranch("list", ["path"], { path: { type: "string" } }));
-  if (suppressedAction !== "read") branches.push(actionBranch("read", ["path"], { path: { type: "string" } }));
-  if (allowWrite && suppressedAction !== "write") {
+  if (allowFilesystem && suppressedAction !== "list") branches.push(actionBranch("list", ["path"], { path: { type: "string" } }));
+  if (allowFilesystem && suppressedAction !== "read") branches.push(actionBranch("read", ["path"], { path: { type: "string" } }));
+  if (allowFilesystem && allowWrite && suppressedAction !== "write") {
     branches.push(actionBranch("write", ["path", "content"], { path: { type: "string" }, content: { type: "string" } }));
   }
-  if (suppressedAction !== "delete") branches.push(actionBranch("delete", ["path"], { path: { type: "string" } }));
+  if (allowFilesystem && suppressedAction !== "delete") branches.push(actionBranch("delete", ["path"], { path: { type: "string" } }));
   if (suppressedAction !== "run") {
     branches.push(actionBranch("run", ["command", "args"], {
       command: commandSchema,
@@ -646,11 +646,14 @@ export async function runLocalAgent(input: LocalAgentInput, options: LocalAgentO
   let repeatedFailedActionCount = 0;
   let repeatedSuccessfulInspectionFingerprint: string | null = null;
   let repeatedSuccessfulInspectionCount = 0;
+  let suppressFilesystemTurn = false;
+  const runtimeOwnedGitMetadataFailureActions = new Set<string>();
   for (let step = 1; step <= maxSteps; step += 1) {
-    const actionSchema = agentActionSchema(!forceToolTurn, !suppressWriteTurn, suppressedActionTurn);
+    const actionSchema = agentActionSchema(!forceToolTurn, !suppressWriteTurn, suppressedActionTurn, !suppressFilesystemTurn);
     const action = await callModel(endpoint, model, boundedAgentMessages(messages), fetchImpl, actionSchema);
     if (action.action !== "final") forceToolTurn = false;
     if (suppressWriteTurn) suppressWriteTurn = false;
+    if (suppressFilesystemTurn) suppressFilesystemTurn = false;
     if (suppressedActionTurn) suppressedActionTurn = null;
     const actionEvent = { step, ...sanitizedAgentAction(action) };
     events.push(actionEvent);
@@ -749,6 +752,19 @@ export async function runLocalAgent(input: LocalAgentInput, options: LocalAgentO
       const madeRecoveryProgress = result.ok === true && (action.action === "run" || action.action === "delete");
       if (madeRecoveryProgress) duplicateSuccessfulWriteRecovery = false;
       else suppressWriteTurn = true;
+    }
+    const runtimeOwnedGitMetadataFailure = result.ok !== true
+      && typeof result.error === "string"
+      && result.error.includes("Git metadata paths are runtime-owned");
+    if (runtimeOwnedGitMetadataFailure) {
+      runtimeOwnedGitMetadataFailureActions.add(String(action.action ?? ""));
+      if (runtimeOwnedGitMetadataFailureActions.size >= 2) {
+        suppressFilesystemTurn = true;
+        forceToolTurn = true;
+        result.recovery = "RECOVERY_REQUIRED: Runtime-owned Git metadata has been targeted through multiple filesystem actions. The next turn must use a safe run action to gather repository evidence before filesystem tools are reopened.";
+      }
+    } else {
+      runtimeOwnedGitMetadataFailureActions.clear();
     }
     const successfulInspectionFingerprint = result.ok === true && (action.action === "read" || action.action === "list")
       ? `${String(action.action)}:${String(action.path ?? "")}`
