@@ -146,7 +146,7 @@ const DIRECTORY_LIKE_WRITE_BASENAMES = new Set([
 
 function validateFilesystemToolTarget(value: unknown, operation: "read" | "list" | "delete" | "write"): string {
   const normalized = validateRelativePath(value);
-  if (normalized.split("/")[0]?.toLowerCase() === ".git") {
+  if (normalized.split("/").some((segment) => segment.toLowerCase() === ".git")) {
     const suffix = operation === "write" ? "written" : "accessed";
     throw new Error(`Git metadata paths are runtime-owned by Luna Runtime and cannot be ${suffix} by Local Agent.`);
   }
