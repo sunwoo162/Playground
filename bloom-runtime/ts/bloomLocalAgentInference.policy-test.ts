@@ -843,6 +843,74 @@ async function testRepositoryWriterEscapesRuntimeOwnedGitMetadataCrossActionLoop
   }
 }
 
+async function testRepositoryWriterForcesMutationAfterCrossActionNoProgressCycle() {
+  const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-writer-progress-watchdog-"));
+  await fs.writeFile(path.join(worktree, "README.md"), "baseline\n", "utf8");
+  execFileSync("git", ["init"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["config", "user.email", "policy@example.com"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["config", "user.name", "Bloom Policy"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["add", "README.md"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["commit", "-m", "baseline"], { cwd: worktree, stdio: "ignore" });
+  const bodies: Array<Record<string, unknown>> = [];
+  let calls = 0;
+  let mutationForced = false;
+  const completed = '{"action":"final","report":{"status":"completed","summary":"done","rationaleSummary":"done","evidence":[],"verification":[],"commitSha":null,"pullRequestNumber":null,"pullRequestUrl":null,"reviewedPullRequests":[],"blockers":[]}}';
+  const fetchImpl: typeof fetch = async (_input, init) => {
+    const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+    bodies.push(body);
+    calls += 1;
+    const schema = ((body.response_format as Record<string, unknown> | undefined)?.schema ?? {}) as Record<string, unknown>;
+    const variants = schema.oneOf as Array<Record<string, unknown>> | undefined;
+    const actions = variants?.map((variant) => {
+      const properties = variant.properties as Record<string, unknown> | undefined;
+      const action = properties?.action as Record<string, unknown> | undefined;
+      return Array.isArray(action?.enum) ? action.enum[0] : undefined;
+    }) ?? [];
+    let content: string;
+    if (calls === 1) content = completed;
+    else if (calls === 2) content = '{"action":"read","path":".git/diff"}';
+    else if (calls === 3) content = '{"action":"read","path":".git/refs/heads/agent/rose/frontend/builder-78-frontend-pulseboard"}';
+    else if (calls === 4) content = '{"action":"delete","path":".git/refs/heads/agent/rose/frontend/builder-78-frontend-pulseboard"}';
+    else if (calls === 5) content = '{"action":"run","command":"git","args":["status","--short"]}';
+    else if (calls === 6) {
+      mutationForced = actions.length === 2 && actions[0] === "write" && actions[1] === "delete";
+      content = mutationForced
+        ? '{"action":"write","path":"frontend/src/App.tsx","content":"export default function App(){ return null; }"}'
+        : completed;
+    } else {
+      content = mutationForced ? completed : '{"action":"read","path":".git/diff"}';
+    }
+    return streamingResponse([
+      `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`,
+      "data: [DONE]\n\n",
+    ]);
+  };
+
+  try {
+    const result = await runLocalAgent({
+      projectId: "policy",
+      taskId: "WRITER-PROGRESS-WATCHDOG",
+      worktree,
+      prompt: "implement the frontend",
+      requireMutation: true,
+    }, { fetchImpl, maxSteps: 7 });
+    assert.equal(result.report.status, "completed");
+    assert.equal(calls, 7, "a writer that stays clean across a cross-action recovery cycle must be forced into a repository mutation");
+    const sixthSchema = ((bodies[5]?.response_format as Record<string, unknown> | undefined)?.schema ?? {}) as Record<string, unknown>;
+    const sixthVariants = sixthSchema.oneOf as Array<Record<string, unknown>> | undefined;
+    const sixthActions = sixthVariants?.map((variant) => {
+      const properties = variant.properties as Record<string, unknown> | undefined;
+      const action = properties?.action as Record<string, unknown> | undefined;
+      return Array.isArray(action?.enum) ? action.enum[0] : undefined;
+    });
+    assert.deepEqual(sixthActions, ["write", "delete"],
+      "after four tool turns with no repository diff, the next writer turn must allow only actions that can create a Git diff");
+    assert.equal(await fs.readFile(path.join(worktree, "frontend", "src", "App.tsx"), "utf8"),
+      "export default function App(){ return null; }");
+  } finally {
+    await fs.rm(worktree, { recursive: true, force: true });
+  }
+}
 async function testRepositoryWriterTreatsRuntimeOwnedGitMetadataReadsAsOneFailureClass() {
   const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-git-metadata-read-recovery-"));
   await fs.writeFile(path.join(worktree, "README.md"), "baseline\n", "utf8");
@@ -1321,6 +1389,7 @@ async function main() {
   await testRepositoryWriterForcesDifferentActionAfterRepeatedSuccessfulRead();
   await testRepositoryWriterForcesDifferentActionAfterRepeatedFailedRead();
   await testRepositoryWriterEscapesRuntimeOwnedGitMetadataCrossActionLoop();
+  await testRepositoryWriterForcesMutationAfterCrossActionNoProgressCycle();
   await testRepositoryWriterTreatsRuntimeOwnedGitMetadataReadsAsOneFailureClass();
   await testRepositoryWriterTreatsNestedRuntimeOwnedGitMetadataReadsAsOneFailureClass();
   await testRepositoryWriterRejectsRuntimeOwnedGitMetadataWriteAndRecovers();
