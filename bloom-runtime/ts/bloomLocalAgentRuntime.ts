@@ -366,7 +366,7 @@ function finalReportContract(): string {
   });
 }
 
-function agentActionSchema(allowFinal = true, allowWrite = true, suppressedAction: string | null = null, allowFilesystem = true): JsonObject {
+function agentActionSchema(allowFinal = true, allowWrite = true, suppressedAction: string | null = null, allowFilesystem = true, writeOnly = false): JsonObject {
   const commandSchema = {
     type: "string",
     enum: ["pnpm", "npm", "yarn", "bun", "cargo", "git", "node", "./gradlew", "gradlew", "gradlew.bat", "./mvnw", "mvnw", "mvnw.cmd"],
@@ -413,6 +413,10 @@ function agentActionSchema(allowFinal = true, allowWrite = true, suppressedActio
     },
   });
   const branches: JsonObject[] = [];
+  if (writeOnly) {
+    branches.push(actionBranch("write", ["path", "content"], { path: { type: "string" }, content: { type: "string" } }));
+    return { oneOf: branches };
+  }
   if (allowFilesystem && suppressedAction !== "list") branches.push(actionBranch("list", ["path"], { path: { type: "string" } }));
   if (allowFilesystem && suppressedAction !== "read") branches.push(actionBranch("read", ["path"], { path: { type: "string" } }));
   if (allowFilesystem && allowWrite && suppressedAction !== "write") {
@@ -647,9 +651,17 @@ export async function runLocalAgent(input: LocalAgentInput, options: LocalAgentO
   let repeatedSuccessfulInspectionFingerprint: string | null = null;
   let repeatedSuccessfulInspectionCount = 0;
   let suppressFilesystemTurn = false;
+  let gitMetadataRecoveryPhase: "none" | "evidence" | "mutation" = "none";
   const runtimeOwnedGitMetadataFailureActions = new Set<string>();
   for (let step = 1; step <= maxSteps; step += 1) {
-    const actionSchema = agentActionSchema(!forceToolTurn, !suppressWriteTurn, suppressedActionTurn, !suppressFilesystemTurn);
+    const recoveryPhaseAtTurn = gitMetadataRecoveryPhase;
+    const actionSchema = agentActionSchema(
+      !forceToolTurn,
+      !suppressWriteTurn,
+      suppressedActionTurn,
+      recoveryPhaseAtTurn !== "evidence" && !suppressFilesystemTurn,
+      recoveryPhaseAtTurn === "mutation",
+    );
     const action = await callModel(endpoint, model, boundedAgentMessages(messages), fetchImpl, actionSchema);
     if (action.action !== "final") forceToolTurn = false;
     if (suppressWriteTurn) suppressWriteTurn = false;
@@ -756,14 +768,40 @@ export async function runLocalAgent(input: LocalAgentInput, options: LocalAgentO
     const runtimeOwnedGitMetadataFailure = result.ok !== true
       && typeof result.error === "string"
       && result.error.includes("Git metadata paths are runtime-owned");
+    if (input.requireMutation === true && recoveryPhaseAtTurn === "evidence" && result.ok === true && action.action === "run") {
+      const repositoryStatus = await executeRun(worktree, { command: "git", args: ["status", "--porcelain"], cwd: "." });
+      const hasRepositoryChanges = repositoryStatus.ok === true && Boolean(String(repositoryStatus.stdout ?? "").trim());
+      runtimeOwnedGitMetadataFailureActions.clear();
+      if (hasRepositoryChanges) {
+        gitMetadataRecoveryPhase = "none";
+      } else {
+        gitMetadataRecoveryPhase = "mutation";
+        forceToolTurn = true;
+        result.recovery = "RECOVERY_REQUIRED: The safe read-only repository command succeeded, but a repository-writing task still has no changes. The next turn must write a task-owned source file; do not inspect or modify .git metadata.";
+      }
+    } else if (input.requireMutation === true && recoveryPhaseAtTurn === "mutation") {
+      const repositoryStatus = await executeRun(worktree, { command: "git", args: ["status", "--porcelain"], cwd: "." });
+      const hasRepositoryChanges = repositoryStatus.ok === true && Boolean(String(repositoryStatus.stdout ?? "").trim());
+      if (hasRepositoryChanges) {
+        gitMetadataRecoveryPhase = "none";
+        runtimeOwnedGitMetadataFailureActions.clear();
+      } else {
+        gitMetadataRecoveryPhase = "mutation";
+        forceToolTurn = true;
+        result.recovery = "RECOVERY_REQUIRED: This repository-writing task still has no changes. Continue by writing a task-owned source file; .git metadata is never a valid write target.";
+      }
+    }
     if (runtimeOwnedGitMetadataFailure) {
       runtimeOwnedGitMetadataFailureActions.add(String(action.action ?? ""));
-      if (runtimeOwnedGitMetadataFailureActions.size >= 2) {
-        suppressFilesystemTurn = true;
+      if (runtimeOwnedGitMetadataFailureActions.size >= 2 && recoveryPhaseAtTurn === "none") {
+        if (input.requireMutation === true) gitMetadataRecoveryPhase = "evidence";
+        else suppressFilesystemTurn = true;
         forceToolTurn = true;
-        result.recovery = "RECOVERY_REQUIRED: Runtime-owned Git metadata has been targeted through multiple filesystem actions. The next turn must use a safe run action to gather repository evidence before filesystem tools are reopened.";
+        result.recovery = input.requireMutation === true
+          ? "RECOVERY_REQUIRED: Runtime-owned Git metadata has been targeted through multiple filesystem actions. The next turn must use one safe read-only run action; writer progress will still require a task-owned source-file write afterward."
+          : "RECOVERY_REQUIRED: Runtime-owned Git metadata has been targeted through multiple filesystem actions. The next turn must use a safe run action to gather repository evidence before filesystem tools are reopened.";
       }
-    } else {
+    } else if (recoveryPhaseAtTurn === "none") {
       runtimeOwnedGitMetadataFailureActions.clear();
     }
     const successfulInspectionFingerprint = result.ok === true && (action.action === "read" || action.action === "list")
