@@ -781,6 +781,7 @@ async function testRepositoryWriterEscapesRuntimeOwnedGitMetadataCrossActionLoop
   const bodies: Array<Record<string, unknown>> = [];
   let calls = 0;
   let escapedMetadataLoop = false;
+  let keptEvidenceTurn = false;
   let forcedMutationTurn = false;
   const completed = '{"action":"final","report":{"status":"completed","summary":"done","rationaleSummary":"done","evidence":[],"verification":[],"commitSha":null,"pullRequestNumber":null,"pullRequestUrl":null,"reviewedPullRequests":[],"blockers":[]}}';
   const badWrite = '{"action":"write","path":".git/HEAD","content":"ref: refs/heads/agent/rose/frontend/builder-77-frontend-pulseboard\\n"}';
@@ -803,10 +804,13 @@ async function testRepositoryWriterEscapesRuntimeOwnedGitMetadataCrossActionLoop
     else if (calls === 5) {
       escapedMetadataLoop = actions.length === 1 && actions[0] === "run";
       content = escapedMetadataLoop
-        ? '{"action":"run","command":"git","args":["status","--short"]}'
+        ? '{"action":"run","command":"git","args":["definitely-not-a-command"]}'
         : '{"action":"read","path":".git/HEAD"}';
     } else if (calls === 6) {
-      forcedMutationTurn = escapedMetadataLoop && actions.length === 1 && actions[0] === "write";
+      keptEvidenceTurn = escapedMetadataLoop && actions.length === 1 && actions[0] === "run";
+      content = '{"action":"run","command":"git","args":["status","--short"]}';
+    } else if (calls === 7) {
+      forcedMutationTurn = keptEvidenceTurn && actions.length === 1 && actions[0] === "write";
       content = forcedMutationTurn
         ? '{"action":"write","path":"frontend/src/App.tsx","content":"export default function App(){ return null; }"}'
         : '{"action":"read","path":".git/diff"}';
@@ -826,9 +830,9 @@ async function testRepositoryWriterEscapesRuntimeOwnedGitMetadataCrossActionLoop
       worktree,
       prompt: "implement the frontend",
       requireMutation: true,
-    }, { fetchImpl, maxSteps: 7 });
+    }, { fetchImpl, maxSteps: 8 });
     assert.equal(result.report.status, "completed");
-    assert.equal(calls, 7, "runtime-owned git metadata failures must escape read/write ping-pong before the writer can finish");
+    assert.equal(calls, 8, "runtime-owned git metadata recovery must survive a failed evidence run before the writer can finish");
     const fifthSchema = ((bodies[4]?.response_format as Record<string, unknown> | undefined)?.schema ?? {}) as Record<string, unknown>;
     const fifthVariants = fifthSchema.oneOf as Array<Record<string, unknown>> | undefined;
     const fifthActions = fifthVariants?.map((variant) => {
@@ -845,8 +849,17 @@ async function testRepositoryWriterEscapesRuntimeOwnedGitMetadataCrossActionLoop
       const action = properties?.action as Record<string, unknown> | undefined;
       return Array.isArray(action?.enum) ? action.enum[0] : undefined;
     });
-    assert.deepEqual(sixthActions, ["write"],
-      "a successful read-only recovery run is not writer progress; the next turn must require a task-owned write instead of reopening inspection or final");
+    assert.deepEqual(sixthActions, ["run"],
+      "a failed evidence run must keep the writer in run-only recovery instead of reopening final or filesystem actions");
+    const seventhSchema = ((bodies[6]?.response_format as Record<string, unknown> | undefined)?.schema ?? {}) as Record<string, unknown>;
+    const seventhVariants = seventhSchema.oneOf as Array<Record<string, unknown>> | undefined;
+    const seventhActions = seventhVariants?.map((variant) => {
+      const properties = variant.properties as Record<string, unknown> | undefined;
+      const action = properties?.action as Record<string, unknown> | undefined;
+      return Array.isArray(action?.enum) ? action.enum[0] : undefined;
+    });
+    assert.deepEqual(seventhActions, ["write"],
+      "after a successful read-only recovery run, the next turn must require a task-owned write instead of reopening inspection or final");
     assert.equal(await fs.readFile(path.join(worktree, "frontend", "src", "App.tsx"), "utf8"),
       "export default function App(){ return null; }");
   } finally {

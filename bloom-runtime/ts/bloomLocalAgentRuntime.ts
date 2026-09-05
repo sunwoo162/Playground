@@ -768,16 +768,22 @@ export async function runLocalAgent(input: LocalAgentInput, options: LocalAgentO
     const runtimeOwnedGitMetadataFailure = result.ok !== true
       && typeof result.error === "string"
       && result.error.includes("Git metadata paths are runtime-owned");
-    if (input.requireMutation === true && recoveryPhaseAtTurn === "evidence" && result.ok === true && action.action === "run") {
-      const repositoryStatus = await executeRun(worktree, { command: "git", args: ["status", "--porcelain"], cwd: "." });
-      const hasRepositoryChanges = repositoryStatus.ok === true && Boolean(String(repositoryStatus.stdout ?? "").trim());
-      runtimeOwnedGitMetadataFailureActions.clear();
-      if (hasRepositoryChanges) {
-        gitMetadataRecoveryPhase = "none";
+    if (input.requireMutation === true && recoveryPhaseAtTurn === "evidence") {
+      if (result.ok === true && action.action === "run") {
+        const repositoryStatus = await executeRun(worktree, { command: "git", args: ["status", "--porcelain"], cwd: "." });
+        const hasRepositoryChanges = repositoryStatus.ok === true && Boolean(String(repositoryStatus.stdout ?? "").trim());
+        runtimeOwnedGitMetadataFailureActions.clear();
+        if (hasRepositoryChanges) {
+          gitMetadataRecoveryPhase = "none";
+        } else {
+          gitMetadataRecoveryPhase = "mutation";
+          forceToolTurn = true;
+          result.recovery = "RECOVERY_REQUIRED: The safe read-only repository command succeeded, but a repository-writing task still has no changes. The next turn must write a task-owned source file; do not inspect or modify .git metadata.";
+        }
       } else {
-        gitMetadataRecoveryPhase = "mutation";
+        gitMetadataRecoveryPhase = "evidence";
         forceToolTurn = true;
-        result.recovery = "RECOVERY_REQUIRED: The safe read-only repository command succeeded, but a repository-writing task still has no changes. The next turn must write a task-owned source file; do not inspect or modify .git metadata.";
+        result.recovery = "RECOVERY_REQUIRED: The safe repository evidence command failed. Stay in run-only recovery and use a different allowed read-only repository command; do not return final until repository evidence succeeds.";
       }
     } else if (input.requireMutation === true && recoveryPhaseAtTurn === "mutation") {
       const repositoryStatus = await executeRun(worktree, { command: "git", args: ["status", "--porcelain"], cwd: "." });
