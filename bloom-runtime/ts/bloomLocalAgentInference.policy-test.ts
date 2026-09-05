@@ -781,6 +781,7 @@ async function testRepositoryWriterEscapesRuntimeOwnedGitMetadataCrossActionLoop
   const bodies: Array<Record<string, unknown>> = [];
   let calls = 0;
   let escapedMetadataLoop = false;
+  let forcedMutationTurn = false;
   const completed = '{"action":"final","report":{"status":"completed","summary":"done","rationaleSummary":"done","evidence":[],"verification":[],"commitSha":null,"pullRequestNumber":null,"pullRequestUrl":null,"reviewedPullRequests":[],"blockers":[]}}';
   const badWrite = '{"action":"write","path":".git/HEAD","content":"ref: refs/heads/agent/rose/frontend/builder-77-frontend-pulseboard\\n"}';
   const fetchImpl: typeof fetch = async (_input, init) => {
@@ -805,11 +806,12 @@ async function testRepositoryWriterEscapesRuntimeOwnedGitMetadataCrossActionLoop
         ? '{"action":"run","command":"git","args":["status","--short"]}'
         : '{"action":"read","path":".git/HEAD"}';
     } else if (calls === 6) {
-      content = escapedMetadataLoop
+      forcedMutationTurn = escapedMetadataLoop && actions.length === 1 && actions[0] === "write";
+      content = forcedMutationTurn
         ? '{"action":"write","path":"frontend/src/App.tsx","content":"export default function App(){ return null; }"}'
-        : badWrite;
+        : '{"action":"read","path":".git/diff"}';
     } else {
-      content = escapedMetadataLoop ? completed : '{"action":"read","path":".git/HEAD"}';
+      content = forcedMutationTurn ? completed : '{"action":"read","path":".git/HEAD"}';
     }
     return streamingResponse([
       `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`,
@@ -836,6 +838,15 @@ async function testRepositoryWriterEscapesRuntimeOwnedGitMetadataCrossActionLoop
     });
     assert.deepEqual(fifthActions, ["run"],
       "after runtime-owned git metadata failures cross from read into write, the recovery turn must suppress every filesystem action and final");
+    const sixthSchema = ((bodies[5]?.response_format as Record<string, unknown> | undefined)?.schema ?? {}) as Record<string, unknown>;
+    const sixthVariants = sixthSchema.oneOf as Array<Record<string, unknown>> | undefined;
+    const sixthActions = sixthVariants?.map((variant) => {
+      const properties = variant.properties as Record<string, unknown> | undefined;
+      const action = properties?.action as Record<string, unknown> | undefined;
+      return Array.isArray(action?.enum) ? action.enum[0] : undefined;
+    });
+    assert.deepEqual(sixthActions, ["write"],
+      "a successful read-only recovery run is not writer progress; the next turn must require a task-owned write instead of reopening inspection or final");
     assert.equal(await fs.readFile(path.join(worktree, "frontend", "src", "App.tsx"), "utf8"),
       "export default function App(){ return null; }");
   } finally {
