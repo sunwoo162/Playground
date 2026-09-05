@@ -3,7 +3,7 @@ name: Ops Bloom Runtime Diagnostics
 on:
   push:
     branches:
-      - ops/live-e2e-model-diagnostics
+      - ops/run79-security-diagnostics
 
 permissions:
   contents: read
@@ -136,6 +136,26 @@ jobs:
               if [ -s "$BACKEND_STDERR" ]; then echo "[backend-stderr]"; cat "$BACKEND_STDERR"; fi
               BACKEND_EVENTS="$RUNTIME_ROOT/agents/rose:backend/${BACKEND_TASK_ID}/local-agent-events.jsonl"
               if [ -s "$BACKEND_EVENTS" ]; then echo "[backend-events]"; cat "$BACKEND_EVENTS"; fi
+            fi
+            SECURITY_TASK_ID=""
+            if [ -f "$PLAN_FILE" ]; then
+              SECURITY_TASK_ID="$(node - "$PLAN_FILE" <<'NODE'
+            const fs=require('fs');
+            const plan=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+            const task=(plan.tasks||[]).find((x)=>x.role==='security');
+            if (task?.id) process.stdout.write(String(task.id));
+            NODE
+              )"
+            fi
+            if [ -n "$SECURITY_TASK_ID" ]; then
+              echo "=== security task ${SECURITY_TASK_ID} ==="
+              SECURITY_WT="/home/ubuntu/bloom-workspaces/.luna-worktrees/builder-${PROJECT_ID}/${SECURITY_TASK_ID}"
+              echo "[security-worktree-status]"
+              git -C "$SECURITY_WT" status --short 2>/dev/null || true
+              SECURITY_STDERR="$RUNTIME_ROOT/agents/rose:security/${SECURITY_TASK_ID}/local-agent.stderr.log"
+              if [ -s "$SECURITY_STDERR" ]; then echo "[security-stderr]"; cat "$SECURITY_STDERR"; fi
+              SECURITY_EVENTS="$RUNTIME_ROOT/agents/rose:security/${SECURITY_TASK_ID}/local-agent-events.jsonl"
+              if [ -s "$SECURITY_EVENTS" ]; then echo "[security-events]"; cat "$SECURITY_EVENTS"; fi
             fi
             echo "=== builder process ==="
             BUILDER_PID="$(pm2 pid bloom-builder-worker || true)"
