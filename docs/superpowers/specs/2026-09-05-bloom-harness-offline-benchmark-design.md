@@ -126,7 +126,11 @@ type HarnessBenchmarkRunFixture = {
 fixture loader는 directory 이름과 `caseId`가 정확히 같아야 한다고 요구한다.
 모든 counter는 0 이상의 정수여야 하며 taskId는 한 case 안에서 중복될 수 없다.
 loader는 benchmark envelope와 primitive shape만 검증하고, nested Pack binding/task completion의
-production 의미 검증은 evaluator에 맡긴다. 그래야 손상 fixture도 `invalid` verdict로 관찰 가능하다.
+production 의미 검증은 evaluator에 맡긴다. `expected.json`은 먼저 정상 로드/검증해야 한다.
+`run.json` 파일 자체가 없거나 regular file이 아니면 benchmark 정의 오류로 즉시 process failure다.
+반면 run 파일이 존재하지만 JSON parse 또는 primitive benchmark schema validation이 실패하면 loader는
+전용 run-schema error를 던지고 suite가 directory caseId를 사용해 `invalid / FIXTURE_SCHEMA_INVALID` candidate로
+변환한다. `expected.json` parse/schema 오류는 golden 자체 손상이므로 항상 process failure다.
 
 Production `evaluateHarnessPackProjectCompletion()`은 구현 시 `ProjectTaskRun[]` 전체 대신
 structural typing 가능한 최소 task view를 받도록 입력 타입을 좁힌다. Live runtime은 기존
@@ -178,6 +182,7 @@ coverage는 float로 저장하지 않는다. `present/total` 정수 쌍만 golde
 ```text
 FIXTURE_SCHEMA_INVALID
 PACK_BINDING_INVALID
+PACK_BINDING_BLOCKED
 TASK_COMPLETION_INVALID
 DUPLICATE_EVIDENCE_ID
 TASK_NOT_DONE
@@ -193,12 +198,16 @@ MISSING_REQUIRED_EVIDENCE
 - done task에 trusted Harness completion 없음 → `fail / MISSING_TRUSTED_COMPLETION`
 - valid `accepted:false` completion → `fail / TASK_COMPLETION_REJECTED`
 - malformed Pack binding → `invalid / PACK_BINDING_INVALID`
+- valid blocked Pack binding → `fail / PACK_BINDING_BLOCKED`
 - accepted completion이 자신의 required evidence를 충족하지 못함 → `invalid / TASK_COMPLETION_INVALID`
 - task 내부 또는 project aggregate에서 evidence id 중복 → `invalid / DUPLICATE_EVIDENCE_ID`
 - fixture version/counter/case identity 자체가 잘못됨 → `invalid / FIXTURE_SCHEMA_INVALID`
 
 production validator가 throw하는 경우 evaluator는 raw error string을 golden으로 저장하지 않고
-위 stable code로 변환한다. 예상하지 못한 validator 오류는 숨기지 말고 benchmark process를 실패시킨다.
+위 stable code로 변환한다. `fail` 결과는 하나의 primary reason만 고르지 않고 같은 정상 입력에서
+관찰되는 모든 stable policy violation을 canonical order로 함께 기록한다. 예를 들어 rejected bound task가
+Pack evidence coverage도 잃으면 `TASK_COMPLETION_REJECTED`와 `MISSING_REQUIRED_EVIDENCE`를 둘 다 기록한다.
+예상하지 못한 validator 오류는 숨기지 말고 benchmark process를 실패시킨다.
 
 ## 9. 초기 golden suite
 
@@ -217,12 +226,12 @@ v1은 최소 6개 case로 시작한다.
 ## 10. 평가 데이터 흐름
 
 1. suite가 fixture directory를 lexical order로 찾는다.
-2. loader가 `run.json`과 `expected.json`을 읽고 benchmark contract를 검증한다.
-3. evaluator가 저장된 `binding`을 `validateHarnessPackBinding()`으로 검증한다.
-4. 각 trusted completion은 `validateHarnessTaskCompletionRecord()`로 검증한다.
-5. evaluator는 task counters와 verification issue count를 deterministic하게 계산한다.
-6. project completion은 production `evaluateHarnessPackProjectCompletion()` semantics를 재사용한다.
-7. validation corruption은 stable `invalid` code로 분류하고, 정상 정책 거부는 `fail` code로 분류한다.
+2. loader가 `expected.json`을 먼저 읽고 golden contract를 검증한다.
+3. loader가 `run.json`을 읽는다. 파일 누락은 process failure, JSON/primitive schema 오류는 typed run-schema error다.
+4. suite는 typed run-schema error만 `invalid / FIXTURE_SCHEMA_INVALID` candidate로 변환한다.
+5. 정상 run은 evaluator가 저장된 `binding`과 trusted completion을 production validator로 검증한다.
+6. evaluator는 task counters와 verification issue count를 deterministic하게 계산하고 production project completion semantics를 재사용한다.
+7. nested validation corruption은 stable `invalid` code, 정상 정책 거부는 `fail` code로 분류한다.
 8. comparator가 candidate와 expected의 verdict, ordered violations, metrics를 exact compare한다.
 9. suite는 case별 결과와 전체 regression summary를 출력한다.
 
@@ -245,7 +254,7 @@ update mode는 다음 안전장치를 가진다.
 - `CI=true` 또는 일반적인 CI environment 감지 시 즉시 거부한다.
 - `--case <id>` 또는 명시적 `--all` 없이는 실행하지 않는다.
 - `run.json`은 절대 수정하지 않는다.
-- current evaluator 결과로 대상 `expected.json`만 갱신한다.
+- current evaluator 결과로 대상 `expected.json`만 갱신한다. present `run.json`의 primitive schema 오류도 test mode와 동일하게 `invalid / FIXTURE_SCHEMA_INVALID` candidate로 평가한다.
 - update 후 suite를 다시 평가하여 새 expected와 candidate가 일치하는지 검증한다.
 - 자동 git add/commit/push는 하지 않는다. semantic golden diff는 리뷰 가능한 상태로 남긴다.
 
