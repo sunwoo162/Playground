@@ -640,6 +640,71 @@ async function testRepositoryWriterTreatsIdenticalExistingContentAsNoProgress() 
   } finally { await fs.rm(worktree, { recursive: true, force: true }); }
 }
 
+async function testRepositoryWriterForcesDifferentActionAfterRepeatedSuccessfulRead() {
+  const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-successful-read-loop-"));
+  await fs.writeFile(path.join(worktree, ".gitignore"), "node_modules\n", "utf8");
+  await fs.writeFile(path.join(worktree, "README.md"), "baseline\n", "utf8");
+  execFileSync("git", ["init"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["config", "user.email", "policy@example.com"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["config", "user.name", "Bloom Policy"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["add", ".gitignore", "README.md"], { cwd: worktree, stdio: "ignore" });
+  execFileSync("git", ["commit", "-m", "baseline"], { cwd: worktree, stdio: "ignore" });
+  const bodies: Array<Record<string, unknown>> = [];
+  let calls = 0;
+  const repeatedRead = '{"action":"read","path":".gitignore"}';
+  const completed = '{"action":"final","report":{"status":"completed","summary":"done","rationaleSummary":"done","evidence":[],"verification":[],"commitSha":null,"pullRequestNumber":null,"pullRequestUrl":null,"reviewedPullRequests":[],"blockers":[]}}';
+  const fetchImpl: typeof fetch = async (_input, init) => {
+    const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+    bodies.push(body);
+    calls += 1;
+    const responseFormat = body.response_format as Record<string, unknown> | undefined;
+    const schema = responseFormat?.schema as Record<string, unknown> | undefined;
+    const variants = schema?.oneOf as Array<Record<string, unknown>> | undefined;
+    const actions = variants?.map((variant) => {
+      const properties = variant.properties as Record<string, unknown> | undefined;
+      const action = properties?.action as Record<string, unknown> | undefined;
+      return Array.isArray(action?.enum) ? action.enum[0] : undefined;
+    }) ?? [];
+    const content = calls <= 2
+      ? repeatedRead
+      : calls === 3
+        ? actions.includes("read")
+          ? repeatedRead
+          : '{"action":"write","path":"frontend/src/main.tsx","content":"export default function App(){ return null; }"}'
+        : completed;
+    return streamingResponse([
+      `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`,
+      "data: [DONE]\n\n",
+    ]);
+  };
+
+  try {
+    const result = await runLocalAgent({
+      projectId: "policy",
+      taskId: "WRITER-SUCCESSFUL-READ-LOOP",
+      worktree,
+      prompt: "implement the frontend",
+      requireMutation: true,
+    }, { fetchImpl, maxSteps: 4 });
+    assert.equal(result.report.status, "completed");
+    assert.equal(calls, 4, "two identical successful reads without progress must force a different action");
+    const thirdFormat = bodies[2]?.response_format as Record<string, unknown> | undefined;
+    const thirdSchema = thirdFormat?.schema as Record<string, unknown> | undefined;
+    const thirdVariants = thirdSchema?.oneOf as Array<Record<string, unknown>> | undefined;
+    const thirdActions = thirdVariants?.map((variant) => {
+      const properties = variant.properties as Record<string, unknown> | undefined;
+      const action = properties?.action as Record<string, unknown> | undefined;
+      return Array.isArray(action?.enum) ? action.enum[0] : undefined;
+    });
+    assert.deepEqual(thirdActions, ["list", "write", "delete", "run"],
+      "repeated successful read recovery must temporarily remove read and final until the writer makes progress");
+    assert.equal(await fs.readFile(path.join(worktree, "frontend", "src", "main.tsx"), "utf8"),
+      "export default function App(){ return null; }");
+  } finally {
+    await fs.rm(worktree, { recursive: true, force: true });
+  }
+}
+
 async function testRepositoryWriterForcesDifferentActionAfterRepeatedFailedRead() {
   const worktree = await fs.mkdtemp(path.join(os.tmpdir(), "bloom-local-agent-failed-read-recovery-"));
   await fs.writeFile(path.join(worktree, "README.md"), "baseline\n", "utf8");
@@ -1180,6 +1245,7 @@ async function main() {
   await testRepositoryWriterForcesDifferentActionAfterDuplicateSuccessfulWrite();
   await testRepositoryWriterKeepsWriteSuppressedAfterDuplicateWriteInspection();
   await testRepositoryWriterTreatsIdenticalExistingContentAsNoProgress();
+  await testRepositoryWriterForcesDifferentActionAfterRepeatedSuccessfulRead();
   await testRepositoryWriterForcesDifferentActionAfterRepeatedFailedRead();
   await testRepositoryWriterTreatsRuntimeOwnedGitMetadataReadsAsOneFailureClass();
   await testRepositoryWriterTreatsNestedRuntimeOwnedGitMetadataReadsAsOneFailureClass();
