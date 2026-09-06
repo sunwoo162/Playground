@@ -154,11 +154,11 @@ Expected: all PASS.
 Run: `pnpm run build:bloom-worker`
 Expected: exit 0.
 
-- [ ] **Step 4: Run full Bloom runtime suite and GitHub Harness CI**
+- [x] **Step 4: Run full Bloom runtime suite and GitHub Harness CI**
 
 Windows may retain only the documented POSIX-path baseline failure. The PR `Harness` job on `ubuntu-latest` is authoritative and must be green.
 
-- [ ] **Step 5: Verify diff hygiene and record outcomes**
+- [x] **Step 5: Verify diff hygiene and record outcomes**
 
 Run `git diff --check` and `git status --short`; update actual plan progress and commit it separately.
 
@@ -177,4 +177,4 @@ Run `git diff --check` and `git status --short`; update actual plan progress and
 - Focused structured-history/identity suites pass on Windows.
 - `pnpm run build:bloom-worker` passes.
 - Full Windows `test:bloom-runtime` reaches only the documented `lunaServerRuntime.policy-test` POSIX-path baseline after all new Harness suites pass.
-- Ubuntu Harness CI on PR #243 remains the authoritative final gate for Task 4.
+- Ubuntu Harness CI run `34067745923` on head `d4b46d5c68ac3a4ca0f682be1cc89a91f2e82fd3` passed every Harness step on `ubuntu-latest`.
