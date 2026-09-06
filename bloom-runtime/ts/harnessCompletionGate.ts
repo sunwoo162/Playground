@@ -22,6 +22,7 @@ export type HarnessCompletionGateReason =
   | "ready"
   | "result-not-done"
   | "missing-evidence-ids"
+  | "identity-mismatch"
   | "missing-evidence-kinds";
 
 export type HarnessCompletionGateResult = {
@@ -30,6 +31,7 @@ export type HarnessCompletionGateResult = {
   result: HarnessAgentResult;
   referencedEvidence: HarnessEvidence[];
   missingEvidenceIds: string[];
+  mismatchedEvidenceIds: string[];
   missingEvidenceKinds: HarnessEvidenceKind[];
 };
 
@@ -49,6 +51,18 @@ function validateRequiredEvidence(
     }
   }
   return required;
+}
+
+function evidenceMatchesResultIdentity(
+  result: HarnessAgentResult,
+  evidence: HarnessEvidence,
+): boolean {
+  if (result.identity === undefined) return true;
+  if (evidence.identity === undefined) return false;
+  return result.identity.projectId === evidence.identity.projectId
+    && result.identity.taskId === evidence.identity.taskId
+    && result.identity.runId === evidence.identity.runId
+    && result.identity.agentId === evidence.identity.agentId;
 }
 
 function validateStoredEvidence(input: readonly unknown[]): HarnessEvidence[] {
@@ -80,7 +94,13 @@ export function evaluateHarnessCompletion(
   const referencedEvidence = [...new Set(result.evidenceIds)]
     .map((id) => byId.get(id))
     .filter((item): item is HarnessEvidence => item !== undefined);
-  const referencedKinds = new Set(referencedEvidence.map((item) => item.kind));
+  const mismatchedEvidenceIds = referencedEvidence
+    .filter((item) => !evidenceMatchesResultIdentity(result, item))
+    .map((item) => item.id);
+  const identityMatchedEvidence = referencedEvidence.filter(
+    (item) => evidenceMatchesResultIdentity(result, item),
+  );
+  const referencedKinds = new Set(identityMatchedEvidence.map((item) => item.kind));
   const missingEvidenceKinds = requiredEvidence.filter(
     (kind) => !referencedKinds.has(kind),
   );
@@ -88,6 +108,7 @@ export function evaluateHarnessCompletion(
   let reason: HarnessCompletionGateReason = "ready";
   if (result.status !== "done") reason = "result-not-done";
   else if (missingEvidenceIds.length > 0) reason = "missing-evidence-ids";
+  else if (mismatchedEvidenceIds.length > 0) reason = "identity-mismatch";
   else if (missingEvidenceKinds.length > 0) reason = "missing-evidence-kinds";
 
   return {
@@ -96,6 +117,7 @@ export function evaluateHarnessCompletion(
     result,
     referencedEvidence,
     missingEvidenceIds,
+    mismatchedEvidenceIds,
     missingEvidenceKinds,
   };
 }
@@ -116,6 +138,11 @@ export function assertHarnessCompletion(
       `Bloom Harness completion rejected: missing referenced evidence ids: ${evaluation.missingEvidenceIds.join(", ")}.`,
     );
   }
+  if (evaluation.reason === "identity-mismatch") {
+    throw new Error(
+      `Bloom Harness completion rejected: evidence identity mismatch for ids: ${evaluation.mismatchedEvidenceIds.join(", ")}.`,
+    );
+  }
   throw new Error(
     `Bloom Harness completion rejected: missing required evidence kinds: ${evaluation.missingEvidenceKinds.join(", ")}.`,
   );
@@ -128,6 +155,13 @@ export function evaluateHarnessRunCompletion(
   const result = bundle.snapshots.result;
   if (result === undefined) {
     throw new Error(`Bloom Harness run result snapshot is missing for ${bundle.runId}.`);
+  }
+  const validatedResult = validateHarnessAgentResult(result);
+  if (validatedResult.identity !== undefined
+      && validatedResult.identity.runId !== bundle.runId) {
+    throw new Error(
+      `Bloom Harness run identity mismatch: bundle=${bundle.runId}, result=${validatedResult.identity.runId}.`,
+    );
   }
   return evaluateHarnessCompletion({
     requiredEvidence,
@@ -143,6 +177,13 @@ export function assertHarnessRunCompletion(
   const result = bundle.snapshots.result;
   if (result === undefined) {
     throw new Error(`Bloom Harness run result snapshot is missing for ${bundle.runId}.`);
+  }
+  const validatedResult = validateHarnessAgentResult(result);
+  if (validatedResult.identity !== undefined
+      && validatedResult.identity.runId !== bundle.runId) {
+    throw new Error(
+      `Bloom Harness run identity mismatch: bundle=${bundle.runId}, result=${validatedResult.identity.runId}.`,
+    );
   }
   return assertHarnessCompletion({
     requiredEvidence,

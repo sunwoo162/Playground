@@ -44,6 +44,15 @@ const reviewEvidence = {
   summary: "review approved",
 };
 
+function identity(runId: string) {
+  return {
+    projectId: "jobdam",
+    taskId: "TASK-52",
+    runId,
+    agentId: "frontend-1",
+  };
+}
+
 const ready = evaluateHarnessCompletion({
   requiredEvidence: ["test", "file-change", "review"],
   result: doneResult(["test-1", "file-1", "review-1"]),
@@ -72,6 +81,35 @@ const missingReference = evaluateHarnessCompletion({
 });
 assert.equal(missingReference.ready, false);
 assert.deepEqual(missingReference.missingEvidenceIds, ["missing-1"]);
+
+const crossRun = evaluateHarnessCompletion({
+  requiredEvidence: ["test"],
+  result: { ...doneResult(["cross-run-test"]), identity: identity("run-current") },
+  evidence: [{
+    version: 1,
+    identity: identity("run-other"),
+    id: "cross-run-test",
+    kind: "test",
+    summary: "belongs to another run",
+  }],
+});
+assert.equal(crossRun.ready, false);
+assert.equal(crossRun.reason, "identity-mismatch");
+assert.deepEqual(crossRun.mismatchedEvidenceIds, ["cross-run-test"]);
+assert.throws(
+  () => assertHarnessCompletion({
+    requiredEvidence: ["test"],
+    result: { ...doneResult(["cross-run-test"]), identity: identity("run-current") },
+    evidence: [{
+      version: 1,
+      identity: identity("run-other"),
+      id: "cross-run-test",
+      kind: "test",
+      summary: "belongs to another run",
+    }],
+  }),
+  /identity mismatch/i,
+);
 
 assert.throws(
   () => evaluateHarnessCompletion({
@@ -127,6 +165,27 @@ const missingResultStore = createHarnessRunArtifactStore(runRoot, "run-missing-r
 assert.throws(
   () => evaluateHarnessRunCompletion(missingResultStore.readRun(), ["test"]),
   /result snapshot.*missing|missing.*result snapshot/i,
+);
+
+const mismatchedRunStore = createHarnessRunArtifactStore(runRoot, "run-identity-boundary");
+mismatchedRunStore.writeSnapshot("result", {
+  ...doneResult(["test-identity"]),
+  identity: identity("run-other"),
+});
+mismatchedRunStore.appendEvidence({
+  version: 1,
+  identity: identity("run-other"),
+  id: "test-identity",
+  kind: "test",
+  summary: "other run passed",
+});
+assert.throws(
+  () => evaluateHarnessRunCompletion(mismatchedRunStore.readRun(), ["test"]),
+  /run identity|identity.*run|run.*identity/i,
+);
+assert.throws(
+  () => assertHarnessRunCompletion(mismatchedRunStore.readRun(), ["test"]),
+  /run identity|identity.*run|run.*identity/i,
 );
 
 const missingEvidenceStore = createHarnessRunArtifactStore(runRoot, "run-missing-evidence");
