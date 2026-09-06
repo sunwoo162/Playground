@@ -58,6 +58,50 @@ assert.throws(
   }),
   /identity.*mismatch|mismatch.*identity/i,
 );
+
+const historyAt = "2026-09-07T00:00:00.000Z";
+const decisionRecord = {
+  version: 1 as const, id: "decision-1", identity: boundIdentity,
+  problem: "session expires", observations: ["refresh/reset overlap"],
+  options: ["redirect guard", "refresh lifecycle"], decision: "refresh lifecycle",
+  reason: "fix the source race", outcome: null, evidenceIds: ["bound-test"], at: historyAt,
+};
+const failureRecord = {
+  version: 1 as const, id: "failure-1", identity: boundIdentity, failureType: "test",
+  severity: "high" as const, summary: "E2E failed", cause: "race", evidenceIds: ["bound-test"], at: historyAt,
+};
+const recoveryRecord = {
+  version: 1 as const, id: "recovery-1", identity: boundIdentity, failureId: "failure-1",
+  action: "replan", reason: "remove race", status: "succeeded" as const, result: "green",
+  actorAgentId: "debug-router-1", evidenceIds: ["bound-test"], at: historyAt,
+};
+const artifactRecord = {
+  version: 1 as const, id: "artifact-1", identity: boundIdentity, kind: "pull-request" as const,
+  summary: "PR #52", reference: "https://github.com/example/repo/pull/52", digest: null, at: historyAt,
+};
+const runResultRecord = {
+  version: 1 as const, identity: boundIdentity, status: "done" as const, summary: "completed",
+  decisionIds: ["decision-1"], failureIds: ["failure-1"], recoveryIds: ["recovery-1"],
+  evidenceIds: ["bound-test"], artifactIds: ["artifact-1"],
+  startedAt: historyAt, completedAt: "2026-09-07T00:10:00.000Z",
+};
+boundStore.appendDecision(decisionRecord);
+boundStore.appendFailure(failureRecord);
+boundStore.appendRecovery(recoveryRecord);
+boundStore.appendArtifact(artifactRecord);
+boundStore.writeRunResult(runResultRecord);
+const structured = boundStore.readRun();
+assert.deepEqual(structured.decisions, [decisionRecord]);
+assert.deepEqual(structured.failures, [failureRecord]);
+assert.deepEqual(structured.recoveries, [recoveryRecord]);
+assert.deepEqual(structured.artifacts, [artifactRecord]);
+assert.deepEqual(structured.runResult, runResultRecord);
+assert.throws(() => boundStore.appendDecision(decisionRecord), /decision.*exists|duplicate/i);
+assert.throws(() => boundStore.appendArtifact({ ...artifactRecord, identity: { ...boundIdentity, runId: "run-other" }, id: "artifact-foreign" }), /identity.*mismatch|mismatch.*identity/i);
+assert.throws(() => store.appendDecision(decisionRecord), /identity-bound|unbound|identity/i);
+assert.throws(() => boundStore.appendRecovery({ ...recoveryRecord, id: "recovery-unknown", failureId: "failure-unknown" }), /unknown failure|failure.*unknown/i);
+assert.throws(() => boundStore.writeRunResult(runResultRecord), /already exists/i);
+
 store.writeSnapshot("manifest", { version: 1 });
 store.writeSnapshot("pack", { id: "bug-fix" });
 store.writeSnapshot("plan", { tasks: [] });
