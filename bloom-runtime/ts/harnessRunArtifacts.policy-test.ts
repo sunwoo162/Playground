@@ -24,6 +24,26 @@ const identityPath = path.join(boundStore.runDir, "identity.json");
 assert.deepEqual(JSON.parse(fs.readFileSync(identityPath, "utf8")), boundIdentity);
 assert.deepEqual(boundStore.readRun().identity, boundIdentity);
 
+const publicEvent1 = {
+  version: 1 as const, eventId: "public-event-1", identity: boundIdentity, seq: 1,
+  type: "RUN_STATE_CHANGED" as const, state: "RUNNING" as const,
+  at: "2026-09-07T00:00:00.000Z", summary: "run started", evidenceIds: [],
+};
+const publicEvent2 = {
+  version: 1 as const, eventId: "public-event-2", identity: boundIdentity, seq: 2,
+  type: "EVIDENCE_RECORDED" as const, state: "TESTING" as const,
+  at: "2026-09-07T00:00:01.000Z", summary: "test evidence recorded", evidenceIds: ["bound-test"],
+};
+boundStore.appendPublicEvent(publicEvent1);
+boundStore.appendPublicEvent(publicEvent1);
+assert.deepEqual(boundStore.readRun().publicEvents, [publicEvent1]);
+boundStore.appendPublicEvent(publicEvent2);
+assert.deepEqual(boundStore.readRun().publicEvents, [publicEvent1, publicEvent2]);
+assert.throws(() => boundStore.appendPublicEvent({ ...publicEvent1, summary: "conflicting replay" }), /eventId|conflict|duplicate/i);
+assert.throws(() => boundStore.appendPublicEvent({ ...publicEvent2, eventId: "public-event-gap", seq: 4 }), /seq|sequence/i);
+assert.throws(() => boundStore.appendPublicEvent({ ...publicEvent2, eventId: "public-event-foreign", seq: 3, identity: { ...boundIdentity, runId: "run-other" } }), /identity.*mismatch|mismatch.*identity/i);
+assert.throws(() => store.appendPublicEvent({ ...publicEvent1, identity: { ...boundIdentity, runId: "run-001" } }), /identity-bound|unbound|identity/i);
+
 store.writeSnapshot("request", { objective: "Fix login" });
 const requestPath = path.join(root, ".bloom", "runs", "run-001", "request.json");
 assert.deepEqual(JSON.parse(fs.readFileSync(requestPath, "utf8")), {

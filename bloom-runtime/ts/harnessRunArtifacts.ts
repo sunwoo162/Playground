@@ -15,6 +15,8 @@ import {
   validateHarnessFailureRecord, validateHarnessRecoveryRecord,
   validateHarnessRunResultRecord,
 } from "./harnessHistoryValidation";
+import type { IseolHarnessEvent } from "./iseolHarnessProtocol";
+import { validateIseolHarnessEvent } from "./iseolHarnessProtocol";
 
 export type HarnessRunSnapshotName =
   | "request"
@@ -181,6 +183,7 @@ export type HarnessRunArtifactBundle = {
   identity: HarnessExecutionIdentity | null;
   snapshots: Partial<Record<HarnessRunSnapshotName, unknown>>;
   events: HarnessRunEvent[];
+  publicEvents: IseolHarnessEvent[];
   evidence: HarnessEvidence[];
   decisions: HarnessDecisionRecord[];
   failures: HarnessFailureRecord[];
@@ -245,12 +248,38 @@ function readEvents(filePath: string): HarnessRunEvent[] {
   });
 }
 
+function readPublicEvents(filePath: string): IseolHarnessEvent[] {
+  assertSafeArtifactFile(filePath, "public event artifact");
+  if (!fs.existsSync(filePath)) return [];
+  const lines = fs.readFileSync(filePath, "utf8").split(/\r?\n/).filter((line) => line.trim() !== "");
+  const seen = new Set<string>();
+  return lines.map((line, index) => {
+    let event: IseolHarnessEvent;
+    try {
+      event = validateIseolHarnessEvent(JSON.parse(line));
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new Error(`Bloom Harness stored public event is corrupt at ${filePath}:${index + 1}: ${detail}`);
+    }
+    const expectedSeq = index + 1;
+    if (event.seq !== expectedSeq) {
+      throw new Error(`Bloom Harness stored public event sequence is corrupt at ${filePath}:${index + 1}: expected ${expectedSeq}, got ${event.seq}.`);
+    }
+    if (seen.has(event.eventId)) {
+      throw new Error(`Bloom Harness stored public eventId is duplicated: ${event.eventId}.`);
+    }
+    seen.add(event.eventId);
+    return event;
+  });
+}
+
 export type HarnessRunArtifactStore = {
   runId: string;
   runDir: string;
   writeSnapshot(name: HarnessRunSnapshotName, value: unknown): void;
   writeRetrospective(markdown: string): void;
   appendEvent(event: HarnessRunEvent): void;
+  appendPublicEvent(event: IseolHarnessEvent): void;
   appendEvidence(evidence: HarnessEvidence): void;
   appendDecision(decision: HarnessDecisionRecord): void;
   appendFailure(failure: HarnessFailureRecord): void;
@@ -326,6 +355,23 @@ export function createHarnessRunArtifactStore(
       assertSafeArtifactFile(filePath, "event artifact");
       fs.appendFileSync(filePath, line, "utf8");
     },
+    appendPublicEvent(event) {
+      const validated = validateIseolHarnessEvent(event);
+      assertBoundIdentity(identityPath, runId, validated.identity);
+      const filePath = path.join(runDir, "public-events.jsonl");
+      const existing = readPublicEvents(filePath);
+      const duplicate = existing.find((item) => item.eventId === validated.eventId);
+      if (duplicate) {
+        if (JSON.stringify(duplicate) === JSON.stringify(validated)) return;
+        throw new Error(`Bloom Harness public eventId conflict: ${validated.eventId}.`);
+      }
+      const expectedSeq = existing.length + 1;
+      if (validated.seq !== expectedSeq) {
+        throw new Error(`Bloom Harness public event seq mismatch: expected ${expectedSeq}, got ${validated.seq}.`);
+      }
+      assertSafeArtifactFile(filePath, "public event artifact");
+      fs.appendFileSync(filePath, `${serializeJson(validated, "public event", false)}\n`, "utf8");
+    },
     appendEvidence(evidence) {
       const validated = validateHarnessEvidence(evidence);
       const boundIdentity = readStoredIdentity(identityPath, runId);
@@ -390,6 +436,7 @@ export function createHarnessRunArtifactStore(
         identity: readStoredIdentity(identityPath, runId),
         snapshots,
         events: readEvents(path.join(runDir, "events.jsonl")),
+        publicEvents: readPublicEvents(path.join(runDir, "public-events.jsonl")),
         evidence: readEvidenceArray(path.join(runDir, "evidence.json")),
         decisions: readValidatedArray(path.join(runDir, "decisions.json"), "decision array", validateHarnessDecisionRecord),
         failures: readValidatedArray(path.join(runDir, "failures.json"), "failure array", validateHarnessFailureRecord),
