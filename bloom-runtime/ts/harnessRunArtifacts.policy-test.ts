@@ -11,6 +11,18 @@ function makeRoot(): string {
 
 const root = makeRoot();
 const store = createHarnessRunArtifactStore(root, "run-001");
+assert.equal(store.readRun().identity, null);
+
+const boundIdentity = {
+  projectId: "jobdam",
+  taskId: "TASK-52",
+  runId: "run-bound",
+  agentId: "frontend-1",
+};
+const boundStore = createHarnessRunArtifactStore(root, "run-bound", boundIdentity);
+const identityPath = path.join(boundStore.runDir, "identity.json");
+assert.deepEqual(JSON.parse(fs.readFileSync(identityPath, "utf8")), boundIdentity);
+assert.deepEqual(boundStore.readRun().identity, boundIdentity);
 
 store.writeSnapshot("request", { objective: "Fix login" });
 const requestPath = path.join(root, ".bloom", "runs", "run-001", "request.json");
@@ -21,6 +33,30 @@ assert.equal(fs.readFileSync(requestPath, "utf8").endsWith("\n"), true);
 assert.throws(
   () => store.writeSnapshot("request", { objective: "replace" }),
   /already exists/,
+);
+assert.throws(
+  () => createHarnessRunArtifactStore(root, "run-bound", {
+    ...boundIdentity,
+    projectId: "other-project",
+  }),
+  /identity.*mismatch|mismatch.*identity|conflict/i,
+);
+boundStore.appendEvidence({
+  version: 1,
+  identity: boundIdentity,
+  id: "bound-test",
+  kind: "test",
+  summary: "bound evidence",
+});
+assert.throws(
+  () => boundStore.appendEvidence({
+    version: 1,
+    identity: { ...boundIdentity, runId: "run-other" },
+    id: "foreign-test",
+    kind: "test",
+    summary: "foreign evidence",
+  }),
+  /identity.*mismatch|mismatch.*identity/i,
 );
 store.writeSnapshot("manifest", { version: 1 });
 store.writeSnapshot("pack", { id: "bug-fix" });
@@ -108,6 +144,7 @@ assert.match(restored.retrospective ?? "", /Retrospective/);
 
 const emptyStore = createHarnessRunArtifactStore(root, "run-empty");
 const empty = emptyStore.readRun();
+assert.equal(empty.identity, null);
 assert.deepEqual(empty.snapshots, {});
 assert.deepEqual(empty.events, []);
 assert.deepEqual(empty.evidence, []);

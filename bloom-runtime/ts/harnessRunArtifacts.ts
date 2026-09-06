@@ -1,8 +1,11 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import type { HarnessEvidence } from "./harnessContracts";
-import { validateHarnessEvidence } from "./harnessValidation";
+import type { HarnessEvidence, HarnessExecutionIdentity } from "./harnessContracts";
+import {
+  validateHarnessEvidence,
+  validateHarnessExecutionIdentity,
+} from "./harnessValidation";
 
 export type HarnessRunSnapshotName =
   | "request"
@@ -134,11 +137,42 @@ function validateRunEvent(event: unknown): HarnessRunEvent {
 export type HarnessRunArtifactBundle = {
   runId: string;
   runDir: string;
+  identity: HarnessExecutionIdentity | null;
   snapshots: Partial<Record<HarnessRunSnapshotName, unknown>>;
   events: HarnessRunEvent[];
   evidence: HarnessEvidence[];
   retrospective?: string;
 };
+
+function sameExecutionIdentity(
+  left: HarnessExecutionIdentity,
+  right: HarnessExecutionIdentity,
+): boolean {
+  return left.projectId === right.projectId
+    && left.taskId === right.taskId
+    && left.runId === right.runId
+    && left.agentId === right.agentId;
+}
+
+function readStoredIdentity(
+  filePath: string,
+  expectedRunId: string,
+): HarnessExecutionIdentity | null {
+  assertSafeArtifactFile(filePath, "identity artifact");
+  if (!fs.existsSync(filePath)) return null;
+  try {
+    const identity = validateHarnessExecutionIdentity(
+      JSON.parse(fs.readFileSync(filePath, "utf8")),
+    );
+    if (identity.runId !== expectedRunId) {
+      throw new Error(`identity runId ${identity.runId} does not match ${expectedRunId}`);
+    }
+    return identity;
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`Bloom Harness stored identity is corrupt at ${filePath}: ${detail}`);
+  }
+}
 
 function readJsonArtifact(filePath: string): unknown | undefined {
   assertSafeArtifactFile(filePath, "JSON artifact");
@@ -178,6 +212,7 @@ export type HarnessRunArtifactStore = {
 export function createHarnessRunArtifactStore(
   repoRoot: string,
   runId: string,
+  identity?: HarnessExecutionIdentity,
 ): HarnessRunArtifactStore {
   assertRunId(runId);
 
@@ -187,6 +222,24 @@ export function createHarnessRunArtifactStore(
   const runDir = ensureSafeDirectory(runsRoot, runId, "run directory");
   if (!runDir.startsWith(`${runsRoot}${path.sep}`)) {
     throw new Error(`Bloom Harness run id escapes runs root: ${runId}`);
+  }
+
+  const identityPath = path.join(runDir, "identity.json");
+  const requestedIdentity = identity === undefined
+    ? null
+    : validateHarnessExecutionIdentity(identity);
+  if (requestedIdentity !== null && requestedIdentity.runId !== runId) {
+    throw new Error(
+      `Bloom Harness identity runId mismatch: store=${runId}, identity=${requestedIdentity.runId}.`,
+    );
+  }
+  const existingIdentity = readStoredIdentity(identityPath, runId);
+  if (existingIdentity !== null && requestedIdentity !== null
+      && !sameExecutionIdentity(existingIdentity, requestedIdentity)) {
+    throw new Error(`Bloom Harness run identity mismatch for ${runId}.`);
+  }
+  if (existingIdentity === null && requestedIdentity !== null) {
+    writeOnce(identityPath, `${serializeJson(requestedIdentity, "run identity")}\n`);
   }
 
   return {
@@ -208,6 +261,12 @@ export function createHarnessRunArtifactStore(
     },
     appendEvidence(evidence) {
       const validated = validateHarnessEvidence(evidence);
+      const boundIdentity = readStoredIdentity(identityPath, runId);
+      if (boundIdentity !== null
+          && (validated.identity === undefined
+            || !sameExecutionIdentity(boundIdentity, validated.identity))) {
+        throw new Error(`Bloom Harness evidence identity mismatch for run ${runId}.`);
+      }
       const filePath = path.join(runDir, "evidence.json");
       const existing = readEvidenceArray(filePath);
       if (existing.some((item) => item.id === validated.id)) {
@@ -229,6 +288,7 @@ export function createHarnessRunArtifactStore(
       return {
         runId,
         runDir,
+        identity: readStoredIdentity(identityPath, runId),
         snapshots,
         events: readEvents(path.join(runDir, "events.jsonl")),
         evidence: readEvidenceArray(path.join(runDir, "evidence.json")),
