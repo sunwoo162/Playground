@@ -19,6 +19,7 @@ export type RuntimeTaskReportLike = {
 };
 
 export type RuntimeTaskRunResultLike = {
+  projectId: string;
   taskId: string;
   role: string;
   agentId: string;
@@ -78,7 +79,10 @@ export function applyRuntimeCompletionToTaskRun(
   input: ApplyRuntimeCompletionInput,
 ): ProjectTaskRun {
   const decision = evaluateRuntimeTaskCompletion({
+    projectId: input.result.projectId,
     taskId: input.run.taskId,
+    runId: `${input.run.taskId}.attempt-${input.run.attempts}`,
+    agentId: input.result.agentId,
     role: input.run.role,
     report: {
       status: input.result.report.status,

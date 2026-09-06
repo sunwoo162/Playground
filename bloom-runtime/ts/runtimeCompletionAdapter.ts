@@ -3,11 +3,13 @@ import {
   type HarnessAgentResult,
   type HarnessEvidence,
   type HarnessEvidenceKind,
+  type HarnessExecutionIdentity,
 } from "./harnessContracts";
 import {
   evaluateHarnessCompletion,
   type HarnessCompletionGateResult,
 } from "./harnessCompletionGate";
+import { validateHarnessExecutionIdentity } from "./harnessValidation";
 import { REPOSITORY_WRITER_ROLES } from "./planTopology";
 import type { ExecutableAgentRole } from "./types";
 
@@ -46,7 +48,10 @@ export type LegacyRuntimeCompletionReport = {
 };
 
 export type RuntimeTaskCompletionInput = {
+  projectId: string;
   taskId: string;
+  runId: string;
+  agentId: string;
   role: ExecutableAgentRole;
   report: LegacyRuntimeCompletionReport;
   completionObservations?: RuntimeCompletionObservations | null;
@@ -135,11 +140,18 @@ function requiredEvidenceForRole(role: ExecutableAgentRole): HarnessEvidenceKind
 }
 
 function evidence(
-  id: string,
+  identity: HarnessExecutionIdentity,
+  suffix: string,
   kind: HarnessEvidenceKind,
   summary: string,
 ): HarnessEvidence {
-  return { version: HARNESS_CONTRACT_VERSION, id, kind, summary };
+  return {
+    version: HARNESS_CONTRACT_VERSION,
+    identity,
+    id: `${identity.projectId}:${identity.taskId}:${identity.runId}:${suffix}`,
+    kind,
+    summary,
+  };
 }
 
 function latestCommand(
@@ -164,6 +176,7 @@ function gateRejectionReason(gate: HarnessCompletionGateResult): string {
 
 function normalizeReviewTargets(
   input: RuntimeTaskCompletionInput,
+  identity: HarnessExecutionIdentity,
 ): { evidence: HarnessEvidence | null; error: string | null } {
   if (input.role !== "code-review" && input.role !== "reviewer") {
     return { evidence: null, error: null };
@@ -180,7 +193,8 @@ function normalizeReviewTargets(
   if (reviewed.length === 0) return { evidence: null, error: null };
   return {
     evidence: evidence(
-      `${input.taskId}:review:${reviewed.join("-")}`,
+      identity,
+      `review:${reviewed.join("-")}`,
       "review",
       `Runtime validated review targets: ${reviewed.map((number) => `#${number}`).join(", ")}`,
     ),
@@ -191,12 +205,14 @@ function normalizeReviewTargets(
 function buildRuntimeEvidence(
   input: RuntimeTaskCompletionInput,
   observations: RuntimeCompletionObservations,
+  identity: HarnessExecutionIdentity,
 ): { evidence: HarnessEvidence[]; policyError: string | null } {
   const items: HarnessEvidence[] = [];
   for (const command of observations.commands) {
     if (command.ok && command.exitCode === 0) {
       items.push(evidence(
-        `${input.taskId}:command:${command.step}`,
+        identity,
+        `command:${command.step}`,
         "command",
         `Runtime command ${command.command}:${command.commandClass} passed at step ${command.step}.`,
       ));
@@ -207,7 +223,8 @@ function buildRuntimeEvidence(
     const latest = latestCommand(observations.commands, kind);
     if (latest?.ok && latest.exitCode === 0) {
       items.push(evidence(
-        `${input.taskId}:${kind}:${latest.step}`,
+        identity,
+        `${kind}:${latest.step}`,
         kind,
         `Latest runtime-observed ${kind} passed at step ${latest.step}.`,
       ));
@@ -220,7 +237,8 @@ function buildRuntimeEvidence(
   }
   if (isWriter && observations.publication) {
     items.push(evidence(
-      `${input.taskId}:file-change:${observations.publication.commitSha}`,
+      identity,
+      `file-change:${observations.publication.commitSha}`,
       "file-change",
       `Runtime verified branch ${observations.publication.branchName} at ${observations.publication.commitSha}.`,
     ));
@@ -228,13 +246,14 @@ function buildRuntimeEvidence(
   if (isWriter && observations.publication?.pullRequestNumber !== null
       && observations.publication?.pullRequestNumber !== undefined) {
     items.push(evidence(
-      `${input.taskId}:github:pr-${observations.publication.pullRequestNumber}`,
+      identity,
+      `github:pr-${observations.publication.pullRequestNumber}`,
       "github",
       `Runtime verified pull request #${observations.publication.pullRequestNumber}.`,
     ));
   }
 
-  const review = normalizeReviewTargets(input);
+  const review = normalizeReviewTargets(input, identity);
   if (review.error) return { evidence: items, policyError: review.error };
   if (review.evidence) items.push(review.evidence);
   return { evidence: items, policyError: null };
@@ -268,15 +287,22 @@ export function evaluateRuntimeTaskCompletion(
   input: RuntimeTaskCompletionInput,
 ): RuntimeTaskCompletionDecision {
   validateInput(input);
+  const identity = validateHarnessExecutionIdentity({
+    projectId: input.projectId,
+    taskId: input.taskId,
+    runId: input.runId,
+    agentId: input.agentId,
+  });
   const missingObservations = input.report.status === "completed"
     && !input.completionObservations;
   const observations = input.completionObservations
     ? validateObservations(input.completionObservations)
     : { commands: [], publication: null };
-  const built = buildRuntimeEvidence(input, observations);
+  const built = buildRuntimeEvidence(input, observations, identity);
   const requiredEvidence = requiredEvidenceForRole(input.role);
   const result: HarnessAgentResult = {
     version: HARNESS_CONTRACT_VERSION,
+    identity,
     status: input.report.status === "completed" ? "done" : "blocked",
     summary: input.report.summary,
     changedFiles: [],
