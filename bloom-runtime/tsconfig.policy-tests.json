@@ -28,6 +28,7 @@
     "ts/harnessValidation.policy-test.ts",
     "ts/harnessHistoryValidation.policy-test.ts",
     "ts/harnessHistoryAdapter.policy-test.ts",
+    "ts/iseolHarnessProtocol.policy-test.ts",
     "ts/harnessRunArtifacts.ts",
     "ts/harnessRunArtifacts.policy-test.ts",
     "ts/harnessCompletionGate.ts",
