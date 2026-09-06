@@ -26,6 +26,7 @@
     "ts/harnessProjectCompletionGate.policy-test.ts",
     "ts/harnessValidation.ts",
     "ts/harnessValidation.policy-test.ts",
+    "ts/harnessHistoryValidation.policy-test.ts",
     "ts/harnessRunArtifacts.ts",
     "ts/harnessRunArtifacts.policy-test.ts",
     "ts/harnessCompletionGate.ts",
