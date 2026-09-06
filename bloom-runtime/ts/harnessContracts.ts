@@ -3,6 +3,12 @@ import type { AgentPermission, AgentRole } from "./types";
 export const HARNESS_CONTRACT_VERSION = 1 as const;
 
 export type HarnessPermissionMode = "deny" | "read" | "write";
+export type HarnessExecutionIdentity = {
+  projectId: string;
+  taskId: string;
+  runId: string;
+  agentId: string | null;
+};
 export type HarnessProjectManifest = {
   version: 1;
   project: { type: string };
@@ -25,6 +31,7 @@ export type HarnessProjectManifest = {
 
 export type HarnessAgentEnvelope = {
   version: 1;
+  identity?: HarnessExecutionIdentity;
   objective: string;
   role: AgentRole;
   permissions: AgentPermission[];
@@ -34,6 +41,7 @@ export type HarnessAgentEnvelope = {
 
 export type HarnessAgentResult = {
   version: 1;
+  identity?: HarnessExecutionIdentity;
   status: "done" | "blocked" | "failed";
   summary: string;
   changedFiles: string[];
@@ -58,6 +66,7 @@ export type HarnessEvidenceKind = (typeof HARNESS_EVIDENCE_KINDS)[number];
 
 export type HarnessEvidence = {
   version: 1;
+  identity?: HarnessExecutionIdentity;
   id: string;
   kind: HarnessEvidenceKind;
   summary: string;

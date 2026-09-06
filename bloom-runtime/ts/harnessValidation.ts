@@ -10,12 +10,14 @@ import {
   type HarnessAgentEnvelope,
   type HarnessAgentResult,
   type HarnessEvidence,
+  type HarnessExecutionIdentity,
   type HarnessEvidenceKind,
 } from "./harnessContracts";
 
 const AGENT_ROLE_SET = new Set<string>(AGENT_ROLES);
 const AGENT_PERMISSION_SET = new Set<string>(AGENT_PERMISSION_VALUES);
 const EVIDENCE_KIND_SET = new Set<string>(HARNESS_EVIDENCE_KINDS);
+const HARNESS_IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -46,12 +48,32 @@ function readStringArray(value: unknown, label: string): string[] {
   return [...value];
 }
 
+function readHarnessIdentifier(value: unknown, label: string): string {
+  if (typeof value !== "string" || !HARNESS_IDENTIFIER_PATTERN.test(value)) {
+    throw new Error(`Bloom Harness identity ${label} is invalid.`);
+  }
+  return value;
+}
+
+export function validateHarnessExecutionIdentity(input: unknown): HarnessExecutionIdentity {
+  if (!isRecord(input)) {
+    throw new Error("Bloom Harness execution identity must be an object.");
+  }
+  return {
+    projectId: readHarnessIdentifier(input.projectId, "projectId"),
+    taskId: readHarnessIdentifier(input.taskId, "taskId"),
+    runId: readHarnessIdentifier(input.runId, "runId"),
+    agentId: input.agentId === null ? null : readHarnessIdentifier(input.agentId, "agentId"),
+  };
+}
+
 export function validateHarnessAgentEnvelope(input: unknown): HarnessAgentEnvelope {
   if (!isRecord(input)) {
     throw new Error("Bloom Harness agent envelope must be an object.");
   }
 
   const version = readVersion(input);
+  const identity = input.identity === undefined ? undefined : validateHarnessExecutionIdentity(input.identity);
   const objective = readNonEmptyString(input.objective, "objective");
   const roleValue = readNonEmptyString(input.role, "role");
   if (!AGENT_ROLE_SET.has(roleValue)) {
@@ -79,6 +101,7 @@ export function validateHarnessAgentEnvelope(input: unknown): HarnessAgentEnvelo
 
   return {
     version,
+    ...(identity === undefined ? {} : { identity }),
     objective,
     role,
     permissions,
@@ -95,6 +118,7 @@ export function validateHarnessAgentResult(input: unknown): HarnessAgentResult {
   }
 
   const version = readVersion(input);
+  const identity = input.identity === undefined ? undefined : validateHarnessExecutionIdentity(input.identity);
   const status = readNonEmptyString(input.status, "status");
   if (!RESULT_STATUSES.has(status)) {
     throw new Error(`Bloom Harness status is invalid: ${status}`);
@@ -109,6 +133,7 @@ export function validateHarnessAgentResult(input: unknown): HarnessAgentResult {
 
   return {
     version,
+    ...(identity === undefined ? {} : { identity }),
     status: status as HarnessAgentResult["status"],
     summary,
     changedFiles,
@@ -126,6 +151,7 @@ export function validateHarnessEvidence(input: unknown): HarnessEvidence {
   }
 
   const version = readVersion(input);
+  const identity = input.identity === undefined ? undefined : validateHarnessExecutionIdentity(input.identity);
   const id = readNonEmptyString(input.id, "evidence id");
   const kindValue = readNonEmptyString(input.kind, "evidence kind");
   if (!EVIDENCE_KIND_SET.has(kindValue)) {
@@ -136,6 +162,7 @@ export function validateHarnessEvidence(input: unknown): HarnessEvidence {
 
   return {
     version,
+    ...(identity === undefined ? {} : { identity }),
     id,
     kind,
     summary,
