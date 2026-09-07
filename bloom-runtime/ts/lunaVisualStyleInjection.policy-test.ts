@@ -55,6 +55,33 @@ const PLAN: ProjectPlan = {
       dependsOn: [],
       acceptanceCriteria: ["API가 검증된다."],
     },
+    {
+      id: "CR-001",
+      title: "Code Review",
+      role: "code-review",
+      taskSlug: "code-review",
+      summary: "Frontend와 Backend 구현을 검토한다.",
+      dependsOn: ["FE-001", "BE-001"],
+      acceptanceCriteria: ["구현 변경이 독립 검토된다."],
+    },
+    {
+      id: "REV-001",
+      title: "Reviewer",
+      role: "reviewer",
+      taskSlug: "reviewer",
+      summary: "요구사항과 구조를 독립 검토한다.",
+      dependsOn: ["CR-001"],
+      acceptanceCriteria: ["리뷰 결과가 검증된다."],
+    },
+    {
+      id: "QA-001",
+      title: "QA",
+      role: "qa",
+      taskSlug: "qa",
+      summary: "최종 기능과 회귀를 검증한다.",
+      dependsOn: ["REV-001"],
+      acceptanceCriteria: ["최종 QA가 통과한다."],
+    },
   ],
 };
 
