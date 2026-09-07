@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 
+import BouquetDevelopmentHistory, { type DevelopmentHistoryResponse } from './BouquetDevelopmentHistory'
 import {
   BouquetWordmark,
   EmptyState,
@@ -69,6 +70,10 @@ export default function BouquetProjectDetailApp({ projectId }: Props) {
   const [detail, setDetail] = useState<ProjectDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [activeView, setActiveView] = useState<'project' | 'development'>('project')
+  const [developmentRuns, setDevelopmentRuns] = useState<DevelopmentHistoryResponse[]>([])
+  const [developmentLoading, setDevelopmentLoading] = useState(true)
+  const [developmentError, setDevelopmentError] = useState<string | null>(null)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -84,6 +89,25 @@ export default function BouquetProjectDetailApp({ projectId }: Props) {
         setError(reason instanceof Error ? reason.message : '프로젝트 정보를 불러오지 못했습니다.')
       })
       .finally(() => setLoading(false))
+
+    return () => controller.abort()
+  }, [projectId])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    setDevelopmentLoading(true)
+    setDevelopmentError(null)
+    fetch(`/api/bloom-bouquet/public/projects/${projectId}/development`, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`개발 과정을 불러오지 못했습니다. (${response.status})`)
+        return response.json() as Promise<DevelopmentHistoryResponse[]>
+      })
+      .then(setDevelopmentRuns)
+      .catch((reason) => {
+        if (reason instanceof DOMException && reason.name === 'AbortError') return
+        setDevelopmentError(reason instanceof Error ? reason.message : '개발 과정을 불러오지 못했습니다.')
+      })
+      .finally(() => setDevelopmentLoading(false))
 
     return () => controller.abort()
   }, [projectId])
@@ -136,7 +160,25 @@ export default function BouquetProjectDetailApp({ projectId }: Props) {
           </div>
         </header>
 
-        <div className="bouquet-detail-layout">
+        <nav className="bouquet-detail-tabs" aria-label="프로젝트 상세 보기 전환">
+          <button
+            type="button"
+            className={activeView === 'project' ? 'is-active' : ''}
+            onClick={() => setActiveView('project')}
+          >
+            프로젝트 보기
+          </button>
+          <button
+            type="button"
+            className={activeView === 'development' ? 'is-active' : ''}
+            onClick={() => setActiveView('development')}
+          >
+            개발 과정
+          </button>
+        </nav>
+
+        {activeView === 'project' ? (
+          <div className="bouquet-detail-layout">
           <div className="bouquet-detail-main">
             <ProjectVisual name={project.name} teamName={project.teamName} status={latest?.evaluationStatus ?? null} />
 
@@ -178,6 +220,13 @@ export default function BouquetProjectDetailApp({ projectId }: Props) {
             )}
           </aside>
         </div>
+        ) : (
+          <BouquetDevelopmentHistory
+            runs={developmentRuns}
+            loading={developmentLoading}
+            error={developmentError}
+          />
+        )}
       </article>
     </main>
   )

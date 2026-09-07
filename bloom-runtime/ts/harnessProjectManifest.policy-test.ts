@@ -37,6 +37,7 @@ permissions:
 
 const explicit = loadHarnessProjectManifest(explicitRoot);
 assert.equal(explicit.source, "explicit");
+assert.equal(explicit.profile.id, "web-frontend");
 assert.equal(explicit.manifest.git.baseBranch, "develop");
 assert.equal(explicit.manifest.permissions.deploy, "deny");
 assert.equal(explicit.manifest.commands.test, "pnpm test");
@@ -44,6 +45,7 @@ assert.equal(explicit.manifest.commands.test, "pnpm test");
 const inferredRoot = makeFixture();
 const inferred = loadHarnessProjectManifest(inferredRoot);
 assert.equal(inferred.source, "inferred");
+assert.equal(inferred.profile.id, "unknown");
 assert.equal(inferred.manifest.git.baseBranch, "main");
 assert.equal(inferred.manifest.permissions.filesystem, "deny");
 assert.equal(inferred.manifest.permissions.git, "deny");

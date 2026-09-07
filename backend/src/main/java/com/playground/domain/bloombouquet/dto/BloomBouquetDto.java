@@ -1,5 +1,6 @@
 package com.playground.domain.bloombouquet.dto;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import lombok.*;
 
 import java.time.LocalDateTime;
@@ -120,5 +121,19 @@ public class BloomBouquetDto {
     @Getter @Setter @NoArgsConstructor @AllArgsConstructor
     public static class CompleteEvaluationRequest {
         private Integer overallScore; private Double overallStars; private String reportSummary;
+    }
+
+    @Getter @Setter @NoArgsConstructor @AllArgsConstructor
+    public static class DevelopmentHistoryUpsertRequest {
+        private JsonNode projection;
+    }
+
+    @Getter @Builder @AllArgsConstructor
+    public static class DevelopmentHistoryResponse {
+        private Long id;
+        private String harnessRunId;
+        private JsonNode projection;
+        private LocalDateTime createdAt;
+        private LocalDateTime updatedAt;
     }
 }

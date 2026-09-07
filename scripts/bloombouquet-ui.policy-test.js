@@ -11,6 +11,7 @@ const paths = {
   manageCss: 'bloom-web/src/app/bouquet-manage.css',
   showcase: 'bloom-web/src/app/BouquetShowcaseApp.tsx',
   detail: 'bloom-web/src/app/BouquetProjectDetailApp.tsx',
+  development: 'bloom-web/src/app/BouquetDevelopmentHistory.tsx',
   report: 'bloom-web/src/app/BouquetEvaluationReportApp.tsx',
   auth: 'bloom-web/src/app/BouquetAuthApp.tsx',
   luna: 'bloom-web/src/app/LunaBouquetRegisterApp.tsx',
@@ -71,6 +72,7 @@ test('public showcase uses a compact product-site typography and layout scale', 
 test('public showcase is a real project gallery with dedicated detail and agent report views', () => {
   const showcase = source(paths.showcase);
   const detail = source(paths.detail);
+  const development = source(paths.development);
   const report = source(paths.report);
   const css = source(paths.showcaseCss);
 
@@ -82,6 +84,12 @@ test('public showcase is a real project gallery with dedicated detail and agent 
   assert.match(detail, /Version History/);
   assert.match(detail, /Agent 평가 리포트 보기/);
   assert.match(detail, /\/api\/bloom-bouquet\/public\/projects\/\$\{projectId\}/);
+  assert.match(detail, /프로젝트 보기/);
+  assert.match(detail, /개발 과정/);
+  assert.match(detail, /\/api\/bloom-bouquet\/public\/projects\/\$\{projectId\}\/development/);
+  assert.match(detail, /BouquetDevelopmentHistory/);
+  assert.match(development, /bouquet-development-tree/);
+  assert.match(development, /failures\.map/);
   assert.match(report, /Senior Agent Review/);
   assert.match(report, /Assessment/);
   assert.match(report, /Recommendation/);

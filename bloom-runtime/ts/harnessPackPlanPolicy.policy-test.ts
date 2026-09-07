@@ -68,7 +68,38 @@ const valid = plan([
 assert.equal(assertHarnessPackPlan(binding, valid), valid);
 assert.match(harnessPackPlanningContext(binding), /bug-fix/);
 
-const unbound = resolveHarnessPackBinding({ intent: "Add profile" });
+const featureBinding = resolveHarnessPackBinding({ intent: "Add profile page" });
+const validFeature = plan([
+  task("FEAT", "frontend", []),
+  task("FCR", "code-review", ["FEAT"]),
+  task("FREV", "reviewer", ["FCR"]),
+  task("FQA", "qa", ["FREV"]),
+]);
+assert.equal(evaluateHarnessPackPlan(featureBinding, validFeature).ready, true);
+assert.equal(evaluateHarnessPackPlan(featureBinding, plan([
+  task("FEAT", "frontend", []), task("FCR", "code-review", ["FEAT"]),
+  task("FREV", "reviewer", ["FCR"]),
+])).ready, false);
+
+const reviewBinding = resolveHarnessPackBinding({ intent: "code review PR" });
+assert.equal(evaluateHarnessPackPlan(reviewBinding, plan([
+  task("CR", "code-review", []), task("REV", "reviewer", ["CR"]),
+])).ready, true);
+
+const docsBinding = resolveHarnessPackBinding({ intent: "Update README documentation" });
+assert.equal(evaluateHarnessPackPlan(docsBinding, plan([
+  task("DOC", "documentation", []), task("REV", "reviewer", ["DOC"]),
+])).ready, true);
+
+const deployBinding = resolveHarnessPackBinding({ intent: "Deploy production release" });
+assert.equal(evaluateHarnessPackPlan(deployBinding, plan([
+  task("DEP", "devops", []), task("QA", "qa", ["DEP"]),
+])).ready, true);
+assert.equal(evaluateHarnessPackPlan(deployBinding, plan([
+  task("DEP", "devops", []), task("QA", "qa", []),
+])).ready, false);
+
+const unbound = resolveHarnessPackBinding({ intent: "summarize project status" });
 assert.equal(harnessPackPlanningContext(unbound), "");
 assert.equal(evaluateHarnessPackPlan(unbound, governanceOnly).ready, true);
 

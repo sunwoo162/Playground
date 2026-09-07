@@ -12,7 +12,10 @@ function completedInput(
   overrides: Partial<RuntimeTaskCompletionInput> = {},
 ): RuntimeTaskCompletionInput {
   return {
+    projectId: "jobdam",
     taskId: `TASK-${role}`,
+    runId: `run-${role}`,
+    agentId: `${role}-agent-1`,
     role,
     report: {
       status: "completed",
@@ -44,6 +47,8 @@ function testWriterNeedsRuntimePublication() {
     completionObservations: { commands: [], publication: publication() },
   }));
   assert.equal(accepted.accepted, true);
+  assert.deepEqual(accepted.packet.result.identity, { projectId: "jobdam", taskId: "TASK-frontend", runId: "run-frontend", agentId: "frontend-agent-1" });
+  assert.ok(accepted.packet.evidence.every((item) => JSON.stringify(item.identity) === JSON.stringify(accepted.packet.result.identity)));
   assert.ok(accepted.packet.evidence.some((item: { kind: string }) => item.kind === "file-change"));
   assert.ok(accepted.packet.evidence.some((item: { kind: string }) => item.kind === "github"));
 }
@@ -162,6 +167,24 @@ function testBlockedResultStaysBlocked() {
   assert.equal(rejected.gate.reason, "result-not-done");
 }
 
+function testRetryRunIdentityChangesEvidenceIds() {
+  const first = evaluateRuntimeTaskCompletion(completedInput("frontend", {
+    taskId: "BLOOM-RETRY",
+    runId: "run-1",
+    completionObservations: { commands: [], publication: publication(88) },
+  }));
+  const second = evaluateRuntimeTaskCompletion(completedInput("frontend", {
+    taskId: "BLOOM-RETRY",
+    runId: "run-2",
+    completionObservations: { commands: [], publication: publication(88) },
+  }));
+  assert.equal(first.accepted, true);
+  assert.equal(second.accepted, true);
+  assert.notDeepEqual(first.packet.result.evidenceIds, second.packet.result.evidenceIds);
+  assert.equal(first.packet.result.identity?.runId, "run-1");
+  assert.equal(second.packet.result.identity?.runId, "run-2");
+}
+
 function testEvidenceIdsAndSafeCommandsAreDeterministic() {
   const decision = evaluateRuntimeTaskCompletion(completedInput("frontend", {
     taskId: "BLOOM-001",
@@ -174,10 +197,10 @@ function testEvidenceIdsAndSafeCommandsAreDeterministic() {
     },
   }));
   assert.equal(decision.accepted, true);
-  assert.ok(decision.packet.result.evidenceIds.includes("BLOOM-001:command:3"));
-  assert.ok(decision.packet.result.evidenceIds.includes("BLOOM-001:build:4"));
-  assert.ok(decision.packet.result.evidenceIds.includes("BLOOM-001:file-change:abc123"));
-  assert.ok(decision.packet.result.evidenceIds.includes("BLOOM-001:github:pr-77"));
+  assert.ok(decision.packet.result.evidenceIds.includes("jobdam:BLOOM-001:run-frontend:command:3"));
+  assert.ok(decision.packet.result.evidenceIds.includes("jobdam:BLOOM-001:run-frontend:build:4"));
+  assert.ok(decision.packet.result.evidenceIds.includes("jobdam:BLOOM-001:run-frontend:file-change:abc123"));
+  assert.ok(decision.packet.result.evidenceIds.includes("jobdam:BLOOM-001:run-frontend:github:pr-77"));
   assert.deepEqual(decision.packet.result.commandsExecuted, ["pnpm:lint", "pnpm:build"]);
 }
 
@@ -189,6 +212,7 @@ function main() {
   testAutomationRequiresMutationAndTest();
   testCompletedWithoutObservationsFailsClosed();
   testBlockedResultStaysBlocked();
+  testRetryRunIdentityChangesEvidenceIds();
   testEvidenceIdsAndSafeCommandsAreDeterministic();
   console.log("Bloom Runtime Completion Adapter policy tests passed");
 }

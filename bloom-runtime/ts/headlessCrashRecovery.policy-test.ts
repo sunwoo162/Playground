@@ -49,15 +49,44 @@ const BASE_PLAN: ProjectPlan = {
   architectureSummary: "Frontend 결과를 review topology로 검증한다.",
   needsAuth: false,
   technologyDecisions: [],
-  tasks: [{
-    id: "FE-001",
-    title: "Frontend 구현",
-    role: "frontend",
-    taskSlug: "frontend-shell",
-    summary: "Frontend shell을 구현한다.",
-    dependsOn: [],
-    acceptanceCriteria: ["Frontend 결과가 검증된다."],
-  }],
+  tasks: [
+    {
+      id: "FE-001",
+      title: "Frontend 구현",
+      role: "frontend",
+      taskSlug: "frontend-shell",
+      summary: "Frontend shell을 구현한다.",
+      dependsOn: [],
+      acceptanceCriteria: ["Frontend 결과가 검증된다."],
+    },
+    {
+      id: "CR-001",
+      title: "Code Review",
+      role: "code-review",
+      taskSlug: "code-review",
+      summary: "Frontend 변경을 검토한다.",
+      dependsOn: ["FE-001"],
+      acceptanceCriteria: ["구현 변경이 독립 검토된다."],
+    },
+    {
+      id: "REV-001",
+      title: "Reviewer",
+      role: "reviewer",
+      taskSlug: "reviewer",
+      summary: "요구사항 충족을 독립 검토한다.",
+      dependsOn: ["CR-001"],
+      acceptanceCriteria: ["리뷰 결과가 검증된다."],
+    },
+    {
+      id: "QA-001",
+      title: "QA",
+      role: "qa",
+      taskSlug: "qa",
+      summary: "최종 회귀를 검증한다.",
+      dependsOn: ["REV-001"],
+      acceptanceCriteria: ["최종 QA가 통과한다."],
+    },
+  ],
 };
 
 function runState(status: BuilderWorkerRunState["status"]): BuilderWorkerRunState {

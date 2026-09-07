@@ -49,6 +49,7 @@ function result(
   overrides: Partial<RuntimeTaskRunResultLike> = {},
 ): RuntimeTaskRunResultLike {
   return {
+    projectId: "PROJECT-1",
     taskId: "DEV-001",
     role,
     agentId: `rose:${role}`,
@@ -115,6 +116,13 @@ assert(validWriter.harnessCompletion?.accepted === true, "accepted writer must p
 assert(
   validWriter.harnessCompletion?.evidence.some((item) => item.kind === "file-change") === true,
   "writer record must persist file-change evidence",
+);
+assert(
+  validWriter.harnessCompletion?.evidence.every(
+    (item) => item.identity?.projectId === "PROJECT-1"
+      && item.identity?.runId === "DEV-001.attempt-1",
+  ) === true,
+  "runtime task completion must bind evidence to project/task attempt identity",
 );
 const plan: ProjectPlan = {
   projectName: "Completion Gate",
