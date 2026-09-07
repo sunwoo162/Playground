@@ -32,6 +32,11 @@ const plan: ProjectPlan = {
 };
 
 function doneRun(taskId: string, role: ProjectTaskRun["role"], pullRequestNumber: number | null, reviewedPullRequests: number[]): ProjectTaskRun {
+  const completionEvidence = role === "frontend"
+    ? [{ version: 1 as const, id: `${taskId}-file`, kind: "file-change" as const, summary: "file change" }]
+    : role === "qa"
+      ? [{ version: 1 as const, id: `${taskId}-test`, kind: "test" as const, summary: "tests passed" }]
+      : [{ version: 1 as const, id: `${taskId}-review`, kind: "review" as const, summary: "reviewed" }];
   return {
     taskId,
     role,
@@ -57,6 +62,13 @@ function doneRun(taskId: string, role: ProjectTaskRun["role"], pullRequestNumber
     lastError: null,
     startedAt: "2026-08-30T14:00:00Z",
     completedAt: "2026-08-30T14:01:00Z",
+    harnessCompletion: {
+      version: 1,
+      accepted: true,
+      evidence: completionEvidence,
+      requiredEvidence: completionEvidence.map((item) => item.kind),
+      rejectionReason: null,
+    },
   };
 }
 

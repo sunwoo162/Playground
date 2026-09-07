@@ -102,7 +102,7 @@ assert.throws(
 );
 
 const unbound = evaluateHarnessPackProjectCompletion({
-  binding: resolveHarnessPackBinding({ intent: "Add profile" }),
+  binding: resolveHarnessPackBinding({ intent: "Triage project request" }),
   taskRuns: [legacy],
 });
 assert.equal(unbound.ready, true);
