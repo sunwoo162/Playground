@@ -69,6 +69,7 @@ const DEPLOYMENT_INTENT = /\b(deploy|deployment|release|publish|promote|ship)\b|
 const CODE_REVIEW_INTENT = /\b(code\s*review|review\s+(?:this\s+)?(?:pr|pull request)|pr\s*review)\b|(?:코드\s*리뷰|PR\s*리뷰|리뷰해)/i;
 const DOCUMENTATION_INTENT = /\b(documentation|docs?|readme)\b|(?:문서|README)/i;
 const FEATURE_INTENT = /\b(feature|implement|create|add|build)\b|(?:기능\s*추가|추가해|구현해|만들어|개발해)/i;
+const FEATURE_CREATION_INTENT = /\b(implement|create|add|build)\b|(?:기능\s*추가|추가해|구현해|만들어|개발해)/i;
 
 export function findHarnessPackById(id: string): HarnessPack | null {
   return HARNESS_PACKS.find((pack) => pack.id === id) ?? null;
@@ -78,7 +79,7 @@ export function inferHarnessPack(intent: string): HarnessPackResolution | null {
   if (BUG_FIX_DIRECT_INTENT.test(intent) || ENGLISH_ERROR_REPAIR_INTENT.test(intent)) {
     return { pack: BUG_FIX_PACK, reason: "Selected from bug-fix intent keywords." };
   }
-  if (DEPLOYMENT_INTENT.test(intent)) {
+  if (DEPLOYMENT_INTENT.test(intent) && !FEATURE_CREATION_INTENT.test(intent)) {
     return { pack: DEPLOYMENT_PACK, reason: "Selected from deployment intent keywords." };
   }
   if (CODE_REVIEW_INTENT.test(intent)) {

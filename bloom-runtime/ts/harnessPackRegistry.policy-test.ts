@@ -24,6 +24,7 @@ assert.equal(findHarnessPackById("unknown"), null);
 
 assert.equal(inferHarnessPack("로그인 오류")?.pack.id, "bug-fix");
 assert.equal(inferHarnessPack("Production 배포해")?.pack.id, "deployment");
+assert.equal(inferHarnessPack("Build and release automatically")?.pack.id, "feature-development");
 assert.equal(inferHarnessPack("PR 코드 리뷰해")?.pack.id, "code-review");
 assert.equal(inferHarnessPack("README 문서 정리해")?.pack.id, "documentation");
 assert.equal(inferHarnessPack("사용자 프로필 기능 추가해")?.pack.id, "feature-development");

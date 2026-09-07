@@ -2,7 +2,10 @@ import {
   validateHarnessPackBinding,
   type HarnessPackBinding,
 } from "./harnessPackBinding";
-import { BUG_FIX_PACK } from "./harnessPackRegistry";
+import {
+  BUG_FIX_PACK, CODE_REVIEW_PACK, DEPLOYMENT_PACK, DOCUMENTATION_PACK,
+  FEATURE_DEVELOPMENT_PACK,
+} from "./harnessPackRegistry";
 import {
   REPOSITORY_WRITER_ROLES,
   taskTransitivelyDependsOn,
@@ -41,6 +44,49 @@ function hasReviewQaChain(plan: ProjectPlan, writerTaskId: string) {
     }
   }
   return false;
+}
+
+function requiredRoleReasons(binding: HarnessPackBinding, plan: ProjectPlan): string[] {
+  if (!binding.pack) return ["Harness pack binding is missing its pack snapshot."];
+  const roles = new Set(plan.tasks.map((task) => task.role));
+  return binding.pack.requiredRoles
+    .filter((role) => !roles.has(role))
+    .map((role) => `${binding.pack?.id ?? "pack"} requires PM role ${role}.`);
+}
+
+function hasDownstreamRole(
+  plan: ProjectPlan,
+  sourceTaskId: string,
+  role: ProjectTaskPlan["role"],
+): boolean {
+  return downstreamByRole(plan, sourceTaskId, role).length > 0;
+}
+
+function evaluateFeaturePlan(binding: HarnessPackBinding, plan: ProjectPlan): HarnessPackPlanEvaluation {
+  const reasons = requiredRoleReasons(binding, plan);
+  const writers = plan.tasks.filter((task) =>
+    REPOSITORY_WRITER_ROLES.includes(task.role) && !NON_FIX_WRITER_ROLES.has(task.role),
+  );
+  if (writers.length === 0) {
+    reasons.push("feature-development requires a repository implementation writer.");
+  } else if (!writers.some((writer) => hasReviewQaChain(plan, writer.id))) {
+    reasons.push("feature-development writer requires downstream code-review -> reviewer -> qa validation.");
+  }
+  return { ready: reasons.length === 0, reasons };
+}
+
+function evaluateLinearRoleChain(
+  binding: HarnessPackBinding,
+  plan: ProjectPlan,
+  sourceRole: ProjectTaskPlan["role"],
+  targetRole: ProjectTaskPlan["role"],
+): HarnessPackPlanEvaluation {
+  const reasons = requiredRoleReasons(binding, plan);
+  const sources = plan.tasks.filter((task) => task.role === sourceRole);
+  if (sources.length > 0 && !sources.some((task) => hasDownstreamRole(plan, task.id, targetRole))) {
+    reasons.push(`${binding.pack?.id ?? "pack"} requires downstream ${sourceRole} -> ${targetRole} topology.`);
+  }
+  return { ready: reasons.length === 0, reasons };
 }
 
 function evaluateBugFixPlan(
@@ -104,13 +150,23 @@ export function evaluateHarnessPackPlan(
   if (validated.status === "blocked") {
     return { ready: false, reasons: [validated.reason] };
   }
-  if (validated.pack?.id !== BUG_FIX_PACK.id) {
-    return {
-      ready: false,
-      reasons: [`Unsupported live Bloom Harness pack plan policy: ${validated.pack?.id ?? "missing"}.`],
-    };
+  switch (validated.pack?.id) {
+    case BUG_FIX_PACK.id:
+      return evaluateBugFixPlan(validated, plan);
+    case FEATURE_DEVELOPMENT_PACK.id:
+      return evaluateFeaturePlan(validated, plan);
+    case CODE_REVIEW_PACK.id:
+      return evaluateLinearRoleChain(validated, plan, "code-review", "reviewer");
+    case DOCUMENTATION_PACK.id:
+      return evaluateLinearRoleChain(validated, plan, "documentation", "reviewer");
+    case DEPLOYMENT_PACK.id:
+      return evaluateLinearRoleChain(validated, plan, "devops", "qa");
+    default:
+      return {
+        ready: false,
+        reasons: [`Unsupported live Bloom Harness pack plan policy: ${validated.pack?.id ?? "missing"}.`],
+      };
   }
-  return evaluateBugFixPlan(validated, plan);
 }
 
 export function assertHarnessPackPlan(
