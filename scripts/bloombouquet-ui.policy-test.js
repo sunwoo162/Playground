@@ -82,6 +82,10 @@ test('public showcase is a real project gallery with dedicated detail and agent 
   assert.match(detail, /Version History/);
   assert.match(detail, /Agent 평가 리포트 보기/);
   assert.match(detail, /\/api\/bloom-bouquet\/public\/projects\/\$\{projectId\}/);
+  assert.match(detail, /프로젝트 보기/);
+  assert.match(detail, /개발 과정/);
+  assert.match(detail, /\/api\/bloom-bouquet\/public\/projects\/\$\{projectId\}\/development/);
+  assert.match(detail, /BouquetDevelopmentHistory/);
   assert.match(report, /Senior Agent Review/);
   assert.match(report, /Assessment/);
   assert.match(report, /Recommendation/);
