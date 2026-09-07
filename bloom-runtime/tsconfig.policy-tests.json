@@ -33,6 +33,7 @@
     "ts/iseolExecutionControlAdapter.policy-test.ts",
     "ts/harnessRunArtifacts.ts",
     "ts/harnessRunArtifacts.policy-test.ts",
+    "ts/harnessRunHistoryProjection.policy-test.ts",
     "ts/harnessCompletionGate.ts",
     "ts/harnessCompletionGate.policy-test.ts",
     "ts/runtimeCompletionAdapter.ts",
