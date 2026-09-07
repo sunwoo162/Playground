@@ -2,6 +2,7 @@ package com.playground.domain.bloombouquet.controller;
 
 import com.playground.config.BouquetAuthenticationToken;
 import com.playground.domain.bloombouquet.dto.BloomBouquetDto;
+import com.playground.domain.bloombouquet.service.BloomBouquetDevelopmentHistoryService;
 import com.playground.domain.bloombouquet.service.BloomBouquetOwnerProjectQueryService;
 import com.playground.domain.bloombouquet.service.BloomBouquetService;
 import com.playground.domain.bloombouquet.service.LunaBloomBouquetRegistrationService;
@@ -20,6 +21,7 @@ import java.util.NoSuchElementException;
 public class BloomBouquetController {
     private final BloomBouquetService service;
     private final BloomBouquetOwnerProjectQueryService ownerProjectQueryService;
+    private final BloomBouquetDevelopmentHistoryService developmentHistoryService;
     private final LunaBloomBouquetRegistrationService lunaRegistrationService;
 
     @PostMapping("/teams")
@@ -79,6 +81,13 @@ public class BloomBouquetController {
     @GetMapping("/public/projects/{projectId}")
     public ResponseEntity<BloomBouquetDto.ProjectDetailResponse> getPublicProject(@PathVariable Long projectId) {
         return ResponseEntity.ok(service.getPublicProject(projectId));
+    }
+
+    @GetMapping("/public/projects/{projectId}/development")
+    public ResponseEntity<List<BloomBouquetDto.DevelopmentHistoryResponse>> getPublicDevelopmentHistory(
+            @PathVariable Long projectId
+    ) {
+        return ResponseEntity.ok(developmentHistoryService.listPublic(projectId));
     }
 
     @GetMapping("/public/evaluations/{runId}")
