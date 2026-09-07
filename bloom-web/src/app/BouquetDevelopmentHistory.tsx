@@ -157,8 +157,46 @@ export default function BouquetDevelopmentHistory({ runs, loading, error }: Prop
     )
   }
 
+  const taskGroups = new Map<string, DevelopmentHistoryResponse[]>()
+  for (const run of runs) {
+    const taskId = run.projection.identity.taskId
+    const group = taskGroups.get(taskId) ?? []
+    group.push(run)
+    taskGroups.set(taskId, group)
+  }
+
   return (
     <section className="bouquet-development-history" aria-label="프로젝트 개발 과정">
+      <section className="bouquet-development-tree" aria-label="Harness 작업 트리">
+        <p className="bouquet-section-label">Work Tree</p>
+        {[...taskGroups.entries()].map(([taskId, taskRuns]) => (
+          <article className="bouquet-development-task-node" key={taskId}>
+            <div className="bouquet-development-task-title">
+              <span>Task</span>
+              <strong>{taskId}</strong>
+            </div>
+            <div className="bouquet-development-run-branches">
+              {taskRuns.map(({ harnessRunId, projection }) => (
+                <div className="bouquet-development-run-node" key={harnessRunId}>
+                  <div className="bouquet-development-run-node-line">
+                    <span>{harnessRunId}</span>
+                    <strong>{stateLabel(projection.state)}</strong>
+                  </div>
+                  {projection.failures.map((failure) => (
+                    <div className="bouquet-development-failure-branch" key={failure.id}>
+                      <span>⚠ {failure.summary}</span>
+                      {failure.recoveries.map((recovery) => (
+                        <small key={recovery.id}>↳ {recovery.action} · {recovery.status}</small>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </article>
+        ))}
+      </section>
+
       {runs.map(({ harnessRunId, projection }) => (
         <article className="bouquet-development-run" key={harnessRunId}>
           <header className="bouquet-development-run-head">

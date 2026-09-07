@@ -225,6 +225,21 @@
 .bouquet-report-terms { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
 .bouquet-report-terms span { padding: 5px 7px; border: 1px solid var(--bouquet-line); background: var(--bouquet-surface-soft); color: var(--bouquet-muted); font-size: 9px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 
+.bouquet-development-tree { padding: 22px 0 6px; border-top: 1px solid var(--bouquet-line); }
+.bouquet-development-task-node { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 26px; padding: 16px 0; border-top: 1px solid var(--bouquet-line-soft); }
+.bouquet-development-task-title { display: grid; align-content: start; gap: 4px; }
+.bouquet-development-task-title span { color: var(--bouquet-muted); font-size: 9px; text-transform: uppercase; }
+.bouquet-development-task-title strong { font-size: 14px; }
+.bouquet-development-run-branches { display: grid; gap: 12px; }
+.bouquet-development-run-node { position: relative; padding: 0 0 0 18px; border-left: 1px solid var(--bouquet-line); }
+.bouquet-development-run-node::before { position: absolute; top: 10px; left: -1px; width: 12px; border-top: 1px solid var(--bouquet-line); content: ''; }
+.bouquet-development-run-node-line { display: flex; justify-content: space-between; gap: 16px; padding: 5px 0; }
+.bouquet-development-run-node-line span { font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--bouquet-muted); }
+.bouquet-development-run-node-line strong { font-size: 10px; }
+.bouquet-development-failure-branch { display: grid; gap: 4px; margin: 7px 0 2px; padding-left: 14px; border-left: 1px solid var(--bouquet-accent); }
+.bouquet-development-failure-branch span { font-size: 11px; }
+.bouquet-development-failure-branch small { color: var(--bouquet-muted); font-size: 9px; }
+
 .bouquet-detail-tabs { display: flex; gap: 24px; margin: 28px 0 30px; border-bottom: 1px solid var(--bouquet-line); }
 .bouquet-detail-tabs button { padding: 0 0 12px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--bouquet-muted); font: inherit; font-size: 12px; font-weight: 750; cursor: pointer; }
 .bouquet-detail-tabs button.is-active { border-bottom-color: var(--bouquet-accent); color: var(--bouquet-text); }
@@ -301,6 +316,8 @@
   .bouquet-development-run-head { grid-template-columns: 1fr; }
   .bouquet-development-run-state { justify-items: start; }
   .bouquet-development-event-topline { align-items: flex-start; flex-direction: column; gap: 5px; }
+  .bouquet-development-task-node { grid-template-columns: 1fr; gap: 10px; }
+  .bouquet-development-run-node-line { align-items: flex-start; flex-direction: column; gap: 3px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
