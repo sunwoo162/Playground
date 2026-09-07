@@ -102,8 +102,13 @@ async function run() {
   );
   assert.equal(networkCalls, 1);
 
-  const unbound = resolveHarnessPackBinding({ intent: "Add profile page" });
-  const unboundRequest = buildPmPlanningRequest("Add profile page", unbound);
+  const feature = resolveHarnessPackBinding({ intent: "Add profile page" });
+  const featureRequest = buildPmPlanningRequest("Add profile page", feature);
+  assert.match(featureRequest, /Bloom Harness pack feature-development/);
+  assert.match(featureRequest, /code-review, reviewer, qa/);
+
+  const unbound = resolveHarnessPackBinding({ intent: "summarize project status" });
+  const unboundRequest = buildPmPlanningRequest("summarize project status", unbound);
   assert.doesNotMatch(unboundRequest, /Bloom Harness pack/);
   assert.match(unboundRequest, /Task IDs and taskSlug values must each be unique/);
 
