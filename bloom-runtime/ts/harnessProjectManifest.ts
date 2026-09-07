@@ -7,11 +7,13 @@ import {
   type HarnessPermissionMode,
   type HarnessProjectManifest,
 } from "./harnessContracts";
+import { resolveHarnessProjectProfile, type HarnessProjectProfile } from "./harnessProjectProfiles";
 
 export type HarnessProjectManifestResolution = {
   source: "explicit" | "inferred";
   path: string;
   manifest: HarnessProjectManifest;
+  profile: HarnessProjectProfile;
 };
 
 const COMMAND_KEYS = ["install", "lint", "typecheck", "test", "build"] as const;
@@ -158,14 +160,17 @@ export function loadHarnessProjectManifest(
       source: "inferred",
       path: manifestPath,
       manifest: createInferredManifest(),
+      profile: resolveHarnessProjectProfile("unknown"),
     };
   }
 
   const raw = fs.readFileSync(manifestPath, "utf8");
   const parsed = parse(raw);
+  const manifest = parseExplicitManifest(parsed);
   return {
     source: "explicit",
     path: manifestPath,
-    manifest: parseExplicitManifest(parsed),
+    manifest,
+    profile: resolveHarnessProjectProfile(manifest.project.type),
   };
 }

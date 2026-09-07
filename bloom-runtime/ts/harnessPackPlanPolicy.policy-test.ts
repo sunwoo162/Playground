@@ -68,7 +68,7 @@ const valid = plan([
 assert.equal(assertHarnessPackPlan(binding, valid), valid);
 assert.match(harnessPackPlanningContext(binding), /bug-fix/);
 
-const unbound = resolveHarnessPackBinding({ intent: "Add profile" });
+const unbound = resolveHarnessPackBinding({ intent: "summarize project status" });
 assert.equal(harnessPackPlanningContext(unbound), "");
 assert.equal(evaluateHarnessPackPlan(unbound, governanceOnly).ready, true);
 
